@@ -1,0 +1,21 @@
+# Git hooks. Install once with: make hooks
+pre-commit:
+  parallel: true
+  jobs:
+    - name: go-fmt
+      glob: "*.go"
+      run: golangci-lint fmt {staged_files}
+      stage_fixed: true
+    - name: go-lint
+      glob: "*.go"
+      run: golangci-lint run --fast-only ./...
+    - name: python
+      root: sdk/python/
+      glob: "*.py"
+      run: uvx ruff format {staged_files} && uvx ruff check --fix {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      run: scripts/check-commit-msg.sh {1}

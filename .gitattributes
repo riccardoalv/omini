@@ -1,0 +1,3 @@
+* text=auto eol=lf
+internal/model/model_gen.go linguist-generated=true
+sdk/python/src/omini_sdk/models.py linguist-generated=true
