@@ -1,0 +1,52 @@
+name: Device support request
+description: Ask for (or help with) support for a device, vendor or software.
+labels: [device-support]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Real device data is the most valuable contribution to Omini.
+        **Anonymize everything** (communities, passwords, public IPs, serial numbers) before attaching files.
+  - type: input
+    id: vendor
+    attributes:
+      label: Vendor and model
+      placeholder: Horaco ZX-SWTG124AS
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware / OS version
+  - type: dropdown
+    id: role
+    attributes:
+      label: Device role
+      options: [Router, Firewall, Switch, Access point, Controller / software, Other]
+    validations:
+      required: true
+  - type: checkboxes
+    id: interfaces
+    attributes:
+      label: What does the device offer?
+      options:
+        - label: SNMP v2c
+        - label: SNMP v3
+        - label: LLDP
+        - label: REST / JSON API
+        - label: SSH
+        - label: Web UI only
+  - type: textarea
+    id: data
+    attributes:
+      label: Sample data
+      description: |
+        If it has SNMP, attach an anonymized walk:
+        `snmpwalk -v2c -c <community> -On <host> .1 > device.walk`
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can test a development build on this device
+        - label: I can write the integration / plugin

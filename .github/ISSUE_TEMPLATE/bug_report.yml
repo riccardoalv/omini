@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Omini version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: devices
+    attributes:
+      label: Devices involved
+      description: Vendor, model, firmware and integration used (SNMP, OPNsense plugin...).
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Remove credentials, public IPs and anything private before pasting.
+      render: shell

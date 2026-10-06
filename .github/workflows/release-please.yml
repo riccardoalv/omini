@@ -1,0 +1,20 @@
+name: Release Please
+
+# Keeps a release PR open with the next version and CHANGELOG, computed from
+# Conventional Commits on main. Merging that PR tags the release.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
