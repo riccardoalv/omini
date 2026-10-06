@@ -1,0 +1,485 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/riccardoalv/omini/schema/omini.schema.json",
+  "title": "Omini data contract",
+  "description": "Single source of truth for the data exchanged between the Omini core and integrations/plugins. Go types and Python models are generated from this file (make generate).",
+  "$defs": {
+    "Device": {
+      "type": "object",
+      "description": "Vendor-neutral snapshot of one network device, as collected by an integration.",
+      "required": [
+        "key",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Stable unique id of the device within its integration (e.g. base MAC or serial)."
+        },
+        "name": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string",
+          "description": "Management IP or hostname."
+        },
+        "role": {
+          "$ref": "#/$defs/DeviceRole"
+        },
+        "vendor": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "os_version": {
+          "type": "string"
+        },
+        "serial": {
+          "type": "string"
+        },
+        "uptime_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "mem_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "macs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MacAddress"
+          },
+          "description": "All MAC addresses owned by the device."
+        },
+        "ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All IP addresses owned by the device."
+        },
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Interface"
+          }
+        },
+        "neighbors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Neighbor"
+          }
+        },
+        "fdb": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FdbEntry"
+          }
+        },
+        "arp": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArpEntry"
+          }
+        },
+        "dhcp_leases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DhcpLease"
+          }
+        },
+        "wireless_clients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WirelessClient"
+          }
+        }
+      }
+    },
+    "DeviceRole": {
+      "type": "string",
+      "enum": [
+        "router",
+        "switch",
+        "ap",
+        "firewall",
+        "server",
+        "unknown"
+      ]
+    },
+    "MacAddress": {
+      "type": "string",
+      "description": "Lowercase, colon separated: aa:bb:cc:dd:ee:ff.",
+      "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$"
+    },
+    "Interface": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Readable port name (ifName), never a numeric index."
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/InterfaceType"
+        },
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "up": {
+          "type": "boolean",
+          "description": "Operational status."
+        },
+        "speed_mbps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rx_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative counter."
+        },
+        "tx_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cumulative counter."
+        },
+        "rx_errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tx_errors": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "InterfaceType": {
+      "type": "string",
+      "enum": [
+        "ethernet",
+        "wireless",
+        "bridge",
+        "vlan",
+        "lag",
+        "loopback",
+        "tunnel",
+        "other"
+      ]
+    },
+    "Neighbor": {
+      "type": "object",
+      "description": "A device seen through a discovery protocol.",
+      "required": [
+        "local_port"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "local_port": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/NeighborProtocol"
+        },
+        "remote_name": {
+          "type": "string"
+        },
+        "remote_port": {
+          "type": "string"
+        },
+        "remote_mac": {
+          "$ref": "#/$defs/MacAddress",
+          "description": "Chassis MAC, when the chassis id is a MAC."
+        },
+        "remote_ip": {
+          "type": "string"
+        },
+        "remote_platform": {
+          "type": "string"
+        }
+      }
+    },
+    "FdbEntry": {
+      "type": "object",
+      "description": "Switch forwarding table entry: this MAC was learned on this port.",
+      "required": [
+        "mac",
+        "port"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "port": {
+          "type": "string"
+        },
+        "vlan": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4095
+        }
+      }
+    },
+    "ArpEntry": {
+      "type": "object",
+      "required": [
+        "ip",
+        "mac"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ip": {
+          "type": "string"
+        },
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "interface": {
+          "type": "string"
+        }
+      }
+    },
+    "DhcpLease": {
+      "type": "object",
+      "required": [
+        "ip",
+        "mac"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ip": {
+          "type": "string"
+        },
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "WirelessClient": {
+      "type": "object",
+      "required": [
+        "mac"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "ssid": {
+          "type": "string"
+        },
+        "band": {
+          "$ref": "#/$defs/WifiBand"
+        },
+        "signal_dbm": {
+          "type": "integer",
+          "maximum": 0
+        },
+        "tx_rate_mbps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rx_rate_mbps": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "FormField": {
+      "type": "object",
+      "description": "One input of the 'add integration' form. Declared by core integrations and in plugin.yaml.",
+      "required": [
+        "key",
+        "type"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "type": {
+          "$ref": "#/$defs/FormFieldType"
+        },
+        "label": {
+          "type": "string"
+        },
+        "help": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "default": {
+          "description": "Default value; type must match the field type."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Choices for 'select' fields."
+        }
+      }
+    },
+    "PluginManifest": {
+      "type": "object",
+      "description": "Contents of plugin.yaml at the root of a plugin repository.",
+      "required": [
+        "id",
+        "name",
+        "version",
+        "protocol",
+        "entrypoint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version of the plugin."
+        },
+        "protocol": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Plugin protocol version implemented by the plugin."
+        },
+        "entrypoint": {
+          "type": "string",
+          "description": "Python file executed by the core, relative to the plugin root."
+        },
+        "description": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FormField"
+          }
+        }
+      }
+    },
+    "PluginRequest": {
+      "type": "object",
+      "description": "Written by the core as JSON to the plugin's stdin.",
+      "required": [
+        "protocol",
+        "action",
+        "config"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "$ref": "#/$defs/PluginAction"
+        },
+        "config": {
+          "type": "object",
+          "description": "Values of the manifest fields, keyed by field key.",
+          "additionalProperties": true
+        },
+        "state_dir": {
+          "type": "string",
+          "description": "Writable directory private to this integration, kept between runs (e.g. to cache sessions)."
+        }
+      }
+    },
+    "PluginResponse": {
+      "type": "object",
+      "description": "Written by the plugin as JSON to stdout. Exactly one of devices (collect), message (test) or error is set.",
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Device"
+          }
+        },
+        "message": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "NeighborProtocol": {
+      "type": "string",
+      "enum": [
+        "lldp",
+        "cdp",
+        "mndp",
+        "other"
+      ]
+    },
+    "WifiBand": {
+      "type": "string",
+      "enum": [
+        "2.4ghz",
+        "5ghz",
+        "6ghz"
+      ]
+    },
+    "FormFieldType": {
+      "type": "string",
+      "enum": [
+        "string",
+        "secret",
+        "host",
+        "url",
+        "int",
+        "bool",
+        "select"
+      ]
+    },
+    "PluginAction": {
+      "type": "string",
+      "enum": [
+        "collect",
+        "test"
+      ]
+    }
+  }
+}
