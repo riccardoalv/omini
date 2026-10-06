@@ -2,9 +2,7 @@
 #   filename:  omini.schema.json
 
 from __future__ import annotations
-
 from typing import Annotated, Any, Literal
-
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, RootModel
 
 
@@ -73,16 +71,7 @@ class Interface(BaseModel):
     """
     description: str | None = None
     type: (
-        Literal[
-            "ethernet",
-            "wireless",
-            "bridge",
-            "vlan",
-            "lag",
-            "loopback",
-            "tunnel",
-            "other",
-        ]
+        Literal["ethernet", "wireless", "bridge", "vlan", "lag", "loopback", "tunnel", "other"]
         | None
     ) = None
     mac: Annotated[str | None, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")] = None

@@ -57,7 +57,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - name: Lint
         run: |
-          uvx ruff check .
-          uvx ruff format --check .
+          uv run ruff check .
+          uv run ruff format --check .
       - name: Test
-        run: uv run --extra test pytest
+        run: uv run pytest

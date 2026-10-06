@@ -6,6 +6,9 @@ SCHEMA := schema/omini.schema.json
 GO_MODEL := internal/model/model_gen.go
 PY_MODEL := sdk/python/src/omini_sdk/models.py
 
+# Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
+SDK := uv run --project sdk/python
+
 .PHONY: generate check-generated test lint fmt hooks
 
 ## generate: regenerate Go types and Python models from the JSON Schema
@@ -13,14 +16,15 @@ generate:
 	go run $(GO_JSONSCHEMA) --package model --min-sized-ints \
 		--capitalization ID,IP,IPs,MAC,MACs,URL,SSID,DBM,CPU,OS \
 		--tags json,yaml --output $(GO_MODEL) $(SCHEMA)
-	uvx --from '$(DATAMODEL_CODEGEN)' datamodel-codegen \
+	$(SDK) --with '$(DATAMODEL_CODEGEN)' datamodel-codegen \
 		--input $(SCHEMA) --input-file-type jsonschema \
 		--output-model-type pydantic_v2.BaseModel --target-python-version 3.10 \
 		--use-standard-collections --use-union-operator --use-annotated \
 		--use-schema-description --use-field-description \
 		--collapse-root-models --enum-field-as-literal all \
-		--disable-timestamp --formatters black isort \
+		--disable-timestamp --formatters ruff-format \
 		--output $(PY_MODEL)
+	cd sdk/python && uv run ruff format src/omini_sdk/models.py
 
 ## check-generated: fail if generated code is out of date (used in CI)
 check-generated: generate
@@ -29,19 +33,17 @@ check-generated: generate
 ## test: run all test suites
 test:
 	go test ./...
-	cd sdk/python && uv run --extra test pytest
+	cd sdk/python && uv run pytest
 
 ## lint: run all linters (Go + Python SDK)
 lint:
 	golangci-lint run ./...
-	uvx ruff check sdk/python
-	uvx ruff format --check sdk/python
+	cd sdk/python && uv run ruff check . && uv run ruff format --check .
 
 ## fmt: format all code (Go + Python SDK)
 fmt:
 	golangci-lint fmt ./...
-	uvx ruff format sdk/python
-	uvx ruff check --fix sdk/python
+	cd sdk/python && uv run ruff format . && uv run ruff check --fix .
 
 ## hooks: install git hooks (format, lint, conventional commit check)
 hooks:

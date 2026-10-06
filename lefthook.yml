@@ -12,7 +12,7 @@ pre-commit:
     - name: python
       root: sdk/python/
       glob: "*.py"
-      run: uvx ruff format {staged_files} && uvx ruff check --fix {staged_files}
+      run: uv run ruff format {staged_files} && uv run ruff check --fix {staged_files}
       stage_fixed: true
 
 commit-msg:
