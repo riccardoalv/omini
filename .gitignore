@@ -1,0 +1,20 @@
+# Build output
+/bin/
+/dist/
+web/dist/
+web/node_modules/
+
+# Runtime data
+/data/
+*.db
+*.db-journal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
