@@ -147,13 +147,16 @@ omini/
 └── Dockerfile
 ```
 
-## Commands (planned)
+## Commands
 
 ```bash
-make dev         # start the full dev stack (Go live reload, Vite, SNMP simulator)
+make dev         # (planned) start the full dev stack (Go live reload, Vite, SNMP simulator)
 make generate    # regenerate Go types and Python models from schema/
-make test        # Go + web + SDK tests
-make build       # production Docker image
+make test        # Go + SDK tests
+make lint        # golangci-lint + ruff
+make fmt         # format Go and Python
+make hooks       # install git hooks (lefthook)
+make build       # (planned) production Docker image
 ```
 
 ## Topology engine
@@ -171,6 +174,9 @@ Each rule is a function `(devices, topology) -> insights[]` with `severity` (`cr
 ## Conventions
 
 - **Everything in English**: code, identifiers, comments, docs, commit messages, issues, PRs. User-facing UI strings go through i18n (`en`, `pt-BR`).
+- **Conventional Commits** for every commit and PR title (`feat(snmp): ...`, `fix(topology): ...`); scopes and rules in [CONTRIBUTING.md](CONTRIBUTING.md). PRs are squash-merged; release-please builds the changelog and versions from them.
+- Formatting/linting: Go with gofumpt + goimports + golangci-lint v2 (`.golangci.yml`); Python with ruff. Run `make fmt lint test` before committing; lefthook runs them as git hooks (`make hooks`).
+- Never edit generated files (`internal/model/model_gen.go`, `sdk/python/src/omini_sdk/models.py`): change `schema/omini.schema.json` and run `make generate`.
 - All network I/O is async/concurrent.
 - Structured logging, no ad-hoc prints.
 - Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); the demo integration also serves as a fixture.
