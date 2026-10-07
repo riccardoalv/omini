@@ -244,6 +244,29 @@ func TestIntegrationValidation(t *testing.T) {
 	}
 }
 
+func TestRunIntegrationNow(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	var created map[string]any
+	h.do("POST", "/api/integrations", map[string]any{"name": "demo", "type": "demo", "config": map[string]any{}}, &created)
+	id := itoa(int64(created["id"].(float64)))
+
+	var st map[string]any
+	if code := h.do("POST", "/api/integrations/"+id+"/run", nil, &st); code != 200 {
+		t.Fatalf("run: %d %v", code, st)
+	}
+	if st["ok"] != true || st["devices"] != float64(3) {
+		t.Fatalf("status = %v", st)
+	}
+	if code := h.do("POST", "/api/integrations/999/run", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("unknown integration: %d", code)
+	}
+	h.do("PUT", "/api/integrations/"+id, map[string]any{"enabled": false}, nil)
+	if code := h.do("POST", "/api/integrations/"+id+"/run", nil, nil); code != http.StatusConflict {
+		t.Fatalf("disabled integration: %d", code)
+	}
+}
+
 func TestConnectionTest(t *testing.T) {
 	h := newHarness(t, nil)
 	h.login()

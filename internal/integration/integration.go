@@ -69,6 +69,20 @@ type Integration interface {
 	Test(ctx context.Context, cfg Config) (string, error)
 }
 
+type forceKey struct{}
+
+// WithForce marks a collection as requested by the user ("run now"):
+// integrations should skip their caches and refresh everything.
+func WithForce(ctx context.Context) context.Context {
+	return context.WithValue(ctx, forceKey{}, true)
+}
+
+// Forced reports whether the collection was requested by the user.
+func Forced(ctx context.Context) bool {
+	v, _ := ctx.Value(forceKey{}).(bool)
+	return v
+}
+
 // Validator is implemented by integrations that check settings beyond the
 // field types (e.g. port ranges); it runs before settings are saved.
 type Validator interface {

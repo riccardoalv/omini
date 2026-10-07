@@ -249,6 +249,27 @@ func (s *Server) deleteIntegration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// runIntegration collects one integration now and returns its new status.
+func (s *Server) runIntegration(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, 2*time.Minute)
+	defer cancel()
+	st, err := s.Collector.CollectIntegration(ctx, id)
+	switch {
+	case isNotFound(err):
+		writeError(w, http.StatusNotFound, "integration not found")
+	case errors.Is(err, collector.ErrDisabled):
+		writeError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, st)
+	}
+}
+
 type testInput struct {
 	ID     int64              `json:"id"` // optional: test an existing integration with edited values
 	Type   string             `json:"type"`

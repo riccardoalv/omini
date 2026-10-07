@@ -431,7 +431,7 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	s.mu.Lock()
 	d, ok := s.deep[key]
 	s.mu.Unlock()
-	if ok && s.now().Sub(d.at) < opts.deepEvery {
+	if ok && s.now().Sub(d.at) < opts.deepEvery && !integration.Forced(ctx) {
 		return d
 	}
 	d = deepInfo{at: s.now()}

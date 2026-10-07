@@ -4,6 +4,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -179,6 +180,37 @@ func (c *Collector) CollectNow(ctx context.Context) error {
 	c.snaps = snaps // disabled and deleted integrations drop out here
 	c.mu.Unlock()
 	return c.rebuild(ctx)
+}
+
+// ErrDisabled is returned when running an integration that is disabled.
+var ErrDisabled = errors.New("integration is disabled")
+
+// CollectIntegration runs one integration now (user request), skipping its
+// caches, and returns its new status. The map is rebuilt right away.
+func (c *Collector) CollectIntegration(ctx context.Context, id int64) (Status, error) {
+	c.round.Lock()
+	defer c.round.Unlock()
+	in, err := c.store.GetIntegration(ctx, id)
+	if err != nil {
+		return Status{}, err
+	}
+	if !in.Enabled {
+		return Status{}, ErrDisabled
+	}
+	snap := c.collectOne(integration.WithForce(ctx), in)
+	if err := c.store.SaveSnapshot(ctx, snap); err != nil {
+		slog.Error("save snapshot", "integration", snap.IntegrationID, "err", err)
+	}
+	c.mu.Lock()
+	c.snaps[id] = snap
+	c.mu.Unlock()
+	if err := c.rebuild(ctx); err != nil {
+		return Status{}, err
+	}
+	return Status{
+		IntegrationID: id, OK: snap.OK, Error: snap.Error, CollectedAt: snap.CollectedAt,
+		DurationMs: snap.DurationMs, Devices: countDevices(snap.Devices),
+	}, nil
 }
 
 func (c *Collector) collectOne(ctx context.Context, in store.Integration) store.Snapshot {

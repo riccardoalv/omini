@@ -19,11 +19,12 @@ import (
 
 // fake is an integration whose result the test controls.
 type fake struct {
-	mu      sync.Mutex
-	devices []model.Device
-	err     error
-	panic   bool
-	gotCfg  integration.Config
+	mu        sync.Mutex
+	devices   []model.Device
+	err       error
+	panic     bool
+	gotCfg    integration.Config
+	onCollect func(context.Context)
 }
 
 func (*fake) Info() integration.Info {
@@ -33,10 +34,13 @@ func (*fake) Info() integration.Info {
 	}}
 }
 
-func (f *fake) Collect(_ context.Context, cfg integration.Config) ([]model.Device, error) {
+func (f *fake) Collect(ctx context.Context, cfg integration.Config) ([]model.Device, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.gotCfg = cfg
+	if f.onCollect != nil {
+		f.onCollect(ctx)
+	}
 	if f.panic {
 		panic("boom")
 	}
@@ -296,5 +300,30 @@ func TestStatusCountsScannedHosts(t *testing.T) {
 	}}, nil)
 	if got := e.collect(t).Statuses[0].Devices; got != 3 {
 		t.Fatalf("devices = %d, want 3 (gateway + 2 hosts)", got)
+	}
+}
+
+func TestCollectIntegrationRunsOneNowAndForces(t *testing.T) {
+	e := setup(t)
+	in := e.addIntegration(t, "fake", integration.Config{})
+	e.fake.set([]model.Device{{Key: "aa:00:00:00:00:01", Name: "sw"}}, nil)
+
+	var forced bool
+	e.fake.onCollect = func(ctx context.Context) { forced = integration.Forced(ctx) }
+	st, err := e.coll.CollectIntegration(context.Background(), in.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.OK || st.Devices != 1 || !forced {
+		t.Fatalf("status = %+v, forced = %v", st, forced)
+	}
+	if _, ok := node(e.coll.State(), "dev:aa:00:00:00:00:01"); !ok {
+		t.Fatal("the map must be rebuilt right away")
+	}
+
+	in.Enabled = false
+	_, _ = e.st.UpdateIntegration(context.Background(), in)
+	if _, err := e.coll.CollectIntegration(context.Background(), in.ID); !errors.Is(err, collector.ErrDisabled) {
+		t.Fatalf("disabled integration: err = %v", err)
 	}
 }
