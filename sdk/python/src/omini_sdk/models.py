@@ -91,6 +91,10 @@ class Interface(BaseModel):
         Literal["ethernet", "wireless", "bridge", "vlan", "lag", "loopback", "tunnel", "other"]
         | None
     ) = None
+    connector: Literal["rj45", "sfp", "qsfp"] | None = None
+    """
+    Physical connector of a port.
+    """
     mac: Annotated[str | None, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")] = None
     """
     Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
@@ -98,6 +102,14 @@ class Interface(BaseModel):
     ips: list[str] | None = None
     """
     Addresses assigned to the interface, with prefix length (192.168.1.1/24).
+    """
+    wan: bool | None = None
+    """
+    Uplink to the internet (a WAN of a router or firewall).
+    """
+    parent: str | None = None
+    """
+    Interface this one runs on: a VLAN's port, the port carrying a PPPoE link.
     """
     up: bool | None = None
     """

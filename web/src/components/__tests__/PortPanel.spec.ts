@@ -85,6 +85,18 @@ describe('PortPanel', () => {
     await p.trigger('mouseleave')
     expect(w.find('[data-test=port-tip]').exists()).toBe(false)
   })
+  it('draws SFP cages and names the generation by speed', async () => {
+    const w = mountPanel([
+      port('mlxen0', { up: true, speed_mbps: 10000, connector: 'sfp' }),
+      port('re0', { up: true, speed_mbps: 2500, connector: 'rj45' }),
+      port('igb0', { up: true, speed_mbps: 1000 }), // unknown: RJ45
+    ])
+    expect(w.get('[data-port=mlxen0] svg').classes()).toContain('cage')
+    expect(w.get('[data-port=re0] svg').classes()).not.toContain('cage')
+    expect(w.get('[data-port=igb0] svg').classes()).not.toContain('cage')
+    await w.get('[data-port=mlxen0]').trigger('mouseenter')
+    expect(w.get('[data-test=port-tip]').text()).toContain('SFP+')
+  })
 })
 
 describe('ResourceBars', () => {

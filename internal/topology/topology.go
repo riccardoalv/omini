@@ -33,6 +33,7 @@ const (
 	KindSegment   NodeKind = "segment"   // inferred: several MACs behind one port (dumb switch, AP, hypervisor)
 	KindClient    NodeKind = "client"    // end device (phone, laptop, TV...)
 	KindApp       NodeKind = "app"       // a web application running on a device (Jellyfin, qBittorrent...)
+	KindWAN       NodeKind = "wan"       // an internet uplink of a router or firewall
 )
 
 type EdgeKind string
@@ -47,6 +48,16 @@ const (
 // SegmentMinMACs is the number of client MACs behind a single non-uplink port
 // from which we assume there is an unmanaged switch/AP/host there.
 const SegmentMinMACs = 3
+
+// WANLink describes an internet uplink: the router's WAN interface, the
+// physical port carrying it and its gateways.
+type WANLink struct {
+	Interface string          `json:"interface"`      // e.g. pppoe1
+	Port      string          `json:"port,omitempty"` // physical port, e.g. re0
+	SpeedMbps uint64          `json:"speed_mbps,omitempty"`
+	IPs       []string        `json:"ips,omitempty"`
+	Gateways  []model.Gateway `json:"gateways,omitempty"`
+}
 
 type Node struct {
 	ID            string        `json:"id"`
@@ -67,6 +78,7 @@ type Node struct {
 	SignalDBM     *int64        `json:"signal_dbm,omitempty"`
 	MACCount      int           `json:"mac_count,omitempty"` // segments: MACs seen behind the port
 	Device        *model.Device `json:"device,omitempty"`    // managed devices: full collected data
+	WAN           *WANLink      `json:"wan,omitempty"`       // WAN nodes: the uplink
 	OS            string        `json:"os,omitempty"`
 	ReportedOS    string        `json:"-"`                    // OS reported by an integration (input of the classifier)
 	OpenPorts     []int         `json:"open_ports,omitempty"` // found by the network scan
@@ -125,6 +137,10 @@ type builder struct {
 	// fdbPorts lists where each MAC was learned; portMACs counts MACs per port.
 	fdbPorts map[model.MACAddress][]portKey
 	portMACs map[portKey]int
+	// wanPorts maps a router port that belongs to a WAN (the WAN interface,
+	// its VLAN and physical port) to the WAN node: what is seen there is on
+	// the internet side.
+	wanPorts map[portKey]string
 	// sources keeps every device record merged into a managed node (one per
 	// integration that reports it), so no integration's data is lost.
 	sources map[string][]*model.Device
@@ -139,6 +155,7 @@ func Build(sources []Source) Topology {
 		byIP:     map[string]string{},
 		byName:   map[string]string{},
 		uplinks:  map[portKey]string{},
+		wanPorts: map[portKey]string{},
 		fdbPorts: map[model.MACAddress][]portKey{},
 		portMACs: map[portKey]int{},
 		sources:  map[string][]*model.Device{},
@@ -154,6 +171,7 @@ func Build(sources []Source) Topology {
 	}
 	b.indexFDB(managed)
 	b.placeUnlinkedDevices(managed)
+	b.addWANs(managed)
 	b.placeClients(managed)
 	b.groupSegments()
 	b.fillDirectLinkSpeeds()
@@ -671,6 +689,9 @@ func (b *builder) placeCollected(
 			}
 		} else if a, ok := arp[m]; ok {
 			n.ParentID, n.Port, kind = a.node, a.iface, EdgeInferred
+			if wan := b.wanPorts[portKey{a.node, a.iface}]; wan != "" {
+				n.ParentID, n.Port = wan, "" // e.g. the ISP modem, seen on the WAN port
+			}
 		} else if scanned {
 			n.ParentID, kind = hs.node, EdgeInferred
 		}
@@ -848,6 +869,74 @@ func (b *builder) fillDirectLinkSpeeds() {
 	}
 }
 
+// addWANs adds one node per internet uplink of each router/firewall, as
+// its parent: several WANs give several parents.
+func (b *builder) addWANs(managed []string) {
+	for _, id := range managed {
+		var ifaces []model.Interface
+		var gateways []model.Gateway
+		seen := map[string]bool{}
+		for _, d := range b.sources[id] {
+			for _, i := range d.Interfaces {
+				if !seen[i.Name] {
+					seen[i.Name] = true
+					ifaces = append(ifaces, i)
+				}
+			}
+			gateways = append(gateways, d.Gateways...)
+		}
+		byName := map[string]model.Interface{}
+		for _, i := range ifaces {
+			byName[i.Name] = i
+		}
+		for _, i := range ifaces {
+			if !model.Deref(i.Wan) {
+				continue
+			}
+			wanID := "wan:" + id + ":" + i.Name
+			link := &WANLink{Interface: i.Name, SpeedMbps: model.Deref(i.SpeedMbps), IPs: i.IPs}
+			// Follow the chain (PPPoE → VLAN → port) to the physical port.
+			chain := []string{i.Name}
+			for p, n := model.Deref(i.Parent), 0; p != "" && n < 4; n++ {
+				chain = append(chain, p)
+				link.Port = p
+				p = model.Deref(byName[p].Parent)
+			}
+			for _, g := range gateways {
+				if model.Deref(g.Interface) == i.Name {
+					link.Gateways = append(link.Gateways, g)
+				}
+			}
+			label := model.Deref(i.Description)
+			if label == "" {
+				label = "WAN"
+			}
+			b.nodes[wanID] = &Node{
+				ID: wanID, Kind: KindWAN, Label: label, Role: "wan",
+				Online: model.Deref(i.Up) && wanUp(link.Gateways), WAN: link,
+			}
+			for _, p := range chain {
+				b.wanPorts[portKey{id, p}] = wanID
+			}
+			port := link.Port
+			if port == "" {
+				port = i.Name
+			}
+			b.addEdge(wanID, "", id, port, EdgeInferred, link.SpeedMbps)
+		}
+	}
+}
+
+// wanUp: an uplink is up unless every gateway on it is down.
+func wanUp(gateways []model.Gateway) bool {
+	for _, g := range gateways {
+		if g.Status != model.GatewayStatusDown {
+			return true
+		}
+	}
+	return len(gateways) == 0
+}
+
 func edgeKey(a, c string) string {
 	if c < a {
 		a, c = c, a
@@ -886,7 +975,10 @@ func (b *builder) result() Topology {
 
 	t := Topology{Nodes: make([]Node, 0, len(b.nodes)), Edges: make([]Edge, 0, len(b.edges))}
 	for _, e := range b.edges {
-		if depth[e.Target] < depth[e.Source] {
+		// WAN nodes are parents of their router, whatever the BFS found.
+		toWAN := b.nodes[e.Target] != nil && b.nodes[e.Target].Kind == KindWAN &&
+			(b.nodes[e.Source] == nil || b.nodes[e.Source].Kind != KindWAN)
+		if toWAN || (depth[e.Target] < depth[e.Source] && b.nodes[e.Source].Kind != KindWAN) {
 			e.Source, e.Target, e.SourcePort, e.TargetPort = e.Target, e.Source, e.TargetPort, e.SourcePort
 		}
 		t.Edges = append(t.Edges, *e)

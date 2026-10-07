@@ -288,6 +288,7 @@ export const typeIcons: Record<string, string> = {
   nas: 'hard-drive',
   hypervisor: 'layers',
   virtual_machine: 'server',
+  wan: 'globe',
   computer: 'monitor',
   phone: 'smartphone',
   tablet: 'tablet',

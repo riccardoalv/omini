@@ -285,7 +285,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
 	for _, n := range topo.Nodes {
-		if n.Online {
+		if n.Online && n.Kind != topology.KindWAN { // an uplink is not a device
 			seen = append(seen, store.InventoryEntry{
 				ID: n.ID, Kind: string(n.Kind), Label: n.Label, MAC: n.MAC, IP: n.IP,
 				Hostname: n.Hostname, Vendor: n.Vendor, ParentID: n.ParentID, Port: n.Port,
@@ -365,6 +365,10 @@ func classifyNodes(topo *topology.Topology) {
 }
 
 func classifyNode(n *topology.Node) {
+	if n.Kind == topology.KindWAN {
+		n.Type = "wan"
+		return
+	}
 	in := classify.Input{
 		Kind: string(n.Kind), Role: n.Role, Vendor: n.Vendor, Model: n.Model, Hostname: n.Hostname,
 		OS: n.ReportedOS, RandomMAC: n.RandomMAC, OpenPorts: n.OpenPorts, Services: n.Services,

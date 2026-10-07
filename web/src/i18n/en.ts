@@ -86,6 +86,10 @@ export default {
     },
   },
   panel: {
+    uplink: 'Internet uplink',
+    interface: 'Interface',
+    speed: 'Speed',
+    connector: 'Connector',
     status: 'Status',
     media: 'Media',
     traffic: 'Traffic',
@@ -161,6 +165,7 @@ export default {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    wan: 'Internet uplink',
     app: 'App',
     air_conditioner: 'Air conditioner',
     firewall: 'Firewall',

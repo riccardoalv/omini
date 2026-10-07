@@ -96,6 +96,7 @@ const portLinks = computed(() => {
 const ports = computed(() =>
   (n.value?.device?.interfaces ?? []).filter((i) => i.type !== 'loopback'),
 )
+const gateways = computed(() => n.value?.device?.gateways ?? n.value?.wan?.gateways ?? [])
 const roleLabel = computed(() => (n.value?.type ? t(`types.${n.value.type}`) : ''))
 const reasons = computed(() => parseReasons(n.value?.reasons))
 const logoName = slugName
@@ -473,11 +474,29 @@ async function save(patch: {
         </table>
       </section>
 
-      <section v-if="n.device?.gateways?.length" data-test="gateways">
+      <section v-if="n.wan" data-test="wan">
+        <h3>{{ t('panel.uplink') }}</h3>
+        <dl>
+          <dt>{{ t('panel.interface') }}</dt>
+          <dd class="mono">
+            {{ n.wan.interface }}<template v-if="n.wan.port"> → {{ n.wan.port }}</template>
+          </dd>
+          <template v-if="n.wan.speed_mbps">
+            <dt>{{ t('panel.speed') }}</dt>
+            <dd>{{ formatSpeed(n.wan.speed_mbps) }}</dd>
+          </template>
+          <template v-if="n.wan.ips?.length">
+            <dt>IP</dt>
+            <dd class="mono">{{ n.wan.ips.join(', ') }}</dd>
+          </template>
+        </dl>
+      </section>
+
+      <section v-if="gateways.length" data-test="gateways">
         <h3>{{ t('panel.gateways') }}</h3>
         <table class="table ports">
           <tbody>
-            <tr v-for="g in n.device.gateways" :key="g.name">
+            <tr v-for="g in gateways" :key="g.name">
               <td><span class="dot" :class="g.status" /></td>
               <td>{{ g.name }}</td>
               <td>{{ t(`panel.gatewayStatus.${g.status}`) }}</td>

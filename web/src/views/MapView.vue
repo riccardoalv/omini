@@ -56,6 +56,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
   segment: { width: 240, height: 56 },
   client: { width: 200, height: 38 },
   app: { width: 180, height: 34 },
+  wan: { width: 180, height: 56 },
   group: { width: 150, height: 44 },
 }
 
@@ -152,6 +153,10 @@ const flowNodes = computed<Node[]>(() => {
 
 const flowEdges = computed<Edge[]>(() => {
   const byId = new Map(nodes.value.map((n) => [n.id, n]))
+  // Links ending at the same node (several WANs into a firewall) would stack
+  // their speeds there: those show it at their other end.
+  const incoming = new Map<string, number>()
+  for (const e of view.value.edges) incoming.set(e.target, (incoming.get(e.target) ?? 0) + 1)
   return view.value.edges.map((e) => {
     const source = byId.get(e.source)
     const target = byId.get(e.target)
@@ -161,7 +166,10 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: { speed: e.speed_mbps },
+      data: {
+        speed: e.speed_mbps,
+        labelAt: (incoming.get(e.target) ?? 0) > 1 ? 'source' : 'target',
+      },
       class: { slow: look.slow, offline: target ? !target.online : false },
       style: {
         strokeWidth: look.width,

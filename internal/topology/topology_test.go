@@ -245,3 +245,63 @@ func TestDirectLinksGetThePortSpeed(t *testing.T) {
 		}
 	}
 }
+
+func TestWANsAreParentsOfTheFirewall(t *testing.T) {
+	up, down := model.GatewayStatusUp, model.GatewayStatusDown
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"},
+		Interfaces: []model.Interface{
+			{Name: "re0", Up: model.Ptr(true), SpeedMbps: model.Ptr(uint64(2500))},
+			{Name: "vlan0.2000", Up: model.Ptr(true), Parent: model.Ptr("re0")},
+			{
+				Name: "pppoe1", Description: model.Ptr("WAN"), Up: model.Ptr(true), Wan: model.Ptr(true),
+				Parent: model.Ptr("vlan0.2000"), SpeedMbps: model.Ptr(uint64(2500)), IPs: []string{"100.64.0.20/32"},
+			},
+			{Name: "igb3", Description: model.Ptr("LTE"), Up: model.Ptr(true), Wan: model.Ptr(true), SpeedMbps: model.Ptr(uint64(1000))},
+			{Name: "igb1", Up: model.Ptr(true), SpeedMbps: model.Ptr(uint64(1000))},
+		},
+		Gateways: []model.Gateway{
+			{Name: "WAN_PPPOE", Interface: model.Ptr("pppoe1"), Status: up},
+			{Name: "LTE_GW", Interface: model.Ptr("igb3"), Status: down},
+		},
+		Arp: []model.ArpEntry{
+			{IP: "192.168.100.1", MAC: "aa:00:00:00:00:01", Interface: model.Ptr("re0")}, // ISP modem
+			{IP: "192.168.1.10", MAC: "aa:00:00:00:00:02", Interface: model.Ptr("igb1")},
+		},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{fw}}})
+	nodes := map[string]topology.Node{}
+	for _, n := range topo.Nodes {
+		nodes[n.ID] = n
+	}
+	parents := map[string][]string{}
+	speed := map[string]uint64{}
+	for _, e := range topo.Edges {
+		parents[e.Target] = append(parents[e.Target], e.Source)
+		speed[e.Source+">"+e.Target] = e.SpeedMbps
+	}
+	fwID := "dev:58:9c:fc:00:00:01"
+	pppoe, lte := "wan:"+fwID+":pppoe1", "wan:"+fwID+":igb3"
+
+	w := nodes[pppoe]
+	if w.Kind != topology.KindWAN || w.Label != "WAN" || !w.Online || w.WAN.Port != "re0" ||
+		w.WAN.SpeedMbps != 2500 || len(w.WAN.Gateways) != 1 || w.WAN.IPs[0] != "100.64.0.20/32" {
+		t.Fatalf("PPPoE WAN node = %+v %+v", w, w.WAN)
+	}
+	if l := nodes[lte]; l.Label != "LTE" || l.Online {
+		t.Fatalf("LTE WAN (gateway down) = %+v", l)
+	}
+	if got := parents[fwID]; len(got) != 2 {
+		t.Fatalf("the firewall must have both WANs as parents, got %v", got)
+	}
+	if speed[pppoe+">"+fwID] != 2500 || speed[lte+">"+fwID] != 1000 {
+		t.Fatalf("WAN link speeds: %v", speed)
+	}
+	if got := parents["mac:aa:00:00:00:00:01"]; len(got) != 1 || got[0] != pppoe {
+		t.Fatalf("the modem on the WAN port belongs to the WAN: %v", got)
+	}
+	if got := parents["mac:aa:00:00:00:00:02"]; len(got) != 1 || got[0] != fwID {
+		t.Fatalf("LAN devices stay under the firewall: %v", got)
+	}
+}

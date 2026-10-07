@@ -56,6 +56,14 @@ function portStatus(p: Interface) {
   return `${speed} · ${p.duplex === 'full' ? t('panel.fullDuplex') : t('panel.halfDuplex')}`
 }
 
+/** "SFP+", "SFP28", "QSFP+", "RJ45": the cage generation follows the speed. */
+function connectorName(p: Interface) {
+  const speed = p.speed_mbps ?? 0
+  if (p.connector === 'sfp') return speed >= 25_000 ? 'SFP28' : speed >= 10_000 ? 'SFP+' : 'SFP'
+  if (p.connector === 'qsfp') return speed >= 100_000 ? 'QSFP28' : 'QSFP+'
+  return 'RJ45'
+}
+
 /** Short label under a port: "igb0" stays, "GigabitEthernet0/12" → "12". */
 function shortName(name: string) {
   if (name.length <= 6) return name
@@ -83,7 +91,18 @@ function shortName(name: string) {
           @blur="hovered = undefined"
           @click="open(p)"
         >
-          <svg viewBox="0 0 36 30" aria-hidden="true">
+          <!-- SFP / QSFP: a cage with the module's latch; otherwise an RJ45 jack. -->
+          <svg
+            v-if="p.connector === 'sfp' || p.connector === 'qsfp'"
+            viewBox="0 0 36 30"
+            aria-hidden="true"
+            class="cage"
+          >
+            <rect class="jack" x="3" y="6" width="30" height="18" rx="1.5" />
+            <rect class="slot" x="7" y="10" width="22" height="10" rx="1" />
+            <path class="latch" d="M11 6V3h14v3" />
+          </svg>
+          <svg v-else viewBox="0 0 36 30" aria-hidden="true">
             <path class="jack" d="M3 3h30v18h-7v4h-4v3h-8v-3h-4v-4H3z" stroke-linejoin="round" />
             <rect
               v-for="i in 6"
@@ -137,6 +156,10 @@ function shortName(name: string) {
           <template v-if="hovered.up">{{ portStatus(hovered) }}</template>
           <template v-else>{{ t('panel.portDown') }}</template>
         </dd>
+        <template v-if="hovered.connector">
+          <dt>{{ t('panel.connector') }}</dt>
+          <dd>{{ connectorName(hovered) }}</dd>
+        </template>
         <template v-if="hovered.media">
           <dt>{{ t('panel.media') }}</dt>
           <dd class="mono">{{ hovered.media }}</dd>
@@ -228,6 +251,20 @@ function shortName(name: string) {
 }
 .pin {
   fill: var(--border-strong);
+}
+.slot {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.port.up .slot {
+  fill: color-mix(in srgb, var(--c) 55%, var(--bg));
+  stroke: var(--c);
+}
+.latch {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 1.6;
 }
 .port.up .pin {
   fill: color-mix(in srgb, var(--c) 70%, white 30%);

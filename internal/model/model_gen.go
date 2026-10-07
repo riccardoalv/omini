@@ -500,6 +500,9 @@ func (j *Host) UnmarshalJSON(value []byte) error {
 }
 
 type Interface struct {
+	// Connector corresponds to the JSON schema field "connector".
+	Connector *InterfaceConnector `json:"connector,omitempty,omitzero" yaml:"connector,omitempty"`
+
 	// Description corresponds to the JSON schema field "description".
 	Description *string `json:"description,omitempty,omitzero" yaml:"description,omitempty"`
 
@@ -517,6 +520,9 @@ type Interface struct {
 
 	// Readable port name (ifName), never a numeric index.
 	Name string `json:"name" yaml:"name"`
+
+	// Interface this one runs on: a VLAN's port, the port carrying a PPPoE link.
+	Parent *string `json:"parent,omitempty,omitzero" yaml:"parent,omitempty"`
 
 	// Cumulative counter.
 	RxBytes *uint64 `json:"rx_bytes,omitempty,omitzero" yaml:"rx_bytes,omitempty"`
@@ -538,6 +544,41 @@ type Interface struct {
 
 	// Operational status.
 	Up *bool `json:"up,omitempty,omitzero" yaml:"up,omitempty"`
+
+	// Uplink to the internet (a WAN of a router or firewall).
+	Wan *bool `json:"wan,omitempty,omitzero" yaml:"wan,omitempty"`
+}
+
+type InterfaceConnector string
+
+const InterfaceConnectorQsfp InterfaceConnector = "qsfp"
+const InterfaceConnectorRj45 InterfaceConnector = "rj45"
+const InterfaceConnectorSfp InterfaceConnector = "sfp"
+
+var enumValues_InterfaceConnector = []interface{}{
+	"rj45",
+	"sfp",
+	"qsfp",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *InterfaceConnector) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_InterfaceConnector {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_InterfaceConnector, v)
+	}
+	*j = InterfaceConnector(v)
+	return nil
 }
 
 type InterfaceDuplex string

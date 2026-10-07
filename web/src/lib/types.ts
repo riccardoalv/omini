@@ -1,13 +1,15 @@
 // Types mirroring the Go API (internal/api, internal/topology, schema/).
 
 export type DeviceRole = 'router' | 'switch' | 'ap' | 'firewall' | 'server' | 'unknown'
-export type NodeKind = 'device' | 'unmanaged' | 'segment' | 'client' | 'app'
+export type NodeKind = 'device' | 'unmanaged' | 'segment' | 'client' | 'app' | 'wan'
 export type EdgeKind = 'lldp' | 'fdb' | 'wifi' | 'inferred'
 
 export interface Interface {
   name: string
   description?: string
   type?: string
+  /** Physical connector: drawn as an RJ45 jack or an SFP cage. */
+  connector?: 'rj45' | 'sfp' | 'qsfp'
   mac?: string
   up?: boolean
   speed_mbps?: number
@@ -15,6 +17,10 @@ export interface Interface {
   /** As reported by the device, e.g. "1000baseT <full-duplex>". */
   media?: string
   ips?: string[]
+  /** Internet uplink of a router or firewall. */
+  wan?: boolean
+  /** Interface it runs on (a VLAN's port, the port carrying PPPoE). */
+  parent?: string
   rx_bytes?: number
   tx_bytes?: number
   rx_errors?: number
@@ -28,6 +34,16 @@ export interface Gateway {
   status: 'up' | 'degraded' | 'down' | 'unknown'
   rtt_ms?: number
   loss_pct?: number
+}
+
+/** WAN nodes: an internet uplink of a router or firewall. */
+export interface WANLink {
+  interface: string
+  /** Physical port carrying it (e.g. re0 for PPPoE over a VLAN). */
+  port?: string
+  speed_mbps?: number
+  ips?: string[]
+  gateways?: Gateway[]
 }
 
 export interface Device {
@@ -67,6 +83,7 @@ export interface TopoNode {
   signal_dbm?: number
   mac_count?: number
   device?: Device
+  wan?: WANLink
   pinned?: boolean
   /** Hidden from the map by the user. */
   hidden?: boolean

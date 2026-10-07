@@ -88,6 +88,9 @@ func (m *Manager) Load() ([]*Plugin, []error) {
 			continue
 		}
 		home := filepath.Join(m.Dir, e.Name())
+		if _, err := os.Stat(filepath.Join(home, "src")); err != nil {
+			continue // only the environment of a development plugin
+		}
 		p, err := m.open(filepath.Join(home, "src"), home)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("plugin %s: %w", e.Name(), err))

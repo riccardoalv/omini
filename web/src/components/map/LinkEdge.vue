@@ -8,6 +8,8 @@ import { speedColor } from '@/lib/speed'
 
 export interface LinkData {
   speed?: number
+  /** Where the speed goes: next to the device reached (default) or the source. */
+  labelAt?: 'target' | 'source'
 }
 
 /**
@@ -31,9 +33,18 @@ const label = computed(() => {
   const speed = formatSpeed(props.data?.speed)
   if (!speed) return undefined
   const vertical = props.targetPosition === Position.Top
+  const color = speedColor(props.data?.speed)
+  if (props.data?.labelAt === 'source') {
+    return {
+      text: speed,
+      color,
+      x: vertical ? props.sourceX : props.sourceX + 26,
+      y: vertical ? props.sourceY + 14 : props.sourceY,
+    }
+  }
   return {
     text: speed,
-    color: speedColor(props.data?.speed),
+    color,
     x: vertical ? props.targetX : props.targetX - 26,
     y: vertical ? props.targetY - 14 : props.targetY,
   }

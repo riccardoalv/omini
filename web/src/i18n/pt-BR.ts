@@ -89,6 +89,10 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    uplink: 'Link de internet',
+    interface: 'Interface',
+    speed: 'Velocidade',
+    connector: 'Conector',
     status: 'Status',
     media: 'Mídia',
     traffic: 'Tráfego',
@@ -164,6 +168,7 @@ const ptBR: typeof en = {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    wan: 'Link de internet',
     app: 'Aplicativo',
     air_conditioner: 'Ar-condicionado',
     firewall: 'Firewall',

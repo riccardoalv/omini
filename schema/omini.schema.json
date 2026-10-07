@@ -152,6 +152,9 @@
         "type": {
           "$ref": "#/$defs/InterfaceType"
         },
+        "connector": {
+          "$ref": "#/$defs/InterfaceConnector"
+        },
         "mac": {
           "$ref": "#/$defs/MacAddress"
         },
@@ -161,6 +164,14 @@
             "type": "string"
           },
           "description": "Addresses assigned to the interface, with prefix length (192.168.1.1/24)."
+        },
+        "wan": {
+          "type": "boolean",
+          "description": "Uplink to the internet (a WAN of a router or firewall)."
+        },
+        "parent": {
+          "type": "string",
+          "description": "Interface this one runs on: a VLAN's port, the port carrying a PPPoE link."
         },
         "up": {
           "type": "boolean",
@@ -212,6 +223,15 @@
         "loopback",
         "tunnel",
         "other"
+      ]
+    },
+    "InterfaceConnector": {
+      "type": "string",
+      "description": "Physical connector of a port.",
+      "enum": [
+        "rj45",
+        "sfp",
+        "qsfp"
       ]
     },
     "Neighbor": {

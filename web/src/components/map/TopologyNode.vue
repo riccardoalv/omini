@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import type { ClientGroup } from '@/lib/graph'
+import { formatSpeed } from '@/lib/format'
 import { displayName } from '@/lib/names'
 import type { TopoNode } from '@/lib/types'
 
@@ -44,8 +45,22 @@ const sub = computed(() => {
   if (!node) return ''
   if (node.kind === 'segment') return t('map.clients', { n: node.mac_count ?? 0 })
   if (node.kind === 'app') return node.port ? `:${node.port}` : ''
+  if (node.kind === 'wan') {
+    // "2.5G · 30 ms": speed of the uplink and latency of its gateway.
+    const rtt = node.wan?.gateways?.find((g) => g.rtt_ms !== undefined)?.rtt_ms
+    return [formatSpeed(node.wan?.speed_mbps), rtt !== undefined ? `${Math.round(rtt)} ms` : '']
+      .filter(Boolean)
+      .join(' · ')
+  }
   if (node.kind === 'client') return label.value !== node.ip ? (node.ip ?? '') : ''
   return [node.ip, node.model ?? node.vendor].filter(Boolean).join(' · ')
+})
+/** WAN status: the worst of its gateways (up, degraded, down). */
+const wanStatus = computed(() => {
+  const gws = n.value?.wan?.gateways ?? []
+  if (!n.value?.online) return 'down'
+  if (gws.some((g) => g.status === 'degraded' || g.status === 'down')) return 'degraded'
+  return 'up'
 })
 const horizontal = computed(() => props.data.direction !== 'DOWN')
 const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
@@ -89,6 +104,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
         class="dot"
         :class="{ online: n.online && !data.error, error: data.error }"
       />
+      <span v-else-if="variant === 'wan'" class="dot" :class="`wan-${wanStatus}`" />
     </template>
 
     <Handle
@@ -100,6 +116,26 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
 </template>
 
 <style scoped>
+.topo-node.wan {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 12%, var(--bg-elevated)),
+    var(--bg-elevated)
+  );
+}
+.topo-node.wan .icon {
+  color: var(--accent);
+}
+.dot.wan-up {
+  background: var(--ok);
+}
+.dot.wan-degraded {
+  background: var(--warn);
+}
+.dot.wan-down {
+  background: var(--danger);
+}
 .topo-node {
   display: flex;
   align-items: center;
