@@ -46,6 +46,8 @@ export default {
     refresh: 'Refresh now',
     resetLayout: 'Reset layout',
     hideOffline: 'Hide offline',
+    showHidden: 'Show hidden',
+    hideHidden: 'Hide hidden',
     showOffline: 'Show offline',
     collapseChildren: 'Collapse children',
     expandChildren: 'Expand children',
@@ -92,6 +94,14 @@ export default {
     unpin: 'Unpin',
     pinned: 'Pinned',
     pinHint: 'Pinned devices are never collapsed into a group.',
+    hide: 'Hide',
+    unhide: 'Show on map',
+    hideHint:
+      'Hidden devices (and everything connected below them) leave the map but stay in Devices.',
+    delete: 'Delete',
+    confirmDelete: 'Click again to delete',
+    deleteHint:
+      'Removes the device and its history from Omini. If it is still on the network, it comes back on the next scan — use Hide to keep it off the map.',
     expandGroup: 'Show all clients',
     collapseGroup: 'Group clients',
     ip: 'IP address',
@@ -175,6 +185,7 @@ export default {
     client: 'Client',
   },
   devices: {
+    hidden: 'Hidden',
     title: 'Devices',
     subtitle: 'Everything ever seen on your network. Entries are kept until you delete them.',
     name: 'Name',

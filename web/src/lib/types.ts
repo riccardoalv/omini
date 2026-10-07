@@ -54,6 +54,8 @@ export interface TopoNode {
   mac_count?: number
   device?: Device
   pinned?: boolean
+  /** Hidden from the map by the user. */
+  hidden?: boolean
   last_seen?: string
   os?: string
   open_ports?: number[]
@@ -164,6 +166,7 @@ export interface InventoryEntry {
   port?: string
   alias?: string
   pinned: boolean
+  hidden: boolean
   first_seen: string
   last_seen: string
   online: boolean

@@ -7,6 +7,7 @@ import {
   edgeLook,
   groupId,
   linkOnPort,
+  withoutHidden,
   withoutOffline,
 } from '../graph'
 import type { TopoEdge, TopoNode } from '../types'
@@ -184,6 +185,17 @@ describe('withoutOffline', () => {
     const edges = [edge('sw', 'tv'), edge('sw', 'phone')]
     const view = withoutOffline(nodes, edges)
     expect(view.nodes.map((n) => n.id)).toEqual(['sw', 'tv'])
+    expect(view.edges.map((e) => e.target)).toEqual(['tv'])
+    expect(view.hidden).toBe(1)
+  })
+})
+
+describe('withoutHidden', () => {
+  it('removes hidden devices and everything below them', () => {
+    const nodes = [device('gw'), client('pve', { hidden: true }), client('vm'), client('tv')]
+    const edges = [edge('gw', 'pve'), edge('pve', 'vm'), edge('gw', 'tv')]
+    const view = withoutHidden(nodes, edges)
+    expect(view.nodes.map((n) => n.id)).toEqual(['gw', 'tv'])
     expect(view.edges.map((e) => e.target)).toEqual(['tv'])
     expect(view.hidden).toBe(1)
   })

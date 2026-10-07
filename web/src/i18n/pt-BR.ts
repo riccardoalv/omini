@@ -48,6 +48,8 @@ const ptBR: typeof en = {
     refresh: 'Atualizar agora',
     resetLayout: 'Reorganizar mapa',
     hideOffline: 'Ocultar offline',
+    showHidden: 'Mostrar ocultos',
+    hideHidden: 'Esconder ocultos',
     showOffline: 'Mostrar offline',
     collapseChildren: 'Compactar filhos',
     expandChildren: 'Expandir filhos',
@@ -95,6 +97,14 @@ const ptBR: typeof en = {
     unpin: 'Desafixar',
     pinned: 'Fixado',
     pinHint: 'Dispositivos fixados nunca são agrupados.',
+    hide: 'Ocultar',
+    unhide: 'Mostrar no mapa',
+    hideHint:
+      'Dispositivos ocultos (e tudo conectado abaixo deles) saem do mapa, mas continuam em Dispositivos.',
+    delete: 'Excluir',
+    confirmDelete: 'Clique de novo para excluir',
+    deleteHint:
+      'Remove o dispositivo e o histórico dele do Omini. Se ainda estiver na rede, ele volta na próxima varredura — use Ocultar para tirá-lo do mapa.',
     expandGroup: 'Mostrar todos os clientes',
     collapseGroup: 'Agrupar clientes',
     ip: 'Endereço IP',
@@ -178,6 +188,7 @@ const ptBR: typeof en = {
     client: 'Cliente',
   },
   devices: {
+    hidden: 'Oculto',
     title: 'Dispositivos',
     subtitle:
       'Tudo o que já passou pela sua rede. Os registros ficam guardados até você excluí-los.',

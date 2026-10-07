@@ -15,6 +15,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...mod.api,
       webServices: vi.fn<typeof mod.api.webServices>(),
       updateInventory: vi.fn<typeof mod.api.updateInventory>(),
+      deleteInventory: vi.fn<typeof mod.api.deleteInventory>(),
     },
   }
 })
@@ -151,5 +152,48 @@ describe('NodePanel app node', () => {
     expect(w.get('[data-test=open-web]').attributes('href')).toBe('http://192.168.1.42:8080/')
     expect(w.find('.classification').exists()).toBe(false)
     expect(w.text()).toContain('Ubuntu')
+  })
+})
+
+describe('NodePanel hide and delete', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    vi.mocked(api.updateInventory)
+      .mockReset()
+      .mockResolvedValue({} as never)
+    vi.mocked(api.deleteInventory).mockReset().mockResolvedValue()
+  })
+
+  it('hides a device from the map and shows it again', async () => {
+    const w = mountPanel(firewall)
+    await w.get('[data-test=hide]').trigger('click')
+    await flushPromises()
+    expect(api.updateInventory).toHaveBeenCalledWith(firewall.id, { hidden: true })
+    expect(w.emitted('changed')![0]).toEqual([{ hidden: true }])
+
+    const hidden = mountPanel({ ...firewall, hidden: true })
+    expect(hidden.get('[data-test=hide]').text()).toBe('Show on map')
+    await hidden.get('[data-test=hide]').trigger('click')
+    await flushPromises()
+    expect(api.updateInventory).toHaveBeenLastCalledWith(firewall.id, { hidden: false })
+  })
+
+  it('deletes only after a second click', async () => {
+    const w = mountPanel(firewall)
+    const del = w.get('[data-test=delete]')
+    await del.trigger('click')
+    expect(api.deleteInventory).not.toHaveBeenCalled()
+    expect(del.text()).toBe('Click again to delete')
+
+    await del.trigger('click')
+    await flushPromises()
+    expect(api.deleteInventory).toHaveBeenCalledWith([firewall.id])
+    expect(w.emitted('deleted')![0]).toEqual([firewall.id])
+  })
+
+  it('has no hide or delete for app nodes', () => {
+    const w = mountPanel({ ...firewall, id: 'app:x:8096', kind: 'app' })
+    expect(w.find('[data-test=hide]').exists()).toBe(false)
+    expect(w.find('[data-test=delete]').exists()).toBe(false)
   })
 })

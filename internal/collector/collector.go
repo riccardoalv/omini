@@ -323,7 +323,7 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 			if e.Alias != "" {
 				n.Label = e.Alias
 			}
-			n.Pinned = e.Pinned
+			n.Pinned, n.Hidden = e.Pinned, e.Hidden
 			applyOverrides(n, e)
 		}
 	}
@@ -334,7 +334,7 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 		lastSeen := e.LastSeen
 		n := topology.Node{
 			ID: e.ID, Kind: topology.KindClient, Role: "client", Label: e.Label, Online: false,
-			MAC: e.MAC, IP: e.IP, Hostname: e.Hostname, Vendor: e.Vendor, Pinned: e.Pinned,
+			MAC: e.MAC, IP: e.IP, Hostname: e.Hostname, Vendor: e.Vendor, Pinned: e.Pinned, Hidden: e.Hidden,
 			RandomMAC: model.MACAddress(e.MAC).IsRandomized(), LastSeen: &lastSeen,
 		}
 		if e.Alias != "" {

@@ -156,6 +156,28 @@ export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): n
 }
 
 /** Removes offline nodes and the links that lead to them. */
+/** Removes the devices the user hid, and everything below them. */
+export function withoutHidden(nodes: TopoNode[], edges: TopoEdge[]) {
+  const hidden = new Set(nodes.filter((n) => n.hidden).map((n) => n.id))
+  const count = hidden.size
+  const below = new Map<string, string[]>()
+  for (const e of edges) below.set(e.source, [...(below.get(e.source) ?? []), e.target])
+  const stack = [...hidden]
+  while (stack.length) {
+    for (const child of below.get(stack.pop()!) ?? []) {
+      if (!hidden.has(child)) {
+        hidden.add(child)
+        stack.push(child)
+      }
+    }
+  }
+  return {
+    nodes: nodes.filter((n) => !hidden.has(n.id)),
+    edges: edges.filter((e) => !hidden.has(e.source) && !hidden.has(e.target)),
+    hidden: count,
+  }
+}
+
 export function withoutOffline(nodes: TopoNode[], edges: TopoEdge[]) {
   const offline = new Set(nodes.filter((n) => !n.online).map((n) => n.id))
   return {

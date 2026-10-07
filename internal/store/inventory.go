@@ -22,6 +22,7 @@ type InventoryEntry struct {
 	Port     string `json:"port,omitempty"`
 	Alias    string `json:"alias,omitempty"`
 	Pinned   bool   `json:"pinned"`
+	Hidden   bool   `json:"hidden"` // hidden from the map (kept in the inventory)
 	// User corrections of the classification; empty means automatic.
 	DeviceType string    `json:"device_type,omitempty"`
 	Icon       string    `json:"icon,omitempty"`
@@ -69,7 +70,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, label, COALESCE(mac, ''), COALESCE(ip, ''), COALESCE(hostname, ''), COALESCE(vendor, ''),
 		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), pinned, first_seen, last_seen,
-		       COALESCE(device_type, ''), COALESCE(icon, '')
+		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden
 		FROM inventory ORDER BY last_seen DESC, id`)
 	if err != nil {
 		return nil, err
@@ -78,15 +79,15 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	var out []InventoryEntry
 	for rows.Next() {
 		var (
-			e             InventoryEntry
-			pinned        int
-			first, latest int64
+			e              InventoryEntry
+			pinned, hidden int
+			first, latest  int64
 		)
 		if err := rows.Scan(&e.ID, &e.Kind, &e.Label, &e.MAC, &e.IP, &e.Hostname, &e.Vendor,
-			&e.ParentID, &e.Port, &e.Alias, &pinned, &first, &latest, &e.DeviceType, &e.Icon); err != nil {
+			&e.ParentID, &e.Port, &e.Alias, &pinned, &first, &latest, &e.DeviceType, &e.Icon, &hidden); err != nil {
 			return nil, err
 		}
-		e.Pinned, e.FirstSeen, e.LastSeen = pinned == 1, fromUnix(first), fromUnix(latest)
+		e.Pinned, e.Hidden, e.FirstSeen, e.LastSeen = pinned == 1, hidden == 1, fromUnix(first), fromUnix(latest)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -97,13 +98,14 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 type InventoryUpdate struct {
 	Alias      *string `json:"alias"`
 	Pinned     *bool   `json:"pinned"`
+	Hidden     *bool   `json:"hidden"`
 	DeviceType *string `json:"device_type"`
 	Icon       *string `json:"icon"`
 }
 
 // UpdateInventory changes the user fields of an entry.
 func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdate) (InventoryEntry, error) {
-	alias, pinned := u.Alias, u.Pinned
+	alias := u.Alias
 	for col, v := range map[string]*string{"device_type": u.DeviceType, "icon": u.Icon} {
 		if v == nil {
 			continue
@@ -120,8 +122,12 @@ func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdat
 			return InventoryEntry{}, err
 		}
 	}
-	if pinned != nil {
-		if _, err := s.db.ExecContext(ctx, `UPDATE inventory SET pinned = ? WHERE id = ?`, boolInt(*pinned), id); err != nil {
+	for col, v := range map[string]*bool{"pinned": u.Pinned, "hidden": u.Hidden} {
+		if v == nil {
+			continue
+		}
+		//nolint:gosec // col comes from the fixed map above, not from the request
+		if _, err := s.db.ExecContext(ctx, `UPDATE inventory SET `+col+` = ? WHERE id = ?`, boolInt(*v), id); err != nil {
 			return InventoryEntry{}, err
 		}
 	}

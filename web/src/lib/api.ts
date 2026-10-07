@@ -102,7 +102,13 @@ export const api = {
   inventory: () => request<InventoryEntry[]>('GET', '/api/inventory'),
   updateInventory: (
     id: string,
-    input: { alias?: string; pinned?: boolean; device_type?: string; icon?: string },
+    input: {
+      alias?: string
+      pinned?: boolean
+      hidden?: boolean
+      device_type?: string
+      icon?: string
+    },
   ) => request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),
 

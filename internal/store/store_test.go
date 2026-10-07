@@ -121,3 +121,26 @@ func TestClassificationOverrides(t *testing.T) {
 		t.Fatalf("empty must reset only that field: %+v", e)
 	}
 }
+
+func TestHideDevice(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: "mac:aa", Kind: "client", Label: "x"}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	yes, no := true, false
+	e, err := s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{Hidden: &yes})
+	if err != nil || !e.Hidden || e.Pinned {
+		t.Fatalf("hide: %+v, %v", e, err)
+	}
+	// Seen again: still hidden (user fields are never overwritten).
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: "mac:aa", Kind: "client", Label: "x"}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := s.ListInventory(ctx); !list[0].Hidden {
+		t.Fatal("a hidden device must stay hidden when seen again")
+	}
+	if e, _ = s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{Hidden: &no}); e.Hidden {
+		t.Fatal("unhide failed")
+	}
+}

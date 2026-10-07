@@ -2,7 +2,9 @@ package collector
 
 import (
 	"testing"
+	"time"
 
+	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
 
@@ -69,5 +71,13 @@ func TestVMsStayWithoutProxmoxHost(t *testing.T) {
 	attachVMs(&topo)
 	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "gw" {
 		t.Fatalf("no host: %v", got)
+	}
+}
+
+func TestApplyInventoryMarksHiddenDevices(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{{ID: "tv", Kind: topology.KindClient}, {ID: "phone", Kind: topology.KindClient}}}
+	applyInventory(&topo, []store.InventoryEntry{{ID: "tv", Kind: "client", Hidden: true, LastSeen: time.Now()}}, time.Now())
+	if !topo.Nodes[0].Hidden || topo.Nodes[1].Hidden {
+		t.Fatalf("hidden flags: %+v", topo.Nodes)
 	}
 }

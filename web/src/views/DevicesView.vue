@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Pencil, Pin, Search, Trash2 } from 'lucide-vue-next'
+import { Eye, EyeOff, Pencil, Pin, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -66,6 +66,11 @@ async function rename(e: InventoryEntry) {
 
 async function pin(e: InventoryEntry) {
   const updated = await api.updateInventory(e.id, { pinned: !e.pinned })
+  entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
+}
+
+async function toggleHidden(e: InventoryEntry) {
+  const updated = await api.updateInventory(e.id, { hidden: !e.hidden })
   entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
 }
 
@@ -147,6 +152,9 @@ onMounted(load)
                 />
                 <span>{{ nameOf(e) }}</span>
                 <Pin v-if="e.pinned" :size="12" class="muted" />
+                <span v-if="e.hidden" class="badge" data-test="hidden-badge">{{
+                  t('devices.hidden')
+                }}</span>
               </div>
             </td>
             <td class="mono">{{ e.ip }}</td>
@@ -177,6 +185,15 @@ onMounted(load)
                 @click="pin(e)"
               >
                 <Pin :size="14" />
+              </button>
+              <button
+                class="btn ghost icon small"
+                data-test="toggle-hidden"
+                :aria-label="e.hidden ? t('panel.unhide') : t('panel.hide')"
+                :title="e.hidden ? t('panel.unhide') : t('panel.hide')"
+                @click="toggleHidden(e)"
+              >
+                <component :is="e.hidden ? Eye : EyeOff" :size="14" />
               </button>
             </td>
           </tr>

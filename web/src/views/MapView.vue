@@ -33,7 +33,7 @@ import {
   withDescendants,
 } from '@/lib/areas'
 import { formatAgo, formatSpeed } from '@/lib/format'
-import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
+import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
 import { alignOn, layout, layoutKey, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import type {
@@ -73,10 +73,16 @@ let timer: ReturnType<typeof setInterval> | undefined
 
 const allNodes = computed(() => data.value?.topology.nodes ?? [])
 const allEdges = computed(() => data.value?.topology.edges ?? [])
+/** Shows the devices the user hid (to bring one back); not remembered. */
+const showHidden = ref(false)
+const unhidden = computed(() =>
+  showHidden.value
+    ? { nodes: allNodes.value, edges: allEdges.value, hidden: 0 }
+    : withoutHidden(allNodes.value, allEdges.value),
+)
+const hiddenCount = computed(() => allNodes.value.filter((n) => n.hidden).length)
 const filtered = computed(() =>
-  prefs.hideOffline
-    ? withoutOffline(allNodes.value, allEdges.value)
-    : { nodes: allNodes.value, edges: allEdges.value, hidden: 0 },
+  prefs.hideOffline ? withoutOffline(unhidden.value.nodes, unhidden.value.edges) : unhidden.value,
 )
 const nodes = computed(() => filtered.value.nodes)
 const edges = computed(() => filtered.value.edges)
@@ -594,6 +600,19 @@ function menuAction(action: 'collapse' | 'expand' | 'details') {
   else selectedId.value = target
 }
 
+/** A deleted device leaves the map right away (it returns if a scan finds it again). */
+function removeNode(id: string) {
+  selectedId.value = undefined
+  if (!data.value) return
+  data.value = {
+    ...data.value,
+    topology: {
+      nodes: data.value.topology.nodes.filter((n) => n.id !== id),
+      edges: data.value.topology.edges.filter((e) => e.source !== id && e.target !== id),
+    },
+  }
+}
+
 function patchSelected(patch: Partial<TopoNode>) {
   if (!data.value || !selectedId.value) return
   const id = selectedId.value
@@ -643,6 +662,19 @@ onBeforeUnmount(() => {
           <span class="label">
             {{ prefs.hideOffline ? t('map.showOffline') : t('map.hideOffline') }}
             <template v-if="offlineCount"> ({{ offlineCount }})</template>
+          </span>
+        </button>
+        <button
+          v-if="hiddenCount"
+          class="btn small"
+          :class="{ active: showHidden }"
+          data-test="toggle-hidden"
+          :aria-pressed="showHidden"
+          @click="showHidden = !showHidden"
+        >
+          <component :is="showHidden ? EyeOff : Eye" :size="15" />
+          <span class="label">
+            {{ showHidden ? t('map.hideHidden') : t('map.showHidden') }} ({{ hiddenCount }})
           </span>
         </button>
         <button
@@ -779,6 +811,7 @@ onBeforeUnmount(() => {
       @changed="patchSelected"
       @expand="expand"
       @collapse="collapse"
+      @deleted="removeNode"
     />
   </div>
 </template>

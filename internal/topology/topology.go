@@ -84,6 +84,7 @@ type Node struct {
 	Icon    string   `json:"icon,omitempty"` // logo chosen by the user (overrides product/OS/brand)
 
 	Pinned   bool       `json:"pinned,omitempty"`    // pinned by the user: never collapsed
+	Hidden   bool       `json:"hidden,omitempty"`    // hidden from the map by the user
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }
 

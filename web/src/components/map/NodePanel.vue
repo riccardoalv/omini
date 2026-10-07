@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, ExternalLink, Pencil, Pin, PinOff, X } from 'lucide-vue-next'
+import { Check, Eye, EyeOff, ExternalLink, Pencil, Pin, PinOff, Trash2, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -28,6 +28,7 @@ const emit = defineEmits<{
   select: [id: string]
   expand: [parentId: string]
   collapse: [parentId: string]
+  deleted: [id: string]
 }>()
 const { t, locale } = useI18n()
 
@@ -108,6 +109,29 @@ const title = computed(() => {
   return displayName(n.value, t)
 })
 
+// Deleting takes a second click (no blocking dialog).
+const confirmDelete = ref(false)
+watch(
+  () => props.node?.id,
+  () => (confirmDelete.value = false),
+)
+async function remove() {
+  if (!n.value) return
+  if (!confirmDelete.value) {
+    confirmDelete.value = true
+    return
+  }
+  error.value = ''
+  try {
+    await api.deleteInventory([n.value.id])
+    emit('deleted', n.value.id)
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : t('common.error')
+  } finally {
+    confirmDelete.value = false
+  }
+}
+
 function startEdit() {
   alias.value = n.value?.label ?? ''
   editing.value = true
@@ -116,6 +140,7 @@ function startEdit() {
 async function save(patch: {
   alias?: string
   pinned?: boolean
+  hidden?: boolean
   device_type?: string
   icon?: string
 }) {
@@ -126,6 +151,7 @@ async function save(patch: {
     const local: Partial<TopoNode> = {}
     if (patch.alias !== undefined && patch.alias !== '') local.label = patch.alias
     if (patch.pinned !== undefined) local.pinned = patch.pinned
+    if (patch.hidden !== undefined) local.hidden = patch.hidden
     if (patch.device_type) local.type = patch.device_type
     if (patch.icon !== undefined) local.icon = patch.icon || undefined
     emit('changed', local)
@@ -202,6 +228,26 @@ async function save(patch: {
         <button v-if="expandedParent" class="btn small" @click="emit('collapse', n.id)">
           {{ t('panel.collapseGroup') }}
         </button>
+        <template v-if="n.kind !== 'app'">
+          <button
+            class="btn small"
+            data-test="hide"
+            :title="t('panel.hideHint')"
+            @click="save({ hidden: !n.hidden })"
+          >
+            <component :is="n.hidden ? Eye : EyeOff" :size="14" />
+            {{ n.hidden ? t('panel.unhide') : t('panel.hide') }}
+          </button>
+          <button
+            class="btn small danger"
+            data-test="delete"
+            :title="t('panel.deleteHint')"
+            @click="remove"
+          >
+            <Trash2 :size="14" />
+            {{ confirmDelete ? t('panel.confirmDelete') : t('panel.delete') }}
+          </button>
+        </template>
       </div>
       <p v-if="error" class="alert error">{{ error }}</p>
 

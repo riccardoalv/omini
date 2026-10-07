@@ -106,6 +106,10 @@ var migrations = []string{
 	`
 	ALTER TABLE areas ADD COLUMN members TEXT NOT NULL DEFAULT '[]'; -- JSON array of node ids
 	`,
+	// 6: devices the user hid from the map.
+	`
+	ALTER TABLE inventory ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.
