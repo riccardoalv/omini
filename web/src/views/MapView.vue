@@ -44,8 +44,10 @@ import {
   layout,
   layoutKey,
   type LayoutGroup,
+  modelOrder,
   positionsFor,
 } from '@/lib/layout'
+import { displayName } from '@/lib/names'
 import { prefs } from '@/lib/prefs'
 import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
@@ -249,11 +251,16 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
   const refit = lastLayout === '' || !lastLayout.startsWith(direction + '|')
   lastLayout = key
   const saved = positionsFor({ ...data.value?.layout, ...draggedPositions }, direction)
-  const boxes = [
-    ...v.nodes.map((n) => ({ id: n.id, ...SIZES[n.kind]! })),
-    ...v.groups.map((g) => ({ id: g.id, ...SIZES.group! })),
-  ]
-  const fresh = await layout(boxes, v.edges, saved, direction, layoutGroups(v.edges))
+  const sized = new Map([
+    ...v.nodes.map((n) => [n.id, { id: n.id, ...SIZES[n.kind]! }] as const),
+    ...v.groups.map((g) => [g.id, { id: g.id, ...SIZES.group! }] as const),
+  ])
+  const names = new Map(v.nodes.map((n) => [n.id, displayName(n, t)]))
+  const order = modelOrder([...sized.keys()], v.edges, (id) => names.get(id) ?? id)
+  const rank = new Map(order.map((id, i) => [id, i]))
+  const boxes = order.map((id) => sized.get(id)!)
+  const edgesInOrder = [...v.edges].sort((a, b) => rank.get(a.target)! - rank.get(b.target)!)
+  const fresh = await layout(boxes, edgesInOrder, saved, direction, layoutGroups(v.edges))
   // Expanding or collapsing keeps the clicked node where it is; the map is laid
   // out again around it (no overlaps). Other changes keep the first node still.
   const anchor =

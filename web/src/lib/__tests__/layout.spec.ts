@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { alignOn, clearSaved, layout, layoutKey, positionsFor } from '../layout'
+import { alignOn, clearSaved, layout, layoutKey, modelOrder, positionsFor } from '../layout'
 
 describe('per-direction layout positions', () => {
   it('keys left-to-right positions by node id and top-down ones with a prefix', () => {
@@ -151,5 +151,28 @@ describe('dragged positions', () => {
     expect(out.a).toEqual({ x: 50 + 200 + 12, y: 100 })
     const same = { a: { x: 0, y: 0 } }
     expect(clearSaved(same, nodes, {}, 'RIGHT')).toBe(same)
+  })
+})
+
+describe('modelOrder', () => {
+  it('walks from the roots, grouping children by the port or network they use', () => {
+    const edges = [
+      { source: 'ap', target: 'tv', source_port: '5 GHz' },
+      { source: 'ap', target: 'phone', source_port: '2.4 GHz' },
+      { source: 'ap', target: 'laptop', source_port: '5 GHz' },
+      { source: 'ap', target: 'bulb', source_port: '2.4 GHz' },
+      { source: 'gw', target: 'ap', source_port: 'Port 2' },
+      { source: 'gw', target: 'nas', source_port: 'Port 1' },
+    ]
+    const ids = ['tv', 'phone', 'laptop', 'bulb', 'ap', 'nas', 'gw']
+    expect(modelOrder(ids, edges, (id) => id)).toEqual([
+      'gw',
+      'nas', // Port 1
+      'ap', // Port 2
+      'bulb', // 2.4 GHz, by name
+      'phone',
+      'laptop', // 5 GHz
+      'tv',
+    ])
   })
 })

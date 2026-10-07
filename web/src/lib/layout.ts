@@ -289,3 +289,49 @@ export function alignOn(
   }
   return out
 }
+
+interface OrderEdge {
+  source: string
+  target: string
+  source_port?: string
+}
+
+/**
+ * The order nodes are given to the layout (which keeps it among siblings):
+ * a walk from the roots where each node's children are grouped by the port or
+ * Wi-Fi network they hang from ("2.4 GHz" ones together, then "5 GHz"), then
+ * by name — so a link's pill sits over the devices that use it.
+ */
+export function modelOrder(
+  ids: string[],
+  edges: OrderEdge[],
+  label: (id: string) => string,
+): string[] {
+  const known = new Set(ids)
+  const children = new Map<string, OrderEdge[]>()
+  const hasParent = new Set<string>()
+  for (const e of edges) {
+    if (!known.has(e.source) || !known.has(e.target)) continue
+    children.set(e.source, [...(children.get(e.source) ?? []), e])
+    hasParent.add(e.target)
+  }
+  const byName = (a: string, b: string) =>
+    label(a).localeCompare(label(b), undefined, { numeric: true, sensitivity: 'base' }) ||
+    a.localeCompare(b)
+  const out: string[] = []
+  const seen = new Set<string>()
+  const visit = (id: string) => {
+    if (seen.has(id)) return
+    seen.add(id)
+    out.push(id)
+    const kids = [...(children.get(id) ?? [])].sort(
+      (x, y) =>
+        (x.source_port ?? '').localeCompare(y.source_port ?? '', undefined, { numeric: true }) ||
+        byName(x.target, y.target),
+    )
+    for (const e of kids) visit(e.target)
+  }
+  for (const id of ids.filter((i) => !hasParent.has(i)).sort(byName)) visit(id)
+  for (const id of ids) visit(id) // cycles or anything unreached
+  return out
+}
