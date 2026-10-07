@@ -9,7 +9,27 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test cover lint fmt hooks ci
+.PHONY: generate check-generated test cover lint fmt hooks ci web run dev
+
+## run: build the web UI and run Omini on http://localhost:8080 (with the demo network)
+run: web
+	OMINI_DEMO=1 go run ./cmd/omini
+
+## dev: backend (:8080) + Vite dev server with hot reload (http://localhost:5173), demo network on
+dev: web/node_modules
+	@echo "→ open http://localhost:5173 (UI with hot reload; the API runs on :8080)"
+	@trap 'kill 0' INT TERM EXIT; \
+		OMINI_DEMO=1 go run ./cmd/omini & \
+		(cd web && npm run dev) & \
+		wait
+
+## web: build the web UI into web/dist (embedded into the Go binary)
+web: web/node_modules
+	cd web && npm run build
+
+web/node_modules: web/package-lock.json
+	cd web && npm ci
+	@touch web/node_modules
 
 ## generate: regenerate Go types and Python models from the JSON Schema
 generate:
@@ -31,9 +51,10 @@ check-generated: generate
 	git diff --exit-code -- $(GO_MODEL) $(PY_MODEL)
 
 ## test: run all test suites
-test:
+test: web/node_modules
 	go test ./...
 	cd sdk/python && uv run pytest
+	cd web && npm test
 
 ## cover: run tests with a coverage report per package
 cover:
@@ -43,15 +64,17 @@ cover:
 	go tool cover -func=coverage.handwritten.out | tail -1
 	cd sdk/python && uv run pytest --cov=omini_sdk --cov-report=term
 
-## lint: run all linters (Go + Python SDK)
-lint:
+## lint: run all linters (Go + Python SDK + web)
+lint: web/node_modules
 	golangci-lint run ./...
 	cd sdk/python && uv run ruff check . && uv run ruff format --check .
+	cd web && npm run lint && npm run format:check && npm run type-check
 
-## fmt: format all code (Go + Python SDK)
-fmt:
+## fmt: format all code (Go + Python SDK + web)
+fmt: web/node_modules
 	golangci-lint fmt ./...
 	cd sdk/python && uv run ruff format . && uv run ruff check --fix .
+	cd web && npm run format && npm run lint:fix
 
 ## hooks: install git hooks (format, lint, conventional commit check)
 hooks:
@@ -65,4 +88,5 @@ ci: check-generated
 	go test -race ./...
 	$(MAKE) lint
 	cd sdk/python && uv run pytest -q
+	cd web && npm test && npm run build-only
 	@echo "✔ all CI checks passed locally"

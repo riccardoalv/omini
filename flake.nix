@@ -10,7 +10,7 @@
     in {
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
-          packages = with pkgs; [ go gopls golangci-lint lefthook nodejs_22 uv ruff python3 gnumake net-snmp ];
+          packages = with pkgs; [ go gopls golangci-lint lefthook nodejs_24 uv ruff python3 gnumake net-snmp ];
         };
       });
     };

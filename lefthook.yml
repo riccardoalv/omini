@@ -15,6 +15,12 @@ pre-commit:
       run: uv run ruff format {staged_files} && uv run ruff check --fix {staged_files}
       stage_fixed: true
 
+    - name: web
+      root: web/
+      glob: "*.{ts,vue,css,json}"
+      run: npx prettier --write {staged_files} && npx eslint --fix {staged_files}
+      stage_fixed: true
+
 commit-msg:
   jobs:
     - name: conventional-commit

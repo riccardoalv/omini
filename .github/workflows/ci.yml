@@ -74,3 +74,31 @@ jobs:
       - name: Test
         run: |
           uv run pytest --cov=omini_sdk --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+
+  web:
+    name: Web UI (lint, type-check, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: |
+          npm run lint
+          npm run format:check
+      - name: Type-check
+        run: npm run type-check
+      - name: Test
+        run: npx vitest run --coverage --coverage.reporter=text --coverage.reporter=json-summary
+      - name: Coverage summary
+        run: |
+          node -e "const t=require('./coverage/coverage-summary.json').total; console.log('### Web test coverage\n\n| Lines | Statements | Functions | Branches |\n|---|---|---|---|\n| '+t.lines.pct+'% | '+t.statements.pct+'% | '+t.functions.pct+'% | '+t.branches.pct+'% |')" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build
+        run: npm run build-only
