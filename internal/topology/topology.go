@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/riccardoalv/omini/internal/model"
 )
@@ -63,6 +64,8 @@ type Node struct {
 	SignalDBM     *int64        `json:"signal_dbm,omitempty"`
 	MACCount      int           `json:"mac_count,omitempty"` // segments: MACs seen behind the port
 	Device        *model.Device `json:"device,omitempty"`    // managed devices: full collected data
+	Pinned        bool          `json:"pinned,omitempty"`    // pinned by the user: never collapsed
+	LastSeen      *time.Time    `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }
 
 type Edge struct {
