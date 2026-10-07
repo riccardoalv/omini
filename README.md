@@ -53,6 +53,7 @@ Integrations are layered so that most contributions require little or no core co
 | Integration | Type | Data |
 |---|---|---|
 | Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models. Devices with SNMP v2c are read in full (`SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP): ports, traffic, neighbors, MAC tables |
+| nmap | Core (Go), optional, uses the nmap installed on the host | Operating system and service versions of every device (deeper than the network scan; runs in the background, daily) |
 | OPNsense | Python plugin ([omini-plugin-opnsense](https://github.com/riccardoalv/omini-plugin-opnsense), official REST API, key/secret) | Interfaces with link speed and traffic, ARP, DHCP leases (ISC, Kea or dnsmasq), CPU/memory/uptime, gateway status |
 | Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
 | Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
@@ -268,6 +269,8 @@ See [`CLAUDE.md`](CLAUDE.md) for project conventions.
 - Device and software logos: [Simple Icons](https://simpleicons.org) (CC0-1.0).
 - App icons and catalog: [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) by homarr-labs (Apache-2.0).
 - MAC vendors: [IEEE registration authority](https://standards-oui.ieee.org/) (MA-L registry).
+- Device model names: [Google Play supported devices](https://support.google.com/googleplay/answer/1727131) and a [community list of Apple identifiers](https://gist.github.com/adamawolf/3048717).
+- Deep scans: [nmap](https://nmap.org), when installed on the host (not distributed with Omini).
 - Logos and trademarks belong to their respective owners; Omini is not affiliated with them.
 
 ## License

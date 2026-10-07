@@ -260,6 +260,7 @@ export default {
     settings: 'Settings',
     saved: 'Saved. The new settings apply on the next collection.',
     method: {
+      nmap: 'nmap',
       arp: 'ARP',
       icmp: 'Ping',
       tcp: 'Ports',

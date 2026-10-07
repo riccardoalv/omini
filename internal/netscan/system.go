@@ -194,3 +194,27 @@ func parseSubnetSpec(spec string) ([]netip.Prefix, error) {
 	}
 	return parseSubnets(spec)
 }
+
+// Subnets resolves a subnet setting like the network scan does: "auto" (or
+// empty) means the private networks this server is connected to.
+func Subnets(spec string) ([]netip.Prefix, error) {
+	list, err := parseSubnetSpec(spec)
+	if err != nil || list != nil {
+		return list, err
+	}
+	for _, l := range localNetworks() {
+		if !containsPrefix(list, l.Prefix) {
+			list = append(list, l.Prefix)
+		}
+	}
+	if len(list) == 0 {
+		return nil, fmt.Errorf("no private IPv4 network found on this server; list the subnets to scan")
+	}
+	return list, nil
+}
+
+// Gateway returns the default gateway of this server, if any.
+func Gateway() netip.Addr {
+	a, _, _ := defaultGateway("/proc/net/route")
+	return a
+}

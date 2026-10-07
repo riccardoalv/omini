@@ -9,7 +9,7 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test cover lint fmt hooks ci web run dev oui icons
+.PHONY: models generate check-generated test cover lint fmt hooks ci web run dev oui icons
 
 ## run: build the web UI and run Omini on http://localhost:8080 (scans your network)
 run: web
@@ -51,6 +51,10 @@ icons:
 	go run ./internal/appicons/gen -bundle
 
 ## oui: refresh the embedded MAC vendor database from the IEEE registry
+## models: refresh the device model names (Apple identifiers, Google Play devices)
+models:
+	go run ./internal/models/gen
+
 oui:
 	go run ./internal/oui/gen
 

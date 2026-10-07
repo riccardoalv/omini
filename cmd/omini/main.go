@@ -23,6 +23,7 @@ import (
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
+	"github.com/riccardoalv/omini/internal/nmapscan"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
@@ -132,6 +133,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 
 	reg := integration.NewRegistry()
 	reg.Register(netscan.New())
+	reg.Register(nmapscan.New())
 
 	plugs := &plugins.Manager{Dir: filepath.Join(cfg.DataDir, "plugins"), DevDirs: cfg.PluginDirs, UV: cfg.UV, SDK: sdk.Python}
 	loaded, loadErrs := plugs.Load()

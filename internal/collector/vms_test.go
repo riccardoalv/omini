@@ -81,3 +81,21 @@ func TestApplyInventoryMarksHiddenDevices(t *testing.T) {
 		t.Fatalf("hidden flags: %+v", topo.Nodes)
 	}
 }
+
+func TestModelNames(t *testing.T) {
+	apple := topology.Node{ID: "a", Kind: topology.KindClient, Model: "iPhone14,2", Label: "iphone"}
+	nameModel(&apple)
+	if apple.Model != "iPhone 13 Pro" || apple.Label != "iphone" {
+		t.Fatalf("apple: %+v", apple)
+	}
+	android := topology.Node{ID: "b", Kind: topology.KindClient, Hostname: "SM-S911B", Label: "SM-S911B"}
+	nameModel(&android)
+	if android.Model != "Samsung Galaxy S23" || android.Label != "Samsung Galaxy S23" {
+		t.Fatalf("android: %+v", android)
+	}
+	tv := topology.Node{ID: "c", Kind: topology.KindClient, Hostname: "living-room-tv", Label: "living-room-tv"}
+	nameModel(&tv)
+	if tv.Model != "" || tv.Label != "living-room-tv" {
+		t.Fatalf("unknown names stay: %+v", tv)
+	}
+}

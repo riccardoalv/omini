@@ -264,6 +264,7 @@ const ptBR: typeof en = {
     settings: 'Configurações',
     saved: 'Salvo. As novas configurações valem a partir da próxima coleta.',
     method: {
+      nmap: 'nmap',
       arp: 'ARP',
       icmp: 'Ping',
       tcp: 'Portas',
@@ -280,6 +281,24 @@ const ptBR: typeof en = {
     Advanced: 'Avançado',
   },
   fields: {
+    nmap: {
+      subnets: {
+        label: 'Sub-redes',
+        help: '"auto" varre as redes às quais este servidor está conectado, ou liste-as: 192.168.1.0/24, 10.0.20.0/24',
+      },
+      os_detection: {
+        label: 'Detectar sistemas operacionais',
+        help: 'nmap -O. Precisa que o Omini rode como root (a imagem Docker roda); senão é ignorado.',
+      },
+      versions: {
+        label: 'Detectar versões dos serviços',
+        help: 'nmap -sV nas portas mais comuns: diz qual software está por trás de cada porta aberta.',
+      },
+      every_hours: {
+        label: 'Varrer de novo a cada (horas)',
+        help: 'Uma varredura completa leva minutos e gera carga na rede: uma vez por dia basta.',
+      },
+    },
     network: {
       subnets: {
         label: 'Sub-redes',

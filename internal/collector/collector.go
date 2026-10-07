@@ -15,6 +15,7 @@ import (
 	"github.com/riccardoalv/omini/internal/classify"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/models"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -427,7 +428,25 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 // classifyNodes fills type, OS, brand and product of every node.
 func classifyNodes(topo *topology.Topology) {
 	for i := range topo.Nodes {
+		nameModel(&topo.Nodes[i])
 		classifyNode(&topo.Nodes[i])
+	}
+}
+
+// nameModel replaces model identifiers with the names people know
+// ("iPhone14,2" → "iPhone 13 Pro"). A DHCP name that is a model code
+// ("SM-S911B") names the device too.
+func nameModel(n *topology.Node) {
+	if name, ok := models.Name(n.Model); ok {
+		n.Model = name
+	}
+	if name, ok := models.Name(n.Hostname); ok {
+		if n.Model == "" {
+			n.Model = name
+		}
+		if n.Label == n.Hostname {
+			n.Label = name
+		}
 	}
 }
 
