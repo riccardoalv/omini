@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 released.** Network scan (with SNMP), identification (types, OS, brands, products, model names), app nodes, nmap, topology map (areas, WANs, port front view, live traffic), plugin runtime + SDK + store, OPNsense plugin, Docker image, auth, en + pt-BR. Next (v0.2): animated traffic flow, 24h traffic history, insights, presence timeline.
+**v0.2 released.** Network scan (with SNMP), identification (types, OS, brands, products, model names), app nodes, nmap, topology map (areas, WANs, port front view, live traffic), plugin runtime + SDK + store, OPNsense plugin, Docker image, auth, en + pt-BR. v0.2 so far: per-device nmap scan, panel redesign, port names on links, system health. Next: insights, 24h traffic history, presence timeline, animated traffic flow (full list: README → Roadmap).
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 

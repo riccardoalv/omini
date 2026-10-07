@@ -4,7 +4,7 @@
 
 Omini connects to your routers, switches, access points and network software — from different vendors — reads what each one knows about the network, and automatically builds a **live topology map** showing **where traffic is flowing**, **which devices are connected** and **how healthy the network is**. All in a clean web UI running on your own hardware.
 
-> **Status:** v0.1 — first release, for homelabs. The network scan, device identification, the map (areas, live traffic, port view), the nmap integration and the plugin store with the OPNsense plugin work today; traffic history and insights come in v0.2.
+> **Status:** v0.2 — for homelabs. The network scan, device identification, the map (areas, live traffic, port view), system health, the nmap integration and the plugin store with the OPNsense plugin work today; insights and traffic history are next (see the [roadmap](#roadmap)).
 
 ---
 
@@ -265,16 +265,49 @@ Each device can also be scanned from its panel ("Scan (nmap)"). How is set in th
 
 ## Roadmap
 
-The MVP scope above ships in incremental releases, each one usable on its own:
+Omini ships in incremental releases, each one usable on its own.
 
-| Release | Delivers | You can... |
-|---|---|---|
-| **v0.1** ✅ | Network scan (with SNMP), device identification and model names, nmap, topology map with areas, WANs, port view and live traffic, plugin runtime, store and the OPNsense plugin, Docker image, login, `pt-BR` UI | See a map of your real network and its clients |
-| **v0.2** | Animated traffic flow, 24h traffic history, insights, device presence timeline | See where traffic flows, what is wrong, and who joined or left |
-| **v0.3** | Remote store index, YAML SNMP profiles | Find and install community integrations |
-| **v0.4** | Mercusys and Horaco plugins (web UI), refined subnet discovery | Cover a full mixed homelab — public launch |
+### ✅ v0.1 — see your network
 
-**Later:**
+- **Zero-config discovery:** network scan (ARP, ping, common ports, reverse DNS, NetBIOS, mDNS, SSDP/UPnP) with **SNMP** as one of its methods (several read-only communities; interfaces, traffic, LLDP, MAC table, ARP)
+- **Device identification:** type, OS, brand and product with the evidence behind them; MAC vendors (IEEE), Apple and Android model names, solar inverters; user overrides for type and icon
+- **App nodes** (several apps on one IP) and **Proxmox guests** drawn under their host (when the network has a single Proxmox)
+- **nmap** integration, in the background
+- **Topology map:** left-to-right or top-down layout, named **areas** that follow their devices, client groups that collapse into bubbles, saved positions, hide/delete devices
+- **WAN nodes** for each internet uplink (speed, latency, status)
+- **Live traffic** from interface counters: on the devices, with each link's maximum speed
+- **Device panel:** CPU and memory bars, front view of the ports (RJ45/SFP, colored by speed), port descriptions, link to the device's web interface
+- **Plugins:** per-plugin Python environment (uv) with the embedded SDK, install from a GitHub URL, store with a curated catalog, publisher and trust badges
+- **OPNsense plugin:** interfaces with link speed and media, ARP, DHCP leases (ISC, Kea, dnsmasq), CPU, memory, uptime, gateways, WAN/PPPoE
+- Login, `en` + `pt-BR`, dark and light themes, Docker image (amd64 + arm64)
+
+### v0.2 — see what is wrong
+
+- ✅ **Scan one device** with nmap from its panel (quick by default; ports, versions, scripts and OS configurable)
+- ✅ **Device panel redesign:** resizable, summary tiles, ports right below CPU and memory
+- ✅ **Port names on the links**, next to the speed ("LAN | 10G")
+- ✅ **System health:** pending updates, temperatures, load, swap, disks (one per ZFS pool) — in the OPNsense plugin 0.2
+- **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
+- **24h traffic history** per link and port, as a chart
+- **Presence timeline** (joined/left, debounced) and a "new device" insight
+- **Animated traffic flow** on the links
+- **Insights screen** (alerts + timeline)
+
+### v0.3 — find integrations
+
+- Remote store index and a full store screen
+- Review process to promote a plugin between trust levels
+- YAML SNMP profiles
+
+### v0.4 — public launch
+
+- **Horaco** switch plugin (web interface: ports, counters, MAC table) — in progress
+- **Mercusys** plugin (access points)
+- Refined subnet discovery
+- Repositories move to a GitHub organization
+
+### Later
+
 - Long-term traffic history
 - "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
@@ -283,6 +316,18 @@ The MVP scope above ships in incremental releases, each one usable on its own:
 - VLAN view
 - Notifications (Telegram, e-mail, webhook)
 - Topology export (PNG, SVG, draw.io, JSON)
+- Collapsing an area into a bubble
+
+### Ideas under discussion
+
+- More OPNsense data: services running/stopped, VPN peers (WireGuard, OpenVPN), firewall states, DHCP pool usage per network
+- SFP transceiver diagnostics (optical levels)
+
+### Open questions
+
+- SNMP profile format (YAML schema)
+- Where the store index lives and how plugins are reviewed
+- Discovery methods and the privileges they need (ICMP/ARP without root)
 
 ## Contributing
 
