@@ -56,7 +56,7 @@ Integrations are layered so that most contributions require little or no core co
 |---|---|---|
 | Generic SNMP v2c | Core (Go) | `SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP |
 | OPNsense | Python plugin (official REST API, key/secret) | Interfaces, traffic, ARP, DHCP leases, CPU/memory |
-| Horaco managed switches | SNMP profile | Ports, traffic, MAC table (LLDP if supported) |
+| Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
 | Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
 | Demo | Core (Go) | Fictional network |
 

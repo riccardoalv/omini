@@ -34,7 +34,9 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Plugin trust | Publisher badge (`official` / `community`) + trust level assigned by maintainers: `plug-and-play` (fully tested, works out of the box), `stable` (tested, known issues documented), `experimental` (partially tested), `unverified` (not reviewed; always the level for URL imports) |
 | Firewall | **OPNsense** via its official REST API (key/secret, dedicated least-privilege user, HTTPS) as a Python plugin. pfSense is post-MVP |
 | Releases | Incremental: v0.1 core + SNMP + OPNsense + topology map + login + demo; v0.2 traffic flow + 24h traffic history + insights + presence timeline; v0.3 plugin store + trust levels + YAML profiles; v0.4 Mercusys + pt-BR + refined discovery (public launch) |
-| Test network | OPNsense (router/firewall, DHCP), managed Horaco switches (SNMP), Mercusys routers in **AP mode** (clients visible in OPNsense ARP/DHCP; AP attachment inferred from switch FDB until the Mercusys plugin exists) |
+| Test network | OPNsense (router/firewall, DHCP), managed Horaco **HC-SWTGW218AS** switch, Mercusys routers in **AP mode** (clients visible in OPNsense ARP/DHCP) |
+| Horaco HC-SWTGW218AS | Stock firmware very likely has **no SNMP** (community projects read it through its web CGI: `/login.cgi`, `/info.cgi`, `/port.cgi?page=stats`, `/mac.cgi?page=fwd_tbl`). A web-scraping Python plugin is **post-v0.1**; until then it shows as an unmanaged segment |
+| Plugin order | OPNsense plugin first (v0.1); Horaco web plugin later |
 | Detected devices | Kept **forever** (no automatic purge), with `first_seen` / `last_seen`; manual cleanup in the UI (bulk delete, filter by randomized MAC). Hidden from the map after **1h offline** (dimmed until then), always kept in the inventory |
 | Presence timeline | Full join/leave timeline per device, plus a "new device" insight when a never-seen MAC appears. A device is only marked offline after missing several consecutive polls (debounce, avoids flapping events). Ships in v0.2 |
 | UI screens | Map (home, full screen), Devices (inventory), Integrations, Settings in v0.1; Insights (alerts + timeline) in v0.2; Store in v0.3 |
@@ -54,7 +56,6 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 - SNMP profile format (YAML schema)
 - Plugin runtime details: per-plugin venv location, state dir (to cache sessions between runs), timeouts, how protocol versions are negotiated
 - Plugin store: where the curated index lives, review process for promoting a plugin between trust levels
-- Horaco: exact model, whether SNMP and LLDP are available and enabled
 - Discovery methods and required privileges (ICMP/ARP need raw sockets / host networking)
 
 ## Principles
