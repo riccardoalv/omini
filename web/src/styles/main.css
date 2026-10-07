@@ -1,0 +1,322 @@
+/* Design tokens. Dark is the default; light applies when chosen or when the OS prefers it. */
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-elevated: #151b23;
+  --bg-sunken: #0a0d12;
+  --surface: #1a212b;
+  --surface-hover: #212a36;
+  --border: #2a3441;
+  --border-strong: #3a4656;
+  --text: #e6ebf1;
+  --text-muted: #8b98a8;
+  --text-faint: #5d6a7a;
+  --accent: #4c8dff;
+  --accent-text: #ffffff;
+  --accent-soft: rgb(76 141 255 / 0.15);
+
+  /* Status colors are reserved for status and traffic. */
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+  --ok-soft: rgb(63 185 80 / 0.15);
+  --warn-soft: rgb(210 153 34 / 0.15);
+  --danger-soft: rgb(248 81 73 / 0.15);
+
+  --edge: #4a5668;
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --bg: #f5f7fa;
+    --bg-elevated: #ffffff;
+    --bg-sunken: #eceff4;
+    --surface: #ffffff;
+    --surface-hover: #f0f3f7;
+    --border: #dde2ea;
+    --border-strong: #c5ccd6;
+    --text: #1b2330;
+    --text-muted: #5b6878;
+    --text-faint: #8e99a8;
+    --accent: #2563eb;
+    --accent-soft: rgb(37 99 235 / 0.1);
+    --ok: #1a7f37;
+    --warn: #9a6700;
+    --danger: #cf222e;
+    --ok-soft: rgb(26 127 55 / 0.1);
+    --warn-soft: rgb(154 103 0 / 0.12);
+    --danger-soft: rgb(207 34 46 / 0.1);
+    --edge: #a3adbb;
+    --shadow: 0 8px 24px rgb(15 23 42 / 0.12);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f7fa;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #eceff4;
+  --surface: #ffffff;
+  --surface-hover: #f0f3f7;
+  --border: #dde2ea;
+  --border-strong: #c5ccd6;
+  --text: #1b2330;
+  --text-muted: #5b6878;
+  --text-faint: #8e99a8;
+  --accent: #2563eb;
+  --accent-soft: rgb(37 99 235 / 0.1);
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --danger: #cf222e;
+  --ok-soft: rgb(26 127 55 / 0.1);
+  --warn-soft: rgb(154 103 0 / 0.12);
+  --danger-soft: rgb(207 34 46 / 0.1);
+  --edge: #a3adbb;
+  --shadow: 0 8px 24px rgb(15 23 42 / 0.12);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* --- Buttons and inputs --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--accent);
+}
+.btn.danger {
+  color: var(--danger);
+}
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn.ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: transparent;
+}
+.btn.icon {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+.btn.small {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.btn.icon.small {
+  width: 28px;
+  padding: 0;
+}
+.btn > svg {
+  flex: none;
+}
+
+.input,
+.select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.input:focus,
+.select:focus,
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.field label {
+  font-weight: 500;
+}
+.field .help {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.alert.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.alert.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.dot.online {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+.dot.error {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+/* --- Page layout for list screens --- */
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+}
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.page-header p {
+  margin: 4px 0 0;
+}
+
+table.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th,
+.table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 12.5px;
+}
+.table tr:hover td {
+  background: var(--surface-hover);
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px 16px 40px;
+  }
+}

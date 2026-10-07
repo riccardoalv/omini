@@ -1,0 +1,247 @@
+<script setup lang="ts">
+import { Pencil, Plus, Radar, Trash2 } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
+
+import DiscoverDialog from '@/components/DiscoverDialog.vue'
+import IntegrationForm from '@/components/IntegrationForm.vue'
+import ModalDialog from '@/components/ModalDialog.vue'
+import { api } from '@/lib/api'
+import { formatAgo } from '@/lib/format'
+import type { Config, DiscoveredHost, Integration, IntegrationType } from '@/lib/types'
+
+const { t, locale } = useI18n()
+const route = useRoute()
+const router = useRouter()
+
+const items = ref<Integration[]>([])
+const types = ref<IntegrationType[]>([])
+const loading = ref(true)
+const choosing = ref(false)
+const discovering = ref(false)
+const form = ref<{
+  type: IntegrationType
+  existing?: Integration
+  prefill?: Config
+  name?: string
+}>()
+
+const typeByName = computed(() => new Map(types.value.map((x) => [x.type, x])))
+
+async function load() {
+  try {
+    ;[items.value, types.value] = await Promise.all([api.integrations(), api.integrationTypes()])
+  } finally {
+    loading.value = false
+  }
+}
+
+function openAdd(type: IntegrationType) {
+  choosing.value = false
+  form.value = { type }
+}
+
+function openEdit(item: Integration) {
+  const type = typeByName.value.get(item.type)
+  if (type) form.value = { type, existing: item }
+}
+
+function addDiscovered(host: DiscoveredHost, community: string) {
+  const type = typeByName.value.get('snmp')
+  if (!type) return
+  discovering.value = false
+  form.value = { type, prefill: { host: host.ip, community }, name: host.name }
+}
+
+async function toggle(item: Integration) {
+  const updated = await api.updateIntegration(item.id, { enabled: !item.enabled })
+  items.value = items.value.map((i) => (i.id === item.id ? updated : i))
+}
+
+async function remove(item: Integration) {
+  if (!window.confirm(t('integrations.confirmDelete', { name: item.name }))) return
+  await api.deleteIntegration(item.id)
+  items.value = items.value.filter((i) => i.id !== item.id)
+}
+
+async function onSaved() {
+  form.value = undefined
+  await load()
+  // The first collection takes a moment; refresh statuses shortly after.
+  setTimeout(load, 2000)
+}
+
+onMounted(async () => {
+  await load()
+  if (route.query.add) {
+    choosing.value = true
+    router.replace({ query: {} })
+  }
+})
+</script>
+
+<template>
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>{{ t('integrations.title') }}</h1>
+        <p class="muted">{{ t('integrations.subtitle') }}</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn" @click="discovering = true">
+          <Radar :size="16" />{{ t('integrations.discover') }}
+        </button>
+        <button class="btn primary" @click="choosing = true">
+          <Plus :size="16" />{{ t('integrations.add') }}
+        </button>
+      </div>
+    </header>
+
+    <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
+    <p v-else-if="!items.length" class="card empty muted">{{ t('integrations.empty') }}</p>
+
+    <ul v-else class="list">
+      <li v-for="item in items" :key="item.id" class="card item">
+        <span
+          class="dot"
+          :class="{
+            online: item.enabled && item.status?.ok,
+            error: item.enabled && item.status && !item.status.ok,
+          }"
+        />
+        <div class="info">
+          <div class="name-row">
+            <strong>{{ item.name }}</strong>
+            <span class="badge">{{ typeByName.get(item.type)?.name ?? item.type }}</span>
+            <span v-if="item.config.host" class="muted mono">{{ item.config.host }}</span>
+          </div>
+          <div class="muted status">
+            <template v-if="!item.enabled">{{ t('integrations.disabled') }}</template>
+            <template v-else-if="!item.status">{{ t('integrations.neverCollected') }}</template>
+            <template v-else>
+              {{
+                t('integrations.lastCollected', {
+                  ago: formatAgo(item.status.collected_at, locale),
+                })
+              }}
+              · {{ t('integrations.deviceCount', item.status.devices) }}
+            </template>
+          </div>
+          <p v-if="item.enabled && item.status?.error" class="error-text">
+            {{ item.status.error }}
+          </p>
+        </div>
+        <label class="checkbox switch" :title="t('integrations.enabled')">
+          <input type="checkbox" :checked="item.enabled" @change="toggle(item)" />
+        </label>
+        <button class="btn ghost icon" :aria-label="t('common.edit')" @click="openEdit(item)">
+          <Pencil :size="16" />
+        </button>
+        <button
+          class="btn ghost icon danger"
+          :aria-label="t('common.delete')"
+          @click="remove(item)"
+        >
+          <Trash2 :size="16" />
+        </button>
+      </li>
+    </ul>
+
+    <ModalDialog
+      v-if="choosing"
+      :title="t('integrations.chooseType')"
+      wide
+      @close="choosing = false"
+    >
+      <div class="types">
+        <button v-for="type in types" :key="type.type" class="card type" @click="openAdd(type)">
+          <strong>{{ type.name }}</strong>
+          <span class="badge">{{
+            type.kind === 'core' ? t('integrations.core') : t('integrations.plugin')
+          }}</span>
+          <span class="muted">{{ type.description }}</span>
+        </button>
+      </div>
+    </ModalDialog>
+
+    <DiscoverDialog v-if="discovering" @close="discovering = false" @add="addDiscovered" />
+
+    <IntegrationForm
+      v-if="form"
+      :type="form.type"
+      :existing="form.existing"
+      :prefill="form.prefill"
+      :prefill-name="form.name"
+      @close="form = undefined"
+      @saved="onSaved"
+    />
+  </div>
+</template>
+
+<style scoped>
+.header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.empty {
+  padding: 28px;
+  text-align: center;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 12px 14px 18px;
+}
+.info {
+  flex: 1;
+  min-width: 0;
+}
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.status {
+  font-size: 13px;
+  margin-top: 2px;
+}
+.error-text {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+.types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.type:hover {
+  border-color: var(--accent);
+}
+.type .muted {
+  font-size: 12.5px;
+}
+</style>
