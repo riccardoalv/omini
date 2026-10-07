@@ -4,7 +4,7 @@
 
 Omini connects to your routers, switches, access points and network software — from different vendors — reads what each one knows about the network, and automatically builds a **live topology map** showing **where traffic is flowing**, **which devices are connected** and **how healthy the network is**. All in a clean web UI running on your own hardware.
 
-> ⚠️ **Status:** v0.1 in progress — the core (SNMP, topology, collector, API) works; the web UI and the OPNsense plugin are being built. Not ready for production use yet.
+> ⚠️ **Status:** v0.1 in progress — the core (SNMP, topology, collector, API) and the web UI work; the OPNsense plugin and the Docker image are next. Not ready for production use yet.
 
 ---
 
@@ -188,16 +188,16 @@ docker compose up -d
 
 ## Development
 
-Requirements: Go (see `go.mod`), [uv](https://docs.astral.sh/uv/) and `make` — or just `nix develop`.
+Requirements: Go (see `go.mod`), Node.js 24, [uv](https://docs.astral.sh/uv/) and `make` — or just `nix develop`.
 
 ```bash
-OMINI_DEMO=1 go run ./cmd/omini   # http://localhost:8080 with the demo network
-make test                         # all tests (Go + Python SDK)
-make cover                        # tests with a coverage report
-make lint
+make run    # build the UI and run everything on http://localhost:8080 (demo network included)
+make dev    # backend + UI with hot reload on http://localhost:5173 (API on :8080)
+make test   # all tests (Go, Python SDK, web)
+make ci     # everything CI runs, locally
 ```
 
-Planned: `make dev` with Docker Compose (live reload + Vue dev server + SNMP simulator).
+On first access, Omini asks you to create the admin user. Data (database and secret key) goes to `./data`.
 
 The data contract between the Go core and plugins is a JSON Schema in `schema/`; Go types and the Python SDK models are generated from it (`make generate`).
 

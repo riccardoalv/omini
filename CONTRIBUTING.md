@@ -6,10 +6,12 @@ Everything in the project is in **English**: code, comments, docs, commits, issu
 
 ## Development setup
 
-Requirements: Go (version in `go.mod`), [uv](https://docs.astral.sh/uv/), `make`, [golangci-lint](https://golangci-lint.run) v2 and [lefthook](https://lefthook.dev).
+Requirements: Go (version in `go.mod`), Node.js 24, [uv](https://docs.astral.sh/uv/), `make`, [golangci-lint](https://golangci-lint.run) v2 and [lefthook](https://lefthook.dev).
 Nix users can get all of them with `nix develop`.
 
 ```bash
+make dev        # backend + UI with hot reload (http://localhost:5173)
+make run        # build the UI and run everything on http://localhost:8080
 make hooks      # install git hooks (format, lint, commit message check)
 make generate   # regenerate Go types and Python models from schema/
 make lint       # golangci-lint + ruff
@@ -24,6 +26,7 @@ make ci         # everything CI runs, locally — run it before pushing
 |---|---|---|---|
 | Go | gofumpt + goimports | golangci-lint v2 | `.golangci.yml` |
 | Python (SDK, plugins) | ruff format | ruff | `sdk/python/pyproject.toml` |
+| TypeScript / Vue (web) | Prettier | ESLint + oxlint, vue-tsc | `web/` |
 
 Generated files (`internal/model/model_gen.go`, `sdk/python/src/omini_sdk/models.py`) are never edited by hand: change `schema/omini.schema.json` and run `make generate`. CI fails if they are out of date.
 

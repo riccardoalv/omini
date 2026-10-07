@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, SNMP discovery, demo network, SQLite store, secret encryption, topology engine, collector, auth and HTTP API. Next: Vue UI, Python plugin runtime + SDK, OPNsense plugin, Docker image.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, SNMP discovery, demo network, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: Python plugin runtime + SDK, OPNsense plugin, Docker image.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -27,7 +27,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Integrations | **Go** for standard protocols (SNMP/LLDP/ARP/ICMP); **Python plugins** for anything vendor/software specific (OPNsense, Mercusys, UniFi, MikroTik...) |
 | Python runtime | Always bundled in the official image, so every plugin works out of the box |
 | Plugin protocol | Exec per collection: core runs the plugin, sends config as JSON on stdin, reads devices as JSON on stdout |
-| Frontend | **Vue 3**; map with **Vue Flow** + **ELK.js** auto-layout; built assets embedded in the Go binary |
+| Frontend | **Vue 3** + TypeScript (Vite); map with **Vue Flow** + **ELK.js** auto-layout (left-to-right: firewall on the left, clients stacked on the right — top-down made wide networks unreadable); vue-i18n; built assets embedded in the Go binary. Tooling: Vitest, ESLint + oxlint, Prettier, vue-tsc. Node.js 24 |
 | Authentication | Single admin user created on first run; device credentials encrypted at rest in SQLite |
 | Traffic history | Short history (~24h) per link/port in SQLite, shown as a chart when a link is clicked |
 | Plugin distribution | Each plugin is its own Git repository. Built-in **plugin store** with a default curated list (one-click install) + install from any GitHub URL. Reference model: Home Assistant's HACS. Installs pinned to a release |
@@ -43,7 +43,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Repositories | Personal GitHub account for now (organization only at public launch, v0.4). Main monorepo `omini` + one repo per plugin from day one (`omini-plugin-opnsense`) |
 | Data contract | **JSON Schema** in `schema/` is the single source of truth; Go types and Python (pydantic) models are generated from it; CI fails if generated code is stale |
 | Plugin format | `plugin.yaml` manifest (id, name, version, protocol version, entrypoint, form fields) + `requirements.txt`; Python SDK `omini-sdk` handles stdin/stdout, validation and errors so authors only write `collect()` and `test()` |
-| Dev environment | `make dev` via Docker Compose (Go with live reload, Vite dev server, SNMP simulator with sample data). Optional Nix flake |
+| Dev environment | `make dev` runs the Go backend and the Vite dev server together; `make run` builds and runs the production-like binary. Optional Nix flake. (Docker Compose + SNMP simulator: later) |
 | Visual style | **Dark by default**, light theme available, follows the OS setting. Clean UniFi/Linear-like look; color reserved for status (green/yellow/red) and traffic |
 
 ## Open questions
@@ -152,11 +152,13 @@ omini/
 ## Commands
 
 ```bash
-make dev         # (planned) start the full dev stack (Go live reload, Vite, SNMP simulator)
+make run         # build the UI and run everything on :8080 (demo network on)
+make dev         # backend on :8080 + Vite with hot reload on :5173
 make generate    # regenerate Go types and Python models from schema/
-make test        # Go + SDK tests
-make lint        # golangci-lint + ruff
-make fmt         # format Go and Python
+make test        # Go + SDK + web tests
+make ci          # everything CI runs, locally (run before pushing)
+make lint        # golangci-lint + ruff + eslint/oxlint/prettier/vue-tsc
+make fmt         # format Go, Python and web
 make hooks       # install git hooks (lefthook)
 make build       # (planned) production Docker image
 ```
@@ -177,8 +179,9 @@ Each rule is a function `(devices, topology) -> insights[]` with `severity` (`cr
 
 - **Everything in English**: code, identifiers, comments, docs, commit messages, issues, PRs. User-facing UI strings go through i18n (`en`, `pt-BR`).
 - **Conventional Commits** for every commit and PR title (`feat(snmp): ...`, `fix(topology): ...`); scopes and rules in [CONTRIBUTING.md](CONTRIBUTING.md). PRs are squash-merged; release-please builds the changelog and versions from them.
-- Formatting/linting: Go with gofumpt + goimports + golangci-lint v2 (`.golangci.yml`); Python with ruff. Run `make fmt lint test` before committing; lefthook runs them as git hooks (`make hooks`).
+- Formatting/linting: Go with gofumpt + goimports + golangci-lint v2 (`.golangci.yml`); Python with ruff; web with Prettier + ESLint + oxlint + vue-tsc. Run `make fmt lint test` before committing; lefthook runs them as git hooks (`make hooks`).
 - Never edit generated files (`internal/model/model_gen.go`, `sdk/python/src/omini_sdk/models.py`): change `schema/omini.schema.json` and run `make generate`.
+- **Never push** to GitHub unless the maintainer asks; verify with `make ci` locally instead.
 - All network I/O is async/concurrent.
 - Structured logging, no ad-hoc prints.
 - Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); the demo integration also serves as a fixture.
