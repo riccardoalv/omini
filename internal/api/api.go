@@ -16,6 +16,7 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
@@ -39,6 +40,7 @@ type Server struct {
 	Collector *collector.Collector
 	Auth      *auth.Service
 	WebUI     WebFinder
+	Plugins   *plugins.Manager
 	Icons     http.Handler // app icons (internal/appicons); public, used by <img>
 	UI        fs.FS        // built web UI; nil serves a placeholder page
 	Version   string
@@ -77,6 +79,9 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("GET /api/inventory", s.listInventory)
 	private.HandleFunc("PATCH /api/inventory/{id}", s.updateInventory)
 	private.HandleFunc("POST /api/inventory/delete", s.deleteInventory)
+	private.HandleFunc("GET /api/plugins", s.listPlugins)
+	private.HandleFunc("POST /api/plugins", s.installPlugin)
+	private.HandleFunc("DELETE /api/plugins/{id}", s.removePlugin)
 	private.HandleFunc("PUT /api/layout", s.saveLayout)
 	private.HandleFunc("DELETE /api/layout", s.resetLayout)
 	private.HandleFunc("POST /api/areas", s.createArea)

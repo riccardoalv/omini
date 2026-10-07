@@ -409,7 +409,12 @@ async function save(patch: {
             <tr v-for="p in ports" :key="p.name">
               <td><span class="dot" :class="{ online: p.up }" /></td>
               <td class="mono">{{ p.name }}</td>
-              <td>{{ p.up ? formatSpeed(p.speed_mbps) : t('panel.portDown') }}</td>
+              <td :title="p.media">
+                {{ p.up ? formatSpeed(p.speed_mbps) : t('panel.portDown') }}
+                <span v-if="p.up && p.duplex === 'half'" class="warn">{{
+                  t('panel.halfDuplex')
+                }}</span>
+              </td>
               <td class="grow">
                 <template
                   v-for="other in [linkOnPort(n.id, p.name, nodes, edges)]"
@@ -419,7 +424,25 @@ async function save(patch: {
                     other.label
                   }}</a>
                   <span v-else class="muted">{{ p.description }}</span>
+                  <span v-if="other && p.description" class="muted"> · {{ p.description }}</span>
                 </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section v-if="n.device?.gateways?.length" data-test="gateways">
+        <h3>{{ t('panel.gateways') }}</h3>
+        <table class="table ports">
+          <tbody>
+            <tr v-for="g in n.device.gateways" :key="g.name">
+              <td><span class="dot" :class="g.status" /></td>
+              <td>{{ g.name }}</td>
+              <td>{{ t(`panel.gatewayStatus.${g.status}`) }}</td>
+              <td class="grow muted mono">
+                <template v-if="g.rtt_ms !== undefined">{{ g.rtt_ms }} ms</template>
+                <template v-if="g.loss_pct"> · {{ g.loss_pct }}% {{ t('panel.loss') }}</template>
               </td>
             </tr>
           </tbody>
@@ -442,6 +465,19 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.dot.up {
+  background: var(--ok);
+}
+.dot.degraded {
+  background: var(--warn);
+}
+.dot.down {
+  background: var(--danger);
+}
+.warn {
+  color: var(--warn);
+  font-size: 12px;
+}
 .panel {
   position: absolute;
   top: 12px;

@@ -53,7 +53,7 @@ Integrations are layered so that most contributions require little or no core co
 | Integration | Type | Data |
 |---|---|---|
 | Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models. Devices with SNMP v2c are read in full (`SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP): ports, traffic, neighbors, MAC tables |
-| OPNsense | Python plugin (official REST API, key/secret) | Interfaces, traffic, ARP, DHCP leases, CPU/memory |
+| OPNsense | Python plugin ([omini-plugin-opnsense](https://github.com/riccardoalv/omini-plugin-opnsense), official REST API, key/secret) | Interfaces with link speed and traffic, ARP, DHCP leases (ISC, Kea or dnsmasq), CPU/memory/uptime, gateway status |
 | Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
 | Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
 
@@ -106,7 +106,7 @@ Omini opens straight into a **full-screen map** with a summary bar on top (devic
 - **Details:** clicking a node opens a side panel with its ports, traffic, clients and alerts — without leaving the map.
 - **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.
 - **Orientation:** the map is laid out left to right by default; one click switches to top down (dragged positions are kept separately for each orientation).
-- **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor or delete with a right click on the title. Areas are kept per orientation.
+- **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor or delete with a right click on the title. Areas show in both orientations.
 - **Expand and collapse:** the node you expand or collapse stays where it is on screen; the rest of the map makes room around it.
 - **Sidebar:** compact (icons) or expanded (icons and names).
 - **Theme:** dark by default, light available, follows your OS setting.
@@ -225,6 +225,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 
 - **Network scan:** run Omini with **host networking** (`network_mode: host` in Docker) so it sees your LAN directly. If the host has a firewall, allow inbound **UDP 5353** (mDNS) and **UDP 1900** (SSDP) — otherwise names and models announced by devices are not received. To get hostnames from your router, enable registering DHCP leases in its DNS (OPNsense: *Services → Unbound DNS → General → Register DHCP leases*).
 - **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. The network scan finds them by itself and tries the community `public`; if yours is different, add it in *Integrations → Network scan → SNMP communities*. Without LLDP Omini still works, but links between switches become *inferred*.
+- **Plugins:** install them in *Settings → Plugins* from their GitHub URL (Omini installs the latest release). Plugins run in their own Python environment, created with [uv](https://docs.astral.sh/uv/) — the Docker image includes it; when running the binary directly, install uv first.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
 
 ## Security

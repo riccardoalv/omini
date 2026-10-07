@@ -54,6 +54,9 @@ type Device struct {
 	// Fdb corresponds to the JSON schema field "fdb".
 	Fdb []FdbEntry `json:"fdb,omitempty,omitzero" yaml:"fdb,omitempty"`
 
+	// Upstream gateways monitored by a router or firewall.
+	Gateways []Gateway `json:"gateways,omitempty,omitzero" yaml:"gateways,omitempty"`
+
 	// Management IP or hostname.
 	Host *string `json:"host,omitempty,omitzero" yaml:"host,omitempty"`
 
@@ -343,6 +346,91 @@ func (j *FormField) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// A gateway monitored by a router or firewall (e.g. WAN uplinks).
+type Gateway struct {
+	// Address corresponds to the JSON schema field "address".
+	Address *string `json:"address,omitempty,omitzero" yaml:"address,omitempty"`
+
+	// Interface the gateway is reached through.
+	Interface *string `json:"interface,omitempty,omitzero" yaml:"interface,omitempty"`
+
+	// LossPct corresponds to the JSON schema field "loss_pct".
+	LossPct *float64 `json:"loss_pct,omitempty,omitzero" yaml:"loss_pct,omitempty"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name" yaml:"name"`
+
+	// Average round-trip time.
+	RttMs *float64 `json:"rtt_ms,omitempty,omitzero" yaml:"rtt_ms,omitempty"`
+
+	// Status corresponds to the JSON schema field "status".
+	Status GatewayStatus `json:"status" yaml:"status"`
+}
+
+type GatewayStatus string
+
+const GatewayStatusDegraded GatewayStatus = "degraded"
+const GatewayStatusDown GatewayStatus = "down"
+const GatewayStatusUnknown GatewayStatus = "unknown"
+const GatewayStatusUp GatewayStatus = "up"
+
+var enumValues_GatewayStatus = []interface{}{
+	"up",
+	"degraded",
+	"down",
+	"unknown",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *GatewayStatus) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_GatewayStatus {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_GatewayStatus, v)
+	}
+	*j = GatewayStatus(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Gateway) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["name"]; raw != nil && !ok {
+		return fmt.Errorf("field name in Gateway: required")
+	}
+	if _, ok := raw["status"]; raw != nil && !ok {
+		return fmt.Errorf("field status in Gateway: required")
+	}
+	type Plain Gateway
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if plain.LossPct != nil && 100 < *plain.LossPct {
+		return fmt.Errorf("field %s: must be <= %v", "loss_pct", 100)
+	}
+	if plain.LossPct != nil && 0 > *plain.LossPct {
+		return fmt.Errorf("field %s: must be >= %v", "loss_pct", 0)
+	}
+	if plain.RttMs != nil && 0 > *plain.RttMs {
+		return fmt.Errorf("field %s: must be >= %v", "rtt_ms", 0)
+	}
+	*j = Gateway(plain)
+	return nil
+}
+
 // An end device observed on the network, with whatever could be learned about it.
 type Host struct {
 	// Service banners, e.g. the SSH version string.
@@ -415,8 +503,17 @@ type Interface struct {
 	// Description corresponds to the JSON schema field "description".
 	Description *string `json:"description,omitempty,omitzero" yaml:"description,omitempty"`
 
+	// Duplex corresponds to the JSON schema field "duplex".
+	Duplex *InterfaceDuplex `json:"duplex,omitempty,omitzero" yaml:"duplex,omitempty"`
+
+	// Addresses assigned to the interface, with prefix length (192.168.1.1/24).
+	IPs []string `json:"ips,omitempty,omitzero" yaml:"ips,omitempty"`
+
 	// MAC corresponds to the JSON schema field "mac".
 	MAC *MACAddress `json:"mac,omitempty,omitzero" yaml:"mac,omitempty"`
+
+	// Negotiated media as reported by the device, e.g. "1000baseT <full-duplex>".
+	Media *string `json:"media,omitempty,omitzero" yaml:"media,omitempty"`
 
 	// Readable port name (ifName), never a numeric index.
 	Name string `json:"name" yaml:"name"`
@@ -441,6 +538,36 @@ type Interface struct {
 
 	// Operational status.
 	Up *bool `json:"up,omitempty,omitzero" yaml:"up,omitempty"`
+}
+
+type InterfaceDuplex string
+
+const InterfaceDuplexFull InterfaceDuplex = "full"
+const InterfaceDuplexHalf InterfaceDuplex = "half"
+
+var enumValues_InterfaceDuplex = []interface{}{
+	"full",
+	"half",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *InterfaceDuplex) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_InterfaceDuplex {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_InterfaceDuplex, v)
+	}
+	*j = InterfaceDuplex(v)
+	return nil
 }
 
 type InterfaceType string
@@ -652,6 +779,9 @@ type PluginManifest struct {
 	// Plugin protocol version implemented by the plugin.
 	Protocol uint64 `json:"protocol" yaml:"protocol"`
 
+	// Time limit per run; default 60.
+	TimeoutS *uint16 `json:"timeout_s,omitempty,omitzero" yaml:"timeout_s,omitempty"`
+
 	// Semantic version of the plugin.
 	Version string `json:"version" yaml:"version"`
 }
@@ -687,6 +817,12 @@ func (j *PluginManifest) UnmarshalJSON(value []byte) error {
 	}
 	if 1 > plain.Protocol {
 		return fmt.Errorf("field %s: must be >= %v", "protocol", 1)
+	}
+	if plain.TimeoutS != nil && 300 < *plain.TimeoutS {
+		return fmt.Errorf("field %s: must be <= %v", "timeout_s", 300)
+	}
+	if plain.TimeoutS != nil && 5 > *plain.TimeoutS {
+		return fmt.Errorf("field %s: must be >= %v", "timeout_s", 5)
 	}
 	*j = PluginManifest(plain)
 	return nil

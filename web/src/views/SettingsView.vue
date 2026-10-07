@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import PluginsSection from '@/components/PluginsSection.vue'
 import { locales } from '@/i18n'
 import { api } from '@/lib/api'
 import { prefs } from '@/lib/prefs'
@@ -63,6 +64,8 @@ onMounted(async () => {
         <span class="help">{{ t('settings.collapseHint') }}</span>
       </div>
     </section>
+
+    <PluginsSection />
 
     <section class="card section">
       <h2>{{ t('settings.account') }}</h2>

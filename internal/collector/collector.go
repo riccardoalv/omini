@@ -246,7 +246,11 @@ func (c *Collector) runIntegration(ctx context.Context, in store.Integration) (d
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.opts.Timeout)
+	limit := c.opts.Timeout
+	if t, ok := impl.(interface{ Timeout() time.Duration }); ok && t.Timeout() > limit {
+		limit = t.Timeout() // plugins declare their own limit
+	}
+	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	defer func() {
 		// A buggy integration must never take the whole collector down.
@@ -254,7 +258,7 @@ func (c *Collector) runIntegration(ctx context.Context, in store.Integration) (d
 			devices, err = nil, fmt.Errorf("integration panicked: %v", r)
 		}
 	}()
-	return impl.Collect(ctx, cfg)
+	return impl.Collect(integration.WithInstance(ctx, in.ID), cfg)
 }
 
 func (c *Collector) rebuild(ctx context.Context) error {

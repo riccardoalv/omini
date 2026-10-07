@@ -11,10 +11,23 @@ export interface Interface {
   mac?: string
   up?: boolean
   speed_mbps?: number
+  duplex?: 'full' | 'half'
+  /** As reported by the device, e.g. "1000baseT <full-duplex>". */
+  media?: string
+  ips?: string[]
   rx_bytes?: number
   tx_bytes?: number
   rx_errors?: number
   tx_errors?: number
+}
+
+export interface Gateway {
+  name: string
+  interface?: string
+  address?: string
+  status: 'up' | 'degraded' | 'down' | 'unknown'
+  rtt_ms?: number
+  loss_pct?: number
 }
 
 export interface Device {
@@ -31,6 +44,7 @@ export interface Device {
   macs?: string[]
   ips?: string[]
   interfaces?: Interface[]
+  gateways?: Gateway[]
   hosts?: { ip: string; mac?: string; sources?: string[] }[]
 }
 
@@ -177,6 +191,14 @@ export interface InventoryEntry {
   product?: string
   device_type?: string
   icon?: string
+}
+
+/** An installed plugin (GET /api/plugins). */
+export interface PluginInfo {
+  manifest: { id: string; name: string; version: string; description?: string; homepage?: string }
+  source?: { url: string; version: string; installed_at: string }
+  /** Loaded in place from OMINI_PLUGIN_DIRS (development). */
+  dev: boolean
 }
 
 export interface AuthStatus {

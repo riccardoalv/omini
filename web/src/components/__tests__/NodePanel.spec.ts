@@ -197,3 +197,42 @@ describe('NodePanel hide and delete', () => {
     expect(w.find('[data-test=delete]').exists()).toBe(false)
   })
 })
+
+describe('NodePanel firewall data', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+  })
+
+  it('shows port speed, half duplex and gateways', () => {
+    const w = mountPanel({
+      ...firewall,
+      device: {
+        key: 'fw',
+        name: 'fw',
+        interfaces: [
+          {
+            name: 'igb0',
+            description: 'WAN',
+            up: true,
+            speed_mbps: 2500,
+            media: '2500Base-T <full-duplex>',
+          },
+          { name: 'igb1', description: 'LAN', up: true, speed_mbps: 100, duplex: 'half' },
+        ],
+        gateways: [
+          { name: 'WAN_DHCP', status: 'up', rtt_ms: 1.2, loss_pct: 0 },
+          { name: 'WAN2', status: 'down', loss_pct: 100 },
+        ],
+      },
+    })
+    const rows = w.findAll('.ports tr')
+    expect(rows[0]!.text()).toContain('2.5G')
+    expect(rows[0]!.find('[title]').attributes('title')).toBe('2500Base-T <full-duplex>')
+    expect(rows[1]!.text()).toContain('half duplex')
+    const gws = w.get('[data-test=gateways]').text()
+    expect(gws).toContain('WAN_DHCP')
+    expect(gws).toContain('1.2 ms')
+    expect(gws).toContain('Offline')
+    expect(gws).toContain('100% loss')
+  })
+})

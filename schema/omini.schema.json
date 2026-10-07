@@ -103,6 +103,13 @@
             "$ref": "#/$defs/WirelessClient"
           }
         },
+        "gateways": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Gateway"
+          },
+          "description": "Upstream gateways monitored by a router or firewall."
+        },
         "hosts": {
           "type": "array",
           "items": {
@@ -148,6 +155,13 @@
         "mac": {
           "$ref": "#/$defs/MacAddress"
         },
+        "ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Addresses assigned to the interface, with prefix length (192.168.1.1/24)."
+        },
         "up": {
           "type": "boolean",
           "description": "Operational status."
@@ -155,6 +169,17 @@
         "speed_mbps": {
           "type": "integer",
           "minimum": 0
+        },
+        "duplex": {
+          "type": "string",
+          "enum": [
+            "full",
+            "half"
+          ]
+        },
+        "media": {
+          "type": "string",
+          "description": "Negotiated media as reported by the device, e.g. \"1000baseT <full-duplex>\"."
         },
         "rx_bytes": {
           "type": "integer",
@@ -318,6 +343,49 @@
         }
       }
     },
+    "Gateway": {
+      "type": "object",
+      "description": "A gateway monitored by a router or firewall (e.g. WAN uplinks).",
+      "required": [
+        "name",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string",
+          "description": "Interface the gateway is reached through."
+        },
+        "address": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GatewayStatus"
+        },
+        "rtt_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average round-trip time."
+        },
+        "loss_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "GatewayStatus": {
+      "type": "string",
+      "enum": [
+        "up",
+        "degraded",
+        "down",
+        "unknown"
+      ]
+    },
     "FormField": {
       "type": "object",
       "description": "One input of the 'add integration' form. Declared by core integrations and in plugin.yaml.",
@@ -391,6 +459,12 @@
         "entrypoint": {
           "type": "string",
           "description": "Python file executed by the core, relative to the plugin root."
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Time limit per run; default 60."
         },
         "description": {
           "type": "string"

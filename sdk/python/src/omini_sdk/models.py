@@ -95,11 +95,20 @@ class Interface(BaseModel):
     """
     Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
     """
+    ips: list[str] | None = None
+    """
+    Addresses assigned to the interface, with prefix length (192.168.1.1/24).
+    """
     up: bool | None = None
     """
     Operational status.
     """
     speed_mbps: Annotated[int | None, Field(ge=0)] = None
+    duplex: Literal["full", "half"] | None = None
+    media: str | None = None
+    """
+    Negotiated media as reported by the device, e.g. "1000baseT <full-duplex>".
+    """
     rx_bytes: Annotated[int | None, Field(ge=0)] = None
     """
     Cumulative counter.
@@ -146,6 +155,28 @@ class WirelessClient(BaseModel):
     signal_dbm: Annotated[int | None, Field(le=0)] = None
     tx_rate_mbps: Annotated[float | None, Field(ge=0.0)] = None
     rx_rate_mbps: Annotated[float | None, Field(ge=0.0)] = None
+
+
+class Gateway(BaseModel):
+    """
+    A gateway monitored by a router or firewall (e.g. WAN uplinks).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    interface: str | None = None
+    """
+    Interface the gateway is reached through.
+    """
+    address: str | None = None
+    status: Literal["up", "degraded", "down", "unknown"]
+    rtt_ms: Annotated[float | None, Field(ge=0.0)] = None
+    """
+    Average round-trip time.
+    """
+    loss_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
 
 
 class FormField(BaseModel):
@@ -196,6 +227,10 @@ class PluginManifest(BaseModel):
     entrypoint: str
     """
     Python file executed by the core, relative to the plugin root.
+    """
+    timeout_s: Annotated[int | None, Field(ge=5, le=300)] = None
+    """
+    Time limit per run; default 60.
     """
     description: str | None = None
     author: str | None = None
@@ -316,6 +351,10 @@ class Device(BaseModel):
     arp: list[ArpEntry] | None = None
     dhcp_leases: list[DhcpLease] | None = None
     wireless_clients: list[WirelessClient] | None = None
+    gateways: list[Gateway] | None = None
+    """
+    Upstream gateways monitored by a router or firewall.
+    """
     hosts: list[Host] | None = None
     """
     End devices observed by this integration with extra details (network scans, controllers).

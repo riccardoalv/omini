@@ -23,9 +23,11 @@ import (
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
+	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
+	"github.com/riccardoalv/omini/sdk"
 	"github.com/riccardoalv/omini/web"
 )
 
@@ -38,7 +40,9 @@ type config struct {
 	PollInterval time.Duration
 	SecretKey    string
 	LogLevel     slog.Level
-	AutoScan     bool // create the network scan integration on first start
+	AutoScan     bool     // create the network scan integration on first start
+	PluginDirs   []string // plugins loaded in place (development)
+	UV           string   // uv binary used to build plugin environments
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -62,6 +66,12 @@ func loadConfig(getenv func(string) string) (config, error) {
 			return cfg, fmt.Errorf("OMINI_LOG_LEVEL: %w", err)
 		}
 	}
+	for _, d := range strings.Split(getenv("OMINI_PLUGIN_DIRS"), ",") {
+		if d = strings.TrimSpace(d); d != "" {
+			cfg.PluginDirs = append(cfg.PluginDirs, d)
+		}
+	}
+	cfg.UV = getenv("OMINI_UV")
 	if v := getenv("OMINI_AUTOSCAN"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
@@ -123,6 +133,16 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	reg := integration.NewRegistry()
 	reg.Register(netscan.New())
 
+	plugs := &plugins.Manager{Dir: filepath.Join(cfg.DataDir, "plugins"), DevDirs: cfg.PluginDirs, UV: cfg.UV, SDK: sdk.Python}
+	loaded, loadErrs := plugs.Load()
+	for _, err := range loadErrs {
+		slog.Warn("plugin not loaded", "err", err)
+	}
+	for _, p := range loaded {
+		reg.Register(plugs.Integration(p))
+		slog.Info("plugin loaded", "plugin", p.Manifest.ID, "version", p.Manifest.Version, "dev", p.Dev)
+	}
+
 	if err := firstRun(ctx, st, box, cfg); err != nil {
 		return err
 	}
@@ -130,7 +150,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
-		WebUI: webui.New(), UI: web.FS(), Version: version,
+		WebUI: webui.New(), Plugins: plugs, UI: web.FS(), Version: version,
 		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 	}
 	httpServer := &http.Server{

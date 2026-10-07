@@ -11,6 +11,7 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 	"github.com/riccardoalv/omini/internal/webui"
@@ -410,6 +411,72 @@ func (s *Server) resetLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- plugins ---
+
+func (s *Server) listPlugins(w http.ResponseWriter, _ *http.Request) {
+	if s.Plugins == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Plugins.List())
+}
+
+// installPlugin installs (or updates) a plugin from its GitHub repository and
+// makes it available as an integration type right away.
+func (s *Server) installPlugin(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URL     string `json:"url"`
+		Version string `json:"version"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if s.Plugins == nil {
+		writeError(w, http.StatusServiceUnavailable, "plugins are not available")
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, 10*time.Minute)
+	defer cancel()
+	p, err := s.Plugins.Install(ctx, in.URL, strings.TrimSpace(in.Version))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.Registry.Register(s.Plugins.Integration(p))
+	writeJSON(w, http.StatusCreated, p)
+}
+
+// removePlugin uninstalls a plugin that no integration uses anymore.
+func (s *Server) removePlugin(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if s.Plugins == nil {
+		writeError(w, http.StatusNotFound, "plugin not found")
+		return
+	}
+	all, err := s.Store.ListIntegrations(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	for _, in := range all {
+		if in.Type == id {
+			writeError(w, http.StatusConflict, "delete the integrations that use this plugin first")
+			return
+		}
+	}
+	switch err := s.Plugins.Remove(id); {
+	case errors.Is(err, fs.ErrNotExist):
+		writeError(w, http.StatusNotFound, "plugin not found")
+	case errors.Is(err, plugins.ErrDevPlugin):
+		writeError(w, http.StatusConflict, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		s.Registry.Unregister(id)
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // --- map areas ---

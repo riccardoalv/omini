@@ -83,6 +83,20 @@ func Forced(ctx context.Context) bool {
 	return v
 }
 
+type instanceKey struct{}
+
+// WithInstance tells the integration which configured instance it runs for
+// (plugins keep per-instance state, e.g. a session).
+func WithInstance(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, instanceKey{}, id)
+}
+
+// Instance returns the instance id set by WithInstance (0 for a connection test).
+func Instance(ctx context.Context) int64 {
+	v, _ := ctx.Value(instanceKey{}).(int64)
+	return v
+}
+
 // Validator is implemented by integrations that check settings beyond the
 // field types (e.g. port ranges); it runs before settings are saved.
 type Validator interface {
@@ -103,6 +117,13 @@ func (r *Registry) Register(i Integration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items[i.Info().Type] = i
+}
+
+// Unregister removes an integration type (an uninstalled plugin).
+func (r *Registry) Unregister(typ string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.items, typ)
 }
 
 func (r *Registry) Get(typ string) (Integration, error) {

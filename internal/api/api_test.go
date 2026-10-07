@@ -10,6 +10,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/riccardoalv/omini/internal/demo"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
+	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
@@ -63,6 +65,15 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	reg := integration.NewRegistry()
 	reg.Register(demo.New())
 	reg.Register(netscan.New())
+	// A development plugin written in sh (no Python needed in tests).
+	plugDir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(plugDir, "plugin.yaml"), []byte("id: fakefw\nname: Fake firewall\nversion: 1.0.0\nprotocol: 1\nentrypoint: main.sh\nfields:\n  - {key: url, type: url, required: true}\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(plugDir, "main.sh"), []byte(`cat >/dev/null; echo '{"devices":[{"key":"fw","name":"fw","role":"firewall"}]}'`), 0o644)
+	plugs := &plugins.Manager{Dir: t.TempDir(), DevDirs: []string{plugDir}, Interpreter: "/bin/sh"}
+	loaded, _ := plugs.Load()
+	for _, p := range loaded {
+		reg.Register(plugs.Integration(p))
+	}
 	coll := collector.New(st, reg, box, collector.Options{})
 
 	web := &fakeWeb{}
@@ -71,7 +82,7 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	})
 	s := &api.Server{
 		Icons: icons,
-		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test", WebUI: web,
+		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test", WebUI: web, Plugins: plugs,
 	}
 	if ui != nil {
 		s.UI = ui
@@ -168,7 +179,7 @@ func TestIntegrationLifecycleKeepsSecretsSecret(t *testing.T) {
 
 	var types []integration.Info
 	h.do("GET", "/api/integration-types", nil, &types)
-	if len(types) != 2 {
+	if len(types) != 3 {
 		t.Fatalf("integration types: %+v", types)
 	}
 
@@ -508,5 +519,46 @@ func TestUserLanguageIsSaved(t *testing.T) {
 	h.do("POST", "/api/auth/logout", nil, nil)
 	if code := h.do("PATCH", "/api/me", map[string]string{"locale": "en"}, nil); code != http.StatusUnauthorized {
 		t.Fatalf("update without login: %d", code)
+	}
+}
+
+func TestPlugins(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+
+	var list []map[string]any
+	h.do("GET", "/api/plugins", nil, &list)
+	if len(list) != 1 || list[0]["dev"] != true || list[0]["manifest"].(map[string]any)["id"] != "fakefw" {
+		t.Fatalf("plugins: %v", list)
+	}
+
+	// A plugin is an integration type like any other.
+	var created map[string]any
+	if code := h.do("POST", "/api/integrations", map[string]any{"type": "fakefw", "config": map[string]any{"url": "https://fw.lan"}}, &created); code != http.StatusCreated {
+		t.Fatalf("create: %d %v", code, created)
+	}
+	if created["name"] != "Fake firewall" {
+		t.Fatalf("name: %v", created["name"])
+	}
+	var st map[string]any
+	if code := h.do("POST", "/api/integrations/"+itoa(int64(created["id"].(float64)))+"/run", nil, &st); code != 200 || st["ok"] != true || st["devices"] != float64(1) {
+		t.Fatalf("run: %d %v", code, st)
+	}
+
+	// In use: cannot be removed; development plugins never.
+	if code := h.do("DELETE", "/api/plugins/fakefw", nil, nil); code != http.StatusConflict {
+		t.Fatalf("remove in use: %d", code)
+	}
+	h.do("DELETE", "/api/integrations/"+itoa(int64(created["id"].(float64))), nil, nil)
+	if code := h.do("DELETE", "/api/plugins/fakefw", nil, nil); code != http.StatusConflict {
+		t.Fatalf("remove dev plugin: %d", code)
+	}
+	if code := h.do("DELETE", "/api/plugins/nope", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("remove unknown: %d", code)
+	}
+
+	var resp map[string]string
+	if code := h.do("POST", "/api/plugins", map[string]string{"url": "https://example.com/x/y"}, &resp); code != http.StatusBadRequest || !strings.Contains(resp["error"], "GitHub") {
+		t.Fatalf("install from a non-GitHub URL: %d %v", code, resp)
 	}
 }
