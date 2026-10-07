@@ -794,6 +794,11 @@ func (b *builder) placeCollected(
 				if behind := b.nodes[b.uplinks[port]]; behind != nil &&
 					(behind.Kind == KindUnmanaged || len(behind.Device.Fdb) == 0) {
 					if b.listsClients(behind.ID) && !b.isClientOf(behind.ID, m) {
+						// Only that MAC table vouches for it (no ARP, no scan): a
+						// stale entry, or something the AP itself does not see.
+						if _, inARP := arp[m]; !inARP && !scanned {
+							continue
+						}
 						b.beside[port] = append(b.beside[port], n.ID)
 					} else {
 						n.ParentID, n.Port, kind = behind.ID, "", EdgeInferred

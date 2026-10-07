@@ -582,3 +582,39 @@ func TestUplinkKeptWhileTheRouterIsForgotten(t *testing.T) {
 		}
 	}
 }
+
+// A MAC only the switch's table has (no IP, no ARP, no scan), on the port of
+// an access point that lists its clients without it, is not shown: nothing
+// else says it is there — and it must not invent an unmanaged switch.
+func TestMACOnlySeenBehindAnAccessPointIsNotShown(t *testing.T) {
+	const (
+		fwMAC = "58:9c:fc:00:00:01"
+		swMAC = "1c:2a:a3:00:00:01"
+		apMAC = "30:16:9d:00:00:01"
+		tuya  = "00:33:7a:00:00:01"
+		phone = "02:23:ab:00:00:01"
+	)
+	band := model.WifiBand("2.4ghz")
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{{
+			Key: fwMAC, Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{fwMAC},
+			Arp: []model.ArpEntry{
+				{IP: "192.168.1.2", MAC: swMAC, Interface: model.Ptr("bridge0")},
+				{IP: "192.168.1.3", MAC: apMAC, Interface: model.Ptr("bridge0")},
+			},
+		}}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{{
+			Key: swMAC, Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{swMAC},
+			Fdb: []model.FdbEntry{{MAC: fwMAC, Port: "Port 9"}, {MAC: apMAC, Port: "Port 2"}, {MAC: tuya, Port: "Port 2"}},
+		}}},
+		{IntegrationID: 3, Online: true, Devices: []model.Device{{
+			Key: apMAC, Name: "Living Room", Role: model.Ptr(model.DeviceRoleAp), MACs: []model.MACAddress{apMAC},
+			WirelessClients: []model.WirelessClient{{MAC: phone, Band: &band}},
+		}}},
+	})
+	for _, n := range topo.Nodes {
+		if n.ID == "mac:"+tuya || n.Kind == topology.KindSegment {
+			t.Fatalf("unexpected %s %q", n.Kind, n.ID)
+		}
+	}
+}
