@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/riccardoalv/omini/internal/store"
 )
 
 func env(vars map[string]string) func(string) string {
@@ -18,7 +21,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || cfg.Demo {
+	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || cfg.Demo || !cfg.AutoScan {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }
@@ -26,13 +29,13 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestLoadConfigFromEnv(t *testing.T) {
 	cfg, err := loadConfig(env(map[string]string{
 		"OMINI_ADDR": "127.0.0.1:9000", "OMINI_DATA_DIR": "/data", "OMINI_POLL_INTERVAL": "30",
-		"OMINI_LOG_LEVEL": "debug", "OMINI_DEMO": "true", "OMINI_SECRET_KEY": "k",
+		"OMINI_LOG_LEVEL": "debug", "OMINI_DEMO": "true", "OMINI_SECRET_KEY": "k", "OMINI_AUTOSCAN": "false",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Addr != "127.0.0.1:9000" || cfg.DataDir != "/data" || cfg.PollInterval != 30*time.Second ||
-		cfg.LogLevel != slog.LevelDebug || !cfg.Demo || cfg.SecretKey != "k" {
+		cfg.LogLevel != slog.LevelDebug || !cfg.Demo || cfg.SecretKey != "k" || cfg.AutoScan {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }
@@ -43,6 +46,7 @@ func TestLoadConfigErrors(t *testing.T) {
 		{"OMINI_POLL_INTERVAL": "soon"},
 		{"OMINI_LOG_LEVEL": "loud"},
 		{"OMINI_DEMO": "maybe"},
+		{"OMINI_AUTOSCAN": "sometimes"},
 	} {
 		if _, err := loadConfig(env(vars)); err == nil {
 			t.Errorf("loadConfig(%v) should fail", vars)
@@ -87,5 +91,29 @@ func TestRunServesDemo(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("server did not shut down")
+	}
+}
+
+func TestFirstRunCreatesTheNetworkScan(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := st.ListIntegrations(ctx)
+	if len(list) != 1 || list[0].Type != "network" || list[0].Config.String("subnets") != "auto" {
+		t.Fatalf("integrations = %+v", list)
+	}
+	// Only on the very first start: existing setups are never touched.
+	if err := firstRun(ctx, st, config{AutoScan: true, Demo: true}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := st.ListIntegrations(ctx); len(list) != 1 {
+		t.Fatalf("first run must not add integrations again: %+v", list)
 	}
 }
