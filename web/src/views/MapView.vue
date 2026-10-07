@@ -187,8 +187,8 @@ const flowNodes = computed<Node[]>(() => {
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
-    // A Wi-Fi network is only a picture: no click, menu or drag.
-    ...(n.kind === 'ssid' ? { selectable: false, draggable: false, focusable: false } : {}),
+    // A Wi-Fi network has no panel or menu, but it can be moved like any node.
+    ...(n.kind === 'ssid' ? { selectable: false, focusable: false } : {}),
   }))
   out.push(...devices)
   for (const g of view.value.groups) {

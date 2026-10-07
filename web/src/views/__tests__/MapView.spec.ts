@@ -109,4 +109,43 @@ describe('MapView', () => {
     expect(w.find('aside.panel').exists()).toBe(false)
     w.unmount()
   })
+
+  it('draws Wi-Fi networks as nodes that can be dragged but not selected', async () => {
+    vi.mocked(api.integrations).mockResolvedValue([])
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [
+          { id: 'dev:ap', kind: 'device', label: 'ap', online: true },
+          { id: 'mac:1', kind: 'client', label: 'phone', online: true, band: '5ghz' },
+        ],
+        edges: [
+          {
+            id: 'e1',
+            source: 'dev:ap',
+            target: 'mac:1',
+            kind: 'wifi',
+            source_port: 'Home · 5 GHz',
+          },
+        ],
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const flow = w.findComponent({ name: 'VueFlow' })
+    const net = (
+      flow.props('nodes') as { id: string; selectable?: boolean; draggable?: boolean }[]
+    ).find((n) => n.id === 'wifi:dev:ap:Home · 5 GHz')
+    expect(net).toBeDefined()
+    expect(net!.selectable).toBe(false)
+    expect(net!.draggable).not.toBe(false)
+    w.unmount()
+  })
 })
