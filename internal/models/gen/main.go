@@ -112,11 +112,11 @@ func fetch(url string) []byte {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		log.Fatalf("%s: %s", url, resp.Status)
 	}
-	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
 	}
