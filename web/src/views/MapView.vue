@@ -95,6 +95,7 @@ const selectedId = ref<string>()
 const refreshing = ref(false)
 const now = ref(Date.now())
 let lastLayout = '' // signature of the last laid out graph
+const layoutsApplied = ref(0) // counts layouts put on screen (an export waits for one)
 let layoutAnchor: string | undefined // node the user expanded or collapsed
 let timer: ReturnType<typeof setInterval> | undefined
 
@@ -121,17 +122,21 @@ const areas = ref<MapArea[]>([])
 // The map's graph: each access point's Wi-Fi networks as mini nodes between it
 // and its clients (the panel and lists use the plain graph).
 const mapGraph = computed(() => withWifiNetworks(nodes.value, edges.value))
+// While exporting an image, everything is shown expanded (no bubbles).
+const expandAll = ref(false)
 const view = computed(() =>
-  collapseAreas(
-    collapseClients(
-      mapGraph.value.nodes,
-      mapGraph.value.edges,
-      prefs.collapseThreshold,
-      expanded.value,
-      forced.value,
-    ),
-    collapsedAreaList.value,
-  ),
+  expandAll.value
+    ? collapseClients(mapGraph.value.nodes, mapGraph.value.edges, Infinity, new Set())
+    : collapseAreas(
+        collapseClients(
+          mapGraph.value.nodes,
+          mapGraph.value.edges,
+          prefs.collapseThreshold,
+          expanded.value,
+          forced.value,
+        ),
+        collapsedAreaList.value,
+      ),
 )
 /** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
 const collapsedAreaList = computed(() =>
@@ -263,7 +268,10 @@ function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
 watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
   const ids = [...v.nodes.map((n) => n.id), ...v.groups.map((g) => g.id)]
   const key = direction + '|' + ids.join(',') + '|' + v.edges.map((e) => e.id).join(',')
-  if (key === lastLayout) return
+  if (key === lastLayout) {
+    layoutsApplied.value++
+    return
+  }
   const refit = lastLayout === '' || !lastLayout.startsWith(direction + '|')
   lastLayout = key
   const saved = positionsFor({ ...data.value?.layout, ...draggedPositions }, direction)
@@ -299,6 +307,7 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
     updateNodeInternals()
     fitSoon()
   }
+  layoutsApplied.value++
 })
 
 // The map area changes width when the sidebar expands or collapses.
@@ -618,6 +627,17 @@ async function refresh() {
 const exportOpen = ref(false)
 const exporting = ref(false)
 const exportError = ref('')
+/** Expands every group and area, and waits for that map to be drawn. */
+async function showEverything() {
+  const before = layoutsApplied.value
+  expandAll.value = true
+  for (let i = 0; i < 200 && layoutsApplied.value === before; i++) {
+    await new Promise((r) => setTimeout(r, 25))
+  }
+  await nextTick()
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+}
+
 async function exportMap(format: ExportFormat) {
   exportOpen.value = false
   exportError.value = ''
@@ -630,11 +650,13 @@ async function exportMap(format: ExportFormat) {
     }
     const viewportEl = mapEl.value?.querySelector<HTMLElement>('.vue-flow__viewport')
     if (!viewportEl) return
+    await showEverything()
     const background = getComputedStyle(mapEl.value!).backgroundColor
     download(await mapImage(format, viewportEl, background), exportName(format))
   } catch {
     exportError.value = t('map.exportFailed')
   } finally {
+    expandAll.value = false
     exporting.value = false
   }
 }

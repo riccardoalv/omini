@@ -4,7 +4,8 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { plugins } from '@/components/__tests__/helpers'
 import { api } from '@/lib/api'
-import { download } from '@/lib/export'
+import { download, mapImage } from '@/lib/export'
+import { prefs } from '@/lib/prefs'
 
 import MapView from '../MapView.vue'
 
@@ -22,7 +23,11 @@ vi.mock('@/lib/api', async (orig) => {
 
 vi.mock('@/lib/export', async (orig) => {
   const mod = await orig<typeof import('@/lib/export')>()
-  return { ...mod, download: vi.fn<typeof mod.download>() }
+  return {
+    ...mod,
+    download: vi.fn<typeof mod.download>(),
+    mapImage: vi.fn<typeof mod.mapImage>(),
+  }
 })
 
 beforeAll(() => {
@@ -228,6 +233,60 @@ describe('MapView', () => {
     const [content, name] = vi.mocked(download).mock.calls[0]!
     expect(JSON.parse(content).topology.nodes[0].id).toBe('dev:fw')
     expect(name).toMatch(/^omini-map-\d{4}-\d{2}-\d{2}\.json$/)
+    w.unmount()
+  })
+
+  it('exports images with every group expanded, then folds them back', async () => {
+    localStorage.clear()
+    prefs.expanded = []
+    prefs.collapsed = []
+    vi.mocked(api.integrations).mockResolvedValue([])
+    const phones = Array.from({ length: 10 }, (_, i) => ({
+      id: `mac:${i}`,
+      kind: 'client' as const,
+      label: `phone-${i}`,
+      online: true,
+    }))
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [{ id: 'dev:ap', kind: 'device', label: 'ap', online: true }, ...phones],
+        edges: phones.map((p) => ({
+          id: `e:${p.id}`,
+          source: 'dev:ap',
+          target: p.id,
+          kind: 'inferred' as const,
+        })),
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    let drawn: string[] = []
+    vi.mocked(mapImage).mockImplementation(async (_format, viewport) => {
+      drawn = [...viewport.querySelectorAll('.vue-flow__node')].map((n) =>
+        n.getAttribute('data-id')!,
+      )
+      return 'data:image/png;base64,'
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, {
+      global: { plugins: [...plugins(), router] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const bubbles = () =>
+      w.findAllComponents({ name: 'TopologyNode' }).filter((c) => c.props('data').group).length
+    expect(bubbles()).toBe(1)
+    await w.get('[data-test=export]').trigger('click')
+    await w.get('[data-test=export-png]').trigger('click')
+    await vi.waitFor(() => expect(vi.mocked(mapImage)).toHaveBeenCalled(), { timeout: 3000 })
+    expect(drawn.filter((id) => id.startsWith('mac:'))).toHaveLength(10)
+    await flushPromises()
+    await vi.waitFor(() => expect(bubbles()).toBe(1), { timeout: 3000 })
     w.unmount()
   })
 })
