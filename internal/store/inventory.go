@@ -11,19 +11,22 @@ import (
 // InventoryEntry is a device ever seen on the network. Entries are kept until
 // the user deletes them.
 type InventoryEntry struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Label     string    `json:"label"`
-	MAC       string    `json:"mac,omitempty"`
-	IP        string    `json:"ip,omitempty"`
-	Hostname  string    `json:"hostname,omitempty"`
-	Vendor    string    `json:"vendor,omitempty"`
-	ParentID  string    `json:"parent_id,omitempty"`
-	Port      string    `json:"port,omitempty"`
-	Alias     string    `json:"alias,omitempty"`
-	Pinned    bool      `json:"pinned"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Label    string `json:"label"`
+	MAC      string `json:"mac,omitempty"`
+	IP       string `json:"ip,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	Vendor   string `json:"vendor,omitempty"`
+	ParentID string `json:"parent_id,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Alias    string `json:"alias,omitempty"`
+	Pinned   bool   `json:"pinned"`
+	// User corrections of the classification; empty means automatic.
+	DeviceType string    `json:"device_type,omitempty"`
+	Icon       string    `json:"icon,omitempty"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
 }
 
 // MarkSeen records that entries were present at time at. New entries are
@@ -65,7 +68,8 @@ func (s *Store) MarkSeen(ctx context.Context, entries []InventoryEntry, at time.
 func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, label, COALESCE(mac, ''), COALESCE(ip, ''), COALESCE(hostname, ''), COALESCE(vendor, ''),
-		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), pinned, first_seen, last_seen
+		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), pinned, first_seen, last_seen,
+		       COALESCE(device_type, ''), COALESCE(icon, '')
 		FROM inventory ORDER BY last_seen DESC, id`)
 	if err != nil {
 		return nil, err
@@ -79,7 +83,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 			first, latest int64
 		)
 		if err := rows.Scan(&e.ID, &e.Kind, &e.Label, &e.MAC, &e.IP, &e.Hostname, &e.Vendor,
-			&e.ParentID, &e.Port, &e.Alias, &pinned, &first, &latest); err != nil {
+			&e.ParentID, &e.Port, &e.Alias, &pinned, &first, &latest, &e.DeviceType, &e.Icon); err != nil {
 			return nil, err
 		}
 		e.Pinned, e.FirstSeen, e.LastSeen = pinned == 1, fromUnix(first), fromUnix(latest)
@@ -88,8 +92,28 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	return out, rows.Err()
 }
 
-// UpdateInventory changes the user fields of an entry. Nil means unchanged.
-func (s *Store) UpdateInventory(ctx context.Context, id string, alias *string, pinned *bool) (InventoryEntry, error) {
+// InventoryUpdate holds the user fields to change; nil means unchanged and an
+// empty string resets the field to automatic.
+type InventoryUpdate struct {
+	Alias      *string `json:"alias"`
+	Pinned     *bool   `json:"pinned"`
+	DeviceType *string `json:"device_type"`
+	Icon       *string `json:"icon"`
+}
+
+// UpdateInventory changes the user fields of an entry.
+func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdate) (InventoryEntry, error) {
+	alias, pinned := u.Alias, u.Pinned
+	for col, v := range map[string]*string{"device_type": u.DeviceType, "icon": u.Icon} {
+		if v == nil {
+			continue
+		}
+		//nolint:gosec // col comes from the fixed map above, not from the request
+		if _, err := s.db.ExecContext(ctx, `UPDATE inventory SET `+col+` = ? WHERE id = ?`,
+			nullable(strings.TrimSpace(*v)), id); err != nil {
+			return InventoryEntry{}, err
+		}
+	}
 	if alias != nil {
 		if _, err := s.db.ExecContext(ctx, `UPDATE inventory SET alias = ? WHERE id = ?`,
 			nullable(strings.TrimSpace(*alias)), id); err != nil {

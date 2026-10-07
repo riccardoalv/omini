@@ -207,7 +207,7 @@ func TestAliasAndPinAreApplied(t *testing.T) {
 	e.collect(t)
 
 	alias, pinned := "NAS (Synology)", true
-	if _, err := e.st.UpdateInventory(context.Background(), "mac:00:11:32:aa:00:01", &alias, &pinned); err != nil {
+	if _, err := e.st.UpdateInventory(context.Background(), "mac:00:11:32:aa:00:01", store.InventoryUpdate{Alias: &alias, Pinned: &pinned}); err != nil {
 		t.Fatal(err)
 	}
 	s := e.collect(t)
@@ -257,5 +257,31 @@ func TestLoadRestoresStateAfterRestart(t *testing.T) {
 	}
 	if got := len(restarted.State().Topology.Nodes); got != len(before.Topology.Nodes) {
 		t.Fatalf("restored %d nodes, want %d", got, len(before.Topology.Nodes))
+	}
+}
+
+func TestNodesAreClassifiedAndUserCorrectionsWin(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "demo", integration.Config{})
+	s := e.collect(t)
+
+	fw, _ := node(s, "dev:00:e0:4c:68:00:02")
+	if fw.Type != "firewall" {
+		t.Fatalf("firewall classified as %q", fw.Type)
+	}
+	phone, _ := node(s, "mac:da:a1:19:00:00:01") // iphone-ana, private MAC, Wi-Fi
+	if phone.Type != "phone" || phone.OS != "ios" {
+		t.Fatalf("iphone classified as %q/%q (%v)", phone.Type, phone.OS, phone.Reasons)
+	}
+
+	tv, icon := "tv", "samsung"
+	if _, err := e.st.UpdateInventory(context.Background(), "mac:00:11:32:aa:00:01",
+		store.InventoryUpdate{DeviceType: &tv, Icon: &icon}); err != nil {
+		t.Fatal(err)
+	}
+	s = e.collect(t)
+	nas, _ := node(s, "mac:00:11:32:aa:00:01")
+	if nas.Type != "tv" || nas.Icon != "samsung" || nas.Reasons[0] != "user" {
+		t.Fatalf("user correction not applied: %+v", nas)
 	}
 }

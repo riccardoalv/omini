@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/classify"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/secret"
@@ -261,6 +263,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	classifyNodes(&topo)
 	applyInventory(&topo, inventory, now)
 
 	c.mu.Lock()
@@ -287,6 +290,7 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 				n.Label = e.Alias
 			}
 			n.Pinned = e.Pinned
+			applyOverrides(n, e)
 		}
 	}
 	for _, e := range inventory {
@@ -302,6 +306,8 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 		if e.Alias != "" {
 			n.Label = e.Alias
 		}
+		classifyNode(&n)
+		applyOverrides(&n, e)
 		if present[e.ParentID] {
 			n.ParentID, n.Port = e.ParentID, e.Port
 			topo.Edges = append(topo.Edges, topology.Edge{
@@ -310,5 +316,36 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 			})
 		}
 		topo.Nodes = append(topo.Nodes, n)
+	}
+}
+
+// classifyNodes fills type, OS, brand and product of every node.
+func classifyNodes(topo *topology.Topology) {
+	for i := range topo.Nodes {
+		classifyNode(&topo.Nodes[i])
+	}
+}
+
+func classifyNode(n *topology.Node) {
+	in := classify.Input{
+		Kind: string(n.Kind), Role: n.Role, Vendor: n.Vendor, Model: n.Model, Hostname: n.Hostname,
+		OS: n.OS, RandomMAC: n.RandomMAC, OpenPorts: n.OpenPorts, Services: n.Services,
+		Titles: n.Titles, Banners: n.Banners, TTL: n.TTL, Self: slices.Contains(n.Services, "omini"),
+	}
+	if in.Hostname == "" && n.Kind != topology.KindClient {
+		in.Hostname = n.Label // managed devices: the name reported by the integration
+	}
+	r := classify.Classify(in)
+	n.Type, n.OS, n.Brand, n.Product, n.Reasons = r.Type, r.OS, r.Brand, r.Product, r.Reasons
+}
+
+// applyOverrides applies the user's corrections of the classification.
+func applyOverrides(n *topology.Node, e store.InventoryEntry) {
+	if e.DeviceType != "" {
+		n.Type = e.DeviceType
+		n.Reasons = append([]string{"user"}, n.Reasons...)
+	}
+	if e.Icon != "" {
+		n.Icon = e.Icon
 	}
 }

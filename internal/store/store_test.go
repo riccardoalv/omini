@@ -86,7 +86,7 @@ func TestMarkSeenKeepsUserFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	alias, pinned := "Ricardo's phone", true
-	if _, err := s.UpdateInventory(ctx, entry.ID, &alias, &pinned); err != nil {
+	if _, err := s.UpdateInventory(ctx, entry.ID, InventoryUpdate{Alias: &alias, Pinned: &pinned}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,5 +101,23 @@ func TestMarkSeenKeepsUserFields(t *testing.T) {
 	}
 	if !got.FirstSeen.Equal(first) || !got.LastSeen.Equal(first.Add(time.Hour)) {
 		t.Fatalf("unexpected timestamps: first=%v last=%v", got.FirstSeen, got.LastSeen)
+	}
+}
+
+func TestClassificationOverrides(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: "mac:aa", Kind: "client", Label: "x"}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	phone, android := "phone", "android"
+	e, err := s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{DeviceType: &phone, Icon: &android})
+	if err != nil || e.DeviceType != "phone" || e.Icon != "android" {
+		t.Fatalf("override not saved: %+v, %v", e, err)
+	}
+	empty := ""
+	e, _ = s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{DeviceType: &empty})
+	if e.DeviceType != "" || e.Icon != "android" {
+		t.Fatalf("empty must reset only that field: %+v", e)
 	}
 }

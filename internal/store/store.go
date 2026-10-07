@@ -79,6 +79,11 @@ var migrations = []string{
 		expires_at INTEGER NOT NULL
 	);
 	`,
+	// 2: user corrections of the automatic classification.
+	`
+	ALTER TABLE inventory ADD COLUMN device_type TEXT; -- e.g. "phone"; overrides the detected type
+	ALTER TABLE inventory ADD COLUMN icon TEXT;        -- logo slug, e.g. "android"; overrides the detected one
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

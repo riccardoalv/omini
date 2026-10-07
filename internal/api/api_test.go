@@ -296,6 +296,13 @@ func TestTopologyInventoryAndLayout(t *testing.T) {
 	if roles["dev:00:e0:4c:68:00:02"] != "firewall" || roles[nas] != "client" {
 		t.Fatalf("inventory roles: firewall=%v nas=%v", roles["dev:00:e0:4c:68:00:02"], roles[nas])
 	}
+	types := map[string]any{}
+	for _, e := range inv {
+		types[e["id"].(string)] = e["type"]
+	}
+	if types["dev:00:e0:4c:68:00:02"] != "firewall" {
+		t.Fatalf("inventory roles: firewall=%v nas=%v", roles["dev:00:e0:4c:68:00:02"], roles[nas])
+	}
 	if code := h.do("POST", "/api/inventory/delete", map[string]any{"ids": []string{nas}}, nil); code != http.StatusNoContent {
 		t.Fatalf("delete inventory: %d", code)
 	}

@@ -69,8 +69,19 @@ type Node struct {
 	OS            string        `json:"os,omitempty"`
 	OpenPorts     []int         `json:"open_ports,omitempty"` // found by the network scan
 	Services      []string      `json:"services,omitempty"`   // mDNS/UPnP services
-	Pinned        bool          `json:"pinned,omitempty"`     // pinned by the user: never collapsed
-	LastSeen      *time.Time    `json:"last_seen,omitempty"`  // offline nodes: when they were last present
+	Titles        []string      `json:"titles,omitempty"`     // web interface titles
+	Banners       []string      `json:"banners,omitempty"`    // e.g. SSH version
+	TTL           int           `json:"ttl,omitempty"`        // ICMP reply TTL
+
+	// Classification (set by the collector, see internal/classify).
+	Type    string   `json:"type,omitempty"`
+	Brand   string   `json:"brand,omitempty"`
+	Product string   `json:"product,omitempty"`
+	Reasons []string `json:"reasons,omitempty"`
+	Icon    string   `json:"icon,omitempty"` // logo chosen by the user (overrides product/OS/brand)
+
+	Pinned   bool       `json:"pinned,omitempty"`    // pinned by the user: never collapsed
+	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }
 
 type Edge struct {
@@ -696,6 +707,11 @@ func enrich(n *Node, h model.Host) {
 	}
 	slices.Sort(n.OpenPorts)
 	n.Services = appendUniqueStr(n.Services, h.Services...)
+	n.Titles = appendUniqueStr(n.Titles, h.Titles...)
+	n.Banners = appendUniqueStr(n.Banners, h.Banners...)
+	if n.TTL == 0 && h.TTL != nil {
+		n.TTL = int(*h.TTL)
+	}
 }
 
 // bestHostname prefers real names over reverse-DNS placeholders and machine

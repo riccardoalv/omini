@@ -345,28 +345,30 @@ func (s *Server) listInventory(w http.ResponseWriter, r *http.Request) {
 	for _, n := range s.Collector.State().Topology.Nodes {
 		current[n.ID] = n
 	}
+	// Classification comes from the current map, when the device is on it.
 	type entry struct {
 		store.InventoryEntry
-		Online bool   `json:"online"`
-		Role   string `json:"role,omitempty"` // from the current map, when the device is on it
+		Online  bool   `json:"online"`
+		Role    string `json:"role,omitempty"`
+		Type    string `json:"type,omitempty"`
+		OS      string `json:"os,omitempty"`
+		Brand   string `json:"brand,omitempty"`
+		Product string `json:"product,omitempty"`
 	}
 	out := make([]entry, 0, len(inv))
 	for _, e := range inv {
 		n := current[e.ID]
-		out = append(out, entry{e, n.Online, n.Role})
+		out = append(out, entry{e, n.Online, n.Role, n.Type, n.OS, n.Brand, n.Product})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) updateInventory(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Alias  *string `json:"alias"`
-		Pinned *bool   `json:"pinned"`
-	}
+	var in store.InventoryUpdate
 	if !readJSON(w, r, &in) {
 		return
 	}
-	e, err := s.Store.UpdateInventory(r.Context(), r.PathValue("id"), in.Alias, in.Pinned)
+	e, err := s.Store.UpdateInventory(r.Context(), r.PathValue("id"), in)
 	if isNotFound(err) {
 		writeError(w, http.StatusNotFound, "device not found")
 		return
