@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/gosnmp/gosnmp v1.45.0
+	golang.org/x/crypto v0.57.0
 	modernc.org/sqlite v1.60.1
 )
 
