@@ -55,15 +55,32 @@ func tarball(t *testing.T, files map[string]string) []byte {
 	return buf.Bytes()
 }
 
-// fakeGitHub serves releases/latest and the tarball of v1.0.0.
-func fakeGitHub(t *testing.T, files map[string]string) *httptest.Server {
+const (
+	releaseSHA = "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	mainSHA    = "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+// fakeGitHub serves the API and tarballs of someone/omini-plugin-fake: the
+// release v1.0.0 (unless noRelease) and the main branch.
+func fakeGitHub(t *testing.T, files map[string]string, noRelease ...bool) *httptest.Server {
 	t.Helper()
 	tgz := tarball(t, files)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const repo = "/repos/someone/omini-plugin-fake"
 		switch r.URL.Path {
-		case "/repos/someone/omini-plugin-fake/releases/latest":
+		case repo + "/releases/latest":
+			if len(noRelease) > 0 && noRelease[0] {
+				http.NotFound(w, r)
+				return
+			}
 			_, _ = w.Write([]byte(`{"tag_name":"v1.0.0"}`))
-		case "/someone/omini-plugin-fake/tar.gz/refs/tags/v1.0.0":
+		case repo:
+			_, _ = w.Write([]byte(`{"default_branch":"main"}`))
+		case repo + "/commits/v1.0.0":
+			_, _ = w.Write([]byte(`{"sha":"` + releaseSHA + `"}`))
+		case repo + "/commits/main":
+			_, _ = w.Write([]byte(`{"sha":"` + mainSHA + `"}`))
+		case "/someone/omini-plugin-fake/tar.gz/" + releaseSHA, "/someone/omini-plugin-fake/tar.gz/" + mainSHA:
 			_, _ = w.Write(tgz)
 		default:
 			http.NotFound(w, r)
@@ -90,7 +107,7 @@ func TestInstallRunAndRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Manifest.ID != "fake" || p.Source.Version != "v1.0.0" || p.Dev {
+	if p.Manifest.ID != "fake" || p.Source.Version != "v1.0.0" || p.Source.Commit != releaseSHA || p.Dev {
 		t.Fatalf("installed %+v", p)
 	}
 
@@ -125,6 +142,28 @@ func TestInstallRunAndRemove(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(m.Dir, "fake")); !os.IsNotExist(err) {
 		t.Fatal("plugin files must be removed")
+	}
+}
+
+func TestRepositoriesWithoutReleasesInstallTheMainBranch(t *testing.T) {
+	gh := fakeGitHub(t, map[string]string{"x/plugin.yaml": manifest, "x/main.sh": script}, true)
+	m := newManager(t, gh)
+	p, err := m.Install(context.Background(), "https://github.com/someone/omini-plugin-fake", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Source.Version != "main@2222222" || p.Source.Commit != mainSHA {
+		t.Fatalf("source %+v", p.Source)
+	}
+	// A branch or tag can also be asked for explicitly.
+	if p, err = m.Install(context.Background(), "https://github.com/someone/omini-plugin-fake", "main"); err != nil || p.Source.Version != "main" {
+		t.Fatalf("install main: %+v %v", p, err)
+	}
+	if _, err := m.Install(context.Background(), "https://github.com/someone/omini-plugin-fake", "v9"); err == nil || !strings.Contains(err.Error(), "version v9 not found") {
+		t.Fatalf("unknown version: %v", err)
+	}
+	if _, err := m.Install(context.Background(), "https://github.com/someone/missing", ""); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("missing repository: %v", err)
 	}
 }
 
@@ -245,5 +284,33 @@ if [ "$1" = venv ]; then mkdir -p "$5/bin" && touch "$5/bin/python"; fi
 	b, _ = os.ReadFile(log)
 	if n := strings.Count(string(b), "\n"); n != 4 {
 		t.Fatalf("expected a rebuild, uv calls:\n%s", b)
+	}
+}
+
+func TestCatalog(t *testing.T) {
+	list := Catalog()
+	if len(list) == 0 {
+		t.Fatal("empty catalog")
+	}
+	ids := map[string]bool{}
+	for _, e := range list {
+		if _, _, err := parseGitHubURL(e.URL); err != nil || e.ID == "" || e.Name == "" || ids[e.ID] {
+			t.Errorf("invalid entry %+v: %v", e, err)
+		}
+		if e.Publisher != "official" && e.Publisher != "community" {
+			t.Errorf("%s: publisher %q", e.ID, e.Publisher)
+		}
+		switch e.Trust {
+		case "plug-and-play", "stable", "experimental":
+		default:
+			t.Errorf("%s: trust %q", e.ID, e.Trust)
+		}
+		ids[e.ID] = true
+	}
+	if e, ok := CatalogFor("https://github.com/riccardoalv/omini-plugin-opnsense.git/"); !ok || e.ID != "opnsense" {
+		t.Fatalf("CatalogFor: %+v %v", e, ok)
+	}
+	if _, ok := CatalogFor("https://github.com/someone/else"); ok {
+		t.Fatal("unknown repositories are not curated")
 	}
 }

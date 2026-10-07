@@ -213,11 +213,29 @@ export interface InventoryEntry {
 }
 
 /** An installed plugin (GET /api/plugins). */
+export type PluginTrust = 'plug-and-play' | 'stable' | 'experimental' | 'unverified'
+
 export interface PluginInfo {
   manifest: { id: string; name: string; version: string; description?: string; homepage?: string }
-  source?: { url: string; version: string; installed_at: string }
+  /** Where it was installed from: a tag, or branch@commit without releases. */
+  source?: { url: string; version: string; commit?: string; installed_at: string }
   /** Loaded in place from OMINI_PLUGIN_DIRS (development). */
   dev: boolean
+  publisher: 'official' | 'community'
+  trust: PluginTrust
+}
+
+/** A plugin of the curated list shipped with Omini. */
+export interface CatalogEntry {
+  id: string
+  name: string
+  description: string
+  url: string
+  icon?: string
+  publisher: 'official' | 'community'
+  trust: PluginTrust
+  installed: boolean
+  version?: string
 }
 
 export interface AuthStatus {

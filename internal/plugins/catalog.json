@@ -1,0 +1,11 @@
+[
+  {
+    "id": "opnsense",
+    "name": "OPNsense",
+    "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, ARP, DHCP leases, CPU, memory and uptime. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-opnsense",
+    "icon": "opnsense",
+    "publisher": "official",
+    "trust": "experimental"
+  }
+]

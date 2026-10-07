@@ -7,10 +7,17 @@ import { useRoute, useRouter } from 'vue-router'
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
+import PluginTrust from '@/components/PluginTrust.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
-import type { CollectionStatus, Config, Integration, IntegrationType } from '@/lib/types'
+import type {
+  CatalogEntry,
+  CollectionStatus,
+  Config,
+  Integration,
+  IntegrationType,
+} from '@/lib/types'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -28,11 +35,34 @@ const form = ref<{
 
 const typeByName = computed(() => new Map(types.value.map((x) => [x.type, x])))
 
+const catalog = ref<CatalogEntry[]>([])
+/** Curated plugins not installed yet: offered next to the integration types. */
+const installable = computed(() => catalog.value.filter((e) => !e.installed))
+
 async function load() {
   try {
     ;[items.value, types.value] = await Promise.all([api.integrations(), api.integrationTypes()])
+    catalog.value = await api.pluginCatalog().catch(() => [])
   } finally {
     loading.value = false
+  }
+}
+
+// Picking a plugin that is not installed installs it, then opens its form.
+const installing = ref<string>()
+const installError = ref('')
+async function installAndAdd(e: CatalogEntry) {
+  installing.value = e.id
+  installError.value = ''
+  try {
+    const p = await api.installPlugin(e.url)
+    await load()
+    const type = types.value.find((x) => x.type === p.manifest.id)
+    if (type) openAdd(type)
+  } catch (err) {
+    installError.value = err instanceof ApiError ? err.message : t('common.error')
+  } finally {
+    installing.value = undefined
   }
 }
 
@@ -192,7 +222,23 @@ onMounted(async () => {
           }}</span>
           <span class="muted">{{ type.description }}</span>
         </button>
+        <button
+          v-for="e in installable"
+          :key="e.id"
+          class="card type"
+          data-test="install-type"
+          :disabled="!!installing"
+          @click="installAndAdd(e)"
+        >
+          <strong>{{ e.name }}</strong>
+          <PluginTrust :publisher="e.publisher" :trust="e.trust" />
+          <span class="muted">{{ e.description }}</span>
+          <span class="install-hint">{{
+            installing === e.id ? t('plugins.installing') : t('plugins.installAndAdd')
+          }}</span>
+        </button>
       </div>
+      <p v-if="installError" class="alert error" role="alert">{{ installError }}</p>
     </ModalDialog>
 
     <IntegrationForm
@@ -285,5 +331,11 @@ onMounted(async () => {
 }
 .type .muted {
   font-size: 12.5px;
+}
+.install-hint {
+  margin-top: auto;
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
 }
 </style>

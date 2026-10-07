@@ -1,45 +1,51 @@
 <script setup lang="ts">
-import { Download, Trash2 } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
+import { Download, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
-import type { PluginInfo } from '@/lib/types'
+import type { CatalogEntry, PluginInfo } from '@/lib/types'
+
+import PluginTrust from './PluginTrust.vue'
 
 const { t } = useI18n()
 
 const plugins = ref<PluginInfo[]>([])
+const catalog = ref<CatalogEntry[]>([])
 const url = ref('')
 const version = ref('')
-const installing = ref(false)
+const busy = ref<string>() // id or url being installed
 const error = ref('')
 const installed = ref('')
 const confirmRemove = ref<string>()
 
+const available = computed(() => catalog.value.filter((e) => !e.installed))
 const message = (e: unknown) => (e instanceof ApiError ? e.message : t('common.error'))
 
 async function load() {
   try {
-    plugins.value = await api.plugins()
+    ;[plugins.value, catalog.value] = await Promise.all([api.plugins(), api.pluginCatalog()])
   } catch (e) {
     error.value = message(e)
   }
 }
 
-async function install() {
-  installing.value = true
+async function install(address: string, ver?: string, key = address) {
+  busy.value = key
   error.value = ''
   installed.value = ''
   try {
-    const p = await api.installPlugin(url.value.trim(), version.value.trim() || undefined)
+    const p = await api.installPlugin(address.trim(), ver?.trim() || undefined)
     installed.value = t('plugins.installed', { name: p.manifest.name, v: p.manifest.version })
-    url.value = ''
-    version.value = ''
+    if (address === url.value) {
+      url.value = ''
+      version.value = ''
+    }
     await load()
   } catch (e) {
     error.value = message(e)
   } finally {
-    installing.value = false
+    busy.value = undefined
   }
 }
 
@@ -65,25 +71,66 @@ onMounted(load)
 <template>
   <section class="card section">
     <h2>{{ t('plugins.title') }}</h2>
+    <p class="help">{{ t('plugins.hint') }}</p>
+
     <ul v-if="plugins.length" class="list">
       <li v-for="p in plugins" :key="p.manifest.id" data-test="plugin">
         <div class="grow">
-          <strong>{{ p.manifest.name }}</strong>
-          <span class="muted"> {{ p.manifest.version }}</span>
-          <span v-if="p.dev" class="badge">{{ t('plugins.dev') }}</span>
+          <div class="line">
+            <strong>{{ p.manifest.name }}</strong>
+            <span class="muted">{{ p.source?.version ?? p.manifest.version }}</span>
+            <span v-if="p.dev" class="badge">{{ t('plugins.dev') }}</span>
+            <PluginTrust v-else :publisher="p.publisher" :trust="p.trust" />
+          </div>
           <div v-if="p.source" class="muted small">
             <a :href="p.source.url" target="_blank" rel="noopener noreferrer">{{ p.source.url }}</a>
           </div>
         </div>
-        <button v-if="!p.dev" class="btn small danger" data-test="remove" @click="remove(p)">
-          <Trash2 :size="14" />
-          {{ confirmRemove === p.manifest.id ? t('plugins.confirmRemove') : t('plugins.remove') }}
-        </button>
+        <template v-if="!p.dev && p.source">
+          <button
+            class="btn small"
+            data-test="update"
+            :disabled="!!busy"
+            @click="install(p.source.url, undefined, p.manifest.id)"
+          >
+            <RefreshCw :size="14" :class="{ spin: busy === p.manifest.id }" />
+            {{ busy === p.manifest.id ? t('plugins.updating') : t('plugins.update') }}
+          </button>
+          <button class="btn small danger" data-test="remove" @click="remove(p)">
+            <Trash2 :size="14" />
+            {{ confirmRemove === p.manifest.id ? t('plugins.confirmRemove') : t('plugins.remove') }}
+          </button>
+        </template>
       </li>
     </ul>
     <p v-else class="muted">{{ t('plugins.none') }}</p>
 
-    <form class="install" @submit.prevent="install">
+    <template v-if="available.length">
+      <h3>{{ t('plugins.available') }}</h3>
+      <ul class="list">
+        <li v-for="e in available" :key="e.id" data-test="catalog-entry">
+          <div class="grow">
+            <div class="line">
+              <strong>{{ e.name }}</strong>
+              <PluginTrust :publisher="e.publisher" :trust="e.trust" />
+            </div>
+            <div class="muted small">{{ e.description }}</div>
+          </div>
+          <button
+            class="btn small primary"
+            data-test="install-catalog"
+            :disabled="!!busy"
+            @click="install(e.url, undefined, e.id)"
+          >
+            <Download :size="14" />
+            {{ busy === e.id ? t('plugins.installing') : t('plugins.install') }}
+          </button>
+        </li>
+      </ul>
+    </template>
+
+    <h3>{{ t('plugins.fromUrl') }}</h3>
+    <form class="install" @submit.prevent="install(url, version)">
       <div class="field grow">
         <label for="p-url">{{ t('plugins.url') }}</label>
         <input
@@ -92,7 +139,7 @@ onMounted(load)
           class="input"
           type="url"
           required
-          placeholder="https://github.com/riccardoalv/omini-plugin-opnsense"
+          placeholder="https://github.com/user/omini-plugin-…"
         />
       </div>
       <div class="field">
@@ -104,12 +151,11 @@ onMounted(load)
           :placeholder="t('plugins.latest')"
         />
       </div>
-      <button class="btn primary" type="submit" data-test="install" :disabled="installing || !url">
+      <button class="btn primary" type="submit" data-test="install" :disabled="!!busy || !url">
         <Download :size="15" />
-        {{ installing ? t('plugins.installing') : t('plugins.install') }}
+        {{ busy === url && url ? t('plugins.installing') : t('plugins.install') }}
       </button>
     </form>
-    <p class="help">{{ t('plugins.hint') }}</p>
     <p v-if="installed" class="alert ok" role="status">{{ installed }}</p>
     <p v-if="error" class="alert error" role="alert">{{ error }}</p>
   </section>
@@ -122,25 +168,39 @@ onMounted(load)
 }
 .section h2 {
   font-size: 15px;
-  margin-bottom: 14px;
+  margin-bottom: 6px;
+}
+.section h3 {
+  margin: 16px 0 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .list {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 6px;
   padding: 0;
 }
 .list li {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 8px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
+}
+.line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .grow {
   flex: 1;
   min-width: 0;
 }
 .small {
+  margin-top: 3px;
   font-size: 12.5px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -158,12 +218,17 @@ onMounted(load)
   max-width: 130px;
 }
 .help {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 .alert {
   margin: 0 0 14px;
 }
-.badge {
-  margin-left: 6px;
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

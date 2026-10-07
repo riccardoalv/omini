@@ -415,12 +415,48 @@ func (s *Server) resetLayout(w http.ResponseWriter, r *http.Request) {
 
 // --- plugins ---
 
+// pluginView is an installed plugin with its trust: curated plugins keep the
+// catalog's, any other repository is unverified.
+type pluginView struct {
+	*plugins.Plugin
+	Publisher string `json:"publisher"`
+	Trust     string `json:"trust"`
+}
+
 func (s *Server) listPlugins(w http.ResponseWriter, _ *http.Request) {
-	if s.Plugins == nil {
-		writeJSON(w, http.StatusOK, []any{})
-		return
+	out := []pluginView{}
+	if s.Plugins != nil {
+		for _, p := range s.Plugins.List() {
+			v := pluginView{Plugin: p, Publisher: "community", Trust: "unverified"}
+			if p.Source != nil {
+				if e, ok := plugins.CatalogFor(p.Source.URL); ok {
+					v.Publisher, v.Trust = e.Publisher, e.Trust
+				}
+			}
+			out = append(out, v)
+		}
 	}
-	writeJSON(w, http.StatusOK, s.Plugins.List())
+	writeJSON(w, http.StatusOK, out)
+}
+
+// pluginCatalog lists the curated plugins and whether each is installed.
+func (s *Server) pluginCatalog(w http.ResponseWriter, _ *http.Request) {
+	type entry struct {
+		plugins.CatalogEntry
+		Installed bool   `json:"installed"`
+		Version   string `json:"version,omitempty"`
+	}
+	out := []entry{}
+	for _, e := range plugins.Catalog() {
+		v := entry{CatalogEntry: e}
+		if s.Plugins != nil {
+			if p, ok := s.Plugins.Get(e.ID); ok {
+				v.Installed, v.Version = true, p.Manifest.Version
+			}
+		}
+		out = append(out, v)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // installPlugin installs (or updates) a plugin from its GitHub repository and

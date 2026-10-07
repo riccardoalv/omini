@@ -80,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PATCH /api/inventory/{id}", s.updateInventory)
 	private.HandleFunc("POST /api/inventory/delete", s.deleteInventory)
 	private.HandleFunc("GET /api/plugins", s.listPlugins)
+	private.HandleFunc("GET /api/plugins/catalog", s.pluginCatalog)
 	private.HandleFunc("POST /api/plugins", s.installPlugin)
 	private.HandleFunc("DELETE /api/plugins/{id}", s.removePlugin)
 	private.HandleFunc("PUT /api/layout", s.saveLayout)

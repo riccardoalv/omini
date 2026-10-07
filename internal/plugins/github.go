@@ -37,45 +37,93 @@ func parseGitHubURL(raw string) (owner, repo string, err error) {
 	return owner, repo, nil
 }
 
-// latestRelease returns the tag of the latest GitHub release.
-func (m *Manager) latestRelease(ctx context.Context, owner, repo string) (string, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/releases/latest", m.GitHub, owner, repo), nil)
+// resolve picks what to install and pins it to a commit: the given version
+// (a tag, branch or commit), else the latest release, else the newest commit
+// of the default branch (repositories without releases work too). It returns
+// the commit and a readable version ("v0.2.0" or "main@1a2b3c4").
+func (m *Manager) resolve(ctx context.Context, owner, repo, version string) (sha, label string, err error) {
+	if version == "" {
+		var rel struct {
+			TagName string `json:"tag_name"`
+		}
+		switch code, err := m.githubJSON(ctx, fmt.Sprintf("/repos/%s/%s/releases/latest", owner, repo), &rel); {
+		case err != nil:
+			return "", "", err
+		case code == http.StatusOK && rel.TagName != "":
+			version = rel.TagName
+		default: // no release: the default branch
+			var info struct {
+				DefaultBranch string `json:"default_branch"`
+			}
+			code, err := m.githubJSON(ctx, fmt.Sprintf("/repos/%s/%s", owner, repo), &info)
+			if err != nil {
+				return "", "", err
+			}
+			if code == http.StatusNotFound {
+				return "", "", fmt.Errorf("repository %s/%s not found (it must be public)", owner, repo)
+			}
+			if info.DefaultBranch == "" {
+				return "", "", fmt.Errorf("unexpected answer from GitHub")
+			}
+			sha, err := m.commit(ctx, owner, repo, info.DefaultBranch)
+			if err != nil {
+				return "", "", err
+			}
+			return sha, info.DefaultBranch + "@" + sha[:7], nil
+		}
+	}
+	sha, err = m.commit(ctx, owner, repo, version)
+	return sha, version, err
+}
+
+// commit returns the commit a tag, branch or commit id points to.
+func (m *Manager) commit(ctx context.Context, owner, repo, ref string) (string, error) {
+	var c struct {
+		SHA string `json:"sha"`
+	}
+	code, err := m.githubJSON(ctx, fmt.Sprintf("/repos/%s/%s/commits/%s", owner, repo, url.PathEscape(ref)), &c)
+	if err != nil {
+		return "", err
+	}
+	if code != http.StatusOK || len(c.SHA) < 7 {
+		return "", fmt.Errorf("version %s not found in %s/%s", ref, owner, repo)
+	}
+	return c.SHA, nil
+}
+
+// githubJSON GETs a GitHub API path; a 404 is returned as a status, not an error.
+func (m *Manager) githubJSON(ctx context.Context, path string, out any) (int, error) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.GitHub+path, nil)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "omini")
 	resp, err := m.HTTP.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("cannot reach GitHub: %w", err)
+		return 0, fmt.Errorf("cannot reach GitHub: %w", err)
 	}
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusNotFound:
-		return "", fmt.Errorf("%s/%s has no release yet (or does not exist): give a version to install", owner, repo)
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(out); err != nil {
+			return 0, fmt.Errorf("unexpected answer from GitHub")
+		}
+	case http.StatusNotFound, http.StatusUnprocessableEntity:
+	case http.StatusForbidden, http.StatusTooManyRequests:
+		return 0, fmt.Errorf("GitHub refused the request (rate limit?): try again later")
 	default:
-		return "", fmt.Errorf("GitHub answered %s", resp.Status)
+		return 0, fmt.Errorf("GitHub answered %s", resp.Status)
 	}
-	var rel struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil || rel.TagName == "" {
-		return "", fmt.Errorf("unexpected answer from GitHub")
-	}
-	return rel.TagName, nil
+	return resp.StatusCode, nil
 }
 
-// download extracts the source tarball of a tag into dest.
-func (m *Manager) download(ctx context.Context, owner, repo, version, dest string) error {
-	ref := url.PathEscape(version)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%s/%s/tar.gz/refs/tags/%s", m.Codeload, owner, repo, ref), nil)
+// download extracts the source tarball of a commit into dest.
+func (m *Manager) download(ctx context.Context, owner, repo, sha, dest string) error {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%s/%s/tar.gz/%s", m.Codeload, owner, repo, sha), nil)
 	req.Header.Set("User-Agent", "omini")
 	resp, err := m.HTTP.Do(req)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("version %s not found in %s/%s", version, owner, repo)
-	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: %s", resp.Status)
 	}

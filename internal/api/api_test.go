@@ -557,6 +557,15 @@ func TestPlugins(t *testing.T) {
 		t.Fatalf("remove unknown: %d", code)
 	}
 
+	if list[0]["trust"] != "unverified" || list[0]["publisher"] != "community" {
+		t.Fatalf("a plugin outside the catalog is unverified: %v", list[0])
+	}
+	var catalog []map[string]any
+	h.do("GET", "/api/plugins/catalog", nil, &catalog)
+	if len(catalog) == 0 || catalog[0]["id"] != "opnsense" || catalog[0]["installed"] != false || catalog[0]["trust"] != "experimental" {
+		t.Fatalf("catalog: %v", catalog)
+	}
+
 	var resp map[string]string
 	if code := h.do("POST", "/api/plugins", map[string]string{"url": "https://example.com/x/y"}, &resp); code != http.StatusBadRequest || !strings.Contains(resp["error"], "GitHub") {
 		t.Fatalf("install from a non-GitHub URL: %d %v", code, resp)

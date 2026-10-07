@@ -6,6 +6,7 @@ import type {
   IntegrationType,
   InventoryEntry,
   MapArea,
+  CatalogEntry,
   PluginInfo,
   Point,
   TestResult,
@@ -123,6 +124,7 @@ export const api = {
     request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 
   plugins: () => request<PluginInfo[]>('GET', '/api/plugins'),
+  pluginCatalog: () => request<CatalogEntry[]>('GET', '/api/plugins/catalog'),
   installPlugin: (url: string, version?: string) =>
     request<PluginInfo>('POST', '/api/plugins', { url, version }),
   removePlugin: (id: string) => request<void>('DELETE', `/api/plugins/${encodeURIComponent(id)}`),

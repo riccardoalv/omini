@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,7 +31,8 @@ type Plugin struct {
 // Source records where an installed plugin came from.
 type Source struct {
 	URL         string    `json:"url"`
-	Version     string    `json:"version"`
+	Version     string    `json:"version"` // tag, or branch@commit when the repository has no release
+	Commit      string    `json:"commit"`
 	InstalledAt time.Time `json:"installed_at"`
 }
 
@@ -176,8 +178,8 @@ func (m *Manager) Remove(id string) error {
 	return os.RemoveAll(p.home)
 }
 
-// Install downloads a plugin from GitHub (a release tag; the latest release
-// when version is empty), checks it and builds its environment. Installing a
+// Install downloads a plugin from GitHub (see resolve for the version),
+// checks it and builds its environment. Installing a
 // plugin that is already installed updates it.
 func (m *Manager) Install(ctx context.Context, url, version string) (*Plugin, error) {
 	m.mu.Lock()
@@ -187,10 +189,9 @@ func (m *Manager) Install(ctx context.Context, url, version string) (*Plugin, er
 	if err != nil {
 		return nil, err
 	}
-	if version == "" {
-		if version, err = m.latestRelease(ctx, owner, repo); err != nil {
-			return nil, err
-		}
+	sha, version, err := m.resolve(ctx, owner, repo, strings.TrimSpace(version))
+	if err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(m.Dir, 0o750); err != nil {
 		return nil, err
@@ -200,7 +201,7 @@ func (m *Manager) Install(ctx context.Context, url, version string) (*Plugin, er
 		return nil, err
 	}
 	defer os.RemoveAll(tmp)
-	if err := m.download(ctx, owner, repo, version, filepath.Join(tmp, "src")); err != nil {
+	if err := m.download(ctx, owner, repo, sha, filepath.Join(tmp, "src")); err != nil {
 		return nil, err
 	}
 	man, err := readManifest(filepath.Join(tmp, "src"))
@@ -238,7 +239,7 @@ func (m *Manager) Install(ctx context.Context, url, version string) (*Plugin, er
 		return nil, err
 	}
 	_ = os.RemoveAll(old)
-	p.Source = &Source{URL: url, Version: version, InstalledAt: time.Now().UTC().Truncate(time.Second)}
+	p.Source = &Source{URL: url, Version: version, Commit: sha, InstalledAt: time.Now().UTC().Truncate(time.Second)}
 	b, _ := json.MarshalIndent(p.Source, "", "  ")
 	if err := os.WriteFile(filepath.Join(home, sourceFile), b, 0o640); err != nil {
 		return nil, err
