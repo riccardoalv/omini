@@ -13,6 +13,7 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 // --- auth ---
@@ -339,17 +340,19 @@ func (s *Server) listInventory(w http.ResponseWriter, r *http.Request) {
 	if inv == nil {
 		inv = []store.InventoryEntry{}
 	}
-	online := map[string]bool{}
+	current := map[string]topology.Node{}
 	for _, n := range s.Collector.State().Topology.Nodes {
-		online[n.ID] = n.Online
+		current[n.ID] = n
 	}
 	type entry struct {
 		store.InventoryEntry
-		Online bool `json:"online"`
+		Online bool   `json:"online"`
+		Role   string `json:"role,omitempty"` // from the current map, when the device is on it
 	}
 	out := make([]entry, 0, len(inv))
 	for _, e := range inv {
-		out = append(out, entry{e, online[e.ID]})
+		n := current[e.ID]
+		out = append(out, entry{e, n.Online, n.Role})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
