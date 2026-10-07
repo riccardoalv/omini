@@ -8,6 +8,8 @@ export interface Flow {
 
 export interface LinkLabel {
   speed?: number
+  /** Name of the port the link leaves from (or reaches): "LAN", "Uplink to the rack". */
+  name?: string
   flow?: Flow
   /** Where the pill goes: next to the device reached, or at the source. */
   at: 'target' | 'source'
@@ -51,6 +53,18 @@ const portSpeed = (n: TopoNode | undefined, port?: string) =>
   port ? n?.device?.interfaces?.find((i) => i.name === port)?.speed_mbps : undefined
 
 /**
+ * A port's name worth showing: the user's description, else the device's own
+ * when it says more than the interface name ("LAN" for igb1).
+ */
+export function portName(n: TopoNode | undefined, port?: string): string | undefined {
+  if (!n || !port) return undefined
+  const own = n.port_labels?.[port]?.trim()
+  if (own) return own
+  const desc = n.device?.interfaces?.find((i) => i.name === port)?.description?.trim()
+  return desc && desc.toLowerCase() !== port.toLowerCase() ? desc : undefined
+}
+
+/**
  * Speed and traffic shown on each link. A port shared by several links (a
  * switch behind a firewall port) gets a single pill at the port with the
  * port's speed and traffic; a direct link gets its own pill.
@@ -84,6 +98,7 @@ export function linkLabels(
     if (group.length > 1) {
       out.set(e.id, {
         speed: portSpeed(source, e.source_port),
+        name: portName(source, e.source_port),
         flow,
         at: 'source',
         hidden: group[0]!.id !== e.id,
@@ -92,6 +107,7 @@ export function linkLabels(
     }
     out.set(e.id, {
       speed: e.speed_mbps,
+      name: portName(source, e.source_port) ?? portName(target, e.target_port),
       flow,
       at: (incoming.get(e.target) ?? 0) > 1 || badged.has(e.target) ? 'source' : 'target',
     })

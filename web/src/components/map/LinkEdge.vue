@@ -26,24 +26,24 @@ const path = computed(() =>
   }),
 )
 
-// A link shows its maximum speed only; the traffic is shown on the devices.
+// A link shows its maximum speed only (the traffic is shown on the devices),
+// with the port's name when it has one: "LAN · 10G".
 const label = computed(() => {
   const d = props.data
   if (!d || d.hidden) return undefined
   const speed = formatSpeed(d.speed)
-  if (!speed) return undefined
+  if (!speed && !d.name) return undefined
   const vertical = props.targetPosition === Position.Top
+  // The pill grows away from the node it sits next to.
   const at =
     d.at === 'source'
-      ? {
-          x: vertical ? props.sourceX : props.sourceX + 26,
-          y: vertical ? props.sourceY + 16 : props.sourceY,
-        }
-      : {
-          x: vertical ? props.targetX : props.targetX - 26,
-          y: vertical ? props.targetY - 16 : props.targetY,
-        }
-  return { speed, color: speedColor(d.speed), ...at }
+      ? vertical
+        ? { x: props.sourceX, y: props.sourceY + 16, shift: '-50%, -50%' }
+        : { x: props.sourceX + 10, y: props.sourceY, shift: '0, -50%' }
+      : vertical
+        ? { x: props.targetX, y: props.targetY - 16, shift: '-50%, -50%' }
+        : { x: props.targetX - 10, y: props.targetY, shift: '-100%, -50%' }
+  return { speed, name: d.name, color: speedColor(d.speed), ...at }
 })
 </script>
 
@@ -54,10 +54,13 @@ const label = computed(() => {
       class="link-speed nodrag nopan"
       data-test="link-speed"
       :style="{
-        transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)`,
+        transform: `translate(${label.x}px, ${label.y}px) translate(${label.shift})`,
         '--c': label.color,
       }"
     >
+      <span v-if="label.name" class="name" data-test="link-name" :title="label.name">{{
+        label.name
+      }}</span>
       <span v-if="label.speed" class="speed">{{ label.speed }}</span>
     </div>
   </EdgeLabelRenderer>
@@ -80,5 +83,17 @@ const label = computed(() => {
   line-height: 1.4;
   pointer-events: none;
   white-space: nowrap;
+}
+.name {
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.name + .speed {
+  padding-left: 5px;
+  border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
 }
 </style>

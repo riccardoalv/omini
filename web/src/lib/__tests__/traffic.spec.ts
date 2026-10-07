@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TopoEdge, TopoNode } from '../types'
-import { deviceFlows, formatRate, linkLabels, nodeFlow } from '../traffic'
+import { deviceFlows, formatRate, linkLabels, nodeFlow, portName } from '../traffic'
 
 const fw: TopoNode = {
   id: 'dev:fw',
@@ -100,5 +100,41 @@ describe('traffic', () => {
     const flows = deviceFlows(linkLabels(edges, nodes), edges)
     expect(flows.get('nas')).toEqual({ down: 9e6, up: 125e6 })
     expect(flows.has('a')).toBe(false) // the bridge is shared: no per-device traffic
+  })
+})
+
+describe('port names on links', () => {
+  const named: TopoNode = {
+    ...fw,
+    port_labels: { igb3: 'Uplink to the rack' },
+    device: {
+      ...fw.device!,
+      interfaces: [
+        { name: 'bridge0', description: 'LAN', speed_mbps: 10000 },
+        { name: 'igb3', description: 'OPT1', speed_mbps: 1000 },
+        { name: 're0', description: 're0', speed_mbps: 2500 },
+      ],
+    },
+  }
+
+  it("prefers the user's description, then the device's, never the bare interface name", () => {
+    expect(portName(named, 'igb3')).toBe('Uplink to the rack')
+    expect(portName(named, 'bridge0')).toBe('LAN')
+    expect(portName(named, 're0')).toBeUndefined()
+    expect(portName(named, undefined)).toBeUndefined()
+  })
+
+  it('names the shared port and a direct link', () => {
+    const edges = [
+      edge(named.id, 'a', { source_port: 'bridge0' }),
+      edge(named.id, 'b', { source_port: 'bridge0' }),
+      edge(named.id, 'sw', { source_port: 'igb3', speed_mbps: 1000 }),
+    ]
+    const labels = linkLabels(edges, [named, client('a'), client('b'), client('sw')])
+    expect(labels.get(`${named.id}>a`)).toMatchObject({ name: 'LAN', speed: 10000 })
+    expect(labels.get(`${named.id}>sw`)).toMatchObject({
+      name: 'Uplink to the rack',
+      speed: 1000,
+    })
   })
 })
