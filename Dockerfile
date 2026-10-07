@@ -2,7 +2,7 @@
 # Omini: one image with the Go binary (UI embedded), Python and uv for plugins.
 # Multi-arch (amd64, arm64): the Go binary is cross-compiled, nothing is emulated.
 
-FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS web
+FROM --platform=$BUILDPLATFORM node:25-bookworm-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
