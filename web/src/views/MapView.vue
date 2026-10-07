@@ -107,7 +107,8 @@ const summary = computed(() => {
     problems: failedIntegrations.value.size,
   }
 })
-const empty = computed(() => loaded.value && nodes.value.length === 0)
+// "Empty" means no devices at all: hidden or collapsed devices do not count.
+const empty = computed(() => loaded.value && allNodes.value.length === 0)
 
 const flowNodes = computed<Node[]>(() => {
   const out: Node[] = visibleAreas.value.map((a) => ({
@@ -193,14 +194,12 @@ async function load() {
  * Areas are laid out as boxes: their devices stay together and no other device
  * lands among them. The top padding leaves room for the title.
  */
-function layoutGroups(edges: TopoEdge[], direction: string): LayoutGroup[] {
-  return areas.value
-    .filter((a) => a.direction === direction)
-    .map((a) => ({
-      id: String(a.id),
-      children: withDescendants(a.members, edges),
-      padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
-    }))
+function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
+  return areas.value.map((a) => ({
+    id: String(a.id),
+    children: withDescendants(a.members, edges),
+    padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
+  }))
 }
 
 // Re-layout only when the visible graph or the direction changes, not on every poll.
@@ -219,7 +218,7 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
     v.edges,
     saved,
     direction,
-    layoutGroups(v.edges, direction),
+    layoutGroups(v.edges),
   )
   // Expanding or collapsing keeps the clicked node where it is; the map is laid
   // out again around it (no overlaps). Other changes keep the first node still.
@@ -302,10 +301,17 @@ const nodeBoxes = computed(
 /** A node in an area brings everything below it (apps, clients, VMs). */
 const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
 
-/** Areas of the current orientation, drawn around their nodes. */
+/**
+ * Areas drawn around their nodes, in both orientations. An area with none of
+ * its nodes on the map keeps its stored rectangle, which only makes sense in
+ * the orientation it was drawn in.
+ */
 const visibleAreas = computed(() =>
   areas.value
-    .filter((a) => a.direction === prefs.layoutDirection)
+    .filter(
+      (a) =>
+        a.direction === prefs.layoutDirection || areaNodes(a).some((id) => nodeBoxes.value.has(id)),
+    )
     .map((a) => ({
       ...a,
       ...(frozen.value[a.id] ?? fitArea({ ...a, members: areaNodes(a) }, nodeBoxes.value)),
@@ -395,7 +401,7 @@ async function regroupDropped(ids: string[]) {
   const changes: Promise<void>[] = []
   for (const a of areas.value) {
     const rect = rects[a.id]
-    if (a.direction !== prefs.layoutDirection || !rect) continue
+    if (!rect) continue
     const members = regroup(a.members, rect, dropped)
     if (members.join() === a.members.join()) continue
     // The last member left: the area stays where it was.
