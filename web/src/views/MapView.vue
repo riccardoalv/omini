@@ -627,11 +627,15 @@ async function scanNetwork() {
   await load()
 }
 
-function expand(parentId: string) {
+/**
+ * Shows a node's clients. The side panel only follows when the expansion came
+ * from it (its "Show all" button); a middle click or the menu leave it alone.
+ */
+function expand(parentId: string, fromPanel = false) {
   layoutAnchor = parentId
   prefs.collapsed = prefs.collapsed.filter((id) => id !== parentId)
   if (!prefs.expanded.includes(parentId)) prefs.expanded.push(parentId)
-  selectedId.value = parentId
+  if (fromPanel) selectedId.value = parentId
 }
 
 function collapse(parentId: string) {
@@ -912,7 +916,7 @@ onBeforeUnmount(() => {
       @changed="patchSelected"
       @expand="
         (id: string) =>
-          id.startsWith('area-bubble:') ? expandArea(Number(id.slice(12))) : expand(id)
+          id.startsWith('area-bubble:') ? expandArea(Number(id.slice(12))) : expand(id, true)
       "
       @collapse="collapse"
       @deleted="removeNode"

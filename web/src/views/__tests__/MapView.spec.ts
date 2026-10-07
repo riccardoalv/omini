@@ -68,4 +68,45 @@ describe('MapView', () => {
     expect(w.text()).toContain('1 device')
     w.unmount()
   })
+
+  it('expands a group of clients without opening the side panel', async () => {
+    localStorage.clear()
+    vi.mocked(api.integrations).mockResolvedValue([])
+    const phones = Array.from({ length: 10 }, (_, i) => ({
+      id: `mac:${i}`,
+      kind: 'client' as const,
+      label: `phone-${i}`,
+      online: true,
+    }))
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [{ id: 'dev:ap', kind: 'device', label: 'ap', online: true }, ...phones],
+        edges: phones.map((p) => ({
+          id: `e:${p.id}`,
+          source: 'dev:ap',
+          target: p.id,
+          kind: 'inferred' as const,
+        })),
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, {
+      global: { plugins: [...plugins(), router] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const bubble = w.findAllComponents({ name: 'TopologyNode' }).find((c) => c.props('data').group)
+    expect(bubble).toBeDefined()
+    bubble!.vm.$emit('toggle') // middle click
+    await flushPromises()
+    expect(w.find('aside.panel').exists()).toBe(false)
+    w.unmount()
+  })
 })
