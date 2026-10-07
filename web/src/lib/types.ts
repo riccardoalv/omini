@@ -157,3 +157,9 @@ export interface TestResult {
   message?: string
   error?: string
 }
+
+export interface WebService {
+  url: string
+  port: number
+  title?: string
+}

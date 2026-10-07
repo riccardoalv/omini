@@ -8,6 +8,10 @@ export interface Prefs {
   collapseThreshold: number
   /** Parent node ids whose client group the user expanded. */
   expanded: string[]
+  /** Map orientation: left-to-right or top-down. */
+  layoutDirection: 'RIGHT' | 'DOWN'
+  /** Sidebar shows labels next to icons. */
+  sidebarExpanded: boolean
 }
 
 const KEY = 'omini.prefs'
@@ -25,6 +29,8 @@ function load(): Prefs {
     locale: defaultLocale(),
     collapseThreshold: DEFAULT_COLLAPSE_THRESHOLD,
     expanded: [],
+    layoutDirection: 'RIGHT',
+    sidebarExpanded: false,
   }
   try {
     const raw = localStorage.getItem(KEY)

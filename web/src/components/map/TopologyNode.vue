@@ -13,6 +13,7 @@ export interface NodeData {
   node?: TopoNode
   group?: ClientGroup
   error?: boolean // integration of this device failed
+  direction?: 'RIGHT' | 'DOWN' // where edges enter and leave
 }
 
 const props = defineProps<{ data: NodeData; selected?: boolean }>()
@@ -31,6 +32,7 @@ const sub = computed(() => {
   if (node.kind === 'client') return node.hostname && node.ip ? node.ip : ''
   return [node.ip, node.model ?? node.vendor].filter(Boolean).join(' · ')
 })
+const horizontal = computed(() => props.data.direction !== 'DOWN')
 const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
 </script>
 
@@ -40,7 +42,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     :class="[variant, { offline: n && !n.online, selected, error: data.error }]"
     :title="label"
   >
-    <Handle type="target" :position="Position.Left" class="handle" />
+    <Handle type="target" :position="horizontal ? Position.Left : Position.Top" class="handle" />
 
     <template v-if="data.group">
       <NodeIcon name="users" :size="16" />
@@ -67,7 +69,11 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       />
     </template>
 
-    <Handle type="source" :position="Position.Right" class="handle" />
+    <Handle
+      type="source"
+      :position="horizontal ? Position.Right : Position.Bottom"
+      class="handle"
+    />
   </div>
 </template>
 

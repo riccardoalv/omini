@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Check, Pencil, Pin, PinOff, X } from 'lucide-vue-next'
+import { Check, ExternalLink, Pencil, Pin, PinOff, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -8,7 +8,7 @@ import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, iconFor, linkOnPort } from '@/lib/graph'
-import type { Integration, TopoEdge, TopoNode } from '@/lib/types'
+import type { Integration, TopoEdge, TopoNode, WebService } from '@/lib/types'
 
 const props = defineProps<{
   node?: TopoNode
@@ -30,12 +30,32 @@ const { t, locale } = useI18n()
 const editing = ref(false)
 const alias = ref('')
 const error = ref('')
+const web = ref<WebService[]>([])
+const detectingWeb = ref(false)
+
+// Look for a web interface (admin page, NAS, hypervisor...) when a node with an IP is shown.
+async function detectWeb(id: string | undefined, ip: string | undefined) {
+  web.value = []
+  if (!id || !ip) return
+  detectingWeb.value = true
+  try {
+    const found = await api.webServices(id)
+    if (props.node?.id === id) web.value = found
+  } catch {
+    // detection is best effort
+  } finally {
+    if (props.node?.id === id) detectingWeb.value = false
+  }
+}
+
 watch(
   () => props.node?.id,
-  () => {
+  (id) => {
     editing.value = false
     error.value = ''
+    detectWeb(id, props.node?.ip)
   },
+  { immediate: true },
 )
 
 const n = computed(() => props.node)
@@ -139,6 +159,24 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
         </button>
       </div>
       <p v-if="error" class="alert error">{{ error }}</p>
+
+      <div v-if="web.length" class="web">
+        <a
+          v-for="(svc, i) in web"
+          :key="svc.url"
+          :href="svc.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="btn small"
+          :class="{ primary: i === 0 }"
+          data-test="open-web"
+        >
+          <ExternalLink :size="14" />
+          {{ i === 0 ? t('panel.openWeb') : svc.title || svc.url }}
+          <span class="web-port">{{ t('panel.webPort', { port: svc.port }) }}</span>
+        </a>
+      </div>
+      <p v-else-if="detectingWeb" class="muted small">{{ t('panel.detectingWeb') }}</p>
 
       <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
       <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
@@ -302,6 +340,23 @@ h2 {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 12px;
+}
+.web {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.web .btn {
+  text-decoration: none;
+}
+.web-port {
+  opacity: 0.7;
+  font-size: 12px;
+}
+.small {
+  font-size: 12.5px;
+  margin: 0 0 12px;
 }
 .hint {
   margin: 0 0 12px;

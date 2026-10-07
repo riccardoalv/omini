@@ -8,6 +8,7 @@ import type {
   Point,
   TestResult,
   TopologyResponse,
+  WebService,
 } from './types'
 
 /** Error returned by the API, with the server's message. */
@@ -96,6 +97,9 @@ export const api = {
   updateInventory: (id: string, input: { alias?: string; pinned?: boolean }) =>
     request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),
+
+  webServices: (nodeId: string) =>
+    request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 
   scan: (cidr: string, community: string) =>
     request<DiscoveredHost[]>('POST', '/api/discovery/scan', { cidr, community }),

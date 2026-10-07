@@ -1,6 +1,13 @@
 export default {
   app: { name: 'Omini' },
-  nav: { map: 'Map', devices: 'Devices', integrations: 'Integrations', settings: 'Settings' },
+  nav: {
+    map: 'Map',
+    devices: 'Devices',
+    integrations: 'Integrations',
+    settings: 'Settings',
+    expand: 'Expand menu',
+    collapse: 'Collapse menu',
+  },
   common: {
     save: 'Save',
     cancel: 'Cancel',
@@ -36,6 +43,8 @@ export default {
     updated: 'Updated {ago}',
     refresh: 'Refresh now',
     resetLayout: 'Reset layout',
+    leftToRight: 'Left to right',
+    topDown: 'Top down',
     emptyTitle: 'Your map is empty',
     emptyHint: 'Connect your first device, or load a demo network to look around.',
     addIntegration: 'Add integration',
@@ -77,6 +86,9 @@ export default {
     noPorts: 'No port data.',
     portDown: 'down',
     integration: 'Integration',
+    openWeb: 'Open web interface',
+    webPort: 'port {port}',
+    detectingWeb: 'Looking for a web interface…',
   },
   roles: {
     router: 'Router',

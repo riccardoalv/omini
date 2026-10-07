@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { Cable, LayoutGrid, Network, Settings } from 'lucide-vue-next'
+import {
+  Cable,
+  LayoutGrid,
+  Network,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+} from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
+
+import { prefs } from '@/lib/prefs'
 
 import Logo from './LogoMark.vue'
 
@@ -16,8 +25,11 @@ const items = [
 
 <template>
   <div class="shell">
-    <nav class="sidebar" :aria-label="t('app.name')">
-      <Logo class="logo" />
+    <nav class="sidebar" :class="{ expanded: prefs.sidebarExpanded }" :aria-label="t('app.name')">
+      <div class="brand">
+        <Logo class="logo" />
+        <span class="brand-name">{{ t('app.name') }}</span>
+      </div>
       <RouterLink
         v-for="item in items"
         :key="item.to"
@@ -28,6 +40,23 @@ const items = [
         <component :is="item.icon" :size="20" :stroke-width="1.75" />
         <span class="nav-label">{{ t(item.label) }}</span>
       </RouterLink>
+      <button
+        class="nav-item toggle"
+        type="button"
+        data-test="sidebar-toggle"
+        :aria-expanded="prefs.sidebarExpanded"
+        :title="prefs.sidebarExpanded ? t('nav.collapse') : t('nav.expand')"
+        @click="prefs.sidebarExpanded = !prefs.sidebarExpanded"
+      >
+        <component
+          :is="prefs.sidebarExpanded ? PanelLeftClose : PanelLeftOpen"
+          :size="20"
+          :stroke-width="1.75"
+        />
+        <span class="nav-label">{{
+          prefs.sidebarExpanded ? t('nav.collapse') : t('nav.expand')
+        }}</span>
+      </button>
     </nav>
     <main class="content">
       <slot />
@@ -47,15 +76,27 @@ const items = [
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  padding: 14px 0;
+  padding: 14px 8px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border);
   z-index: 10;
+  transition: width 0.18s ease;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 .logo {
   width: 30px;
   height: 30px;
-  margin-bottom: 14px;
+  flex: none;
+}
+.brand-name {
+  display: none;
+  font-size: 17px;
+  font-weight: 700;
 }
 .nav-item {
   width: 52px;
@@ -64,9 +105,16 @@ const items = [
   align-items: center;
   gap: 3px;
   padding: 8px 0 6px;
+  border: 0;
   border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
   text-decoration: none;
+  cursor: pointer;
+}
+.nav-item svg {
+  flex: none;
 }
 .nav-item:hover {
   background: var(--surface-hover);
@@ -84,6 +132,33 @@ const items = [
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.toggle {
+  margin-top: auto;
+}
+
+/* Expanded: labels next to the icons. */
+.sidebar.expanded {
+  width: 210px;
+  align-items: stretch;
+  padding: 14px 12px;
+}
+.sidebar.expanded .brand {
+  padding: 0 8px;
+}
+.sidebar.expanded .brand-name {
+  display: inline;
+}
+.sidebar.expanded .nav-item {
+  width: auto;
+  flex-direction: row;
+  gap: 12px;
+  padding: 9px 12px;
+}
+.sidebar.expanded .nav-label {
+  max-width: none;
+  font-size: 14px;
+}
+
 .content {
   flex: 1;
   min-width: 0;
@@ -95,7 +170,8 @@ const items = [
   .shell {
     flex-direction: column-reverse;
   }
-  .sidebar {
+  .sidebar,
+  .sidebar.expanded {
     width: 100%;
     flex-direction: row;
     justify-content: space-around;
@@ -103,7 +179,16 @@ const items = [
     border-right: 0;
     border-top: 1px solid var(--border);
   }
-  .logo {
+  .sidebar.expanded .nav-item {
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 0 6px;
+  }
+  .sidebar.expanded .nav-label {
+    font-size: 10.5px;
+  }
+  .brand,
+  .toggle {
     display: none;
   }
 }

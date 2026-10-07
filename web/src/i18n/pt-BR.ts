@@ -7,6 +7,8 @@ const ptBR: typeof en = {
     devices: 'Dispositivos',
     integrations: 'Integrações',
     settings: 'Configurações',
+    expand: 'Expandir menu',
+    collapse: 'Recolher menu',
   },
   common: {
     save: 'Salvar',
@@ -43,6 +45,8 @@ const ptBR: typeof en = {
     updated: 'Atualizado {ago}',
     refresh: 'Atualizar agora',
     resetLayout: 'Reorganizar mapa',
+    leftToRight: 'Esquerda para direita',
+    topDown: 'De cima para baixo',
     emptyTitle: 'Seu mapa está vazio',
     emptyHint: 'Conecte seu primeiro equipamento ou carregue uma rede de demonstração.',
     addIntegration: 'Adicionar integração',
@@ -84,6 +88,9 @@ const ptBR: typeof en = {
     noPorts: 'Sem dados de portas.',
     portDown: 'desligada',
     integration: 'Integração',
+    openWeb: 'Abrir interface web',
+    webPort: 'porta {port}',
+    detectingWeb: 'Procurando interface web…',
   },
   roles: {
     router: 'Roteador',
