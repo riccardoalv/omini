@@ -353,6 +353,10 @@
             "type": "string"
           },
           "description": "Choices for 'select' fields."
+        },
+        "group": {
+          "type": "string",
+          "description": "Section the field is shown under (e.g. \"Methods\"); fields without a group come first."
         }
       }
     },

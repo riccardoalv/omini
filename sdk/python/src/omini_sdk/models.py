@@ -206,6 +206,10 @@ class FormField(BaseModel):
     """
     Choices for 'select' fields.
     """
+    group: str | None = None
+    """
+    Section the field is shown under (e.g. "Methods"); fields without a group come first.
+    """
 
 
 class PluginManifest(BaseModel):

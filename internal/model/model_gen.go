@@ -253,6 +253,10 @@ type FormField struct {
 	// Default value; type must match the field type.
 	Default interface{} `json:"default,omitempty,omitzero" yaml:"default,omitempty"`
 
+	// Section the field is shown under (e.g. "Methods"); fields without a group come
+	// first.
+	Group *string `json:"group,omitempty,omitzero" yaml:"group,omitempty"`
+
 	// Help corresponds to the JSON schema field "help".
 	Help *string `json:"help,omitempty,omitzero" yaml:"help,omitempty"`
 
