@@ -25,7 +25,8 @@ Omini aims for the middle ground: **the UniFi experience, with any vendor.**
 
 ## MVP scope
 
-- **Automatic discovery** — scan one or more subnets (e.g. `192.168.1.0/24`), find devices (ICMP/ARP/SNMP) and suggest integrating them.
+- **Works with zero configuration** — on first start Omini scans the networks it is connected to and finds every device, combining ARP, ping, open ports, reverse DNS (including the router's DNS), NetBIOS, mDNS/Bonjour and SSDP/UPnP. Vendors come from an embedded MAC (OUI) database. Ports and names are checked once per new device and then every few hours, to keep the network quiet.
+- **SNMP discovery** — find SNMP-enabled switches and routers in a subnet and integrate them in one click.
 - **Integrations screen** — pick an integration, enter host and credentials, test the connection, save. Forms are generated from each integration's definition.
 - **Automatic topology** — cross-reference LLDP/CDP neighbors, MAC tables (FDB), ARP, DHCP leases and Wi-Fi client tables to work out *what is plugged into what, and on which port*.
 - **Traffic flow map** — per-link utilization computed from interface counters, refreshed periodically and rendered on the map.
@@ -54,6 +55,7 @@ Integrations are layered so that most contributions require little or no core co
 
 | Integration | Type | Data |
 |---|---|---|
+| Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models |
 | Generic SNMP v2c | Core (Go) | `SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP |
 | OPNsense | Python plugin (official REST API, key/secret) | Interfaces, traffic, ARP, DHCP leases, CPU/memory |
 | Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
@@ -187,6 +189,7 @@ docker compose up -d
 | `OMINI_POLL_INTERVAL` | `60` | Collection interval, in seconds or as a duration (`1m30s`); minimum 10s |
 | `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
 | `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |
 | `OMINI_DEMO` | `false` | Add the demo network on first start |
 
 ## Development
@@ -194,7 +197,8 @@ docker compose up -d
 Requirements: Go (see `go.mod`), Node.js 24, [uv](https://docs.astral.sh/uv/) and `make` — or just `nix develop`.
 
 ```bash
-make run    # build the UI and run everything on http://localhost:8080 (demo network included)
+make run    # build the UI and run everything on http://localhost:8080 (scans your network)
+make demo   # same, with only the demo network (separate data directory)
 make dev    # backend + UI with hot reload on http://localhost:5173 (API on :8080)
 make test   # all tests (Go, Python SDK, web)
 make ci     # everything CI runs, locally
@@ -224,6 +228,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 
 ## Preparing your devices
 
+- **Network scan:** run Omini with **host networking** (`network_mode: host` in Docker) so it sees your LAN directly. If the host has a firewall, allow inbound **UDP 5353** (mDNS) and **UDP 1900** (SSDP) — otherwise names and models announced by devices are not received. To get hostnames from your router, enable registering DHCP leases in its DNS (OPNsense: *Services → Unbound DNS → General → Register DHCP leases*).
 - **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. Without LLDP Omini still works, but links between switches become *inferred*.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
 

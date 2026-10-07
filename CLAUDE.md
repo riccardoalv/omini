@@ -49,6 +49,9 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Map orientation | Left-to-right by default, toggle to top-down in the map toolbar (per browser). Saved node positions are kept per orientation (`DOWN:` prefix in the layout table) |
 | Device web UI | Side panel offers "Open web interface" (new tab) when one is detected: `internal/webui` checks common admin ports (443, 80, 8443, 8080, 8006, 5000/5001, 8123, 8096, 9443) over HTTP/HTTPS and reads the page `<title>`. Only IPs of nodes on the map; cached 10 min; no credentials sent |
 | Sidebar | Compact (icons) or expanded (icons + labels), remembered per browser |
+| Zero-config discovery | Core **network scan** integration (`internal/netscan`), created automatically on first start (`OMINI_AUTOSCAN`). Methods: UDP probe to fill the OS ARP cache + read `/proc/net/arp` (no raw sockets needed), unprivileged ICMP, TCP liveness for routed subnets, common-port scan, reverse DNS (system, then the gateway's DNS), NetBIOS NBSTAT, mDNS (legacy unicast + group listener on 5353) and SSDP/UPnP descriptions. Ports/names once per new host, then every 6h. Results are `Host` records (schema) under the gateway device |
+| MAC vendors | IEEE MA-L registry embedded gzipped (`internal/oui`, refresh with `make oui`) |
+| nmap | Same techniques implemented natively in Go (no dependency, no root). Optional `nmap` OS detection may come later |
 | Visual style | **Dark by default**, light theme available, follows the OS setting. Clean UniFi/Linear-like look; color reserved for status (green/yellow/red) and traffic |
 
 ## Open questions
