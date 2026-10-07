@@ -108,6 +108,11 @@ watch(
 .logo {
   display: block;
 }
+/* Catalog icons are not all square: keep their proportions. */
+img.logo,
+.badge img {
+  object-fit: contain;
+}
 .badge {
   position: absolute;
   right: -45%;

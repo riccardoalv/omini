@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import type { Integration } from '@/lib/types'
 
+import IntegrationLogo from '../IntegrationLogo.vue'
 import IntegrationsView from '../../views/IntegrationsView.vue'
 import { plugins } from './helpers'
 
@@ -47,6 +48,45 @@ describe('IntegrationsView', () => {
     vi.mocked(api.integrationTypes).mockResolvedValue([])
     vi.mocked(api.pluginCatalog).mockResolvedValue([])
     vi.mocked(api.plugins).mockResolvedValue([])
+  })
+
+  it('shows each integration with its logo', async () => {
+    vi.mocked(api.integrations).mockResolvedValue([
+      { ...demo, id: 1, name: 'Network scan', type: 'network' },
+      {
+        ...demo,
+        id: 2,
+        name: 'Mercusys Halo',
+        type: 'mercusys',
+        config: { host: '192.168.1.121' },
+      },
+    ])
+    vi.mocked(api.pluginCatalog).mockResolvedValue([
+      {
+        id: 'mercusys',
+        name: 'Mercusys Halo',
+        description: '',
+        url: 'https://github.com/x/y',
+        icon: 'mercusys',
+        publisher: 'official',
+        trust: 'experimental',
+        installed: true,
+      },
+    ])
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: IntegrationsView }],
+    })
+    const w = mount(IntegrationsView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const logos = w.findAllComponents(IntegrationLogo)
+    expect(logos.map((l) => [l.props('type'), l.props('icon')])).toEqual([
+      ['network', undefined],
+      ['mercusys', 'mercusys'],
+    ])
+    // The Mercusys logo (drawn, not the stretched catalog image).
+    expect(logos[1]!.find('svg path').exists()).toBe(true)
+    expect(w.text()).toContain('192.168.1.121')
   })
 
   it('enables and disables integrations with a switch', async () => {

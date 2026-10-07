@@ -93,6 +93,14 @@ const windows: Logo = {
   hex: '4A90D9',
 }
 
+// Not in Simple Icons: the "M" of the Mercusys wordmark (the bundled app icon is
+// the whole wordmark, unreadable in a square).
+const mercusys: Logo = {
+  title: 'Mercusys',
+  path: 'M 1.0,4.57 C 2.38,4.57 3.77,4.60 5.16,4.56 C 6.28,4.53 7.11,5.01 7.76,5.85 C 8.09,6.28 8.36,6.75 8.61,7.23 C 9.76,9.35 10.88,11.48 12.02,13.60 C 12.12,13.79 12.30,13.92 12.44,14.08 C 12.58,13.92 12.75,13.78 12.85,13.59 C 14.34,10.68 15.82,7.78 17.29,4.86 C 17.47,4.51 17.65,4.36 18.05,4.37 C 19.56,4.40 21.07,4.38 22.57,4.38 L 23.0,4.38 L 23.0,19.52 L 17.24,19.52 L 17.24,11.09 L 17.15,11.06 C 17.09,11.17 17.01,11.28 16.95,11.40 C 15.54,14.01 14.13,16.63 12.73,19.25 C 12.58,19.54 12.42,19.63 12.11,19.62 A 32.05,32.05 0.0 0,0 10.03,19.62 C 9.53,19.63 9.10,19.47 8.80,19.11 C 8.48,18.73 8.18,18.31 7.95,17.86 C 6.68,15.39 5.43,12.90 4.17,10.42 C 4.09,10.26 3.91,10.15 3.78,10.01 C 3.72,10.19 3.61,10.37 3.61,10.54 C 3.58,13.43 3.57,16.31 3.55,19.19 C 3.55,19.31 3.55,19.42 3.55,19.61 L 1.0,19.61 L 1.0,4.57',
+  hex: 'C72127',
+}
+
 const fromSimpleIcons = (icon: SimpleIcon): Logo => ({
   title: icon.title,
   path: icon.path,
@@ -166,6 +174,7 @@ export const logos: Record<string, Logo> = {
   playstation: fromSimpleIcons(siPlaystation),
   espressif: fromSimpleIcons(siEspressif),
   tplink: fromSimpleIcons(siTplink),
+  mercusys,
   ubiquiti: fromSimpleIcons(siUbiquiti),
   netgear: fromSimpleIcons(siNetgear),
   asus: fromSimpleIcons(siAsus),
@@ -255,7 +264,6 @@ export const inCatalog = (slug: string) => catalog.names.has(catalogName(slug))
 
 /** Display names of brands without a logo in Simple Icons. */
 export const brandNames: Record<string, string> = {
-  mercusys: 'Mercusys',
   midea: 'Midea',
   horaco: 'Horaco',
   realtek: 'Realtek',

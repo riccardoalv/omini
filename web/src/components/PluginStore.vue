@@ -3,7 +3,6 @@ import {
   Check,
   Download,
   ExternalLink,
-  Network,
   Plus,
   Puzzle,
   RefreshCw,
@@ -15,7 +14,6 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
-import { deviceTypes } from '@/lib/icons'
 import type {
   CatalogEntry,
   Integration,
@@ -24,7 +22,7 @@ import type {
   PluginTrust,
 } from '@/lib/types'
 
-import DeviceIcon from './DeviceIcon.vue'
+import IntegrationLogo from './IntegrationLogo.vue'
 import ModalDialog from './ModalDialog.vue'
 import PluginTrustBadges from './PluginTrust.vue'
 
@@ -295,18 +293,7 @@ onMounted(load)
         <article v-for="item in shown" :key="item.id" class="plugin card" data-test="store-card">
           <div class="top">
             <span class="logo">
-              <Network v-if="item.builtin" :size="26" class="builtin-icon" />
-              <!-- A logo, or a device type's icon when the brand has none (e.g. "switch"). -->
-              <DeviceIcon
-                v-else-if="item.icon"
-                :device="
-                  deviceTypes.includes(item.icon)
-                    ? { type: item.icon }
-                    : { product: item.icon, type: 'app' }
-                "
-                :size="30"
-              />
-              <Puzzle v-else :size="26" />
+              <IntegrationLogo :type="item.id" :icon="item.icon" />
             </span>
             <div class="title">
               <strong>{{ item.name }}</strong>

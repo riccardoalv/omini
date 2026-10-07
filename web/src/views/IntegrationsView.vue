@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
+import IntegrationLogo from '@/components/IntegrationLogo.vue'
 import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
@@ -26,12 +27,19 @@ const form = ref<{
 }>()
 
 const typeByName = computed(() => new Map(types.value.map((x) => [x.type, x])))
+// Logos come from the store catalog (by plugin id = integration type).
+const logos = ref<Record<string, string | undefined>>({})
 
 async function load() {
   try {
     ;[items.value, types.value] = await Promise.all([api.integrations(), api.integrationTypes()])
   } finally {
     loading.value = false
+  }
+  try {
+    logos.value = Object.fromEntries((await api.pluginCatalog()).map((e) => [e.id, e.icon]))
+  } catch {
+    // logos are a nicety
   }
 }
 
@@ -132,18 +140,20 @@ onMounted(async () => {
           @click="toggleExpand(item)"
           @keydown.enter.self="toggleExpand(item)"
         >
-          <span
-            class="dot"
-            :class="{
-              online: item.enabled && item.status?.ok,
-              error: item.enabled && item.status && !item.status.ok,
-            }"
-          />
+          <span class="logo-tile">
+            <IntegrationLogo :type="item.type" :icon="logos[item.type]" :size="22" />
+            <span
+              class="dot"
+              :class="{
+                online: item.enabled && item.status?.ok,
+                error: item.enabled && item.status && !item.status.ok,
+              }"
+            />
+          </span>
           <div class="info">
             <div class="name-row">
               <strong>{{ item.name }}</strong>
-              <span class="badge">{{ typeByName.get(item.type)?.name ?? item.type }}</span>
-              <span v-if="item.config.host" class="muted mono">{{ item.config.host }}</span>
+              <span v-if="item.config.host" class="muted mono host">{{ item.config.host }}</span>
             </div>
             <div class="muted status">
               <template v-if="!item.enabled">{{ t('integrations.disabled') }}</template>
@@ -226,8 +236,34 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 12px 14px 18px;
+  padding: 12px 12px 12px 14px;
   cursor: pointer;
+}
+/* The integration's logo, with its status as a dot in the corner. */
+.logo-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-hover);
+}
+.logo-tile .dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 2px var(--bg-elevated);
+}
+.name-row strong {
+  font-size: 15px;
+}
+.host {
+  font-size: 12.5px;
 }
 .row:hover {
   background: var(--surface-hover);
@@ -250,8 +286,8 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .status {
-  font-size: 13px;
-  margin-top: 2px;
+  font-size: 12.5px;
+  margin-top: 3px;
 }
 .error-text {
   margin: 6px 0 0;

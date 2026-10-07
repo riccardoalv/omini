@@ -147,15 +147,21 @@ describe('displayName', () => {
 
 describe('app catalog icons', () => {
   it('uses catalog icons for apps and brands without a Simple Icons logo', () => {
-    catalog.names = new Set(['mercusys', 'qbittorrent'])
+    catalog.names = new Set(['meraki', 'mercusys', 'qbittorrent'])
     expect(iconChoice({ kind: 'app', type: 'app', product: 'qbittorrent' })).toEqual({
       type: 'app-window',
       remote: 'qbittorrent',
       badge: false,
     })
+    expect(iconChoice({ type: 'ap', brand: 'meraki' })).toEqual({
+      type: 'wifi',
+      remote: 'meraki',
+      badge: true,
+    })
+    // Mercusys has a drawn logo: its catalog icon is the whole wordmark.
     expect(iconChoice({ type: 'ap', brand: 'mercusys' })).toEqual({
       type: 'wifi',
-      remote: 'mercusys',
+      logo: 'mercusys',
       badge: true,
     })
     // Not in the catalog either: no badge.
