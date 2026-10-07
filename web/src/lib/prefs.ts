@@ -16,6 +16,8 @@ export interface Prefs {
   sidebarExpanded: boolean
   /** Hide devices that are offline from the map. */
   hideOffline: boolean
+  /** Map areas collapsed into a bubble. */
+  collapsedAreas: number[]
 }
 
 const KEY = 'omini.prefs'
@@ -37,6 +39,7 @@ function load(): Prefs {
     layoutDirection: 'RIGHT',
     sidebarExpanded: false,
     hideOffline: false,
+    collapsedAreas: [],
   }
   try {
     const raw = localStorage.getItem(KEY)

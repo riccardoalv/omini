@@ -218,9 +218,16 @@ async function save(patch: {
         <div class="title">
           <h2>
             {{
-              t(group.clients.every((c) => c.kind === 'app') ? 'map.appsLabel' : 'map.groupLabel', {
-                n: group.clients.length,
-              })
+              group.area
+                ? group.area.name
+                : t(
+                    group.clients.every((c) => c.kind === 'app')
+                      ? 'map.appsLabel'
+                      : 'map.groupLabel',
+                    {
+                      n: group.clients.length,
+                    },
+                  )
             }}
           </h2>
           <span class="muted">{{ t('map.groupOnline', { n: group.online }) }}</span>
@@ -229,7 +236,10 @@ async function save(patch: {
           <X :size="18" />
         </button>
       </header>
-      <button class="btn primary wide" @click="emit('expand', group.parentId)">
+      <button
+        class="btn primary wide"
+        @click="emit('expand', group.area ? group.id : group.parentId)"
+      >
         {{ t('panel.expandGroup') }}
       </button>
       <ul class="client-list">

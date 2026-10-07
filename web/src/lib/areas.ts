@@ -1,4 +1,5 @@
-import type { MapArea, Point } from './types'
+import type { ClientGroup, GraphView } from './graph'
+import type { MapArea, Point, TopoEdge } from './types'
 
 export const MIN_AREA_SIZE = 60
 
@@ -93,4 +94,57 @@ export function withDescendants(ids: string[], edges: { source: string; target: 
     stack.push(...(children.get(id) ?? []))
   }
   return [...out]
+}
+
+/** Node id of a collapsed area's bubble. */
+export const areaBubbleId = (id: number) => `area-bubble:${id}`
+
+/**
+ * Collapses areas into one bubble each: their devices (and everything below
+ * them) leave the map, links from outside go to the bubble instead.
+ */
+export function collapseAreas(view: GraphView, areas: MapArea[]): GraphView {
+  if (!areas.length) return view
+  let nodes = view.nodes
+  let edges: TopoEdge[] = view.edges
+  let groups = view.groups
+  for (const a of areas) {
+    const inside = new Set(withDescendants(a.members, edges))
+    const members = nodes.filter((n) => inside.has(n.id))
+    const memberGroups = groups.filter((g) => inside.has(g.id))
+    if (!members.length) continue
+    const bubble = areaBubbleId(a.id)
+    const outsideParents = edges
+      .filter((e) => inside.has(e.target) && !inside.has(e.source))
+      .map((e) => e.source)
+    const group: ClientGroup = {
+      id: bubble,
+      parentId: outsideParents[0] ?? '',
+      clients: [...members, ...memberGroups.flatMap((g) => g.clients)],
+      online:
+        members.filter((n) => n.online).length + memberGroups.reduce((sum, g) => sum + g.online, 0),
+      area: { id: a.id, name: a.name, color: a.color },
+    }
+    const seen = new Set<string>()
+    const next: TopoEdge[] = []
+    for (const e of edges) {
+      const s = inside.has(e.source)
+      const t = inside.has(e.target)
+      if (s && t) continue
+      const edge =
+        s || t ? { ...e, source: s ? bubble : e.source, target: t ? bubble : e.target } : e
+      if (s || t) {
+        edge.id = `e:${edge.source}|${edge.target}`
+        delete edge.source_port
+        delete edge.target_port
+        if (seen.has(edge.id)) continue
+        seen.add(edge.id)
+      }
+      next.push(edge)
+    }
+    nodes = nodes.filter((n) => !inside.has(n.id))
+    groups = [...groups.filter((g) => !inside.has(g.id)), group]
+    edges = next
+  }
+  return { nodes, edges, groups }
 }

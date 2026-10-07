@@ -67,6 +67,8 @@ export default {
       'Several devices are behind this port, but nothing here is integrated: probably a dumb switch, a consumer access point or a hypervisor.',
     unmanagedHint: 'Seen through LLDP, but not integrated yet.',
     areas: {
+      collapse: 'Collapse',
+      devices: '{n} devices · {online} online',
       new: 'New area',
       drawHint: 'Drag on the map to draw an area. Esc cancels.',
       defaultName: 'New area',

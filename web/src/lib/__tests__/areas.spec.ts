@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   areaIdOf,
   areaNodeId,
+  collapseAreas,
   fitArea,
   membersOf,
   rectFrom,
@@ -85,5 +86,50 @@ describe('withDescendants', () => {
     ]
     expect(withDescendants(['pve'], edges).sort()).toEqual(['app', 'group:vm', 'pve', 'vm'])
     expect(withDescendants([], edges)).toEqual([])
+  })
+})
+
+describe('collapseAreas', () => {
+  const node = (id: string, online = true) => ({ id, kind: 'client' as const, label: id, online })
+  const e = (source: string, target: string) => ({
+    id: `${source}>${target}`,
+    source,
+    target,
+    kind: 'inferred' as const,
+  })
+  const rack = {
+    id: 3,
+    name: 'Rack',
+    color: 'blue' as const,
+    direction: 'RIGHT' as const,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+    members: ['pve'],
+  }
+
+  it('replaces the devices of an area (and their children) with one bubble', () => {
+    const view = {
+      nodes: [node('gw'), node('pve'), node('vm'), node('vm2', false), node('tv')],
+      edges: [e('gw', 'pve'), e('pve', 'vm'), e('pve', 'vm2'), e('gw', 'tv'), e('vm', 'tv2')],
+      groups: [],
+    }
+    const out = collapseAreas(view, [rack])
+    expect(out.nodes.map((n) => n.id)).toEqual(['gw', 'tv'])
+    const bubble = out.groups[0]!
+    expect(bubble).toMatchObject({
+      id: 'area-bubble:3',
+      parentId: 'gw',
+      online: 2,
+      area: { name: 'Rack' },
+    })
+    expect(bubble.clients.map((n) => n.id)).toEqual(['pve', 'vm', 'vm2'])
+    expect(out.edges.map((x) => `${x.source}>${x.target}`)).toEqual(['gw>area-bubble:3', 'gw>tv'])
+  })
+
+  it('leaves the view alone without collapsed areas', () => {
+    const view = { nodes: [node('gw')], edges: [], groups: [] }
+    expect(collapseAreas(view, [])).toBe(view)
   })
 })

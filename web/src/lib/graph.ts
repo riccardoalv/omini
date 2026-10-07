@@ -6,6 +6,8 @@ export interface ClientGroup {
   parentId: string
   clients: TopoNode[]
   online: number
+  /** A collapsed map area (its devices in one bubble). */
+  area?: { id: number; name: string; color: string }
 }
 
 export interface GraphView {

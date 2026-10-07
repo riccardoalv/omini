@@ -70,6 +70,8 @@ const ptBR: typeof en = {
       'Há vários dispositivos atrás desta porta, mas nada aqui está integrado: provavelmente um switch burro, um roteador doméstico em modo AP ou um hypervisor.',
     unmanagedHint: 'Visto via LLDP, mas ainda não integrado.',
     areas: {
+      collapse: 'Recolher',
+      devices: '{n} dispositivos · {online} online',
       new: 'Nova área',
       drawHint: 'Arraste no mapa para desenhar uma área. Esc cancela.',
       defaultName: 'Nova área',

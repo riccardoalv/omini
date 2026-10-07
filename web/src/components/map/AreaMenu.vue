@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { Pencil, Trash2 } from 'lucide-vue-next'
+import { ChevronsDownUp, Pencil, Trash2 } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { AREA_COLORS, type AreaColor } from '@/lib/types'
 
 defineProps<{ x: number; y: number; color: AreaColor }>()
-const emit = defineEmits<{ rename: []; color: [color: AreaColor]; delete: []; close: [] }>()
+const emit = defineEmits<{
+  rename: []
+  collapse: []
+  color: [color: AreaColor]
+  delete: []
+  close: []
+}>()
 const { t } = useI18n()
 
 function onKey(e: KeyboardEvent) {
@@ -28,6 +34,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="menu card" role="menu" :style="{ left: `${x}px`, top: `${y}px` }" @pointerdown.stop>
+    <button role="menuitem" data-test="collapse-area" @click="emit('collapse')">
+      <ChevronsDownUp :size="15" />{{ t('map.areas.collapse') }}
+    </button>
     <button role="menuitem" data-test="rename" @click="emit('rename')">
       <Pencil :size="15" />{{ t('map.areas.rename') }}
     </button>

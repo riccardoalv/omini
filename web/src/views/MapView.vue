@@ -28,6 +28,7 @@ import {
   AREA_TITLE,
   areaIdOf,
   areaNodeId,
+  collapseAreas,
   fitArea,
   MIN_AREA_SIZE,
   membersOf,
@@ -103,7 +104,20 @@ const offlineCount = computed(() => allNodes.value.filter((n) => !n.online).leng
 const expanded = computed(() => new Set(prefs.expanded))
 const forced = computed(() => new Set(prefs.collapsed))
 const view = computed(() =>
-  collapseClients(nodes.value, edges.value, prefs.collapseThreshold, expanded.value, forced.value),
+  collapseAreas(
+    collapseClients(
+      nodes.value,
+      edges.value,
+      prefs.collapseThreshold,
+      expanded.value,
+      forced.value,
+    ),
+    collapsedAreaList.value,
+  ),
+)
+/** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
+const collapsedAreaList = computed(() =>
+  areas.value.filter((a) => prefs.collapsedAreas.includes(a.id)),
 )
 const failedIntegrations = computed(
   () => new Set((data.value?.statuses ?? []).filter((s) => !s.ok).map((s) => s.integration_id)),
@@ -325,6 +339,7 @@ const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
  */
 const visibleAreas = computed(() =>
   areas.value
+    .filter((a) => !prefs.collapsedAreas.includes(a.id))
     .filter(
       (a) =>
         a.direction === prefs.layoutDirection || areaNodes(a).some((id) => nodeBoxes.value.has(id)),
@@ -528,11 +543,20 @@ function onDrawKey(e: KeyboardEvent) {
 const areaMenu = ref<{ x: number; y: number; id: number }>()
 const areaMenuArea = computed(() => areas.value.find((a) => a.id === areaMenu.value?.id))
 
-function areaMenuAction(action: 'rename' | 'delete' | AreaColor) {
+function collapseArea(id: number) {
+  if (!prefs.collapsedAreas.includes(id)) prefs.collapsedAreas.push(id)
+}
+function expandArea(id: number) {
+  prefs.collapsedAreas = prefs.collapsedAreas.filter((x) => x !== id)
+  selectedId.value = undefined
+}
+
+function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | AreaColor) {
   const id = areaMenu.value?.id
   areaMenu.value = undefined
   if (id === undefined) return
-  if (action === 'rename') editingArea.value = id
+  if (action === 'collapse') collapseArea(id)
+  else if (action === 'rename') editingArea.value = id
   else if (action === 'delete') deleteArea(id)
   else colorArea(id, action)
 }
@@ -626,6 +650,7 @@ const menuCanExpand = computed(() => {
 
 /** Expands the children of a node if they are grouped, groups them otherwise. */
 function toggleChildren(id: string) {
+  if (id.startsWith('area-bubble:')) return expandArea(Number(id.slice(12)))
   const parent = view.value.groups.find((g) => g.id === id)?.parentId ?? id
   if (view.value.groups.some((g) => g.parentId === parent)) expand(parent)
   else if (clientCount(parent, nodes.value, edges.value) >= 2) collapse(parent)
@@ -825,6 +850,7 @@ onBeforeUnmount(() => {
       :y="areaMenu.y"
       :color="areaMenuArea.color"
       @rename="areaMenuAction('rename')"
+      @collapse="areaMenuAction('collapse')"
       @color="areaMenuAction"
       @delete="areaMenuAction('delete')"
       @close="areaMenu = undefined"
@@ -853,7 +879,10 @@ onBeforeUnmount(() => {
       @close="selectedId = undefined"
       @select="(id) => (selectedId = id)"
       @changed="patchSelected"
-      @expand="expand"
+      @expand="
+        (id: string) =>
+          id.startsWith('area-bubble:') ? expandArea(Number(id.slice(12))) : expand(id)
+      "
       @collapse="collapse"
       @deleted="removeNode"
     />

@@ -86,13 +86,17 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     <template v-if="data.group">
       <NodeIcon name="users" :size="16" />
       <div class="text">
-        <strong>{{
+        <strong v-if="data.group.area">{{ data.group.area.name }}</strong>
+        <strong v-else>{{
           t(
             data.group.clients.every((c) => c.kind === 'app') ? 'map.appsLabel' : 'map.groupLabel',
             { n: data.group.clients.length },
           )
         }}</strong>
-        <span class="sub">{{ t('map.groupOnline', { n: data.group.online }) }}</span>
+        <span v-if="data.group.area" class="sub">{{
+          t('map.areas.devices', { n: data.group.clients.length, online: data.group.online })
+        }}</span>
+        <span v-else class="sub">{{ t('map.groupOnline', { n: data.group.online }) }}</span>
       </div>
     </template>
 
