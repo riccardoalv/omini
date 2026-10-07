@@ -7,6 +7,7 @@ web/node_modules/
 
 # Runtime data
 /data/
+/data-demo/
 *.db
 *.db-journal
 
