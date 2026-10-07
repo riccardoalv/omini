@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), zero-config network scan (with SNMP), device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), zero-config network scan (with SNMP), device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API, the web UI (map, devices, integrations, settings; en + pt-BR), the Python plugin runtime + SDK and the OPNsense plugin (`omini-plugin-opnsense`, to be checked against a real firewall). Next: nmap integration, model names, port panel, Docker image.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
