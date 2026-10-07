@@ -44,6 +44,11 @@ updates:
     groups:
       web:
         patterns: ["*"]
+    # Major versions (TypeScript, Vitest, Node types...) are upgraded by hand,
+    # once the tooling around them supports them.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /
@@ -52,3 +57,7 @@ updates:
     commit-message:
       prefix: build
       include: scope
+    # Node.js stays on its LTS line (24); Go and Debian majors are upgraded by hand.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
