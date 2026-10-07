@@ -22,6 +22,8 @@ export default {
     yes: 'Yes',
     no: 'No',
     error: 'Something went wrong',
+    show: 'Show',
+    hide: 'Hide',
   },
   auth: {
     welcome: 'Welcome to Omini',
@@ -134,7 +136,7 @@ export default {
     name: 'Name',
     test: 'Test connection',
     testing: 'Testing…',
-    secretKept: 'Leave as is to keep the saved value.',
+    secretSaved: 'Saved — leave blank to keep',
     core: 'Built-in',
     plugin: 'Plugin',
   },

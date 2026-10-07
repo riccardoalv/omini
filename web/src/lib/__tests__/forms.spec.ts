@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fieldLabel, initialValues, inputType, missingRequired, toConfig } from '../forms'
+import { fieldLabel, initialValues, inputType, MASKED, missingRequired, toConfig } from '../forms'
 import type { FormField } from '../types'
 
 const fields: FormField[] = [
@@ -43,5 +43,14 @@ describe('forms', () => {
     expect(inputType(fields[2]!)).toBe('number')
     expect(fieldLabel(fields[0]!)).toBe('Host')
     expect(fieldLabel(fields[3]!)).toBe('Verify tls')
+  })
+
+  it('treats saved secrets as "leave blank to keep" when editing', () => {
+    const values = initialValues(fields, { host: '10.0.0.2', community: MASKED, port: 161 })
+    expect(values.community).toBe('')
+    expect(missingRequired(fields, values, true)).toEqual([])
+    expect(missingRequired(fields, values)).toEqual(['community'])
+    expect(toConfig(fields, values, true).community).toBe(MASKED)
+    expect(toConfig(fields, { ...values, community: 'new' }, true).community).toBe('new')
   })
 })

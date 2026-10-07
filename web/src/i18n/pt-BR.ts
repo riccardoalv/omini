@@ -24,6 +24,8 @@ const ptBR: typeof en = {
     yes: 'Sim',
     no: 'Não',
     error: 'Algo deu errado',
+    show: 'Mostrar',
+    hide: 'Ocultar',
   },
   auth: {
     welcome: 'Bem-vindo ao Omini',
@@ -137,7 +139,7 @@ const ptBR: typeof en = {
     name: 'Nome',
     test: 'Testar conexão',
     testing: 'Testando…',
-    secretKept: 'Deixe como está para manter o valor salvo.',
+    secretSaved: 'Salva — deixe em branco para manter',
     core: 'Nativa',
     plugin: 'Plugin',
   },

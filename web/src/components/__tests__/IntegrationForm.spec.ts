@@ -85,7 +85,7 @@ describe('IntegrationForm', () => {
     expect(w.emitted('saved')![0]).toEqual([created])
   })
 
-  it('updates an existing integration and explains masked secrets', async () => {
+  it('edits without showing the saved secret: blank keeps it, a new value replaces it', async () => {
     const existing = {
       id: 7,
       name: 'core switch',
@@ -94,13 +94,37 @@ describe('IntegrationForm', () => {
     } as unknown as Integration
     vi.mocked(api.updateIntegration).mockResolvedValue(existing)
     const w = mountForm({ existing })
-    expect(w.text()).toContain('Leave as is to keep the saved value')
+
+    const community = w.get('input[name=community]')
+    expect((community.element as HTMLInputElement).value).toBe('')
+    expect(community.attributes('placeholder')).toBe('Saved — leave blank to keep')
+    expect(w.get('button[type=submit]').attributes('disabled')).toBeUndefined()
 
     await w.get('form').trigger('submit')
     await flushPromises()
-    expect(api.updateIntegration).toHaveBeenCalledWith(7, {
+    expect(api.updateIntegration).toHaveBeenLastCalledWith(7, {
       name: 'core switch',
       config: { host: '192.168.1.2', community: '********', port: 161 },
     })
+
+    await community.setValue('n3w-community')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.updateIntegration).toHaveBeenLastCalledWith(7, {
+      name: 'core switch',
+      config: { host: '192.168.1.2', community: 'n3w-community', port: 161 },
+    })
+  })
+
+  it('lets the user reveal a secret to check it', async () => {
+    const w = mountForm()
+    const community = w.get('input[name=community]')
+    expect(community.attributes('type')).toBe('password')
+    expect((community.element as HTMLInputElement).value).toBe('public')
+
+    await w.get('button[aria-label=Show]').trigger('click')
+    expect(w.get('input[name=community]').attributes('type')).toBe('text')
+    await w.get('button[aria-label=Hide]').trigger('click')
+    expect(w.get('input[name=community]').attributes('type')).toBe('password')
   })
 })

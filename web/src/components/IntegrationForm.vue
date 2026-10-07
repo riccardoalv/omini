@@ -7,6 +7,7 @@ import { fieldLabel, initialValues, inputType, missingRequired, toConfig } from 
 import type { Config, Integration, IntegrationType, TestResult } from '@/lib/types'
 
 import ModalDialog from './ModalDialog.vue'
+import SecretInput from './SecretInput.vue'
 
 const props = defineProps<{
   type: IntegrationType
@@ -28,7 +29,8 @@ const testing = ref(false)
 const error = ref('')
 const result = ref<TestResult>()
 
-const missing = computed(() => missingRequired(props.type.fields, values.value))
+const editing = !!props.existing
+const missing = computed(() => missingRequired(props.type.fields, values.value, editing))
 
 async function test() {
   testing.value = true
@@ -37,7 +39,7 @@ async function test() {
     result.value = await api.testIntegration({
       id: props.existing?.id,
       type: props.type.type,
-      config: toConfig(props.type.fields, values.value),
+      config: toConfig(props.type.fields, values.value, editing),
     })
   } catch (e) {
     result.value = { ok: false, error: e instanceof ApiError ? e.message : t('common.error') }
@@ -50,7 +52,7 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    const config = toConfig(props.type.fields, values.value)
+    const config = toConfig(props.type.fields, values.value, editing)
     const saved = props.existing
       ? await api.updateIntegration(props.existing.id, { name: name.value, config })
       : await api.createIntegration({ name: name.value, type: props.type.type, config })
@@ -89,6 +91,14 @@ async function save() {
           >
             <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
           </select>
+          <SecretInput
+            v-else-if="f.type === 'secret'"
+            :id="`f-${f.key}`"
+            v-model="values[f.key]"
+            :name="f.key"
+            :required="f.required && !editing"
+            :placeholder="editing ? t('integrations.secretSaved') : undefined"
+          />
           <input
             v-else
             :id="`f-${f.key}`"
@@ -97,13 +107,10 @@ async function save() {
             :name="f.key"
             :type="inputType(f)"
             :required="f.required"
-            :autocomplete="f.type === 'secret' ? 'new-password' : 'off'"
+            autocomplete="off"
           />
         </template>
         <span v-if="f.help" class="help">{{ f.help }}</span>
-        <span v-if="existing && f.type === 'secret'" class="help">
-          {{ t('integrations.secretKept') }}
-        </span>
       </div>
 
       <p v-if="result" class="alert" :class="result.ok ? 'ok' : 'error'" role="status">

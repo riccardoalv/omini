@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api'
 import type { DiscoveredHost } from '@/lib/types'
 
 import ModalDialog from './ModalDialog.vue'
+import SecretInput from './SecretInput.vue'
 
 const emit = defineEmits<{ close: []; add: [host: DiscoveredHost, community: string] }>()
 const { t } = useI18n()
@@ -40,7 +41,7 @@ async function scan() {
       </div>
       <div class="field grow">
         <label for="d-community">{{ t('discover.community') }}</label>
-        <input id="d-community" v-model="community" class="input" type="password" required />
+        <SecretInput id="d-community" v-model="community" required />
       </div>
       <button class="btn primary scan" type="submit" :disabled="scanning">
         {{ t('discover.scan') }}
