@@ -231,6 +231,19 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	impl, _ := s.Registry.Get(in.Type) // prepare checked the type
+	if impl.Info().Single {
+		all, err := s.Store.ListIntegrations(r.Context())
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		for _, other := range all {
+			if other.Type == in.Type {
+				writeError(w, http.StatusConflict, impl.Info().Name+" is already added: there can be only one")
+				return
+			}
+		}
+	}
 	enabled := in.Enabled == nil || *in.Enabled
 	created, err := s.Store.CreateIntegration(r.Context(), store.Integration{
 		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled,

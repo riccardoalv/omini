@@ -188,3 +188,21 @@ func TestFirstRunMovesSNMPIntoTheNetworkScan(t *testing.T) {
 		t.Fatalf("integrations after second start = %+v", list)
 	}
 }
+
+func TestFirstRunKeepsASingleNetworkScan(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	first, _ := st.CreateIntegration(ctx, store.Integration{Name: "Network scan", Type: "network", Enabled: true, Config: integration.Config{"subnets": "192.168.1.0/24"}})
+	_, _ = st.CreateIntegration(ctx, store.Integration{Name: "Network scan", Type: "network", Enabled: true, Config: integration.Config{"subnets": "auto"}})
+	if err := firstRun(ctx, st, testBox(t), config{AutoScan: true}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := st.ListIntegrations(ctx)
+	if len(list) != 1 || list[0].ID != first.ID {
+		t.Fatalf("integrations = %+v (the oldest scan is kept)", list)
+	}
+}

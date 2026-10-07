@@ -269,7 +269,11 @@ export default {
   fieldGroups: {} as Record<string, string>,
   fields: {} as Record<string, Record<string, { label?: string; help?: string }>>,
   store: {
-    title: 'Plugin store',
+    builtin: 'Built in',
+    includedInOmini: 'Included in Omini',
+    added: 'Already added',
+    addedHint: 'There can be only one: change its settings in the list of integrations.',
+    title: 'Add integration',
     open: 'Open the store',
     search: 'Search plugins: name, brand, repository…',
     addByUrl: 'Add from a GitHub address',

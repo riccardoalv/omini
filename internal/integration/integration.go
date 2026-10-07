@@ -21,11 +21,13 @@ const (
 
 // Info describes an integration type and the form the UI renders to configure it.
 type Info struct {
-	Type        string            `json:"type"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Kind        Kind              `json:"kind"`
-	Fields      []model.FormField `json:"fields"`
+	Type        string `json:"type"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Kind        Kind   `json:"kind"`
+	// Single types can be added only once (e.g. the network scan).
+	Single bool              `json:"single,omitempty"`
+	Fields []model.FormField `json:"fields"`
 }
 
 // Config is the user-provided configuration of one integration instance:

@@ -65,6 +65,7 @@ func (*Integration) Info() integration.Info {
 		Description: "Finds every device on your network with no setup on them: ARP, ping, open ports, " +
 			"reverse DNS, NetBIOS, mDNS/Bonjour, UPnP and SNMP. Run Omini with host networking for best results.",
 		Kind:   integration.KindCore,
+		Single: true, // one scan covers every subnet: two would compete
 		Fields: fields(),
 	}
 }

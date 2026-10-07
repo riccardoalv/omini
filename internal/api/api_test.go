@@ -604,3 +604,23 @@ func TestPortLabelsShowInTheTopology(t *testing.T) {
 		t.Fatalf("too long: %d", code)
 	}
 }
+
+func TestNetworkScanIsSingle(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	var types []map[string]any
+	h.do("GET", "/api/integration-types", nil, &types)
+	for _, ty := range types {
+		if ty["type"] == "network" && ty["single"] != true {
+			t.Fatalf("network scan must be single: %v", ty)
+		}
+	}
+	body := map[string]any{"type": "network", "config": map[string]any{"subnets": "192.168.1.0/24"}}
+	if code := h.do("POST", "/api/integrations", body, nil); code != http.StatusCreated {
+		t.Fatalf("first: %d", code)
+	}
+	var resp map[string]string
+	if code := h.do("POST", "/api/integrations", body, &resp); code != http.StatusConflict || !strings.Contains(resp["error"], "only one") {
+		t.Fatalf("second: %d %v", code, resp)
+	}
+}

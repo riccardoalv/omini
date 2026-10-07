@@ -3,6 +3,7 @@ import {
   Check,
   Download,
   ExternalLink,
+  Network,
   Plus,
   Puzzle,
   RefreshCw,
@@ -14,7 +15,13 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
-import type { CatalogEntry, PluginInfo, PluginTrust } from '@/lib/types'
+import type {
+  CatalogEntry,
+  Integration,
+  IntegrationType,
+  PluginInfo,
+  PluginTrust,
+} from '@/lib/types'
 
 import DeviceIcon from './DeviceIcon.vue'
 import ModalDialog from './ModalDialog.vue'
@@ -43,10 +50,16 @@ interface Item {
   trust: PluginTrust
   installed?: PluginInfo
   dev: boolean
+  /** Built into Omini (network scan): always available. */
+  builtin?: boolean
+  /** Single type already added: it cannot be added again. */
+  added?: boolean
 }
 
 const catalog = ref<CatalogEntry[]>([])
 const installed = ref<PluginInfo[]>([])
+const types = ref<IntegrationType[]>([])
+const integrations = ref<Integration[]>([])
 const loading = ref(true)
 const query = ref('')
 const filter = ref<'all' | 'installed' | 'available'>('all')
@@ -58,7 +71,12 @@ const message = (e: unknown) => (e instanceof ApiError ? e.message : t('common.e
 
 async function load() {
   try {
-    ;[catalog.value, installed.value] = await Promise.all([api.pluginCatalog(), api.plugins()])
+    ;[catalog.value, installed.value, types.value, integrations.value] = await Promise.all([
+      api.pluginCatalog(),
+      api.plugins(),
+      api.integrationTypes(),
+      api.integrations(),
+    ])
   } finally {
     loading.value = false
   }
@@ -66,6 +84,23 @@ async function load() {
 
 const items = computed<Item[]>(() => {
   const byId = new Map(installed.value.map((p) => [p.manifest.id, p]))
+  const used = new Set(integrations.value.map((i) => i.type))
+  const added = (type: string) =>
+    !!types.value.find((t) => t.type === type)?.single && used.has(type)
+  // Built-in integrations first.
+  const builtins: Item[] = types.value
+    .filter((t) => t.kind === 'core')
+    .map((t) => ({
+      id: t.type,
+      name: t.name,
+      description: t.description ?? '',
+      icon: undefined,
+      publisher: 'official',
+      trust: 'plug-and-play',
+      dev: false,
+      builtin: true,
+      added: added(t.type),
+    }))
   const out: Item[] = catalog.value.map((e) => ({
     id: e.id,
     name: e.name,
@@ -76,6 +111,7 @@ const items = computed<Item[]>(() => {
     trust: e.trust,
     installed: byId.get(e.id),
     dev: !!byId.get(e.id)?.dev,
+    added: added(e.id),
   }))
   // Installed from a GitHub address or a development folder.
   for (const p of installed.value) {
@@ -89,16 +125,18 @@ const items = computed<Item[]>(() => {
       trust: p.trust,
       installed: p,
       dev: p.dev,
+      added: added(p.manifest.id),
     })
   }
-  return out
+  return [...builtins, ...out]
 })
 
 const shown = computed(() => {
   const q = query.value.trim().toLowerCase()
   return items.value.filter((i) => {
-    if (filter.value === 'installed' && !i.installed) return false
-    if (filter.value === 'available' && i.installed) return false
+    const has = i.builtin || !!i.installed
+    if (filter.value === 'installed' && !has) return false
+    if (filter.value === 'available' && has) return false
     if (!q) return true
     return [i.name, i.description, i.url ?? '', i.id].some((s) => s.toLowerCase().includes(q))
   })
@@ -106,8 +144,8 @@ const shown = computed(() => {
 
 const counts = computed(() => ({
   all: items.value.length,
-  installed: items.value.filter((i) => i.installed).length,
-  available: items.value.filter((i) => !i.installed).length,
+  installed: items.value.filter((i) => i.builtin || i.installed).length,
+  available: items.value.filter((i) => !i.builtin && !i.installed).length,
 }))
 
 async function install(item: Pick<Item, 'id' | 'url'>, version?: string) {
@@ -256,8 +294,9 @@ onMounted(load)
         <article v-for="item in shown" :key="item.id" class="plugin card" data-test="store-card">
           <div class="top">
             <span class="logo">
+              <Network v-if="item.builtin" :size="26" class="builtin-icon" />
               <DeviceIcon
-                v-if="item.icon"
+                v-else-if="item.icon"
                 :device="{ product: item.icon, type: 'app' }"
                 :size="30"
               />
@@ -265,7 +304,8 @@ onMounted(load)
             </span>
             <div class="title">
               <strong>{{ item.name }}</strong>
-              <span v-if="item.dev" class="badge">{{ t('plugins.dev') }}</span>
+              <span v-if="item.builtin" class="badge builtin">{{ t('store.builtin') }}</span>
+              <span v-else-if="item.dev" class="badge">{{ t('plugins.dev') }}</span>
               <PluginTrustBadges v-else :publisher="item.publisher" :trust="item.trust" />
             </div>
           </div>
@@ -281,7 +321,13 @@ onMounted(load)
           </a>
           <p v-if="errors[item.id]" class="alert error" role="alert">{{ errors[item.id] }}</p>
           <div class="actions">
-            <template v-if="item.installed">
+            <template v-if="item.builtin">
+              <span class="installed">
+                <Check :size="14" />
+                {{ t('store.includedInOmini') }}
+              </span>
+            </template>
+            <template v-else-if="item.installed">
               <span class="installed" data-test="store-installed">
                 <Check :size="14" />
                 {{ t('store.installed') }}
@@ -335,13 +381,15 @@ onMounted(load)
             {{ t('plugins.confirmRemove') }}
           </p>
           <button
-            v-if="item.installed"
+            v-if="item.builtin || item.installed"
             class="btn primary wide-btn"
             type="button"
             data-test="store-use"
+            :disabled="item.added"
+            :title="item.added ? t('store.addedHint') : undefined"
             @click="emit('add', item.id)"
           >
-            {{ t('store.addIntegration') }}
+            {{ item.added ? t('store.added') : t('store.addIntegration') }}
           </button>
         </article>
       </div>
@@ -532,6 +580,13 @@ onMounted(load)
 }
 .installed {
   min-width: 0;
+}
+.builtin-icon {
+  color: var(--accent);
+}
+.badge.builtin {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .installed .muted {
   overflow: hidden;

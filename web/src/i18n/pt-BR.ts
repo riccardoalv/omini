@@ -330,7 +330,11 @@ const ptBR: typeof en = {
     },
   },
   store: {
-    title: 'Loja de plugins',
+    builtin: 'Nativo',
+    includedInOmini: 'Incluído no Omini',
+    added: 'Já adicionado',
+    addedHint: 'Só pode haver um: altere as configurações na lista de integrações.',
+    title: 'Adicionar integração',
     open: 'Abrir a loja',
     search: 'Buscar plugins: nome, marca, repositório…',
     addByUrl: 'Adicionar por endereço do GitHub',

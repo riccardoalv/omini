@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ChevronDown, Plus, Store, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
-import ModalDialog from '@/components/ModalDialog.vue'
 import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
@@ -20,7 +19,6 @@ const router = useRouter()
 const items = ref<Integration[]>([])
 const types = ref<IntegrationType[]>([])
 const loading = ref(true)
-const choosing = ref(false)
 const form = ref<{
   type: IntegrationType
   existing?: Integration
@@ -37,20 +35,16 @@ async function load() {
   }
 }
 
-// The plugin store; "Add integration" from it opens that plugin's form.
+// "Add integration" opens the store: built-in integrations, installed and
+// available plugins. Picking one there opens its form.
 const storeOpen = ref(false)
 function addFromStore(type: string) {
   storeOpen.value = false
   const found = types.value.find((x) => x.type === type)
   if (found) openAdd(found)
 }
-function openStore() {
-  choosing.value = false
-  storeOpen.value = true
-}
 
 function openAdd(type: IntegrationType) {
-  choosing.value = false
   form.value = { type }
 }
 
@@ -99,7 +93,7 @@ onMounted(async () => {
   const add = route.query.add
   const type = typeof add === 'string' ? types.value.find((x) => x.type === add) : undefined
   if (type) openAdd(type)
-  else if (add) choosing.value = true
+  else if (add) storeOpen.value = true
   if (route.query.store) storeOpen.value = true
   if (add || route.query.store) router.replace({ query: {} })
 })
@@ -113,10 +107,7 @@ onMounted(async () => {
         <p class="muted">{{ t('integrations.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn" data-test="store" @click="storeOpen = true">
-          <Store :size="16" />{{ t('store.title') }}
-        </button>
-        <button class="btn primary" @click="choosing = true">
+        <button class="btn primary" data-test="add" @click="storeOpen = true">
           <Plus :size="16" />{{ t('integrations.add') }}
         </button>
       </div>
@@ -196,28 +187,6 @@ onMounted(async () => {
       </li>
     </ul>
 
-    <ModalDialog
-      v-if="choosing"
-      :title="t('integrations.chooseType')"
-      wide
-      @close="choosing = false"
-    >
-      <div class="types">
-        <button v-for="type in types" :key="type.type" class="card type" @click="openAdd(type)">
-          <strong>{{ type.name }}</strong>
-          <span class="badge">{{
-            type.kind === 'core' ? t('integrations.core') : t('integrations.plugin')
-          }}</span>
-          <span class="muted">{{ type.description }}</span>
-        </button>
-        <button class="card type more" data-test="open-store" @click="openStore">
-          <Store :size="20" />
-          <strong>{{ t('integrations.moreInStore') }}</strong>
-          <span class="muted">{{ t('integrations.moreInStoreHint') }}</span>
-        </button>
-      </div>
-    </ModalDialog>
-
     <PluginStore v-if="storeOpen" @close="storeOpen = false" @changed="load" @add="addFromStore" />
 
     <IntegrationForm
@@ -288,34 +257,5 @@ onMounted(async () => {
   margin: 6px 0 0;
   color: var(--danger);
   font-size: 13px;
-}
-.types {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px;
-}
-.type {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px;
-  text-align: left;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.type:hover {
-  border-color: var(--accent);
-}
-.type .muted {
-  font-size: 12.5px;
-}
-.type.more {
-  border-style: dashed;
-  color: var(--text-muted);
-}
-.type.more strong {
-  color: var(--text);
 }
 </style>

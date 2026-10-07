@@ -173,6 +173,8 @@ export interface IntegrationType {
   name: string
   description?: string
   kind: 'core' | 'plugin'
+  /** Can be added only once (the network scan). */
+  single?: boolean
   fields: FormField[]
 }
 

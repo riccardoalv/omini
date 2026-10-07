@@ -17,6 +17,8 @@ vi.mock('@/lib/api', async (orig) => {
       pluginCatalog: vi.fn<typeof mod.api.pluginCatalog>(),
       installPlugin: vi.fn<typeof mod.api.installPlugin>(),
       removePlugin: vi.fn<typeof mod.api.removePlugin>(),
+      integrationTypes: vi.fn<typeof mod.api.integrationTypes>(),
+      integrations: vi.fn<typeof mod.api.integrations>(),
     },
   }
 })
@@ -59,6 +61,8 @@ describe('PluginStore', () => {
     vi.mocked(api.plugins).mockReset().mockResolvedValue([])
     vi.mocked(api.installPlugin).mockReset().mockResolvedValue(installed('opnsense', URL))
     vi.mocked(api.removePlugin).mockReset().mockResolvedValue()
+    vi.mocked(api.integrationTypes).mockReset().mockResolvedValue([])
+    vi.mocked(api.integrations).mockReset().mockResolvedValue([])
   })
 
   it('shows the catalog as cards with trust badges and searches it', async () => {
@@ -148,5 +152,32 @@ describe('PluginStore', () => {
     await remove.trigger('click')
     await flushPromises()
     expect(api.removePlugin).toHaveBeenCalledWith('opnsense')
+  })
+
+  it('lists the built-in network scan, which can be added only once', async () => {
+    vi.mocked(api.integrationTypes).mockResolvedValue([
+      { type: 'network', name: 'Network scan', kind: 'core', single: true, fields: [] },
+    ])
+    const w = await mountStore()
+    const card = w.findAll('[data-test=store-card]')[0]!
+    expect(card.text()).toContain('Network scan')
+    expect(card.text()).toContain('Built in')
+    expect(card.get('[data-test=store-use]').attributes('disabled')).toBeUndefined()
+
+    vi.mocked(api.integrations).mockResolvedValue([
+      {
+        id: 1,
+        name: 'Network scan',
+        type: 'network',
+        config: {},
+        enabled: true,
+        created_at: '',
+        updated_at: '',
+      },
+    ])
+    const again = await mountStore()
+    const use = again.findAll('[data-test=store-card]')[0]!.get('[data-test=store-use]')
+    expect(use.text()).toBe('Already added')
+    expect(use.attributes('disabled')).toBeDefined()
   })
 })

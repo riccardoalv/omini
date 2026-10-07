@@ -204,6 +204,14 @@ func firstRun(ctx context.Context, st *store.Store, box *secret.Box, cfg config)
 		kept        int
 	)
 	for _, in := range existing {
+		if in.Type == "network" && scan != nil {
+			// The network scan is single: keep the oldest (the user's settings).
+			slog.Info("removing a duplicate network scan", "integration", in.ID)
+			if err := st.DeleteIntegration(ctx, in.ID); err != nil {
+				return err
+			}
+			continue
+		}
 		switch in.Type {
 		case "demo":
 		case "snmp":

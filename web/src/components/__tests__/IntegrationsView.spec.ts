@@ -73,7 +73,7 @@ describe('IntegrationsView', () => {
     expect(w.text()).toContain('Disabled')
   })
 
-  it('opens the plugin store, and its "Add integration" opens the form', async () => {
+  it('"Add integration" opens the store, and picking an integration opens its form', async () => {
     const opnsense = {
       type: 'opnsense',
       name: 'OPNsense',
@@ -110,9 +110,8 @@ describe('IntegrationsView', () => {
     })
     await flushPromises()
 
-    // From "Add integration": the last card leads to the store.
-    await w.get('.page-header .btn.primary').trigger('click')
-    await w.get('[data-test=open-store]').trigger('click')
+    // "Add integration" opens the store.
+    await w.get('[data-test=add]').trigger('click')
     await flushPromises()
     await w.get('[data-test=store-use]').trigger('click')
     await flushPromises()
