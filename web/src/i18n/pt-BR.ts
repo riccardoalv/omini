@@ -170,6 +170,7 @@ const ptBR: typeof en = {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    solar_inverter: 'Inversor solar',
     wan: 'Link de internet',
     app: 'Aplicativo',
     air_conditioner: 'Ar-condicionado',

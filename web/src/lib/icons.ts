@@ -299,6 +299,7 @@ export const typeIcons: Record<string, string> = {
   camera: 'cctv',
   smart_home: 'house',
   air_conditioner: 'air-vent',
+  solar_inverter: 'solar-panel',
   appliance: 'refrigerator',
   game_console: 'gamepad-2',
   wearable: 'watch',

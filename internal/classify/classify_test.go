@@ -13,6 +13,16 @@ func TestClassify(t *testing.T) {
 	}{
 		// Devices seen on a real homelab network.
 		{
+			"Huawei solar inverter (DHCP name)",
+			Input{Kind: "client", Hostname: "SUN2000", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD", TTL: 255},
+			Result{Type: SolarInverter, Brand: "huawei"},
+		},
+		{
+			"Fronius inverter (MAC vendor only)",
+			Input{Kind: "client", Vendor: "Fronius International GmbH"},
+			Result{Type: SolarInverter},
+		},
+		{
 			"OPNsense gateway (DNS name + FreeBSD MAC)",
 			Input{Kind: "device", Role: "router", Hostname: "OPNsense", Vendor: "FreeBSD Foundation", OpenPorts: []int{22, 53, 80, 443}},
 			Result{Type: Firewall, OS: "freebsd", Brand: "freebsd", Product: "opnsense"},

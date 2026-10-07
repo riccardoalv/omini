@@ -43,6 +43,10 @@ describe('iconChoice', () => {
       logo: undefined,
       badge: false,
     })
+    // A Huawei SUN2000: solar panel with the Huawei badge.
+    expect(iconChoice({ type: 'solar_inverter', brand: 'huawei' })).toMatchObject({
+      type: 'solar-panel',
+    })
     expect(iconChoice({ type: 'appliance' })).toEqual({
       type: 'refrigerator',
       logo: undefined,

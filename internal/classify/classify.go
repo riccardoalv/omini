@@ -32,6 +32,7 @@ const (
 	SmartHome      = "smart_home"
 	Appliance      = "appliance"
 	AirConditioner = "air_conditioner"
+	SolarInverter  = "solar_inverter"
 	GameConsole    = "game_console"
 	Wearable       = "wearable"
 	Segment        = "segment"
@@ -161,7 +162,22 @@ var typeRules = []struct {
 }{
 	{[]string{"hc-swtg", "zx-swtg", "horaco"}, Switch, "horaco"},
 	{[]string{"mercusys"}, AccessPoint, "mercusys"},
+	// Solar inverters (and their Wi-Fi/LAN dongles) are named after the
+	// series: Huawei "SUN2000-5KTL", Fronius "Symo", SMA "Sunny Boy"...
+	{[]string{"sun2000", "sun5000", "sun600-", "sdongle"}, SolarInverter, "huawei"},
+	{[]string{"fronius", "symo gen24", "primo gen24"}, SolarInverter, "fronius"},
+	{[]string{"solaredge"}, SolarInverter, "solaredge"},
+	{[]string{"sunny boy", "sunnyboy", "sunny tripower", "sma solar", "sma-inverter"}, SolarInverter, "sma"},
+	{[]string{"growatt", "shinewifi", "shinelan"}, SolarInverter, "growatt"},
+	{[]string{"goodwe"}, SolarInverter, "goodwe"},
+	{[]string{"enphase", "envoy-s", "iq gateway"}, SolarInverter, "enphase"},
+	{[]string{"sungrow", "winet-s"}, SolarInverter, "sungrow"},
+	{[]string{"solarman", "deye"}, SolarInverter, "deye"},
+	{[]string{"ginlong", "solis-"}, SolarInverter, "solis"},
 }
+
+// solarVendors are MAC vendors that only make solar equipment.
+var solarVendors = []string{"fronius", "sma solar", "solaredge", "enphase", "growatt", "goodwe", "sungrow"}
 
 func products(s *state) {
 	for _, rule := range typeRules {
@@ -419,6 +435,8 @@ func deviceType(s *state) {
 		s.set(&r.Type, Speaker, "mdns:_sonos._tcp")
 	case s.service("_hue._tcp") || s.service("_hap._tcp") || s.service("_matter._tcp") || slices.Contains(smartHome, r.Brand):
 		s.set(&r.Type, SmartHome, "")
+	case slices.ContainsFunc(solarVendors, func(v string) bool { return strings.Contains(strings.ToLower(in.Vendor), v) }):
+		s.set(&r.Type, SolarInverter, "vendor:"+in.Vendor)
 	case strings.Contains(strings.ToLower(in.Vendor), "air-condition") || strings.Contains(strings.ToLower(in.Vendor), "air condition"):
 		s.set(&r.Type, AirConditioner, "vendor:"+in.Vendor)
 	case r.Brand == "midea":

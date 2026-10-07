@@ -167,6 +167,7 @@ export default {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    solar_inverter: 'Solar inverter',
     wan: 'Internet uplink',
     app: 'App',
     air_conditioner: 'Air conditioner',
