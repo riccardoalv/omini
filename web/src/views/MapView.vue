@@ -37,7 +37,14 @@ import {
 } from '@/lib/areas'
 import { formatAgo } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
-import { alignOn, layout, layoutKey, type LayoutGroup, positionsFor } from '@/lib/layout'
+import {
+  alignOn,
+  clearSaved,
+  layout,
+  layoutKey,
+  type LayoutGroup,
+  positionsFor,
+} from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import { linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
@@ -219,16 +226,11 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
   const refit = lastLayout === '' || !lastLayout.startsWith(direction + '|')
   lastLayout = key
   const saved = positionsFor({ ...data.value?.layout, ...draggedPositions }, direction)
-  const fresh = await layout(
-    [
-      ...v.nodes.map((n) => ({ id: n.id, ...SIZES[n.kind]! })),
-      ...v.groups.map((g) => ({ id: g.id, ...SIZES.group! })),
-    ],
-    v.edges,
-    saved,
-    direction,
-    layoutGroups(v.edges),
-  )
+  const boxes = [
+    ...v.nodes.map((n) => ({ id: n.id, ...SIZES[n.kind]! })),
+    ...v.groups.map((g) => ({ id: g.id, ...SIZES.group! })),
+  ]
+  const fresh = await layout(boxes, v.edges, saved, direction, layoutGroups(v.edges))
   // Expanding or collapsing keeps the clicked node where it is; the map is laid
   // out again around it (no overlaps). Other changes keep the first node still.
   const anchor =
@@ -236,9 +238,15 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
       ? layoutAnchor
       : ids.find((id) => positions.value[id])
   layoutAnchor = undefined
+  // Shifting the layout may bring automatic nodes onto dragged ones again.
   positions.value = refit
     ? fresh
-    : alignOn(positions.value, fresh, anchor, new Set(Object.keys(saved)))
+    : clearSaved(
+        alignOn(positions.value, fresh, anchor, new Set(Object.keys(saved))),
+        boxes,
+        saved,
+        direction,
+      )
   if (refit) {
     // Handles moved (left/right vs top/bottom): Vue Flow must re-measure them.
     await nextTick()

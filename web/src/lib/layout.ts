@@ -195,6 +195,53 @@ export async function layout(
     }
   }
   unpack(packs, out, saved)
+  return clearSaved(out, allNodes, saved, direction)
+}
+
+const GAP = 12
+
+/**
+ * Positions the user dragged stay where they are, but the automatic layout
+ * does not know them: automatic nodes that would land on a dragged one (or on
+ * a node pushed before them) move along the row/column until they are clear.
+ */
+export function clearSaved(
+  pos: Record<string, Point>,
+  nodes: LayoutNode[],
+  saved: Record<string, Point>,
+  direction: Direction,
+): Record<string, Point> {
+  const size = new Map(nodes.map((n) => [n.id, n]))
+  const box = (id: string, p: Point) => ({
+    ...p,
+    w: size.get(id)?.width ?? 0,
+    h: size.get(id)?.height ?? 0,
+  })
+  const occupied = Object.keys(saved)
+    .filter((id) => pos[id] && size.has(id))
+    .map((id) => box(id, pos[id]!))
+  if (!occupied.length) return pos
+  const cross = direction === 'RIGHT' ? 'y' : 'x'
+  const overlaps = (a: ReturnType<typeof box>, b: ReturnType<typeof box>) =>
+    a.x < b.x + b.w + GAP && a.x + a.w + GAP > b.x && a.y < b.y + b.h + GAP && a.y + a.h + GAP > b.y
+  const out = { ...pos }
+  const auto = Object.keys(pos)
+    .filter((id) => !saved[id] && size.has(id))
+    .sort((a, b) => pos[a]![cross] - pos[b]![cross])
+  for (const id of auto) {
+    const b = box(id, out[id]!)
+    for (let moved = true, guard = 0; moved && guard < 200; guard++) {
+      moved = false
+      for (const o of occupied) {
+        if (overlaps(b, o)) {
+          b[cross] = cross === 'y' ? o.y + o.h + GAP : o.x + o.w + GAP
+          moved = true
+        }
+      }
+    }
+    out[id] = { x: b.x, y: b.y }
+    occupied.push(b)
+  }
   return out
 }
 

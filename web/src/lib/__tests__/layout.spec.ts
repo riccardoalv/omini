@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { alignOn, layout, layoutKey, positionsFor } from '../layout'
+import { alignOn, clearSaved, layout, layoutKey, positionsFor } from '../layout'
 
 describe('per-direction layout positions', () => {
   it('keys left-to-right positions by node id and top-down ones with a prefix', () => {
@@ -124,5 +124,32 @@ describe('top-down layout', () => {
     const pos = await layout(nodes, edges, { b: { x: 999, y: 999 } }, 'DOWN')
     expect(pos.a!.y).toBe(pos.gw!.y + 40 + 80)
     expect(pos.b).toEqual({ x: 999, y: 999 })
+  })
+})
+
+describe('dragged positions', () => {
+  const nodes = ['a', 'b', 'c', 'dragged'].map((id) => ({ id, width: 200, height: 40 }))
+
+  it('moves automatic nodes off a dragged one, keeping the dragged one still', () => {
+    const pos = {
+      a: { x: 300, y: 0 },
+      b: { x: 300, y: 52 },
+      c: { x: 300, y: 104 },
+      dragged: { x: 310, y: 60 }, // dropped on top of b
+    }
+    const out = clearSaved(pos, nodes, { dragged: pos.dragged }, 'RIGHT')
+    expect(out.dragged).toEqual({ x: 310, y: 60 })
+    expect(out.a).toEqual({ x: 300, y: 0 })
+    // b and c move down the column, below the dragged node and each other.
+    expect(out.b!.y).toBeGreaterThanOrEqual(60 + 40 + 12)
+    expect(out.c!.y).toBeGreaterThanOrEqual(out.b!.y + 40 + 12)
+  })
+
+  it('moves along the row top-down, and leaves layouts without dragged nodes alone', () => {
+    const pos = { a: { x: 0, y: 100 }, dragged: { x: 50, y: 100 } }
+    const out = clearSaved(pos, nodes, { dragged: pos.dragged }, 'DOWN')
+    expect(out.a).toEqual({ x: 50 + 200 + 12, y: 100 })
+    const same = { a: { x: 0, y: 0 } }
+    expect(clearSaved(same, nodes, {}, 'RIGHT')).toBe(same)
   })
 })
