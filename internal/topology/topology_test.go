@@ -471,3 +471,81 @@ func TestWifiClientBandAndTraffic(t *testing.T) {
 	}
 	t.Fatal("phone not on the map")
 }
+
+// Port 5 → unmanaged switch → {Wi-Fi AP, laptop by cable}: the switch sees
+// the laptop on the AP's port, but the AP — which lists its clients — does
+// not have it. Both hang from an unmanaged segment on that port.
+func TestUnmanagedSwitchBesideAnAccessPoint(t *testing.T) {
+	const (
+		swMAC  = "1c:2a:a3:00:00:01"
+		apMAC  = "30:16:9d:00:00:01"
+		wired  = "00:e0:4c:00:00:01" // the laptop's cable
+		phone  = "02:23:ab:00:00:01" // a Wi-Fi client of the AP
+		fwMAC  = "58:9c:fc:00:00:01"
+		swID   = "dev:" + swMAC
+		apID   = "dev:" + apMAC
+		segID  = "seg:" + swID + ":Port 5"
+		bridge = "bridge0"
+	)
+	band := model.WifiBand("5ghz")
+	build := func(apClients []model.WirelessClient, apFdb []model.FdbEntry) map[string]topology.Node {
+		fw := model.Device{
+			Key: fwMAC, Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{fwMAC},
+			Arp: []model.ArpEntry{
+				{IP: "192.168.1.2", MAC: swMAC, Interface: model.Ptr(bridge)},
+				{IP: "192.168.1.3", MAC: apMAC, Interface: model.Ptr(bridge)},
+				{IP: "192.168.1.108", MAC: wired, Interface: model.Ptr(bridge)},
+				{IP: "192.168.1.169", MAC: phone, Interface: model.Ptr(bridge)},
+			},
+		}
+		sw := model.Device{
+			Key: swMAC, Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{swMAC},
+			Interfaces: []model.Interface{{Name: "Port 5", SpeedMbps: model.Ptr(uint64(2500)), Up: model.Ptr(true)}},
+			Fdb: []model.FdbEntry{
+				{MAC: fwMAC, Port: "Port 9"},
+				{MAC: apMAC, Port: "Port 5"},
+				{MAC: wired, Port: "Port 5"},
+				{MAC: phone, Port: "Port 5"},
+			},
+		}
+		ap := model.Device{
+			Key: apMAC, Name: "Bedroom", Role: model.Ptr(model.DeviceRoleAp), MACs: []model.MACAddress{apMAC},
+			WirelessClients: apClients, Fdb: apFdb,
+		}
+		topo := topology.Build([]topology.Source{
+			{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+			{IntegrationID: 2, Online: true, Devices: []model.Device{sw}},
+			{IntegrationID: 3, Online: true, Devices: []model.Device{ap}},
+		})
+		nodes := map[string]topology.Node{}
+		for _, n := range topo.Nodes {
+			nodes[n.ID] = n
+		}
+		return nodes
+	}
+	phoneOnAP := []model.WirelessClient{{MAC: phone, Band: &band, Interface: model.Ptr("Home · 5 GHz")}}
+
+	nodes := build(phoneOnAP, nil)
+	seg, ok := nodes[segID]
+	if !ok || seg.ParentID != swID || seg.Port != "Port 5" {
+		t.Fatalf("an unmanaged segment on Port 5 expected: %+v", seg)
+	}
+	if nodes[apID].ParentID != segID || nodes["mac:"+wired].ParentID != segID {
+		t.Fatalf("AP and laptop under the segment: AP %q, laptop %q", nodes[apID].ParentID, nodes["mac:"+wired].ParentID)
+	}
+	if nodes["mac:"+phone].ParentID != apID {
+		t.Fatalf("the Wi-Fi client stays on the AP: %q", nodes["mac:"+phone].ParentID)
+	}
+
+	// The AP lists the laptop as its wired client: it is behind the AP.
+	nodes = build(phoneOnAP, []model.FdbEntry{{MAC: wired, Port: "LAN"}})
+	if _, ok := nodes[segID]; ok || nodes["mac:"+wired].ParentID != apID {
+		t.Fatalf("a client the AP lists stays behind it: %q", nodes["mac:"+wired].ParentID)
+	}
+
+	// An AP that lists no clients: nothing to compare, the old guess stands.
+	nodes = build(nil, nil)
+	if _, ok := nodes[segID]; ok || nodes["mac:"+wired].ParentID != apID {
+		t.Fatalf("without a client list the laptop is behind the AP: %q", nodes["mac:"+wired].ParentID)
+	}
+}

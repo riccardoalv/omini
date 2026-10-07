@@ -158,6 +158,9 @@ type builder struct {
 	// sources keeps every device record merged into a managed node (one per
 	// integration that reports it), so no integration's data is lost.
 	sources map[string][]*model.Device
+	// beside: clients seen on the port towards a device that lists its own
+	// clients without them — an unmanaged switch is on that port.
+	beside map[portKey][]string
 }
 
 // Build computes the topology for the given sources.
@@ -190,6 +193,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 		fdbPorts: map[model.MACAddress][]portKey{},
 		portMACs: map[portKey]int{},
 		sources:  map[string][]*model.Device{},
+		beside:   map[portKey][]string{},
 	}
 	for _, src := range sources {
 		for i := range src.Devices {
@@ -206,6 +210,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 	b.addWANs(managed)
 	b.placeClients(managed)
 	b.groupSegments()
+	b.sharedPorts()
 	b.fillDirectLinkSpeeds()
 	return b.result()
 }
@@ -776,10 +781,16 @@ func (b *builder) placeCollected(
 		} else if port, ok, uplink := b.bestPort(b.fdbOrLast(m), ""); ok {
 			n.ParentID, n.Port, kind = port.node, port.port, EdgeFDB
 			if uplink {
-				// Only seen towards other infrastructure: the client is behind it.
+				// Only seen towards other infrastructure: the client is behind it —
+				// unless that device lists its clients without this one: then both
+				// hang from an unmanaged switch on that port.
 				if behind := b.nodes[b.uplinks[port]]; behind != nil &&
 					(behind.Kind == KindUnmanaged || len(behind.Device.Fdb) == 0) {
-					n.ParentID, n.Port, kind = behind.ID, "", EdgeInferred
+					if b.listsClients(behind.ID) && !b.isClientOf(behind.ID, m) {
+						b.beside[port] = append(b.beside[port], n.ID)
+					} else {
+						n.ParentID, n.Port, kind = behind.ID, "", EdgeInferred
+					}
 				}
 			}
 		} else if a, ok := arp[m]; ok {
@@ -929,6 +940,71 @@ func (b *builder) groupSegments() {
 			delete(b.edges, edgeKey(k.node, c.ID))
 			c.ParentID, c.Port = seg.ID, ""
 			b.addEdge(seg.ID, "", c.ID, "", EdgeInferred, 0)
+		}
+	}
+}
+
+// listsClients: the device's integration reports its clients (an access
+// point's Wi-Fi clients, or the wired ones it sees).
+func (b *builder) listsClients(id string) bool {
+	for _, d := range b.sources[id] {
+		if len(d.WirelessClients) > 0 || len(d.Fdb) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *builder) isClientOf(id string, m model.MACAddress) bool {
+	for _, d := range b.sources[id] {
+		for _, w := range d.WirelessClients {
+			if w.MAC == m {
+				return true
+			}
+		}
+		for _, f := range d.Fdb {
+			if f.MAC == m {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// sharedPorts draws the unmanaged switch found on a port towards a device (see
+// beside): a segment on that port, with the device and those clients under it.
+func (b *builder) sharedPorts() {
+	keys := make([]portKey, 0, len(b.beside))
+	for k := range b.beside {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, func(x, y portKey) int { return strings.Compare(x.node+x.port, y.node+y.port) })
+	for _, k := range keys {
+		dev := b.uplinks[k]
+		clients := b.beside[k]
+		seg := &Node{
+			ID: "seg:" + k.node + ":" + k.port, Kind: KindSegment, Label: "Unmanaged segment",
+			Role: string(model.DeviceRoleUnknown), Online: true, ParentID: k.node, Port: k.port,
+			MACCount: len(clients) + 1,
+		}
+		b.nodes[seg.ID] = seg
+		up := b.edges[edgeKey(k.node, dev)]
+		delete(b.edges, edgeKey(k.node, dev))
+		b.addEdge(k.node, k.port, seg.ID, "", EdgeFDB, portSpeed(b.nodes[k.node].Device, k.port))
+		devPort := ""
+		if up != nil {
+			devPort = up.TargetPort
+		}
+		b.addEdge(seg.ID, "", dev, devPort, EdgeInferred, 0)
+		if n := b.nodes[dev]; n != nil {
+			n.ParentID, n.Port = seg.ID, ""
+		}
+		for _, id := range clients {
+			delete(b.edges, edgeKey(k.node, id))
+			if c := b.nodes[id]; c != nil {
+				c.ParentID, c.Port = seg.ID, ""
+			}
+			b.addEdge(seg.ID, "", id, "", EdgeInferred, 0)
 		}
 	}
 }
