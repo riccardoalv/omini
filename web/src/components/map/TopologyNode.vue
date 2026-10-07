@@ -43,6 +43,14 @@ const identified = computed(() => {
   const node = n.value
   return !!node && (node.type !== 'unknown' || !!node.brand || !!node.product || !!node.icon)
 })
+// Wi-Fi clients: the network and band they use ("IOT · 2.4G"), on the device
+// itself — the links of an access point all leave from one point.
+const wifi = computed(() => {
+  const node = n.value
+  if (!node || node.kind !== 'client' || !node.band) return ''
+  const band = { '2.4ghz': '2.4G', '5ghz': '5G', '6ghz': '6G' }[node.band]
+  return [node.ssid, band].filter(Boolean).join(' · ')
+})
 const sub = computed(() => {
   const node = n.value
   if (!node) return ''
@@ -78,7 +86,14 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     @auxclick.prevent="onAuxClick"
   >
     <Handle type="target" :position="horizontal ? Position.Left : Position.Top" class="handle" />
-    <div v-if="data.flow" class="flow-badge" data-test="node-flow" :title="t('map.trafficHint')">
+    <!-- Clients are leaves stacked close together: their badge goes beside them. -->
+    <div
+      v-if="data.flow"
+      class="flow-badge"
+      :class="{ side: variant === 'client' && horizontal }"
+      data-test="node-flow"
+      :title="t('map.trafficHint')"
+    >
       <span class="down">↓ {{ formatRate(data.flow.down) }}</span>
       <span class="up">↑ {{ formatRate(data.flow.up) }}</span>
     </div>
@@ -106,7 +121,12 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       </span>
       <div class="text">
         <strong>{{ label }}</strong>
-        <span v-if="sub" class="sub">{{ sub }}</span>
+        <span v-if="sub || wifi" class="sub">
+          {{ sub }}
+          <span v-if="wifi" class="wifi-tag" :class="`band-${n.band}`" data-test="wifi-tag">{{
+            wifi
+          }}</span>
+        </span>
       </div>
       <SignalLow v-if="weak" class="warn-icon" :size="14" />
       <Pin v-if="n.pinned" class="pin" :size="12" />
@@ -143,6 +163,12 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   white-space: nowrap;
   transform: translateX(-50%);
   pointer-events: none;
+}
+.flow-badge.side {
+  top: 50%;
+  bottom: auto;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
 }
 .flow-badge .down {
   color: var(--speed-1g);
@@ -275,6 +301,23 @@ strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.wifi-tag {
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.band-2\.4ghz {
+  color: var(--speed-100m);
+}
+.band-5ghz {
+  color: var(--speed-5g);
+}
+.band-6ghz {
+  color: var(--speed-10g);
 }
 .group .sub {
   color: inherit;

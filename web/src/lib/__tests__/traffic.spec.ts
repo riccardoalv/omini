@@ -177,3 +177,10 @@ describe('Wi-Fi clients', () => {
     expect(nodeFlow({ ...phone, flow: { rx_bps: 0, tx_bps: 0 } }, new Map())).toBeUndefined()
   })
 })
+
+describe('Wi-Fi links', () => {
+  it('have no pill: the device shows its network', () => {
+    const edges = [edge(fw.id, 'phone', { source_port: 'IOT · 2.4 GHz', kind: 'wifi' })]
+    expect(linkLabels(edges, [fw, client('phone')]).has(`${fw.id}>phone`)).toBe(false)
+  })
+})
