@@ -39,7 +39,10 @@ type Integration struct {
 	Gateway func() netip.Addr                                                    // default netscan.Gateway
 	Root    *bool                                                                // default: euid == 0
 	ARP     func() map[string]model.MACAddress                                   // default netscan.ARPTable
-	Now     func() time.Time
+	// Privileged: nmap has raw-socket capabilities without running as root
+	// (default OMINI_NMAP_PRIVILEGED=true).
+	Privileged *bool
+	Now        func() time.Time
 
 	mu      sync.Mutex
 	results map[string]result // by settings
@@ -81,7 +84,7 @@ func (*Integration) Info() integration.Info {
 			},
 			{
 				Key: "os_detection", Type: model.FormFieldTypeBool, Label: model.Ptr("Detect operating systems"), Default: true,
-				Help: model.Ptr("nmap -O. Needs Omini to run as root (the Docker image does); otherwise it is skipped."),
+				Help: model.Ptr("nmap -O. Needs root (the Docker image runs as root) or nmap with raw-socket permission and OMINI_NMAP_PRIVILEGED=true; otherwise it is skipped."),
 			},
 			{
 				Key: "versions", Type: model.FormFieldTypeBool, Label: model.Ptr("Detect service versions"), Default: true,
@@ -110,6 +113,10 @@ func (s *Integration) defaults() {
 	}
 	if s.ARP == nil {
 		s.ARP = netscan.ARPTable
+	}
+	if s.Privileged == nil {
+		p := strings.EqualFold(os.Getenv("OMINI_NMAP_PRIVILEGED"), "true")
+		s.Privileged = &p
 	}
 	if s.Root == nil {
 		root := os.Geteuid() == 0
@@ -149,8 +156,8 @@ func (s *Integration) Test(ctx context.Context, cfg integration.Config) (string,
 	}
 	version, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
 	msg := strings.TrimSpace(version)
-	if cfg.Bool("os_detection", true) && !*s.Root {
-		msg += ". Operating system detection needs root: only service versions will be read"
+	if cfg.Bool("os_detection", true) && !s.privileged() {
+		msg += ". Operating system detection needs root or OMINI_NMAP_PRIVILEGED (see the README): only service versions will be read"
 	}
 	return msg, nil
 }
@@ -220,7 +227,7 @@ func (s *Integration) ScanHost(ctx context.Context, cfg integration.Config, ip s
 	if err != nil {
 		return model.Host{}, fmt.Errorf("invalid address %q", ip)
 	}
-	out, err := s.Run(ctx, s.Binary, append(s.baseArgs(cfg), addr.String()))
+	out, err := s.Run(ctx, s.Binary, append(s.deviceArgs(cfg), addr.String()))
 	if errors.Is(err, exec.ErrNotFound) {
 		return model.Host{}, ErrNotInstalled
 	}
@@ -284,6 +291,26 @@ func (s *Integration) args(cfg integration.Config, prefixes []netip.Prefix) []st
 	return args
 }
 
+// deviceArgs scan one device in depth (the user asked for it): the 1024 most
+// common ports, full version detection and the default scripts, plus the
+// operating system and the route when nmap may use raw sockets — what -A does.
+func (s *Integration) deviceArgs(cfg integration.Config) []string {
+	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "300s", "--top-ports", "1024", "-sV", "-sC"}
+	if cfg.Bool("os_detection", true) && s.privileged() {
+		args = append(args, "-O", "--traceroute")
+		if !*s.Root {
+			args = append(args, "--privileged")
+		}
+	}
+	return args
+}
+
+// privileged: nmap may use raw sockets, as root or with the capabilities
+// given to its binary (OMINI_NMAP_PRIVILEGED=true, see the README).
+func (s *Integration) privileged() bool {
+	return *s.Root || *s.Privileged
+}
+
 // baseArgs are the nmap options of the settings, without targets.
 func (s *Integration) baseArgs(cfg integration.Config) []string {
 	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "120s"}
@@ -292,8 +319,11 @@ func (s *Integration) baseArgs(cfg integration.Config) []string {
 	} else {
 		args = append(args, "--top-ports", "100")
 	}
-	if cfg.Bool("os_detection", true) && *s.Root {
+	if cfg.Bool("os_detection", true) && s.privileged() {
 		args = append(args, "-O", "--osscan-limit")
+		if !*s.Root {
+			args = append(args, "--privileged")
+		}
 	}
 	return args
 }

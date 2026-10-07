@@ -63,10 +63,11 @@ func newTest(root bool) (*Integration, *fakeNmap) {
 		Subnets: func(string) ([]netip.Prefix, error) {
 			return []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, nil
 		},
-		Gateway: func() netip.Addr { return netip.MustParseAddr("192.168.1.1") },
-		Root:    &root,
-		ARP:     func() map[string]model.MACAddress { return nil },
-		Now:     func() time.Time { return clock },
+		Gateway:    func() netip.Addr { return netip.MustParseAddr("192.168.1.1") },
+		Root:       &root,
+		ARP:        func() map[string]model.MACAddress { return nil },
+		Privileged: func() *bool { f := false; return &f }(),
+		Now:        func() time.Time { return clock },
 	}, f
 }
 
@@ -191,7 +192,14 @@ func TestScanOneDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := strings.Join(f.calls[0], " ")
-	if !strings.HasSuffix(args, " 192.168.1.1") || strings.Contains(args, "/24") || !strings.Contains(args, "-sV") {
+	// One device in depth: the 1024 top ports, full versions, default scripts,
+	// OS and route (root here) — like -A.
+	for _, want := range []string{"--top-ports 1024", "-sV", "-sC", "-O", "--traceroute"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args %q lack %q", args, want)
+		}
+	}
+	if !strings.HasSuffix(args, " 192.168.1.1") || strings.Contains(args, "/24") || strings.Contains(args, "--version-light") {
 		t.Fatalf("args: %q", args)
 	}
 	if host.IP != "192.168.1.1" || len(host.OpenPorts) != 1 {
@@ -216,5 +224,20 @@ func TestScanOneDeviceThatDoesNotAnswer(t *testing.T) {
 	}
 	if _, err := s.ScanHost(context.Background(), integration.Config{}, "192.168.1.9"); !errors.Is(err, ErrNoAnswer) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestPrivilegedWithoutRoot(t *testing.T) {
+	s, f := newTest(false)
+	yes := true
+	s.Privileged = &yes
+	_, _ = s.ScanHost(context.Background(), integration.Config{}, "192.168.1.1")
+	args := strings.Join(f.calls[0], " ")
+	if !strings.Contains(args, "-O") || !strings.Contains(args, "--privileged") {
+		t.Fatalf("with capabilities, OS detection runs with --privileged: %q", args)
+	}
+	msg, _ := s.Test(context.Background(), integration.Config{})
+	if strings.Contains(msg, "needs root") {
+		t.Fatalf("no warning when privileged: %q", msg)
 	}
 }

@@ -764,7 +764,7 @@ func (s *Server) scanNode(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
-		ctx, cancel := contextWithTimeout(r, 3*time.Minute)
+		ctx, cancel := contextWithTimeout(r, 6*time.Minute) // nmap gives up on the host after 5
 		defer cancel()
 		host, err := scanner.ScanHost(ctx, cfg, ip)
 		if err != nil {

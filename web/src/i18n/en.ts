@@ -90,8 +90,9 @@ export default {
   },
   panel: {
     scan: 'Scan (nmap)',
-    scanning: 'Scanning… (up to a minute)',
-    scanHint: 'Scan this device with nmap now: open ports, service versions and system.',
+    scanning: 'Scanning… (a few minutes)',
+    scanHint:
+      'Deep nmap scan of this device: the 1024 most common ports, service versions, default scripts and, with permission, the operating system (like nmap -A).',
     scanned: 'Scanned: {result}.',
     scanPorts: 'no open ports | 1 open port | {n} open ports',
     portLabel: 'Describe this port',

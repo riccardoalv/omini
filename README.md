@@ -198,6 +198,7 @@ Without Docker: `make run` builds and starts Omini (needs Go and Node.js; plugin
 | `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |
 | `OMINI_NMAP` | — | Docker image only: `install` installs nmap on start, for the nmap integration (Omini does not ship nmap) |
+| `OMINI_NMAP_PRIVILEGED` | `false` | `true` when nmap has raw-socket permission without Omini running as root, so it detects operating systems (see below) |
 | `OMINI_PLUGIN_DIRS` | — | Comma-separated plugin folders loaded in place (plugin development) |
 | `OMINI_UV` | `uv` | The uv binary used to build plugin environments |
 
@@ -240,6 +241,19 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 - **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. The network scan finds them by itself and tries the community `public`; if yours is different, add it in *Integrations → Network scan → SNMP communities*. Without LLDP Omini still works, but links between switches become *inferred*.
 - **Plugins:** install them in *Settings → Plugins* from their GitHub URL (Omini installs the latest release). Plugins run in their own Python environment, created with [uv](https://docs.astral.sh/uv/) — the Docker image includes it; when running the binary directly, install uv first.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
+
+### nmap without root
+
+The nmap integration detects operating systems (`-O`) only with raw sockets. The Docker image runs as root, so it does. Running the binary as a normal user, give nmap the permission and tell Omini:
+
+```bash
+sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(command -v nmap)"
+OMINI_NMAP_PRIVILEGED=true ./omini
+```
+
+On NixOS, the store is read-only: use a wrapper instead (`security.wrappers.nmap = { source = "${pkgs.nmap}/bin/nmap"; capabilities = "cap_net_raw,cap_net_admin,cap_net_bind_service+eip"; owner = "root"; group = "root"; };`), which puts it in `/run/wrappers/bin`.
+
+Each device can also be scanned in depth from its panel ("Scan (nmap)"): the 1024 most common ports, service versions and default scripts, plus the operating system and route with that permission — like `nmap -A`.
 
 ## Security
 

@@ -93,9 +93,9 @@ const ptBR: typeof en = {
   },
   panel: {
     scan: 'Escanear (nmap)',
-    scanning: 'Escaneando… (até um minuto)',
+    scanning: 'Escaneando… (alguns minutos)',
     scanHint:
-      'Escaneia este dispositivo com o nmap agora: portas abertas, versões dos serviços e sistema.',
+      'Varredura profunda deste dispositivo com o nmap: as 1024 portas mais comuns, versões dos serviços, scripts padrão e, com permissão, o sistema operacional (como nmap -A).',
     scanned: 'Escaneado: {result}.',
     scanPorts: 'nenhuma porta aberta | 1 porta aberta | {n} portas abertas',
     portLabel: 'Descrever esta porta',
@@ -294,7 +294,7 @@ const ptBR: typeof en = {
       },
       os_detection: {
         label: 'Detectar sistemas operacionais',
-        help: 'nmap -O. Precisa que o Omini rode como root (a imagem Docker roda); senão é ignorado.',
+        help: 'nmap -O. Precisa de root (a imagem Docker roda como root) ou do nmap com permissão de rede e OMINI_NMAP_PRIVILEGED=true; senão é ignorado.',
       },
       versions: {
         label: 'Detectar versões dos serviços',
