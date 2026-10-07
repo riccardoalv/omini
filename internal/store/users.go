@@ -11,6 +11,7 @@ type User struct {
 	ID           int64
 	Username     string
 	PasswordHash string
+	Locale       string // UI language; empty means the browser default
 	CreatedAt    time.Time
 }
 
@@ -37,13 +38,25 @@ func (s *Store) GetUserByName(ctx context.Context, username string) (User, error
 		created int64
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, created_at FROM users WHERE username = ?`, username).
-		Scan(&u.ID, &u.Username, &u.PasswordHash, &created)
+		`SELECT id, username, password_hash, locale, created_at FROM users WHERE username = ?`, username).
+		Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Locale, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, ErrNotFound
 	}
 	u.CreatedAt = fromUnix(created)
 	return u, err
+}
+
+// SetUserLocale saves the user's UI language.
+func (s *Store) SetUserLocale(ctx context.Context, userID int64, locale string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET locale = ? WHERE id = ?`, locale, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // CreateSession stores a session by the hash of its token (never the token itself).
@@ -60,10 +73,10 @@ func (s *Store) GetSessionUser(ctx context.Context, tokenHash string, now time.T
 		created int64
 	)
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.username, u.password_hash, u.created_at
+		SELECT u.id, u.username, u.password_hash, u.locale, u.created_at
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ? AND s.expires_at > ?`, tokenHash, unix(now)).
-		Scan(&u.ID, &u.Username, &u.PasswordHash, &created)
+		Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Locale, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, ErrNotFound
 	}

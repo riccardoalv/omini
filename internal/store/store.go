@@ -98,6 +98,14 @@ var migrations = []string{
 		created_at INTEGER NOT NULL
 	);
 	`,
+	// 4: per-user preferences.
+	`
+	ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT ''; -- UI language, e.g. "pt-BR"; '' = browser default
+	`,
+	// 5: areas remember their nodes, so they follow them when the map is laid out again.
+	`
+	ALTER TABLE areas ADD COLUMN members TEXT NOT NULL DEFAULT '[]'; -- JSON array of node ids
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

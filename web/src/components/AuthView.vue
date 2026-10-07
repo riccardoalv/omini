@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
+import { prefs } from '@/lib/prefs'
 import { session, signedIn } from '@/lib/session'
 
 import Logo from './LogoMark.vue'
@@ -25,9 +26,9 @@ async function submit() {
   busy.value = true
   try {
     const res = setup.value
-      ? await api.setup(username.value, password.value)
+      ? await api.setup(username.value, password.value, prefs.locale)
       : await api.login(username.value, password.value)
-    signedIn(res.username ?? username.value)
+    signedIn({ ...res, username: res.username ?? username.value })
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : t('common.error')
   } finally {

@@ -114,6 +114,8 @@ export interface MapArea {
   y: number
   width: number
   height: number
+  /** Node ids inside the area; it is drawn around them. */
+  members: string[]
 }
 
 export type FieldType = 'string' | 'secret' | 'host' | 'url' | 'int' | 'bool' | 'select'
@@ -178,6 +180,8 @@ export interface AuthStatus {
   setup_required: boolean
   authenticated: boolean
   username?: string
+  /** The user's UI language; empty means the browser default. */
+  locale?: string
 }
 
 export interface TestResult {

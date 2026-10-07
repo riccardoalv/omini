@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { locales } from '@/i18n'
 import { api } from '@/lib/api'
 import { prefs } from '@/lib/prefs'
-import { session, signOut } from '@/lib/session'
+import { session, setLocale, signOut } from '@/lib/session'
 
 const { t } = useI18n()
 const version = ref('')
@@ -37,7 +37,12 @@ onMounted(async () => {
       </div>
       <div class="field">
         <label for="s-locale">{{ t('settings.language') }}</label>
-        <select id="s-locale" v-model="prefs.locale" class="select">
+        <select
+          id="s-locale"
+          :value="prefs.locale"
+          class="select"
+          @change="setLocale(($event.target as HTMLSelectElement).value)"
+        >
           <option v-for="l in locales" :key="l.code" :value="l.code">{{ l.name }}</option>
         </select>
       </div>

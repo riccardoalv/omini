@@ -16,6 +16,7 @@ const area: MapArea = {
   y: 0,
   width: 300,
   height: 200,
+  members: [],
 }
 
 const mountArea = (editing = false, zoom = 1) =>

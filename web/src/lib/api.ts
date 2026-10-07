@@ -70,11 +70,12 @@ export interface IntegrationInput {
 
 export const api = {
   authStatus: () => request<AuthStatus>('GET', '/api/auth/status'),
-  setup: (username: string, password: string) =>
-    request<AuthStatus>('POST', '/api/auth/setup', { username, password }),
+  setup: (username: string, password: string, locale?: string) =>
+    request<AuthStatus>('POST', '/api/auth/setup', { username, password, locale }),
   login: (username: string, password: string) =>
     request<AuthStatus>('POST', '/api/auth/login', { username, password }),
   logout: () => request<AuthStatus>('POST', '/api/auth/logout'),
+  updateMe: (input: { locale?: string }) => request<AuthStatus>('PATCH', '/api/me', input),
 
   health: () => request<{ status: string; version: string }>('GET', '/api/health'),
 

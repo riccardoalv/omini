@@ -490,3 +490,40 @@ func TestMapAreas(t *testing.T) {
 		t.Fatalf("delete again: %d", code)
 	}
 }
+
+func TestUserLanguageIsSaved(t *testing.T) {
+	h := newHarness(t, nil)
+
+	// The language picked on the setup screen becomes the user's language.
+	var me map[string]any
+	if code := h.do("POST", "/api/auth/setup", map[string]string{"username": "admin", "password": "correct horse", "locale": "pt-BR"}, &me); code != 200 {
+		t.Fatalf("setup: %d", code)
+	}
+	if me["locale"] != "pt-BR" {
+		t.Fatalf("setup response: %v", me)
+	}
+
+	if code := h.do("PATCH", "/api/me", map[string]string{"locale": "en"}, &me); code != 200 || me["locale"] != "en" {
+		t.Fatalf("update: %d %v", code, me)
+	}
+	if code := h.do("PATCH", "/api/me", map[string]string{"locale": "xx"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("unknown language: %d", code)
+	}
+
+	// Another browser: the login brings the saved language.
+	h.do("POST", "/api/auth/logout", nil, nil)
+	h.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "correct horse"}, &me)
+	if me["locale"] != "en" || me["username"] != "admin" {
+		t.Fatalf("login response: %v", me)
+	}
+	var status map[string]any
+	h.do("GET", "/api/auth/status", nil, &status)
+	if status["locale"] != "en" {
+		t.Fatalf("status: %v", status)
+	}
+
+	h.do("POST", "/api/auth/logout", nil, nil)
+	if code := h.do("PATCH", "/api/me", map[string]string{"locale": "en"}, nil); code != http.StatusUnauthorized {
+		t.Fatalf("update without login: %d", code)
+	}
+}

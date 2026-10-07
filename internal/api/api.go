@@ -69,6 +69,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Authenticated endpoints.
 	private := http.NewServeMux()
+	private.HandleFunc("PATCH /api/me", s.updateMe)
 	private.HandleFunc("GET /api/integration-types", s.integrationTypes)
 	private.HandleFunc("GET /api/integrations", s.listIntegrations)
 	private.HandleFunc("POST /api/integrations", s.createIntegration)

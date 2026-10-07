@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,16 +13,18 @@ import (
 )
 
 // Area is a named rectangle drawn on the map to group devices (e.g. "Rack",
-// "Living room"). Membership is geometric: the nodes inside it move with it.
+// "Living room"). It remembers its member nodes and is drawn around them; the
+// stored rectangle is used while no member is on the map.
 type Area struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Color     string  `json:"color"`
-	Direction string  `json:"direction"` // map orientation the area belongs to: RIGHT | DOWN
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Width     float64 `json:"width"`
-	Height    float64 `json:"height"`
+	ID        int64    `json:"id"`
+	Name      string   `json:"name"`
+	Color     string   `json:"color"`
+	Direction string   `json:"direction"` // map orientation the area belongs to: RIGHT | DOWN
+	X         float64  `json:"x"`
+	Y         float64  `json:"y"`
+	Width     float64  `json:"width"`
+	Height    float64  `json:"height"`
+	Members   []string `json:"members"` // node ids; the area is drawn around them
 }
 
 // AreaColors are the colors offered by the UI.
@@ -30,16 +33,18 @@ var AreaColors = []string{"gray", "blue", "green", "yellow", "red", "purple"}
 const (
 	minAreaSize    = 60
 	maxAreaNameLen = 60
+	maxAreaMembers = 1000
 )
 
 // AreaUpdate changes the given fields of an area; nil fields are kept.
 type AreaUpdate struct {
-	Name   *string  `json:"name"`
-	Color  *string  `json:"color"`
-	X      *float64 `json:"x"`
-	Y      *float64 `json:"y"`
-	Width  *float64 `json:"width"`
-	Height *float64 `json:"height"`
+	Name    *string   `json:"name"`
+	Color   *string   `json:"color"`
+	X       *float64  `json:"x"`
+	Y       *float64  `json:"y"`
+	Width   *float64  `json:"width"`
+	Height  *float64  `json:"height"`
+	Members *[]string `json:"members"`
 }
 
 // ErrInvalidArea is returned for areas with an invalid name, color, orientation or size.
@@ -56,36 +61,49 @@ func (a *Area) validate() error {
 		return fmt.Errorf("%w: the direction must be RIGHT or DOWN", ErrInvalidArea)
 	case a.Width < minAreaSize || a.Height < minAreaSize:
 		return fmt.Errorf("%w: an area must be at least %dx%d", ErrInvalidArea, minAreaSize, minAreaSize)
+	case len(a.Members) > maxAreaMembers:
+		return fmt.Errorf("%w: at most %d devices per area", ErrInvalidArea, maxAreaMembers)
+	}
+	if a.Members == nil {
+		a.Members = []string{}
 	}
 	return nil
 }
 
 func (s *Store) ListAreas(ctx context.Context) ([]Area, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, color, direction, x, y, width, height FROM areas ORDER BY id`)
+		SELECT id, name, color, direction, x, y, width, height, members FROM areas ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Area{}
 	for rows.Next() {
-		var a Area
-		if err := rows.Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height); err != nil {
+		var (
+			a       Area
+			members string
+		)
+		if err := rows.Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height, &members); err != nil {
 			return nil, err
 		}
+		a.Members = decodeMembers(members)
 		out = append(out, a)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) GetArea(ctx context.Context, id int64) (Area, error) {
-	var a Area
+	var (
+		a       Area
+		members string
+	)
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, color, direction, x, y, width, height FROM areas WHERE id = ?`, id).
-		Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height)
+		SELECT id, name, color, direction, x, y, width, height, members FROM areas WHERE id = ?`, id).
+		Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height, &members)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
+	a.Members = decodeMembers(members)
 	return a, err
 }
 
@@ -94,9 +112,9 @@ func (s *Store) CreateArea(ctx context.Context, a Area) (Area, error) {
 		return a, err
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO areas (name, color, direction, x, y, width, height, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.Name, a.Color, a.Direction, a.X, a.Y, a.Width, a.Height, time.Now().Unix())
+		INSERT INTO areas (name, color, direction, x, y, width, height, members, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.Name, a.Color, a.Direction, a.X, a.Y, a.Width, a.Height, encodeMembers(a.Members), time.Now().Unix())
 	if err != nil {
 		return a, err
 	}
@@ -125,12 +143,15 @@ func (s *Store) UpdateArea(ctx context.Context, id int64, u AreaUpdate) (Area, e
 	setF(&a.Y, u.Y)
 	setF(&a.Width, u.Width)
 	setF(&a.Height, u.Height)
+	if u.Members != nil {
+		a.Members = *u.Members
+	}
 	if err := a.validate(); err != nil {
 		return a, err
 	}
 	_, err = s.db.ExecContext(ctx, `
-		UPDATE areas SET name = ?, color = ?, x = ?, y = ?, width = ?, height = ? WHERE id = ?`,
-		a.Name, a.Color, a.X, a.Y, a.Width, a.Height, id)
+		UPDATE areas SET name = ?, color = ?, x = ?, y = ?, width = ?, height = ?, members = ? WHERE id = ?`,
+		a.Name, a.Color, a.X, a.Y, a.Width, a.Height, encodeMembers(a.Members), id)
 	return a, err
 }
 
@@ -143,4 +164,15 @@ func (s *Store) DeleteArea(ctx context.Context, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func encodeMembers(m []string) string {
+	b, _ := json.Marshal(m)
+	return string(b)
+}
+
+func decodeMembers(s string) []string {
+	out := []string{}
+	_ = json.Unmarshal([]byte(s), &out)
+	return out
 }

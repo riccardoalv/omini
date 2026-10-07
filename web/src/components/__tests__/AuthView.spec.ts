@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { prefs } from '@/lib/prefs'
 import { session } from '@/lib/session'
 
 import AuthView from '../AuthView.vue'
@@ -26,6 +27,7 @@ describe('AuthView', () => {
   beforeEach(() => {
     vi.mocked(api.setup).mockReset()
     vi.mocked(api.login).mockReset()
+    prefs.locale = 'en'
     Object.assign(session, {
       ready: true,
       authenticated: false,
@@ -49,7 +51,7 @@ describe('AuthView', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
 
-    expect(api.setup).toHaveBeenCalledWith('admin', 'homelab123')
+    expect(api.setup).toHaveBeenCalledWith('admin', 'homelab123', 'en') // language picked before login
     expect(session.authenticated).toBe(true)
   })
 
@@ -76,5 +78,21 @@ describe('AuthView', () => {
 
     expect(w.get('[role=alert]').text()).toBe('invalid username or password')
     expect(session.authenticated).toBe(false)
+  })
+
+  it('switches to the language saved for the user on login', async () => {
+    vi.mocked(api.login).mockResolvedValue({
+      setup_required: false,
+      authenticated: true,
+      username: 'admin',
+      locale: 'pt-BR',
+    })
+    const w = mountView()
+    await w.get('#password').setValue('homelab123')
+    await w.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(session.authenticated).toBe(true)
+    expect(prefs.locale).toBe('pt-BR')
   })
 })

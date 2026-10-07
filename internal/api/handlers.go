@@ -22,6 +22,16 @@ import (
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Locale   string `json:"locale"` // setup only: the language chosen before the account existed
+}
+
+// locales are the UI languages; an empty locale means the browser default.
+var locales = map[string]bool{"": true, "en": true, "pt-BR": true}
+
+type userView struct {
+	Authenticated bool   `json:"authenticated"`
+	Username      string `json:"username"`
+	Locale        string `json:"locale"`
 }
 
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +42,7 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]any{"setup_required": required, "authenticated": false}
 	if u, err := s.Auth.Authenticate(r.Context(), sessionToken(r)); err == nil {
-		resp["authenticated"], resp["username"] = true, u.Username
+		resp["authenticated"], resp["username"], resp["locale"] = true, u.Username, u.Locale
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -52,7 +62,25 @@ func (s *Server) authSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, token, expires)
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": strings.TrimSpace(c.Username)})
+	s.signedIn(w, r, c.Username, c.Locale)
+}
+
+// signedIn answers a successful setup or login with the user's preferences.
+// A locale sent at setup becomes the user's language.
+func (s *Server) signedIn(w http.ResponseWriter, r *http.Request, username, locale string) {
+	u, err := s.Store.GetUserByName(r.Context(), strings.TrimSpace(username))
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if locale != "" && locales[locale] && u.Locale == "" {
+		if err := s.Store.SetUserLocale(r.Context(), u.ID, locale); err != nil {
+			internalError(w, err)
+			return
+		}
+		u.Locale = locale
+	}
+	writeJSON(w, http.StatusOK, userView{Authenticated: true, Username: u.Username, Locale: u.Locale})
 }
 
 func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +98,34 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setSessionCookie(w, r, token, expires)
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": strings.TrimSpace(c.Username)})
+	s.signedIn(w, r, c.Username, "")
+}
+
+// updateMe saves the signed-in user's preferences.
+func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
+	u, err := s.Auth.Authenticate(r.Context(), sessionToken(r))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "login required")
+		return
+	}
+	var in struct {
+		Locale *string `json:"locale"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if in.Locale != nil {
+		if !locales[*in.Locale] {
+			writeError(w, http.StatusBadRequest, "unknown language")
+			return
+		}
+		if err := s.Store.SetUserLocale(r.Context(), u.ID, *in.Locale); err != nil {
+			internalError(w, err)
+			return
+		}
+		u.Locale = *in.Locale
+	}
+	writeJSON(w, http.StatusOK, userView{Authenticated: true, Username: u.Username, Locale: u.Locale})
 }
 
 func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {

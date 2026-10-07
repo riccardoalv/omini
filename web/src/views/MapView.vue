@@ -22,7 +22,15 @@ import NodeMenu from '@/components/map/NodeMenu.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
-import { areaIdOf, areaNodeId, MIN_AREA_SIZE, membersOf, rectFrom } from '@/lib/areas'
+import {
+  areaIdOf,
+  areaNodeId,
+  fitArea,
+  MIN_AREA_SIZE,
+  membersOf,
+  rectFrom,
+  regroup,
+} from '@/lib/areas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
 import { alignOn, layout, layoutKey, positionsFor } from '@/lib/layout'
@@ -230,7 +238,7 @@ const draggedPositions: Record<string, Point> = {}
 
 async function onDragStop(e: NodeDragEvent) {
   if (areaDrag) {
-    await finishAreaDrag(e)
+    await finishAreaDrag()
     return
   }
   const moved: Record<string, Point> = {}
@@ -242,39 +250,74 @@ async function onDragStop(e: NodeDragEvent) {
   }
   Object.assign(draggedPositions, saved)
   positions.value = { ...positions.value, ...moved }
-  await api.saveLayout(saved)
+  await Promise.all([api.saveLayout(saved), regroupDropped(Object.keys(moved))])
 }
 
 // --- map areas ---
 
 const areas = ref<MapArea[]>([])
-const visibleAreas = computed(() =>
-  areas.value.filter((a) => a.direction === prefs.layoutDirection),
-)
 const editingArea = ref<number>()
 const areaBusy = ref(false) // dragging or resizing
+/** Rectangles held still while something is being dragged or resized. */
+const frozen = ref<Record<number, { x: number; y: number; width: number; height: number }>>({})
 
-/** Boxes of everything laid out on the map, to find the members of an area. */
-function boxes() {
-  return [
-    ...view.value.nodes.map((n) => ({ id: n.id, kind: n.kind })),
-    ...view.value.groups.map((g) => ({ id: g.id, kind: 'group' })),
-  ]
-    .filter((b) => positions.value[b.id])
-    .map((b) => ({ id: b.id, ...positions.value[b.id]!, ...SIZES[b.kind]! }))
+/** Boxes of the nodes laid out on the map. */
+const nodeBoxes = computed(
+  () =>
+    new Map(
+      view.value.nodes
+        .filter((n) => positions.value[n.id])
+        .map((n) => [n.id, { id: n.id, ...positions.value[n.id]!, ...SIZES[n.kind]! }]),
+    ),
+)
+
+/** Areas of the current orientation, drawn around their members. */
+const visibleAreas = computed(() =>
+  areas.value
+    .filter((a) => a.direction === prefs.layoutDirection)
+    .map((a) => ({ ...a, ...(frozen.value[a.id] ?? fitArea(a, nodeBoxes.value)) })),
+)
+
+function freezeAreas() {
+  frozen.value = Object.fromEntries(
+    visibleAreas.value.map((a) => [a.id, { x: a.x, y: a.y, width: a.width, height: a.height }]),
+  )
 }
 
-// Moving an area moves the nodes inside it.
+function patchArea(id: number, patch: Partial<MapArea>) {
+  areas.value = areas.value.map((a) => (a.id === id ? { ...a, ...patch } : a))
+}
+
+/** Saves an area with its current rectangle (used while no member is on the map). */
+async function saveArea(id: number, patch: Partial<MapArea> = {}) {
+  const shown = visibleAreas.value.find((a) => a.id === id)
+  const rect = shown
+    ? {
+        x: Math.round(shown.x),
+        y: Math.round(shown.y),
+        width: Math.round(shown.width),
+        height: Math.round(shown.height),
+      }
+    : {}
+  patchArea(id, { ...rect, ...patch })
+  await api.updateArea(id, { ...rect, ...patch })
+}
+
+// Moving an area moves its members.
 let areaDrag: { id: number; start: Point; members: Record<string, Point> } | undefined
 
 function onDragStart(e: NodeDragEvent) {
   const id = areaIdOf(e.node.id)
-  const area = areas.value.find((a) => a.id === id)
-  if (!area) return
+  const area = visibleAreas.value.find((a) => a.id === id)
   areaBusy.value = true
+  if (!area) {
+    freezeAreas() // a device is dragged: areas keep their shape until it is dropped
+    return
+  }
   const members: Record<string, Point> = {}
-  for (const m of membersOf(area, boxes())) members[m] = { ...positions.value[m]! }
+  for (const m of area.members) if (positions.value[m]) members[m] = { ...positions.value[m]! }
   areaDrag = { id: area.id, start: { x: area.x, y: area.y }, members }
+  frozen.value = { [area.id]: { x: area.x, y: area.y, width: area.width, height: area.height } }
 }
 
 function onDrag(e: NodeDragEvent) {
@@ -284,16 +327,13 @@ function onDrag(e: NodeDragEvent) {
   const next = { ...positions.value }
   for (const [m, p] of Object.entries(areaDrag.members)) next[m] = { x: p.x + dx, y: p.y + dy }
   positions.value = next
-  // The node list is rebuilt from the areas: move the area there too, or it snaps back.
-  patchArea(areaDrag.id, { x: e.node.position.x, y: e.node.position.y })
+  const f = frozen.value[areaDrag.id]!
+  frozen.value = { [areaDrag.id]: { ...f, x: e.node.position.x, y: e.node.position.y } }
 }
 
-async function finishAreaDrag(e: NodeDragEvent) {
+async function finishAreaDrag() {
   const drag = areaDrag!
   areaDrag = undefined
-  const x = Math.round(e.node.position.x)
-  const y = Math.round(e.node.position.y)
-  patchArea(drag.id, { x, y })
   const moved: Record<string, Point> = {}
   const saved: Record<string, Point> = {}
   for (const m of Object.keys(drag.members)) {
@@ -305,28 +345,52 @@ async function finishAreaDrag(e: NodeDragEvent) {
   positions.value = { ...positions.value, ...moved }
   try {
     await Promise.all([
-      api.updateArea(drag.id, { x, y }),
+      saveArea(drag.id),
       Object.keys(saved).length ? api.saveLayout(saved) : undefined,
     ])
   } finally {
+    frozen.value = {}
     areaBusy.value = false
   }
 }
 
-function patchArea(id: number, patch: Partial<MapArea>) {
-  areas.value = areas.value.map((a) => (a.id === id ? { ...a, ...patch } : a))
+/** Dropped devices join the area they were dropped in and leave the one they were dragged out of. */
+async function regroupDropped(ids: string[]) {
+  const dropped = ids.map((id) => nodeBoxes.value.get(id)).filter((b) => !!b)
+  const rects = frozen.value
+  const changes: Promise<void>[] = []
+  for (const a of areas.value) {
+    const rect = rects[a.id]
+    if (a.direction !== prefs.layoutDirection || !rect) continue
+    const members = regroup(a.members, rect, dropped)
+    if (members.join() === a.members.join()) continue
+    // The last member left: the area stays where it was.
+    changes.push(saveArea(a.id, members.length ? { members } : { members, ...rect }))
+  }
+  frozen.value = {}
+  areaBusy.value = false
+  await Promise.all(changes)
 }
 
 function resizeArea(id: number, size: { width: number; height: number }) {
   areaBusy.value = true
-  patchArea(id, size)
+  const a = visibleAreas.value.find((x) => x.id === id)
+  if (!a) return
+  frozen.value = { [id]: { x: a.x, y: a.y, ...size } }
 }
 
+/** Resizing changes which devices are inside; the area then fits around them. */
 async function finishResize(id: number) {
-  const a = areas.value.find((x) => x.id === id)
+  const rect = frozen.value[id]
   try {
-    if (a) await api.updateArea(id, { width: a.width, height: a.height })
+    if (rect) {
+      const members = membersOf(rect, [...nodeBoxes.value.values()])
+      patchArea(id, { ...rect, members })
+      frozen.value = {}
+      await api.updateArea(id, { ...rect, members })
+    }
   } finally {
+    frozen.value = {}
     areaBusy.value = false
   }
 }
@@ -389,6 +453,7 @@ async function onDrawEnd() {
     y: Math.round(r.y),
     width: Math.round(r.width),
     height: Math.round(r.height),
+    members: membersOf(r, [...nodeBoxes.value.values()]),
   })
   areas.value = [...areas.value, created]
   editingArea.value = created.id // name it right away

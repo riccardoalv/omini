@@ -28,13 +28,13 @@ watch(
   },
   { immediate: true },
 )
-// A new node stays hidden until Vue Flow has measured it: retry for a few frames.
+// A new node stays hidden until Vue Flow has measured it: retry for a moment.
 function focusInput(tries = 20) {
   const el = input.value
   if (!el) return
   el.focus()
   if (document.activeElement === el) el.select()
-  else if (tries > 0) requestAnimationFrame(() => focusInput(tries - 1))
+  else if (tries > 0) setTimeout(() => focusInput(tries - 1), 25)
 }
 function commit() {
   if (!props.editing) return
