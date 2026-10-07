@@ -22,13 +22,14 @@ type Integration struct {
 	Type      string             `json:"type"`
 	Config    integration.Config `json:"config"`
 	Enabled   bool               `json:"enabled"`
+	IntervalS int                `json:"interval_s"` // seconds between collections; 0 = default
 	CreatedAt time.Time          `json:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 func (s *Store) ListIntegrations(ctx context.Context) ([]Integration, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, type, config, enabled, created_at, updated_at FROM integrations ORDER BY id`)
+		`SELECT id, name, type, config, enabled, created_at, updated_at, interval_s FROM integrations ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,7 @@ func (s *Store) ListIntegrations(ctx context.Context) ([]Integration, error) {
 
 func (s *Store) GetIntegration(ctx context.Context, id int64) (Integration, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, name, type, config, enabled, created_at, updated_at FROM integrations WHERE id = ?`, id)
+		`SELECT id, name, type, config, enabled, created_at, updated_at, interval_s FROM integrations WHERE id = ?`, id)
 	i, err := scanIntegration(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, ErrNotFound
@@ -61,8 +62,8 @@ func (s *Store) CreateIntegration(ctx context.Context, i Integration) (Integrati
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO integrations (name, type, config, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		i.Name, i.Type, string(cfg), boolInt(i.Enabled), unix(now), unix(now))
+		`INSERT INTO integrations (name, type, config, enabled, created_at, updated_at, interval_s) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		i.Name, i.Type, string(cfg), boolInt(i.Enabled), unix(now), unix(now), i.IntervalS)
 	if err != nil {
 		return i, err
 	}
@@ -78,8 +79,8 @@ func (s *Store) UpdateIntegration(ctx context.Context, i Integration) (Integrati
 	}
 	now := time.Now().UTC().Truncate(time.Second)
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE integrations SET name = ?, config = ?, enabled = ?, updated_at = ? WHERE id = ?`,
-		i.Name, string(cfg), boolInt(i.Enabled), unix(now), i.ID)
+		`UPDATE integrations SET name = ?, config = ?, enabled = ?, updated_at = ?, interval_s = ? WHERE id = ?`,
+		i.Name, string(cfg), boolInt(i.Enabled), unix(now), i.IntervalS, i.ID)
 	if err != nil {
 		return i, err
 	}
@@ -109,7 +110,7 @@ func scanIntegration(r scanner) (Integration, error) {
 		enabled            int
 		created, updatedAt int64
 	)
-	if err := r.Scan(&i.ID, &i.Name, &i.Type, &cfg, &enabled, &created, &updatedAt); err != nil {
+	if err := r.Scan(&i.ID, &i.Name, &i.Type, &cfg, &enabled, &created, &updatedAt, &i.IntervalS); err != nil {
 		return i, err
 	}
 	if err := json.Unmarshal([]byte(cfg), &i.Config); err != nil {

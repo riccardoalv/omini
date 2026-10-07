@@ -119,6 +119,10 @@ var migrations = []string{
 		PRIMARY KEY (node_id, port)
 	);
 	`,
+	// 8: collection interval per integration (0 = the global default).
+	`
+	ALTER TABLE integrations ADD COLUMN interval_s INTEGER NOT NULL DEFAULT 0;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

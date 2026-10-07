@@ -68,6 +68,7 @@ export interface IntegrationInput {
   type?: string
   config?: Config
   enabled?: boolean
+  interval_s?: number
 }
 
 export const api = {

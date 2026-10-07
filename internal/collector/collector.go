@@ -92,18 +92,42 @@ func (c *Collector) Run(ctx context.Context) error {
 		return err
 	}
 	c.collectLogged(ctx)
-	ticker := time.NewTicker(c.opts.Interval)
+	// Each integration has its own interval: check often, collect what is due.
+	tick := min(c.opts.Interval, 10*time.Second)
+	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			c.collectLogged(ctx)
+			if err := c.CollectDue(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("collection round failed", "err", err)
+			}
 		case <-c.trigger:
 			c.collectLogged(ctx)
 		}
 	}
+}
+
+// CollectDue collects the integrations whose interval has passed.
+func (c *Collector) CollectDue(ctx context.Context) error { return c.collect(ctx, c.due) }
+
+// interval is how often an integration is collected.
+func (c *Collector) interval(in store.Integration) time.Duration {
+	if in.IntervalS > 0 {
+		return time.Duration(in.IntervalS) * time.Second
+	}
+	return c.opts.Interval
+}
+
+// due reports whether an integration's interval has passed since its last collection.
+func (c *Collector) due(in store.Integration) bool {
+	c.mu.RLock()
+	last, ok := c.snaps[in.ID]
+	c.mu.RUnlock()
+	// A little slack so a 60 s interval checked every 10 s does not slip to 70 s.
+	return !ok || c.opts.Now().Sub(last.CollectedAt) >= c.interval(in)-time.Second
 }
 
 func (c *Collector) collectLogged(ctx context.Context) {
@@ -144,6 +168,12 @@ func (c *Collector) Load(ctx context.Context) error {
 
 // CollectNow runs one collection round over all enabled integrations.
 func (c *Collector) CollectNow(ctx context.Context) error {
+	return c.collect(ctx, func(store.Integration) bool { return true })
+}
+
+// collect runs the enabled integrations selected by pick and rebuilds the map.
+// The others keep their last snapshot.
+func (c *Collector) collect(ctx context.Context, pick func(store.Integration) bool) error {
 	c.round.Lock()
 	defer c.round.Unlock()
 
@@ -152,9 +182,26 @@ func (c *Collector) CollectNow(ctx context.Context) error {
 		return err
 	}
 	var enabled []store.Integration
+	active := map[int64]bool{}
 	for _, in := range all {
-		if in.Enabled {
+		if !in.Enabled {
+			continue
+		}
+		active[in.ID] = true
+		if pick(in) {
 			enabled = append(enabled, in)
+		}
+	}
+	if len(enabled) == 0 {
+		// Nothing due: rebuild only when an integration was disabled or deleted.
+		c.mu.RLock()
+		stale := false
+		for id := range c.snaps {
+			stale = stale || !active[id]
+		}
+		c.mu.RUnlock()
+		if !stale {
+			return nil
 		}
 	}
 
@@ -172,7 +219,14 @@ func (c *Collector) CollectNow(ctx context.Context) error {
 	}
 	wg.Wait()
 
-	snaps := make(map[int64]store.Snapshot, len(results))
+	c.mu.Lock()
+	snaps := make(map[int64]store.Snapshot, len(active))
+	for id, s := range c.snaps {
+		if active[id] { // disabled and deleted integrations drop out here
+			snaps[id] = s
+		}
+	}
+	c.mu.Unlock()
 	for _, r := range results {
 		snaps[r.IntegrationID] = r
 		c.traffic.observe(r)
@@ -181,7 +235,7 @@ func (c *Collector) CollectNow(ctx context.Context) error {
 		}
 	}
 	c.mu.Lock()
-	c.snaps = snaps // disabled and deleted integrations drop out here
+	c.snaps = snaps
 	c.mu.Unlock()
 	return c.rebuild(ctx)
 }

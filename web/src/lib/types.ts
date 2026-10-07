@@ -186,6 +186,8 @@ export interface Integration {
   type: string
   config: Config
   enabled: boolean
+  /** Seconds between collections; 0 = the default. */
+  interval_s?: number
   created_at: string
   updated_at: string
   status?: CollectionStatus

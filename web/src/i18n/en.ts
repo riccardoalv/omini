@@ -227,6 +227,11 @@ export default {
     renamePrompt: 'Name for this device (empty to reset)',
   },
   integrations: {
+    interval: 'Collect every',
+    intervalDefault: 'Default (1 minute)',
+    everySeconds: '{n} seconds',
+    everyMinutes: '{n} minute | {n} minutes',
+    everyHours: '{n} hour | {n} hours',
     moreInStore: 'Find more in the store',
     moreInStoreHint: 'Plugins for firewalls, routers, controllers and more.',
     title: 'Integrations',

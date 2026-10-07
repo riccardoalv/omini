@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -190,6 +192,18 @@ type integrationInput struct {
 	Type    string             `json:"type"`
 	Config  integration.Config `json:"config"`
 	Enabled *bool              `json:"enabled"`
+	// IntervalS is the time between collections in seconds; 0 restores the default.
+	IntervalS *int `json:"interval_s"`
+}
+
+// Collection intervals the UI offers: from 15 s to a day.
+const minInterval, maxInterval = 15, 86400
+
+func validInterval(v *int) error {
+	if v != nil && *v != 0 && (*v < minInterval || *v > maxInterval) {
+		return fmt.Errorf("the collection interval must be between %d seconds and %d hours", minInterval, maxInterval/3600)
+	}
+	return nil
 }
 
 // prepare validates the input config and seals its secrets. stored is the
@@ -226,6 +240,9 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, err := s.prepare(in.Type, in.Config, nil)
+	if err == nil {
+		err = validInterval(in.IntervalS)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -246,7 +263,7 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	enabled := in.Enabled == nil || *in.Enabled
 	created, err := s.Store.CreateIntegration(r.Context(), store.Integration{
-		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled,
+		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled, IntervalS: model.Deref(in.IntervalS),
 	})
 	if err != nil {
 		internalError(w, err)
@@ -287,6 +304,13 @@ func (s *Server) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Enabled != nil {
 		current.Enabled = *in.Enabled
+	}
+	if err := validInterval(in.IntervalS); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if in.IntervalS != nil {
+		current.IntervalS = *in.IntervalS
 	}
 	updated, err := s.Store.UpdateIntegration(r.Context(), current)
 	if err != nil {

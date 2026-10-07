@@ -231,6 +231,11 @@ const ptBR: typeof en = {
     renamePrompt: 'Nome para este dispositivo (vazio para voltar ao original)',
   },
   integrations: {
+    interval: 'Coletar a cada',
+    intervalDefault: 'Padrão (1 minuto)',
+    everySeconds: '{n} segundos',
+    everyMinutes: '{n} minuto | {n} minutos',
+    everyHours: '{n} hora | {n} horas',
     moreInStore: 'Encontrar mais na loja',
     moreInStoreHint: 'Plugins para firewalls, roteadores, controladoras e mais.',
     title: 'Integrações',

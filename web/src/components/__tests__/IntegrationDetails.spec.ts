@@ -14,6 +14,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...mod.api,
       runIntegration: vi.fn<typeof mod.api.runIntegration>(),
+      updateIntegration: vi.fn<typeof mod.api.updateIntegration>(),
       topology: vi.fn<typeof mod.api.topology>(),
     },
   }
@@ -68,5 +69,20 @@ describe('IntegrationDetails run now', () => {
   it('cannot run a disabled integration', () => {
     const w = mountDetails({ ...demo, enabled: false })
     expect(w.get('[data-test=run-now]').attributes('disabled')).toBeDefined()
+  })
+})
+
+describe('IntegrationDetails interval', () => {
+  it('saves the collection interval as soon as it changes', async () => {
+    vi.mocked(api.updateIntegration).mockResolvedValue({ ...demo, interval_s: 300 })
+    const w = mountDetails()
+    const select = w.get('[data-test=interval]')
+    expect((select.element as HTMLSelectElement).value).toBe('0')
+    expect(select.text()).toContain('Default (1 minute)')
+    expect(select.text()).toContain('5 minutes')
+    await select.setValue('300')
+    await flushPromises()
+    expect(api.updateIntegration).toHaveBeenCalledWith(4, { interval_s: 300 })
+    expect(w.emitted('saved')![0]).toEqual([{ ...demo, interval_s: 300 }])
   })
 })

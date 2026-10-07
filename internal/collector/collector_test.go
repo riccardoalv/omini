@@ -327,3 +327,27 @@ func TestCollectIntegrationRunsOneNowAndForces(t *testing.T) {
 		t.Fatalf("disabled integration: err = %v", err)
 	}
 }
+
+func TestEachIntegrationHasItsOwnInterval(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	fast, _ := e.st.CreateIntegration(ctx, store.Integration{Name: "fast", Type: "demo", Enabled: true, IntervalS: 15})
+	slow, _ := e.st.CreateIntegration(ctx, store.Integration{Name: "slow", Type: "demo", Enabled: true, IntervalS: 3600})
+	start := e.clock
+	e.collect(t)
+
+	e.clock = e.clock.Add(20 * time.Second)
+	if err := e.coll.CollectDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	at := map[int64]time.Time{}
+	for _, s := range e.coll.State().Statuses {
+		at[s.IntegrationID] = s.CollectedAt
+	}
+	if !at[fast.ID].Equal(e.clock) {
+		t.Fatalf("the 15 s integration must be collected again after 20 s: %v", at[fast.ID])
+	}
+	if !at[slow.ID].Equal(start) {
+		t.Fatalf("the hourly integration must wait: %v", at[slow.ID])
+	}
+}
