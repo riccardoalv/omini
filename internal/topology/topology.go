@@ -54,6 +54,9 @@ const SegmentMinMACs = 3
 type Rate struct {
 	RxBps uint64 `json:"rx_bps"`
 	TxBps uint64 `json:"tx_bps"`
+	// Errors counted during the same interval.
+	RxErrors uint64 `json:"rx_errors,omitempty"`
+	TxErrors uint64 `json:"tx_errors,omitempty"`
 }
 
 // WANLink describes an internet uplink: the router's WAN interface, the

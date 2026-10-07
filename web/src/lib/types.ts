@@ -124,7 +124,7 @@ export interface TopoNode {
   device?: Device
   wan?: WANLink
   /** Current traffic per interface (bits/s, average of the last polling interval). */
-  traffic?: Record<string, { rx_bps: number; tx_bps: number }>
+  traffic?: Record<string, Rate>
   /** The user's port descriptions, by port name. */
   port_labels?: Record<string, string>
   pinned?: boolean
@@ -172,6 +172,8 @@ export interface Point {
 export interface TopologyResponse {
   topology: { nodes: TopoNode[]; edges: TopoEdge[] }
   statuses: CollectionStatus[]
+  /** Open alerts. */
+  alerts?: Alert[]
   generated_at: string
   layout: Record<string, Point>
   areas?: MapArea[]
@@ -301,4 +303,51 @@ export interface WebService {
   url: string
   port: number
   title?: string
+}
+
+/** Traffic of an interface over the last polling interval. */
+export interface Rate {
+  rx_bps: number
+  tx_bps: number
+  /** Errors counted during the same interval. */
+  rx_errors?: number
+  tx_errors?: number
+}
+
+export type Severity = 'critical' | 'warning' | 'info'
+
+/** An insight that is (or was) true: opened when found, resolved when gone. */
+export interface Alert {
+  id: number
+  key: string
+  rule: string
+  severity: Severity
+  node_id?: string
+  params: Record<string, string | number | boolean>
+  opened_at: string
+  updated_at: string
+  resolved_at?: string
+  dismissed: boolean
+}
+
+/** A device joining or leaving the network. */
+export interface PresenceEvent {
+  id: number
+  node_id: string
+  kind: 'join' | 'leave'
+  at: string
+  /** The first time the device was ever seen. */
+  first?: boolean
+  label?: string
+  mac?: string
+  ip?: string
+}
+
+/** One point of a traffic chart (per minute, or per hour with its peak). */
+export interface TrafficPoint {
+  at: string
+  rx_bps: number
+  tx_bps: number
+  rx_max_bps?: number
+  tx_max_bps?: number
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { Pin, SignalLow, Wifi } from 'lucide-vue-next'
+import { AlertTriangle, Pin, SignalLow, Wifi } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -10,7 +10,7 @@ import type { ClientGroup } from '@/lib/graph'
 import { formatSpeed } from '@/lib/format'
 import { displayName } from '@/lib/names'
 import { type Flow, formatRate } from '@/lib/traffic'
-import type { TopoNode } from '@/lib/types'
+import type { Severity, TopoNode } from '@/lib/types'
 
 export interface NodeData {
   node?: TopoNode
@@ -19,6 +19,8 @@ export interface NodeData {
   direction?: 'RIGHT' | 'DOWN' // where edges enter and leave
   /** Internet traffic of a router/firewall or of a WAN (bits/s). */
   flow?: Flow
+  /** The most severe open alert about this node. */
+  alert?: Severity
 }
 
 const props = defineProps<{ data: NodeData; selected?: boolean }>()
@@ -90,6 +92,17 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       <span class="up">↑ {{ formatRate(data.flow.up) }}</span>
     </div>
 
+    <!-- An open alert (critical or warning): details in the panel and in Insights. -->
+    <span
+      v-if="data.alert && data.alert !== 'info'"
+      class="alert-mark"
+      :class="data.alert"
+      data-test="node-alert"
+      :title="t(`insights.severity.${data.alert}`)"
+    >
+      <AlertTriangle :size="11" :stroke-width="2.5" />
+    </span>
+
     <template v-if="data.group">
       <NodeIcon name="users" :size="16" />
       <div class="text">
@@ -140,6 +153,26 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
 </template>
 
 <style scoped>
+.alert-mark {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  color: #fff;
+  pointer-events: none;
+}
+.alert-mark.critical {
+  background: var(--danger);
+}
+.alert-mark.warning {
+  background: var(--warn);
+}
 .flow-badge {
   position: absolute;
   bottom: calc(100% + 6px);

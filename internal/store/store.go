@@ -132,6 +132,56 @@ var migrations = []string{
 		seen_at INTEGER NOT NULL -- unix seconds
 	);
 	`,
+	// 10: traffic history, presence timeline and alerts.
+	`
+	CREATE TABLE traffic_minutes ( -- one average per minute, kept 24 h
+		node_id TEXT    NOT NULL,
+		iface   TEXT    NOT NULL, -- '' = the node's own traffic (a Wi-Fi client as its AP measures it)
+		at      INTEGER NOT NULL, -- unix seconds, start of the minute
+		rx_bps  INTEGER NOT NULL,
+		tx_bps  INTEGER NOT NULL,
+		PRIMARY KEY (node_id, iface, at)
+	) WITHOUT ROWID;
+	CREATE INDEX traffic_minutes_at ON traffic_minutes(at);
+
+	CREATE TABLE traffic_hours ( -- average and peak per hour, kept a year
+		node_id    TEXT    NOT NULL,
+		iface      TEXT    NOT NULL,
+		at         INTEGER NOT NULL, -- start of the hour
+		rx_bps     INTEGER NOT NULL,
+		tx_bps     INTEGER NOT NULL,
+		rx_max_bps INTEGER NOT NULL,
+		tx_max_bps INTEGER NOT NULL,
+		samples    INTEGER NOT NULL, -- minutes averaged so far
+		PRIMARY KEY (node_id, iface, at)
+	) WITHOUT ROWID;
+	CREATE INDEX traffic_hours_at ON traffic_hours(at);
+
+	CREATE TABLE presence_events (
+		id      INTEGER PRIMARY KEY,
+		node_id TEXT    NOT NULL,
+		kind    TEXT    NOT NULL, -- join | leave
+		at      INTEGER NOT NULL,
+		first   INTEGER NOT NULL DEFAULT 0 -- the first time the device was ever seen
+	);
+	CREATE INDEX presence_events_node ON presence_events(node_id, at);
+	CREATE INDEX presence_events_at ON presence_events(at);
+
+	CREATE TABLE alerts (
+		id          INTEGER PRIMARY KEY,
+		key         TEXT    NOT NULL, -- rule + subject: one open alert per key
+		rule        TEXT    NOT NULL,
+		severity    TEXT    NOT NULL, -- critical | warning | info
+		node_id     TEXT,
+		params      TEXT    NOT NULL DEFAULT '{}',
+		opened_at   INTEGER NOT NULL,
+		updated_at  INTEGER NOT NULL,
+		resolved_at INTEGER,
+		dismissed   INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE UNIQUE INDEX alerts_open ON alerts(key) WHERE resolved_at IS NULL;
+	CREATE INDEX alerts_resolved ON alerts(resolved_at);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

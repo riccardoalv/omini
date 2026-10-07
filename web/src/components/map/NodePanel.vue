@@ -18,8 +18,10 @@ import { useI18n } from 'vue-i18n'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
+import TrafficChart from '@/components/TrafficChart.vue'
 import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
+import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
 import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
@@ -28,7 +30,7 @@ import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
 import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
 import { formatRate, nodeFlow } from '@/lib/traffic'
-import type { Integration, TopoEdge, TopoNode, WebService } from '@/lib/types'
+import type { Integration, PresenceEvent, TopoEdge, TopoNode, WebService } from '@/lib/types'
 
 const props = defineProps<{
   node?: TopoNode
@@ -80,14 +82,53 @@ async function detectWeb(id: string | undefined, ip: string | undefined) {
   }
 }
 
+// The node's recent comings and goings.
+const activity = ref<PresenceEvent[]>([])
+async function loadActivity(id: string | undefined) {
+  activity.value = []
+  if (
+    !id ||
+    props.node?.kind === 'ssid' ||
+    props.node?.kind === 'app' ||
+    props.node?.kind === 'wan'
+  )
+    return
+  try {
+    const got = await api.presence({ node: id, limit: 8 })
+    if (props.node?.id === id) activity.value = got
+  } catch {
+    // best effort
+  }
+}
+
 watch(
   () => props.node?.id,
   (id) => {
     editing.value = false
     error.value = ''
     detectWeb(id, props.node?.ip)
+    loadActivity(id)
   },
   { immediate: true },
+)
+
+/** Open alerts about this node. */
+const nodeAlerts = computed(() =>
+  sortAlerts(alertsState.list.filter((a) => a.node_id === props.node?.id && !a.resolved_at)),
+)
+/** Whose history the panel charts: a Wi-Fi client's own traffic, or a WAN's uplink. */
+const chart = computed(() => {
+  const node = n.value
+  if (!node) return undefined
+  if (node.flow) return { node: node.id, iface: '' }
+  if (node.kind === 'wan' && node.wan) {
+    const owner = node.id.slice(4, node.id.length - node.wan.interface.length - 1)
+    return { node: owner, iface: node.wan.interface }
+  }
+  return undefined
+})
+const activityTime = computed(
+  () => new Intl.DateTimeFormat(locale.value, { dateStyle: 'short', timeStyle: 'short' }),
 )
 
 const n = computed(() => props.node)
@@ -609,6 +650,25 @@ async function save(patch: {
           :storage="n.device?.storage"
         />
 
+        <section v-if="nodeAlerts.length" class="block" data-test="node-alerts">
+          <h3>{{ t('insights.nodeAlerts') }}</h3>
+          <ul class="node-alerts">
+            <li
+              v-for="a in nodeAlerts"
+              :key="a.id"
+              :class="[a.severity, { dismissed: a.dismissed }]"
+            >
+              <strong>{{ alertText(a, t, locale).title }}</strong>
+              <span>{{ alertText(a, t, locale).detail }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="chart" class="block" data-test="node-traffic">
+          <h3>{{ t('traffic.title') }}</h3>
+          <TrafficChart :node="chart.node" :iface="chart.iface" />
+        </section>
+
         <section v-if="n.kind === 'device'" class="block" data-test="ports-section">
           <h3>{{ t('panel.ports') }}</h3>
           <p v-if="!physicalPorts.length" class="muted">{{ t('panel.noPorts') }}</p>
@@ -617,6 +677,7 @@ async function save(patch: {
             :ports="physicalPorts"
             :links="portLinks"
             :labels="n.port_labels"
+            :node-id="n.id"
             @select="(id) => emit('select', id)"
             @label="savePort"
           />
@@ -672,6 +733,23 @@ async function save(patch: {
           >
             {{ allClients ? t('panel.showLess') : t('panel.showAll', { n: children.length }) }}
           </button>
+        </section>
+
+        <section v-if="activity.length" class="block" data-test="node-activity">
+          <h3>{{ t('insights.activity') }}</h3>
+          <ul class="activity">
+            <li v-for="e in activity" :key="e.id" :class="e.first ? 'first' : e.kind">
+              <span class="dot" />
+              <span class="grow">{{
+                e.first
+                  ? t('insights.firstSeen')
+                  : e.kind === 'join'
+                    ? t('insights.joined')
+                    : t('insights.left')
+              }}</span>
+              <span class="muted mono">{{ activityTime.format(new Date(e.at)) }}</span>
+            </li>
+          </ul>
         </section>
 
         <section class="block">
@@ -830,6 +908,63 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.node-alerts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.node-alerts li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--sev);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sev) 10%, transparent);
+  font-size: 13px;
+}
+.node-alerts li span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.node-alerts .critical {
+  --sev: var(--danger);
+}
+.node-alerts .warning {
+  --sev: var(--warn);
+}
+.node-alerts .info {
+  --sev: var(--accent);
+}
+.node-alerts .dismissed {
+  opacity: 0.6;
+}
+.activity {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.activity li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.activity .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.activity .join .dot {
+  background: var(--ok);
+}
+.activity .first .dot {
+  background: var(--accent);
+}
 .spin {
   animation: spin 1.2s linear infinite;
 }

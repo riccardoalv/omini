@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
-import type { Edge, Node, NodeDragEvent, NodeMouseEvent } from '@vue-flow/core'
+import type { Edge, EdgeMouseEvent, Node, NodeDragEvent, NodeMouseEvent } from '@vue-flow/core'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import {
   ArrowDownFromLine,
   ArrowRightFromLine,
+  Bell,
   Download,
   Eye,
   EyeOff,
   LayoutGrid,
   RefreshCw,
   SquareDashed,
+  Waves,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
+import ModalDialog from '@/components/ModalDialog.vue'
+import TrafficChart from '@/components/TrafficChart.vue'
 import AreaMenu from '@/components/map/AreaMenu.vue'
 import AreaNode from '@/components/map/AreaNode.vue'
 import LinkEdge from '@/components/map/LinkEdge.vue'
@@ -24,6 +28,7 @@ import NodeMenu from '@/components/map/NodeMenu.vue'
 import ExportDialog, { type ExportOptions } from '@/components/map/ExportDialog.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
+import { alertsState, attentionCount, worstByNode } from '@/lib/alerts'
 import { api } from '@/lib/api'
 import {
   AREA_PADDING,
@@ -60,7 +65,14 @@ import {
 import { displayName } from '@/lib/names'
 import { download, exportName, mapImage, mapJSON } from '@/lib/export'
 import { applyTheme, prefs } from '@/lib/prefs'
-import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
+import {
+  deviceFlows,
+  edgeMotion,
+  linkLabels,
+  linkSeries,
+  nodeFlow,
+  type LinkSeries,
+} from '@/lib/traffic'
 import type {
   AreaColor,
   Integration,
@@ -85,6 +97,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 const { t, locale } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const {
   fitView,
   getViewport,
@@ -177,8 +190,15 @@ const nodeById = computed(() => new Map(allNodes.value.map((n) => [n.id, n])))
  */
 const linkInfo = computed(() => {
   const labels = linkLabels(view.value.edges, nodes.value)
-  return { labels, flows: deviceFlows(labels, view.value.edges) }
+  return {
+    labels,
+    flows: deviceFlows(labels, view.value.edges),
+    motion: edgeMotion(view.value.edges, nodes.value, labels),
+  }
 })
+/** The most severe open alert of each node: a mark on the node. */
+const alertOf = computed(() => worstByNode(alertsState.list))
+const attention = computed(() => attentionCount(alertsState.list))
 
 const flowNodes = computed<Node[]>(() => {
   const out: Node[] = visibleAreas.value.map((a) => ({
@@ -202,6 +222,7 @@ const flowNodes = computed<Node[]>(() => {
       error: n.integration_id ? failedIntegrations.value.has(n.integration_id) : false,
       direction: direction.value,
       flow: nodeFlow(n, nodeById.value) ?? linkInfo.value.flows.get(n.id),
+      alert: alertOf.value.get(n.id),
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
@@ -234,7 +255,11 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: labels.get(e.id),
+      data: {
+        ...labels.get(e.id),
+        motion: linkInfo.value.motion.get(e.id),
+        animate: prefs.animateFlow,
+      },
       class: { slow: look.slow, offline: target ? !target.online : false },
       style: {
         strokeWidth: look.width,
@@ -255,6 +280,11 @@ async function load() {
     const [topo, ints] = await Promise.all([api.topology(), api.integrations()])
     data.value = topo
     integrations.value = ints
+    if (topo.alerts) {
+      alertsState.list = topo.alerts
+      alertsState.loaded = true
+    }
+    focusRequested()
     // Never overwrite an area while the user is moving, resizing or renaming it.
     if (!areaBusy.value && editingArea.value === undefined) areas.value = topo.areas ?? []
   } finally {
@@ -615,6 +645,37 @@ function toggleDirection() {
   prefs.layoutDirection = prefs.layoutDirection === 'RIGHT' ? 'DOWN' : 'RIGHT'
 }
 
+// A link's traffic over time, shown when the link is clicked.
+const linkChart = ref<LinkSeries>()
+function onEdgeClick(e: EdgeMouseEvent) {
+  const edge = view.value.edges.find((x) => x.id === e.edge.id)
+  const series = edge && linkSeries(edge, nodeById.value)
+  if (!series || !edge) return
+  const name = (id: string) => {
+    const n = nodeById.value.get(id)
+    return n ? displayName(n, t) : id
+  }
+  linkChart.value = { ...series, name: `${name(edge.source)} → ${name(edge.target)}` }
+}
+
+/**
+ * ?node=<id> (from the Insights screen) opens that node's panel and centers
+ * it, expanding the group it is folded into.
+ */
+let focused: string | undefined
+function focusRequested() {
+  const id = typeof route.query.node === 'string' ? route.query.node : undefined
+  if (!id || id === focused || !nodeById.value.has(id)) return
+  focused = id
+  const node = nodeById.value.get(id)!
+  if (node.parent_id && !view.value.nodes.some((n) => n.id === id)) expand(node.parent_id)
+  selectedId.value = id
+  void router.replace({ query: { ...route.query, node: undefined } })
+  setTimeout(() => {
+    void fitView({ nodes: [id], maxZoom: 1.1, duration: 400, padding: 0.4 })
+  }, 600)
+}
+
 function onNodeClick(e: NodeMouseEvent) {
   if (areaIdOf(e.node.id) !== undefined) return
   // A Wi-Fi network has no panel: a click folds or unfolds its clients.
@@ -674,6 +735,7 @@ async function exportMap(options: ExportOptions) {
   const turned = options.direction !== prefs.layoutDirection
   try {
     document.documentElement.dataset.theme = options.theme
+    mapEl.value?.classList.add('exporting')
     await untilLaidOut(() => {
       expandAll.value = true
       exportDirection.value = options.direction
@@ -685,6 +747,7 @@ async function exportMap(options: ExportOptions) {
     exportError.value = t('map.exportFailed')
   } finally {
     applyTheme(prefs.theme)
+    mapEl.value?.classList.remove('exporting')
     await untilLaidOut(() => {
       expandAll.value = false
       exportDirection.value = undefined
@@ -832,6 +895,10 @@ onBeforeUnmount(() => {
       <div class="chips">
         <span class="chip">{{ t('map.devices', summary.devices) }}</span>
         <span class="chip">{{ t('map.clients', summary.clients) }}</span>
+        <RouterLink v-if="attention" to="/insights" class="chip problem" data-test="alerts-chip">
+          <Bell :size="12" />
+          {{ t('map.alerts', { n: attention }, attention) }}
+        </RouterLink>
         <RouterLink v-if="summary.problems" to="/integrations" class="chip problem">
           {{ t('map.problems', summary.problems) }}
         </RouterLink>
@@ -853,6 +920,17 @@ onBeforeUnmount(() => {
             {{ prefs.hideOffline ? t('map.showOffline') : t('map.hideOffline') }}
             <template v-if="offlineCount"> ({{ offlineCount }})</template>
           </span>
+        </button>
+        <button
+          class="btn small"
+          :class="{ active: prefs.animateFlow }"
+          data-test="toggle-motion"
+          :aria-pressed="prefs.animateFlow"
+          :title="t('map.animateFlowHint')"
+          @click="prefs.animateFlow = !prefs.animateFlow"
+        >
+          <Waves :size="15" />
+          <span class="label">{{ t('map.animateFlow') }}</span>
         </button>
         <button
           v-if="hiddenCount"
@@ -933,6 +1011,7 @@ onBeforeUnmount(() => {
       :default-edge-options="{ selectable: false }"
       class="flow"
       @node-click="onNodeClick"
+      @edge-click="onEdgeClick"
       @node-context-menu="onContextMenu"
       @node-drag-start="onDragStart"
       @node-drag="onDrag"
@@ -1001,6 +1080,15 @@ onBeforeUnmount(() => {
       @details="menuAction('details')"
       @close="menu = undefined"
     />
+
+    <ModalDialog
+      v-if="linkChart"
+      :title="t('traffic.link', { name: linkChart.name })"
+      wide
+      @close="linkChart = undefined"
+    >
+      <TrafficChart :node="linkChart.node" :iface="linkChart.iface" :swap="linkChart.swap" />
+    </ModalDialog>
 
     <ExportDialog
       v-if="exportOpen"

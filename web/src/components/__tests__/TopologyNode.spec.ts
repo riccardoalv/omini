@@ -59,3 +59,21 @@ describe('TopologyNode traffic badge', () => {
     expect(at('device')).not.toContain('compact')
   })
 })
+
+describe('TopologyNode alert', () => {
+  const node = { id: 'dev:fw', kind: 'device' as const, label: 'fw', online: true }
+  it('marks a node with an open critical or warning alert', () => {
+    const w = mount(TopologyNode, {
+      props: { data: { node, alert: 'critical' as const } },
+      global: { plugins: plugins(), stubs: { Handle: true } },
+    })
+    expect(w.get('[data-test=node-alert]').classes()).toContain('critical')
+  })
+  it('does not mark informative alerts', () => {
+    const w = mount(TopologyNode, {
+      props: { data: { node, alert: 'info' as const } },
+      global: { plugins: plugins(), stubs: { Handle: true } },
+    })
+    expect(w.find('[data-test=node-alert]').exists()).toBe(false)
+  })
+})

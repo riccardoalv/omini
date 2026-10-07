@@ -38,6 +38,7 @@ type Status struct {
 type State struct {
 	Topology    topology.Topology `json:"topology"`
 	Statuses    []Status          `json:"statuses"`
+	Alerts      []store.Alert     `json:"alerts"` // open alerts
 	GeneratedAt time.Time         `json:"generated_at"`
 }
 
@@ -46,6 +47,8 @@ type Options struct {
 	Timeout     time.Duration    // per integration
 	Concurrency int              // integrations collected in parallel
 	Now         func() time.Time // for tests
+	// OnAlerts is told about alerts opened and resolved (notifications).
+	OnAlerts func([]store.AlertChange)
 }
 
 type Collector struct {
@@ -62,6 +65,8 @@ type Collector struct {
 
 	// Where each MAC was last learned by a switch (see topology.Options).
 	lastSeen map[model.MACAddress]seenAt
+	// Whether each device is present (presence timeline); loaded once.
+	presence map[string]bool
 
 	round   sync.Mutex // one collection round at a time
 	trigger chan struct{}
@@ -85,7 +90,10 @@ func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Optio
 		snaps:   map[int64]store.Snapshot{},
 		traffic: newTrafficMeter(),
 		trigger: make(chan struct{}, 1),
-		state:   State{Topology: topology.Topology{Nodes: []topology.Node{}, Edges: []topology.Edge{}}, Statuses: []Status{}},
+		state: State{
+			Topology: topology.Topology{Nodes: []topology.Node{}, Edges: []topology.Edge{}},
+			Statuses: []Status{}, Alerts: []store.Alert{},
+		},
 	}
 }
 
@@ -384,9 +392,10 @@ func (c *Collector) rebuild(ctx context.Context) error {
 		topo.Nodes[i].PortLabels = labels[topo.Nodes[i].ID]
 	}
 	c.traffic.attach(&topo)
+	alerts := c.watch(ctx, topo, inventory, statuses, now)
 
 	c.mu.Lock()
-	c.state = State{Topology: topo, Statuses: statuses, GeneratedAt: now}
+	c.state = State{Topology: topo, Statuses: statuses, Alerts: alerts, GeneratedAt: now}
 	c.mu.Unlock()
 	return nil
 }

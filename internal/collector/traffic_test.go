@@ -59,3 +59,21 @@ func TestTrafficRatesBetweenCollections(t *testing.T) {
 		t.Fatalf("stale rates: %v", tr)
 	}
 }
+
+func TestInterfaceErrorsBetweenCollections(t *testing.T) {
+	m := newTrafficMeter()
+	t0 := time.Unix(1_790_000_000, 0)
+	snap := func(at time.Time, rxErr uint64) store.Snapshot {
+		s := snapshot(at, 1000, 1000, true)
+		s.Devices[0].Interfaces[0].RxErrors = model.Ptr(rxErr)
+		s.Devices[0].Interfaces[0].TxErrors = model.Ptr(uint64(3))
+		return s
+	}
+	m.observe(snap(t0, 40))
+	m.observe(snap(t0.Add(time.Minute), 52))
+	tp := topology.Topology{Nodes: []topology.Node{{ID: "dev:58:9c:fc:00:00:01", Kind: topology.KindDevice}}}
+	m.attach(&tp)
+	if r := tp.Nodes[0].Traffic["re0"]; r.RxErrors != 12 || r.TxErrors != 0 {
+		t.Fatalf("errors during the interval: %+v", r)
+	}
+}

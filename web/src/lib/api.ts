@@ -1,4 +1,7 @@
 import type {
+  Alert,
+  PresenceEvent,
+  TrafficPoint,
   AuthStatus,
   Config,
   CollectionStatus,
@@ -136,5 +139,26 @@ export const api = {
     request<PluginInfo>('POST', '/api/plugins', { url, version }),
   removePlugin: (id: string) => request<void>('DELETE', `/api/plugins/${encodeURIComponent(id)}`),
 
+  alerts: (resolvedHours?: number) =>
+    request<Alert[]>(
+      'GET',
+      `/api/alerts${resolvedHours ? `?resolved_hours=${resolvedHours}` : ''}`,
+    ),
+  dismissAlert: (id: number, dismissed: boolean) =>
+    request<void>('POST', `/api/alerts/${id}/dismiss`, { dismissed }),
+  presence: (q: { node?: string; before?: number; limit?: number; first?: boolean } = {}) => {
+    const params = new URLSearchParams()
+    if (q.node) params.set('node', q.node)
+    if (q.before) params.set('before', String(q.before))
+    if (q.limit) params.set('limit', String(q.limit))
+    if (q.first) params.set('first', '1')
+    const qs = params.toString()
+    return request<PresenceEvent[]>('GET', `/api/presence${qs ? `?${qs}` : ''}`)
+  },
+  history: (node: string, iface: string, hours = 24) =>
+    request<TrafficPoint[]>(
+      'GET',
+      `/api/history?${new URLSearchParams({ node, iface, hours: String(hours) })}`,
+    ),
   runIntegration: (id: number) => request<CollectionStatus>('POST', `/api/integrations/${id}/run`),
 }

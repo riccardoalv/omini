@@ -421,3 +421,70 @@ func TestRememberedPortsSurviveARestart(t *testing.T) {
 		t.Fatalf("after a restart the phone keeps its port: %+v", n)
 	}
 }
+
+func TestPresenceTimelineAlertsAndHistory(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	phone := model.MACAddress("f0:18:98:00:00:02")
+	tv := model.MACAddress("f0:18:98:00:00:03")
+	sw := model.Device{
+		Key: "aa:00:00:00:00:01", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), CPUPct: model.Ptr(97.0),
+		Fdb:        []model.FdbEntry{{MAC: phone, Port: "ge3"}},
+		Interfaces: []model.Interface{{Name: "ge1", RxBytes: model.Ptr(uint64(0)), TxBytes: model.Ptr(uint64(0))}},
+	}
+	e.fake.set([]model.Device{sw}, nil)
+	s := e.collect(t)
+	if len(s.Alerts) != 1 || s.Alerts[0].Rule != "high_cpu" {
+		t.Fatalf("alerts: %+v", s.Alerts)
+	}
+
+	// The CPU calms down; 60 MB went through ge1 in a minute (8 Mbit/s).
+	sw.CPUPct = model.Ptr(20.0)
+	sw.Interfaces[0].RxBytes = model.Ptr(uint64(60_000_000))
+	sw.Interfaces[0].TxBytes = model.Ptr(uint64(6_000_000))
+	e.fake.set([]model.Device{sw}, nil)
+	e.clock = e.clock.Add(time.Minute)
+	s = e.collect(t)
+	if len(s.Alerts) != 0 {
+		t.Fatalf("resolved alerts still open: %+v", s.Alerts)
+	}
+	hist, err := e.st.TrafficHistory(ctx, "dev:aa:00:00:00:00:01", "ge1", e.clock.Add(-time.Hour), e.clock)
+	if err != nil || len(hist) != 1 || hist[0].RxBps != 8_000_000 {
+		t.Fatalf("history: %+v %v", hist, err)
+	}
+
+	// After the grace period a TV appears: a new device. The phone leaves:
+	// marked gone only once it has been missing long enough.
+	e.clock = e.clock.Add(collector.NewDeviceGrace + time.Minute)
+	sw.Fdb = []model.FdbEntry{{MAC: phone, Port: "ge3"}, {MAC: tv, Port: "ge4"}}
+	e.fake.set([]model.Device{sw}, nil)
+	s = e.collect(t)
+	if len(s.Alerts) != 1 || s.Alerts[0].Rule != "new_device" || s.Alerts[0].NodeID != "mac:"+string(tv) {
+		t.Fatalf("new device: %+v", s.Alerts)
+	}
+	lastSeen := e.clock
+	sw.Fdb = sw.Fdb[1:]
+	e.fake.set([]model.Device{sw}, nil)
+	e.clock = e.clock.Add(time.Minute)
+	e.collect(t)
+	events, _ := e.st.ListPresence(ctx, store.PresenceQuery{NodeID: "mac:" + string(phone)})
+	if len(events) != 1 || events[0].Kind != "join" || !events[0].First {
+		t.Fatalf("phone still present (debounced): %+v", events)
+	}
+	e.clock = e.clock.Add(6 * time.Minute)
+	e.collect(t)
+	events, _ = e.st.ListPresence(ctx, store.PresenceQuery{NodeID: "mac:" + string(phone)})
+	if len(events) != 2 || events[0].Kind != "leave" || !events[0].At.Equal(lastSeen) {
+		t.Fatalf("phone left when it was last seen: %+v", events)
+	}
+	// It comes back.
+	sw.Fdb = append(sw.Fdb, model.FdbEntry{MAC: phone, Port: "ge3"})
+	e.fake.set([]model.Device{sw}, nil)
+	e.clock = e.clock.Add(time.Minute)
+	e.collect(t)
+	events, _ = e.st.ListPresence(ctx, store.PresenceQuery{NodeID: "mac:" + string(phone)})
+	if len(events) != 3 || events[0].Kind != "join" || events[0].First {
+		t.Fatalf("phone came back: %+v", events)
+	}
+}

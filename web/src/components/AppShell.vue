@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  Bell,
   Cable,
   LayoutGrid,
   Network,
@@ -7,8 +8,10 @@ import {
   PanelLeftOpen,
   Settings,
 } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { alertsState, attentionCount, refreshAlerts } from '@/lib/alerts'
 import { prefs } from '@/lib/prefs'
 
 import Logo from './LogoMark.vue'
@@ -18,9 +21,19 @@ const { t } = useI18n()
 const items = [
   { to: '/', icon: Network, label: 'nav.map' },
   { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
+  { to: '/insights', icon: Bell, label: 'nav.insights' },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
   { to: '/settings', icon: Settings, label: 'nav.settings' },
 ]
+
+// The menu shows how many alerts ask for attention.
+const attention = computed(() => attentionCount(alertsState.list))
+let timer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  void refreshAlerts()
+  timer = setInterval(refreshAlerts, 30_000)
+})
+onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
@@ -37,7 +50,15 @@ const items = [
         class="nav-item"
         :title="t(item.label)"
       >
-        <component :is="item.icon" :size="20" :stroke-width="1.75" />
+        <span class="nav-icon">
+          <component :is="item.icon" :size="20" :stroke-width="1.75" />
+          <span
+            v-if="item.to === '/insights' && attention"
+            class="nav-badge"
+            data-test="alerts-badge"
+            >{{ attention > 99 ? '99+' : attention }}</span
+          >
+        </span>
         <span class="nav-label">{{ t(item.label) }}</span>
       </RouterLink>
       <button
@@ -65,6 +86,24 @@ const items = [
 </template>
 
 <style scoped>
+.nav-icon {
+  position: relative;
+  display: inline-flex;
+}
+.nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -9px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
 .shell {
   display: flex;
   height: 100%;

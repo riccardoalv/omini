@@ -3,6 +3,7 @@ import { Check, ExternalLink, Pencil, X } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import TrafficChart from '@/components/TrafficChart.vue'
 import { formatBytes, formatSpeed } from '@/lib/format'
 import { speedColor, speedTier, SPEED_TIERS } from '@/lib/speed'
 import type { Interface, TopoNode } from '@/lib/types'
@@ -18,6 +19,8 @@ const props = defineProps<{
   links: Record<string, TopoNode | undefined>
   /** Names the user gave the ports. */
   labels?: Record<string, string>
+  /** The device: its ports' traffic history is shown in their card. */
+  nodeId?: string
 }>()
 const emit = defineEmits<{
   select: [id: string]
@@ -277,11 +280,24 @@ function shortName(name: string) {
           }}
         </button>
       </div>
+      <div v-if="nodeId && current.rx_bytes !== undefined" class="port-traffic">
+        <h4>{{ t('traffic.title') }}</h4>
+        <TrafficChart :node="nodeId" :iface="current.name" />
+      </div>
     </section>
   </div>
 </template>
 
 <style scoped>
+.port-traffic {
+  margin-top: 12px;
+}
+.port-traffic h4 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
 .faceplate-wrap {
   position: relative;
 }

@@ -287,11 +287,11 @@ Omini ships in incremental releases, each one usable on its own.
 - ✅ **Device panel redesign:** resizable, summary tiles, ports right below CPU and memory
 - ✅ **Port names on the links**, next to the speed ("LAN | 10G")
 - ✅ **System health:** pending updates, temperatures, load, swap, disks (one per ZFS pool) — in the OPNsense plugin 0.2
-- **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
-- **24h traffic history** per link and port, as a chart
-- **Presence timeline** (joined/left, debounced) and a "new device" insight
-- **Animated traffic flow** on the links
-- **Insights screen** (alerts + timeline)
+- ✅ **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
+- ✅ **24h traffic history** per link and port, as a chart (hourly for a year)
+- ✅ **Presence timeline** (joined/left, debounced) and a "new device" insight
+- ✅ **Animated traffic flow** on the links
+- ✅ **Insights screen** (alerts + timeline)
 
 ### v0.3 — find integrations
 
@@ -308,7 +308,7 @@ Omini ships in incremental releases, each one usable on its own.
 
 ### Later
 
-- Long-term traffic history
+- ✅ Long-term traffic history (hourly average and peak, kept a year)
 - "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
 - SNMP v3
@@ -316,7 +316,7 @@ Omini ships in incremental releases, each one usable on its own.
 - VLAN view
 - Notifications (Telegram, e-mail, webhook)
 - Topology export to draw.io (PNG, SVG and JSON: done)
-- Collapsing an area into a bubble
+- ✅ Collapsing an area into a bubble
 
 ### Ideas under discussion
 

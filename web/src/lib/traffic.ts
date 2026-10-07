@@ -150,3 +150,68 @@ export function deviceFlows(labels: Map<string, LinkLabel>, edges: TopoEdge[]): 
   }
   return out
 }
+
+/**
+ * Traffic moving along each link, for the animation: a link of its own uses
+ * its label's traffic, a Wi-Fi link its client's (as the AP measures it). A
+ * link through a port shared by several devices moves only with what the
+ * device at its end measures itself (the port's total would make every
+ * branch look busy).
+ */
+export function edgeMotion(
+  edges: TopoEdge[],
+  nodes: TopoNode[],
+  labels: Map<string, LinkLabel>,
+): Map<string, Flow> {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const out = new Map<string, Flow>()
+  for (const e of edges) {
+    const target = byId.get(e.target)
+    if (!target?.online) continue
+    const l = labels.get(e.id)
+    let flow: Flow | undefined
+    if (target.flow) flow = { down: target.flow.rx_bps, up: target.flow.tx_bps }
+    else if (l && l.at === 'middle') flow = l.flow
+    else {
+      const tr = rate(target, e.target_port)
+      if (tr) flow = { down: tr.rx_bps, up: tr.tx_bps }
+    }
+    if (flow && (flow.down > 0 || flow.up > 0)) out.set(e.id, flow)
+  }
+  return out
+}
+
+/** Where a link's traffic history is: an interface of one of its ends. */
+export interface LinkSeries {
+  node: string
+  iface: string
+  /** The interface is the upstream port: what it sends is the download. */
+  swap: boolean
+  name: string
+}
+
+/**
+ * The history that describes a link: the upstream port when it measures its
+ * traffic, else the downstream device's port, else a Wi-Fi client's own.
+ */
+export function linkSeries(e: TopoEdge, byId: Map<string, TopoNode>): LinkSeries | undefined {
+  const source = byId.get(e.source)
+  const target = byId.get(e.target)
+  const name = [source?.label, target?.label].filter(Boolean).join(' → ')
+  if (source && e.source_port && rate(source, e.source_port))
+    return { node: source.id, iface: e.source_port, swap: true, name }
+  if (target && e.target_port && rate(target, e.target_port))
+    return { node: target.id, iface: e.target_port, swap: false, name }
+  if (target?.flow) return { node: target.id, iface: '', swap: false, name }
+  if (source && e.source_port) return { node: source.id, iface: e.source_port, swap: true, name }
+  return undefined
+}
+
+/**
+ * How long one dash takes to run along a link: faster with more traffic
+ * (logarithmic, from 3 s at 1 kbit/s to 0.4 s at 1 Gbit/s and more).
+ */
+export function motionSeconds(bps: number): number {
+  if (bps <= 1000) return 3
+  return Math.max(0.4, 3 - Math.log10(bps / 1000) * (2.6 / 6))
+}

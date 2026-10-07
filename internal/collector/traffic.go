@@ -19,8 +19,9 @@ type trafficMeter struct {
 }
 
 type sample struct {
-	rx, tx uint64
-	at     time.Time
+	rx, tx       uint64
+	rxErr, txErr uint64
+	at           time.Time
 }
 
 func newTrafficMeter() *trafficMeter {
@@ -43,7 +44,7 @@ func (t *trafficMeter) observe(snap store.Snapshot) {
 				continue
 			}
 			key := strconv.FormatInt(snap.IntegrationID, 10) + "|" + d.Key + "|" + i.Name
-			now := sample{rx: *i.RxBytes, tx: *i.TxBytes, at: snap.CollectedAt}
+			now := sample{rx: *i.RxBytes, tx: *i.TxBytes, rxErr: deref(i.RxErrors), txErr: deref(i.TxErrors), at: snap.CollectedAt}
 			prev, ok := t.prev[key]
 			t.prev[key] = now
 			secs := now.at.Sub(prev.at).Seconds()
@@ -55,8 +56,10 @@ func (t *trafficMeter) observe(snap store.Snapshot) {
 				byDevice[d.Key] = map[string]topology.Rate{}
 			}
 			byDevice[d.Key][i.Name] = topology.Rate{
-				RxBps: uint64(float64(now.rx-prev.rx) * 8 / secs),
-				TxBps: uint64(float64(now.tx-prev.tx) * 8 / secs),
+				RxBps:    uint64(float64(now.rx-prev.rx) * 8 / secs),
+				TxBps:    uint64(float64(now.tx-prev.tx) * 8 / secs),
+				RxErrors: grew(prev.rxErr, now.rxErr),
+				TxErrors: grew(prev.txErr, now.txErr),
 			}
 		}
 	}
@@ -98,4 +101,19 @@ func (t *trafficMeter) attach(topo *topology.Topology) {
 			}
 		}
 	}
+}
+
+func deref(v *uint64) uint64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// grew is how much a counter grew (0 when it was reset).
+func grew(prev, now uint64) uint64 {
+	if now < prev {
+		return 0
+	}
+	return now - prev
 }

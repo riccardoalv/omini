@@ -91,6 +91,10 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("GET /api/nodes/{id}/web", s.nodeWeb)
 	private.HandleFunc("POST /api/nodes/{id}/scan", s.scanNode)
 	private.HandleFunc("PUT /api/nodes/{id}/ports/{port}", s.setPortLabel)
+	private.HandleFunc("GET /api/alerts", s.alerts)
+	private.HandleFunc("POST /api/alerts/{id}/dismiss", s.dismissAlert)
+	private.HandleFunc("GET /api/presence", s.presence)
+	private.HandleFunc("GET /api/history", s.trafficHistory)
 	mux.Handle("/api/", s.requireAuth(private))
 
 	mux.Handle("/", s.ui())
