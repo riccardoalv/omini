@@ -483,3 +483,18 @@ describe('NodePanel Wi-Fi client', () => {
     expect(flow).toContain('12.0 Mbps')
   })
 })
+
+describe('NodePanel idle Wi-Fi client', () => {
+  it('shows its traffic even at zero', () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    const w = mountPanel({
+      id: 'mac:03',
+      kind: 'client',
+      label: 'tv',
+      online: true,
+      band: '2.4ghz',
+      flow: { rx_bps: 0, tx_bps: 0 },
+    })
+    expect(w.get('[data-test=flow]').text()).toContain('0 bps')
+  })
+})

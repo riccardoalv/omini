@@ -273,7 +273,13 @@ const bandText = computed(() => {
   return [bandNames[node.band] ?? node.band, rate].filter(Boolean).join(' · ')
 })
 /** Traffic right now: internet (routers, firewalls, WAN nodes) or a Wi-Fi client's. */
-const flow = computed(() => (n.value ? nodeFlow(n.value, byId.value) : undefined))
+const flow = computed(() => {
+  const node = n.value
+  if (!node) return undefined
+  // A Wi-Fi client's traffic shows even while idle (the map's badge does not).
+  if (node.flow) return { down: node.flow.rx_bps, up: node.flow.tx_bps }
+  return nodeFlow(node, byId.value)
+})
 // Long client lists show the first few; the rest on demand.
 const CLIENTS_SHOWN = 8
 const allClients = ref(false)
