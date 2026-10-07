@@ -78,7 +78,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     @auxclick.prevent="onAuxClick"
   >
     <Handle type="target" :position="horizontal ? Position.Left : Position.Top" class="handle" />
-    <!-- On top; on a client (stacked close together) a compact one on its border. -->
+    <!-- On top; a compact one on a client (stacked close together). -->
     <div
       v-if="data.flow"
       class="flow-badge"
@@ -158,7 +158,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   pointer-events: none;
 }
 .flow-badge.compact {
-  bottom: calc(100% - 7px);
+  bottom: calc(100% + 2px); /* fits in the gap between stacked clients */
   gap: 6px;
   padding: 0 7px;
   font-size: 10px;
