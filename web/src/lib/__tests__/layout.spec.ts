@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { alignOn, layoutKey, positionsFor } from '../layout'
+import { alignOn, layout, layoutKey, positionsFor } from '../layout'
 
 describe('per-direction layout positions', () => {
   it('keys left-to-right positions by node id and top-down ones with a prefix', () => {
@@ -49,5 +49,41 @@ describe('alignOn', () => {
   it('uses the fresh layout without an anchor on screen', () => {
     expect(alignOn({}, fresh, 'vm')).toEqual(fresh)
     expect(alignOn(current, fresh, undefined)).toEqual(fresh)
+  })
+})
+
+describe('layout with areas', () => {
+  it('keeps the nodes of an area together, with no other node inside its box', async () => {
+    // gw → a, b, c, d in this order; the area holds a and d (not neighbours).
+    const ids = ['gw', 'a', 'b', 'c', 'd']
+    const nodes = ids.map((id) => ({ id, width: 200, height: 40 }))
+    const edges = ids.slice(1).map((id) => ({ id: `e:${id}`, source: 'gw', target: id }))
+    const pad = 24
+    const pos = await layout(nodes, edges, {}, 'RIGHT', [
+      { id: 'rack', children: ['a', 'd'], padding: [pad, pad, pad, pad] },
+    ])
+
+    const box = (id: string) => ({ ...pos[id]!, width: 200, height: 40 })
+    const members = [box('a'), box('d')]
+    const area = {
+      left: Math.min(...members.map((m) => m.x)) - pad,
+      top: Math.min(...members.map((m) => m.y)) - pad,
+      right: Math.max(...members.map((m) => m.x + m.width)) + pad,
+      bottom: Math.max(...members.map((m) => m.y + m.height)) + pad,
+    }
+    for (const id of ['gw', 'b', 'c']) {
+      const b = box(id)
+      const overlaps =
+        b.x < area.right &&
+        b.x + b.width > area.left &&
+        b.y < area.bottom &&
+        b.y + b.height > area.top
+      expect(overlaps, `${id} must stay out of the area`).toBe(false)
+    }
+
+    // Without the group, a and d are apart and their neighbours sit between them.
+    const plain = await layout(nodes, edges, {}, 'RIGHT')
+    const [top, bottom] = [plain.a!.y, plain.d!.y].sort((x, y) => x - y)
+    expect(plain.b!.y > top! && plain.b!.y < bottom!).toBe(true)
   })
 })

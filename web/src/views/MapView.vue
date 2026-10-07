@@ -23,6 +23,8 @@ import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
 import {
+  AREA_PADDING,
+  AREA_TITLE,
   areaIdOf,
   areaNodeId,
   fitArea,
@@ -34,13 +36,14 @@ import {
 } from '@/lib/areas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
-import { alignOn, layout, layoutKey, positionsFor } from '@/lib/layout'
+import { alignOn, layout, layoutKey, type LayoutGroup, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import type {
   AreaColor,
   Integration,
   MapArea,
   Point,
+  TopoEdge,
   TopoNode,
   TopologyResponse,
 } from '@/lib/types'
@@ -186,6 +189,20 @@ async function load() {
   }
 }
 
+/**
+ * Areas are laid out as boxes: their devices stay together and no other device
+ * lands among them. The top padding leaves room for the title.
+ */
+function layoutGroups(edges: TopoEdge[], direction: string): LayoutGroup[] {
+  return areas.value
+    .filter((a) => a.direction === direction)
+    .map((a) => ({
+      id: String(a.id),
+      children: withDescendants(a.members, edges),
+      padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
+    }))
+}
+
 // Re-layout only when the visible graph or the direction changes, not on every poll.
 watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
   const ids = [...v.nodes.map((n) => n.id), ...v.groups.map((g) => g.id)]
@@ -202,6 +219,7 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
     v.edges,
     saved,
     direction,
+    layoutGroups(v.edges, direction),
   )
   // Expanding or collapsing keeps the clicked node where it is; the map is laid
   // out again around it (no overlaps). Other changes keep the first node still.

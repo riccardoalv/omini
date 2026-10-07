@@ -43,6 +43,8 @@ export function membersOf(area: Pick<MapArea, 'x' | 'y' | 'width' | 'height'>, b
 
 /** Space between an area's border and the nodes inside it. */
 export const AREA_PADDING = 24
+/** Height of an area's title, drawn above its border. */
+export const AREA_TITLE = 30
 
 type Rect = Pick<MapArea, 'x' | 'y' | 'width' | 'height'>
 

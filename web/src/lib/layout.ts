@@ -24,17 +24,41 @@ function getElk(): Promise<ElkInstance> {
   return elk
 }
 
+/** Nodes laid out together inside a box (a map area), so no other node lands among them. */
+export interface LayoutGroup {
+  id: string
+  children: string[]
+  /** Space between the box and its nodes: top, right, bottom, left. */
+  padding: [number, number, number, number]
+}
+
 /**
  * Computes a layered layout in the given direction. Saved positions (from the
- * user dragging nodes) take precedence.
+ * user dragging nodes) take precedence. Groups become boxes laid out with the
+ * rest of the graph (edges cross their border); a node belongs to one group.
  */
 export async function layout(
   nodes: LayoutNode[],
   edges: LayoutEdge[],
   saved: Record<string, Point> = {},
   direction: Direction = 'RIGHT',
+  groups: LayoutGroup[] = [],
 ): Promise<Record<string, Point>> {
   const ids = new Set(nodes.map((n) => n.id))
+  const groupOf = new Map<string, LayoutGroup>()
+  for (const g of groups) {
+    for (const c of g.children) if (ids.has(c) && !groupOf.has(c)) groupOf.set(c, g)
+  }
+  const box = (n: LayoutNode) => ({ id: n.id, width: n.width, height: n.height })
+  const boxes = groups
+    .map((g) => ({
+      id: `layout-group:${g.id}`,
+      layoutOptions: {
+        'elk.padding': `[top=${g.padding[0]},left=${g.padding[3]},bottom=${g.padding[2]},right=${g.padding[1]}]`,
+      },
+      children: nodes.filter((n) => groupOf.get(n.id) === g).map(box),
+    }))
+    .filter((g) => g.children.length > 0)
   const graph = await (
     await getElk()
   ).layout({
@@ -42,20 +66,28 @@ export async function layout(
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': direction,
+      'elk.hierarchyHandling': 'INCLUDE_CHILDREN', // one layout across the area boxes
       'elk.layered.spacing.nodeNodeBetweenLayers': direction === 'RIGHT' ? '110' : '80',
       'elk.spacing.nodeNode': direction === 'RIGHT' ? '14' : '24',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED', // parents centered over children
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
     },
-    children: nodes.map((n) => ({ id: n.id, width: n.width, height: n.height })),
+    children: [...nodes.filter((n) => !groupOf.has(n.id)).map(box), ...boxes],
     edges: edges
       .filter((e) => ids.has(e.source) && ids.has(e.target))
       .map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
   })
   const out: Record<string, Point> = {}
   for (const c of graph.children ?? []) {
-    out[c.id] = saved[c.id] ?? { x: c.x ?? 0, y: c.y ?? 0 }
+    if (c.children?.length) {
+      // Positions inside a box are relative to it.
+      for (const cc of c.children) {
+        out[cc.id] = saved[cc.id] ?? { x: (c.x ?? 0) + (cc.x ?? 0), y: (c.y ?? 0) + (cc.y ?? 0) }
+      }
+    } else if (!c.id.startsWith('layout-group:')) {
+      out[c.id] = saved[c.id] ?? { x: c.x ?? 0, y: c.y ?? 0 }
+    }
   }
   return out
 }
