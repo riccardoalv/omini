@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/riccardoalv/omini/compare/v0.1.0...v0.1.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **map:** the map screen was blank since areas could be collapsed ([d8f41b1](https://github.com/riccardoalv/omini/commit/d8f41b19e8efd3e4b4e884fd62a66da56df54586))
+
 ## 0.1.0 (2026-10-07)
 
 
