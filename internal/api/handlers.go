@@ -14,6 +14,7 @@ import (
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
+	"github.com/riccardoalv/omini/internal/webui"
 )
 
 // --- auth ---
@@ -425,6 +426,34 @@ func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
 		out = append(out, result{f, existing[f.IP]})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// nodeWeb returns the web interfaces of a node on the map. Only IPs of nodes
+// on the map are probed, so this endpoint cannot be used to scan arbitrary hosts.
+func (s *Server) nodeWeb(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var ip string
+	for _, n := range s.Collector.State().Topology.Nodes {
+		if n.ID == id {
+			ip = n.IP
+			break
+		}
+	}
+	if ip == "" {
+		writeJSON(w, http.StatusOK, []webui.Service{})
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, 15*time.Second)
+	defer cancel()
+	services, err := s.WebUI.Find(ctx, ip)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	if services == nil {
+		services = []webui.Service{}
+	}
+	writeJSON(w, http.StatusOK, services)
 }
 
 // --- UI ---

@@ -24,9 +24,21 @@ import (
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/webui"
 )
 
 func init() { auth.BcryptCost = bcrypt.MinCost }
+
+// fakeWeb records the probed IPs and reports a web interface on the firewall.
+type fakeWeb struct{ probed []string }
+
+func (f *fakeWeb) Find(_ context.Context, ip string) ([]webui.Service, error) {
+	f.probed = append(f.probed, ip)
+	if ip == "192.168.1.1" {
+		return []webui.Service{{URL: "https://192.168.1.1/", Port: 443, Title: "OPNsense"}}, nil
+	}
+	return nil, nil
+}
 
 type harness struct {
 	t      *testing.T
@@ -35,6 +47,7 @@ type harness struct {
 	store  *store.Store
 	coll   *collector.Collector
 	box    *secret.Box
+	web    *fakeWeb
 }
 
 func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
@@ -51,8 +64,9 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	reg.Register(snmp.New())
 	coll := collector.New(st, reg, box, collector.Options{})
 
+	web := &fakeWeb{}
 	s := &api.Server{
-		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test",
+		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test", WebUI: web,
 		Discover: func(_ context.Context, cidr string, opts snmp.ScanOptions) ([]snmp.Found, error) {
 			if cidr != "192.168.1.0/24" || opts.Community != "public" {
 				return nil, nil
@@ -66,7 +80,7 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
-	return &harness{t: t, srv: srv, client: &http.Client{Jar: jar}, store: st, coll: coll, box: box}
+	return &harness{t: t, srv: srv, client: &http.Client{Jar: jar}, store: st, coll: coll, box: box, web: web}
 }
 
 // do sends a request (with the CSRF header unless csrf is false) and decodes the JSON response into out.
@@ -313,6 +327,30 @@ func TestDiscoveryFlagsIntegratedHosts(t *testing.T) {
 	}
 	if len(found) != 2 || found[0]["integrated"] != true || found[1]["integrated"] != false {
 		t.Fatalf("scan results: %v", found)
+	}
+}
+
+func TestNodeWebInterfaces(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	h.do("POST", "/api/integrations", map[string]any{"name": "demo", "type": "demo", "config": map[string]any{}}, nil)
+	if err := h.coll.CollectNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	var services []webui.Service
+	if code := h.do("GET", "/api/nodes/"+url.PathEscape("dev:00:e0:4c:68:00:02")+"/web", nil, &services); code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	if len(services) != 1 || services[0].Title != "OPNsense" {
+		t.Fatalf("services: %+v", services)
+	}
+
+	// Unknown nodes are never probed: the endpoint cannot scan arbitrary hosts.
+	var none []webui.Service
+	h.do("GET", "/api/nodes/"+url.PathEscape("mac:de:ad:be:ef:00:01")+"/web", nil, &none)
+	if len(none) != 0 || len(h.web.probed) != 1 || h.web.probed[0] != "192.168.1.1" {
+		t.Fatalf("unexpected probes: %v (result %v)", h.web.probed, none)
 	}
 }
 

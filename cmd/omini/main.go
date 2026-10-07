@@ -23,6 +23,7 @@ import (
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/webui"
 	"github.com/riccardoalv/omini/web"
 )
 
@@ -130,7 +131,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
-		Discover: snmp.Discover, UI: web.FS(), Version: version,
+		Discover: snmp.Discover, WebUI: webui.New(), UI: web.FS(), Version: version,
 	}
 	httpServer := &http.Server{
 		Handler:           server.Handler(),

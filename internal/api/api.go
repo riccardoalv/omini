@@ -18,6 +18,7 @@ import (
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/webui"
 )
 
 const sessionCookie = "omini_session"
@@ -29,6 +30,11 @@ const CSRFHeader = "X-Omini-Request"
 // Discoverer scans a subnet for devices (snmp.Discover in production).
 type Discoverer func(ctx context.Context, cidr string, opts snmp.ScanOptions) ([]snmp.Found, error)
 
+// WebFinder detects web interfaces on an IP (*webui.Prober in production).
+type WebFinder interface {
+	Find(ctx context.Context, ip string) ([]webui.Service, error)
+}
+
 type Server struct {
 	Store     *store.Store
 	Registry  *integration.Registry
@@ -36,6 +42,7 @@ type Server struct {
 	Collector *collector.Collector
 	Auth      *auth.Service
 	Discover  Discoverer
+	WebUI     WebFinder
 	UI        fs.FS // built web UI; nil serves a placeholder page
 	Version   string
 }
@@ -67,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PUT /api/layout", s.saveLayout)
 	private.HandleFunc("DELETE /api/layout", s.resetLayout)
 	private.HandleFunc("POST /api/discovery/scan", s.scan)
+	private.HandleFunc("GET /api/nodes/{id}/web", s.nodeWeb)
 	mux.Handle("/api/", s.requireAuth(private))
 
 	mux.Handle("/", s.ui())
