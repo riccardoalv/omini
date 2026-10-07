@@ -113,3 +113,15 @@ func TestInvalidIP(t *testing.T) {
 		t.Fatal("expected error for invalid IP")
 	}
 }
+
+func TestErrorPagesHaveNoTitle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("<html><title>400 The plain HTTP request was sent to HTTPS port</title></html>"))
+	}))
+	defer srv.Close()
+	got, _ := newProber(Port{port(t, srv), false}).Find(context.Background(), "127.0.0.1")
+	if len(got) != 1 || got[0].Title != "" {
+		t.Fatalf("got %+v, want the service without an error title", got)
+	}
+}

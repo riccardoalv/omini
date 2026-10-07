@@ -46,7 +46,7 @@ type pinger struct {
 	conn *icmp.PacketConn
 	id   int
 	mu   sync.Mutex
-	got  map[netip.Addr]bool
+	got  map[netip.Addr]int // address -> TTL of the reply (0 when unknown)
 }
 
 func newPinger() (*pinger, error) {
@@ -54,7 +54,9 @@ func newPinger() (*pinger, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &pinger{conn: conn, id: os.Getpid() & 0xffff, got: map[netip.Addr]bool{}}
+	p := &pinger{conn: conn, id: os.Getpid() & 0xffff, got: map[netip.Addr]int{}}
+	// The reply TTL hints the OS family; not every OS reports it on ping sockets.
+	_ = conn.IPv4PacketConn().SetControlMessage(ipv4.FlagTTL, true)
 	go p.receive()
 	return p, nil
 }
@@ -70,8 +72,9 @@ func (p *pinger) send(ip netip.Addr, seq int) {
 
 func (p *pinger) receive() {
 	buf := make([]byte, 1500)
+	pc := p.conn.IPv4PacketConn()
 	for {
-		n, addr, err := p.conn.ReadFrom(buf)
+		n, cm, addr, err := pc.ReadFrom(buf)
 		if err != nil {
 			return
 		}
@@ -79,22 +82,27 @@ func (p *pinger) receive() {
 		if err != nil || msg.Type != ipv4.ICMPTypeEchoReply {
 			continue
 		}
+		ttl := 0
+		if cm != nil {
+			ttl = cm.TTL
+		}
 		if ua, ok := addr.(*net.UDPAddr); ok {
 			if ip, ok := netip.AddrFromSlice(ua.IP.To4()); ok {
 				p.mu.Lock()
-				p.got[ip] = true
+				p.got[ip] = ttl
 				p.mu.Unlock()
 			}
 		}
 	}
 }
 
-func (p *pinger) replies() map[netip.Addr]bool {
+// replies returns the addresses that answered, with the reply TTL.
+func (p *pinger) replies() map[netip.Addr]int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	out := make(map[netip.Addr]bool, len(p.got))
-	for k := range p.got {
-		out[k] = true
+	out := make(map[netip.Addr]int, len(p.got))
+	for k, v := range p.got {
+		out[k] = v
 	}
 	return out
 }
@@ -156,6 +164,40 @@ func scanPorts(ctx context.Context, ip netip.Addr, ports []int, timeout time.Dur
 	}
 	wg.Wait()
 	return open
+}
+
+// sshBanner reads the version line an SSH server sends first, e.g.
+// "SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3": it often names the OS.
+func sshBanner(ctx context.Context, ip netip.Addr, timeout time.Duration) string {
+	d := net.Dialer{Timeout: timeout}
+	conn, err := d.DialContext(ctx, "tcp4", netip.AddrPortFrom(ip, 22).String())
+	if err != nil {
+		return ""
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	buf := make([]byte, 256)
+	n, _ := conn.Read(buf)
+	line, _, _ := strings.Cut(string(buf[:n]), "\n")
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "SSH-") {
+		return ""
+	}
+	return line
+}
+
+// localOS returns this server's OS id from /etc/os-release (e.g. "nixos", "debian").
+func localOS(path string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "ID="); ok {
+			return strings.Trim(strings.TrimSpace(v), `"'`)
+		}
+	}
+	return ""
 }
 
 // reverseDNS returns the PTR names of ip, without the trailing dot, asking

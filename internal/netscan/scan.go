@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/oui"
+	"github.com/riccardoalv/omini/internal/webui"
 )
 
 // Integration is the network scanner. Zero values of the exported fields mean
@@ -30,6 +32,8 @@ type Integration struct {
 	DeepEvery   time.Duration // how often ports and names are re-checked per host; default 6h
 	NoMulticast bool          // disable mDNS/SSDP (tests)
 	NoPing      bool          // disable ICMP (tests)
+	NoWebTitles bool          // disable web title detection (tests)
+	OSRelease   string        // default /etc/os-release
 	Locals      func() []localNet
 
 	mu   sync.Mutex
@@ -41,6 +45,8 @@ type deepInfo struct {
 	ports   []int
 	names   []string
 	netbios string
+	banner  string   // SSH version string
+	titles  []string // web interface titles
 	at      time.Time
 }
 
@@ -100,6 +106,9 @@ func (s *Integration) defaults() {
 	if s.Locals == nil {
 		s.Locals = localNetworks
 	}
+	if s.OSRelease == "" {
+		s.OSRelease = "/etc/os-release"
+	}
 	if s.now == nil {
 		s.now = time.Now
 	}
@@ -143,6 +152,8 @@ type hostAcc struct {
 	mac model.MACAddress
 	ann announce
 	src []string
+	ttl int
+	os  string
 }
 
 func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]model.Device, error) {
@@ -234,9 +245,9 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		}
 	}
 	if ping != nil {
-		for ip := range ping.replies() {
+		for ip, ttl := range ping.replies() {
 			if inScope(ip) {
-				seen(ip, "icmp")
+				seen(ip, "icmp").ttl = ttl
 			}
 		}
 	}
@@ -320,6 +331,22 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	}
 	d.names = reverseDNS(ctx, h.ip, gateway, 2*time.Second)
 	d.netbios = netbiosName(h.ip, 800*time.Millisecond)
+	if slices.Contains(d.ports, 22) {
+		d.banner = sshBanner(ctx, h.ip, 1500*time.Millisecond)
+	}
+	if !s.NoWebTitles {
+		var web []int
+		for _, p := range d.ports {
+			if webPorts[p] {
+				web = append(web, p)
+			}
+		}
+		if len(web) > 0 {
+			for _, svc := range webui.Titles(ctx, h.ip.String(), web) {
+				d.titles = appendUnique(d.titles, svc.Title)
+			}
+		}
+	}
 	if ctx.Err() == nil {
 		s.mu.Lock()
 		s.deep[key] = d
@@ -348,7 +375,7 @@ func (s *Integration) devices(prefixes []netip.Prefix, locals []localNet, hosts 
 	for _, l := range locals {
 		if _, ok := hosts[l.Self]; !ok && containsAny(prefixes, l.Self) {
 			hosts[l.Self] = &hostAcc{
-				ip: l.Self, mac: l.MAC, src: []string{"self"},
+				ip: l.Self, mac: l.MAC, src: []string{"self"}, os: localOS(s.OSRelease),
 				ann: announce{Hostnames: []string{hostname}, Services: []string{"omini"}},
 			}
 		}
@@ -443,7 +470,23 @@ func (s *Integration) toHost(h *hostAcc) model.Host {
 	for _, p := range d.ports {
 		mh.OpenPorts = append(mh.OpenPorts, uint16(p))
 	}
+	mh.Titles = d.titles
+	if d.banner != "" {
+		mh.Banners = []string{d.banner}
+	}
+	if h.ttl > 0 {
+		mh.TTL = model.Ptr(uint8(h.ttl))
+	}
+	if h.os != "" {
+		mh.OS = model.Ptr(h.os)
+	}
 	return mh
+}
+
+// webPorts are open ports worth fetching a page title from.
+var webPorts = map[int]bool{
+	80: true, 443: true, 5000: true, 5001: true, 8006: true, 8008: true, 8080: true,
+	8096: true, 8123: true, 8443: true, 9443: true, 32400: true,
 }
 
 func containsAny(prefixes []netip.Prefix, ip netip.Addr) bool {

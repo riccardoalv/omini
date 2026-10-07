@@ -67,6 +67,28 @@ func New() *Prober {
 	return p
 }
 
+// HTTPSHint reports whether a port usually speaks HTTPS (only the first scheme tried).
+func HTTPSHint(port int) bool {
+	for _, p := range DefaultPorts {
+		if p.Number == port {
+			return p.HTTPS
+		}
+	}
+	return port == 443 || port == 8443 || port == 9443
+}
+
+// Titles probes only the given ports of ip (no cache) and returns what answered HTTP.
+func Titles(ctx context.Context, ip string, ports []int) []Service {
+	list := make([]Port, 0, len(ports))
+	for _, p := range ports {
+		list = append(list, Port{Number: p, HTTPS: HTTPSHint(p)})
+	}
+	p := &Prober{Ports: list, Timeout: 2 * time.Second}
+	p.init()
+	found, _ := p.Find(ctx, ip)
+	return found
+}
+
 func (p *Prober) init() {
 	if p.client != nil {
 		return
@@ -174,7 +196,10 @@ func (p *Prober) probe(ctx context.Context, ip string, port Port) (Service, bool
 	return Service{}, false
 }
 
-var titleRe = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+var (
+	titleRe    = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	errorTitle = regexp.MustCompile(`^(\d{3}\b|error\b|bad request|forbidden|not found|unauthorized)`)
+)
 
 // fetch reports whether url answers HTTP, with the status and page title.
 func (p *Prober) fetch(ctx context.Context, url string) (string, int, bool) {
@@ -197,6 +222,9 @@ func (p *Prober) fetch(ctx context.Context, url string) (string, int, bool) {
 		if len(title) > 80 {
 			title = title[:80]
 		}
+	}
+	if errorTitle.MatchString(strings.ToLower(title)) {
+		title = "" // e.g. "400 The plain HTTP request was sent to HTTPS port"
 	}
 	return title, resp.StatusCode, true
 }
