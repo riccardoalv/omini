@@ -9,7 +9,7 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test cover lint fmt hooks
+.PHONY: generate check-generated test cover lint fmt hooks ci
 
 ## generate: regenerate Go types and Python models from the JSON Schema
 generate:
@@ -56,3 +56,13 @@ fmt:
 ## hooks: install git hooks (format, lint, conventional commit check)
 hooks:
 	lefthook install
+
+## ci: run locally everything the CI workflow runs (use before pushing)
+ci: check-generated
+	go build ./...
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build ./...
+	go test -race ./...
+	$(MAKE) lint
+	cd sdk/python && uv run pytest -q
+	@echo "✔ all CI checks passed locally"

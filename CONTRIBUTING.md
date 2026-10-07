@@ -15,6 +15,7 @@ make generate   # regenerate Go types and Python models from schema/
 make lint       # golangci-lint + ruff
 make fmt        # gofumpt/goimports + ruff format
 make test       # Go tests + Python SDK tests
+make ci         # everything CI runs, locally — run it before pushing
 ```
 
 ## Code style
