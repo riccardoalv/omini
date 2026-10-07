@@ -84,14 +84,8 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const {
-  fitView,
-  getNodes,
-  onNodesInitialized,
-  updateNodeInternals,
-  viewport,
-  screenToFlowCoordinate,
-} = useVueFlow('omini-map')
+const { fitView, onNodesInitialized, updateNodeInternals, viewport, screenToFlowCoordinate } =
+  useVueFlow('omini-map')
 
 const data = shallowRef<TopologyResponse>()
 const integrations = ref<Integration[]>([])
@@ -637,7 +631,7 @@ async function exportMap(format: ExportFormat) {
     const viewportEl = mapEl.value?.querySelector<HTMLElement>('.vue-flow__viewport')
     if (!viewportEl) return
     const background = getComputedStyle(mapEl.value!).backgroundColor
-    download(await mapImage(format, viewportEl, getNodes.value, background), exportName(format))
+    download(await mapImage(format, viewportEl, background), exportName(format))
   } catch {
     exportError.value = t('map.exportFailed')
   } finally {

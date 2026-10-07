@@ -1,4 +1,3 @@
-import { getRectOfNodes, type GraphNode } from '@vue-flow/core'
 import { toPng, toSvg } from 'html-to-image'
 
 import type { TopologyResponse } from './types'
@@ -10,16 +9,46 @@ const PADDING = 48
 /** Largest side of an exported image: big maps are scaled down to it. */
 const MAX_SIDE = 8192
 
+export interface Box {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 /**
- * Size and transform that fit every node in an image (the whole map, not just
+ * The boxes of the nodes as drawn, in map coordinates: each node element's
+ * translate() and size (the list of nodes alone can disagree with what is on
+ * screen, which cut exported maps).
+ */
+export function drawnBoxes(viewport: Element): Box[] {
+  const out: Box[] = []
+  for (const el of viewport.querySelectorAll<HTMLElement>('.vue-flow__node')) {
+    const m = /translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/.exec(el.style.transform)
+    if (!m || el.style.display === 'none' || el.style.visibility === 'hidden') continue
+    out.push({ x: Number(m[1]), y: Number(m[2]), width: el.offsetWidth, height: el.offsetHeight })
+  }
+  return out
+}
+
+/**
+ * Size and transform that fit every box in an image (the whole map, not just
  * what is on screen), at 1:1 when it fits within MAX_SIDE.
  */
-export function exportFrame(nodes: GraphNode[]): {
+export function exportFrame(boxes: Box[]): {
   width: number
   height: number
   transform: string
 } {
-  const rect = getRectOfNodes(nodes)
+  const rect = boxes.length
+    ? (() => {
+        const x = Math.min(...boxes.map((b) => b.x))
+        const y = Math.min(...boxes.map((b) => b.y))
+        const right = Math.max(...boxes.map((b) => b.x + b.width))
+        const bottom = Math.max(...boxes.map((b) => b.y + b.height))
+        return { x, y, width: right - x, height: bottom - y }
+      })()
+    : { x: 0, y: 0, width: 1, height: 1 }
   const scale = Math.min(
     1,
     MAX_SIDE / Math.max(rect.width + 2 * PADDING, rect.height + 2 * PADDING, 1),
@@ -66,22 +95,28 @@ export function inlineSvgStyles(root: Element): () => void {
 export async function mapImage(
   format: 'png' | 'svg',
   viewport: HTMLElement,
-  nodes: GraphNode[],
   background: string,
 ): Promise<string> {
-  const { width, height, transform } = exportFrame(nodes)
+  const { width, height, transform } = exportFrame(drawnBoxes(viewport))
   const options = {
     backgroundColor: background,
     width,
     height,
     pixelRatio: format === 'png' ? 2 : 1, // sharp on high-density screens
-    style: { width: `${width}px`, height: `${height}px`, transform },
+    style: { width: `${width}px`, height: `${height}px` },
   }
+  // The screen's pan and zoom live on the pane inside the viewport: it gets
+  // the export's framing while the image is taken (else the map came out
+  // shifted by the current pan, and cut).
+  const pane = viewport.querySelector<HTMLElement>('.vue-flow__transformationpane') ?? viewport
+  const paneTransform = pane.style.transform
+  pane.style.transform = transform
   const restore = inlineSvgStyles(viewport)
   try {
     return await (format === 'png' ? toPng(viewport, options) : toSvg(viewport, options))
   } finally {
     restore()
+    pane.style.transform = paneTransform
   }
 }
 

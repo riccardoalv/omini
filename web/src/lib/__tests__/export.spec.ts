@@ -1,16 +1,15 @@
-import type { GraphNode } from '@vue-flow/core'
+import { toSvg } from 'html-to-image'
 import { describe, expect, it, vi } from 'vitest'
 
-import { exportFrame, exportName, inlineSvgStyles, mapJSON } from '../export'
+import { drawnBoxes, exportFrame, exportName, inlineSvgStyles, mapImage, mapJSON } from '../export'
 import type { TopologyResponse } from '../types'
 
-const node = (x: number, y: number, width = 200, height = 40) =>
-  ({
-    id: `${x},${y}`,
-    computedPosition: { x, y, z: 0 },
-    position: { x, y },
-    dimensions: { width, height },
-  }) as unknown as GraphNode
+vi.mock('html-to-image', () => ({
+  toPng: vi.fn<() => Promise<string>>(),
+  toSvg: vi.fn<() => Promise<string>>(),
+}))
+
+const node = (x: number, y: number, width = 200, height = 40) => ({ x, y, width, height })
 
 describe('map export', () => {
   it('frames every node with a margin, at full size when it fits', () => {
@@ -25,6 +24,19 @@ describe('map export', () => {
     const f = exportFrame([node(0, 0), node(20000, 0)])
     expect(Math.max(f.width, f.height)).toBeLessThanOrEqual(8192)
     expect(f.transform).toMatch(/scale\(0\.\d+\)/)
+  })
+
+  it('reads the boxes of the nodes as drawn', () => {
+    document.body.innerHTML = `<div id="vp">
+      <div class="vue-flow__node" style="transform: translate(-120px, 340.5px)"></div>
+      <div class="vue-flow__node" style="transform: translate(900px, 1200px)"></div>
+      <div class="vue-flow__node" style="display: none; transform: translate(5000px, 5000px)"></div>
+    </div>`
+    const boxes = drawnBoxes(document.getElementById('vp')!)
+    expect(boxes.map((b) => [b.x, b.y])).toEqual([
+      [-120, 340.5],
+      [900, 1200],
+    ])
   })
 
   it('names files by date and exports the data as JSON', () => {
@@ -55,5 +67,26 @@ describe('SVG styles while exporting', () => {
     restore()
     expect(wire!.getAttribute('style')).toBeNull()
     expect(other!.getAttribute('style')).toBe('opacity: 0.5')
+  })
+})
+
+describe('taking the image', () => {
+  it("frames the map on the pane that holds the screen's pan and zoom, then puts it back", async () => {
+    document.body.innerHTML = `<div class="vue-flow__viewport">
+      <div class="vue-flow__transformationpane" style="transform: translate(192px, 357px) scale(0.7)">
+        <div class="vue-flow__node" style="transform: translate(12px, 12px)"></div>
+      </div></div>`
+    const viewport = document.querySelector<HTMLElement>('.vue-flow__viewport')!
+    const pane = document.querySelector<HTMLElement>('.vue-flow__transformationpane')!
+    let during = ''
+    vi.mocked(toSvg).mockImplementation(async () => {
+      during = pane.style.transform
+      return 'data:image/svg+xml,'
+    })
+    await mapImage('svg', viewport, '#000')
+    expect(during).toBe('translate(36px, 36px) scale(1)') // 48 px margin − the node at 12
+    expect(pane.style.transform).toBe('translate(192px, 357px) scale(0.7)')
+    const options = vi.mocked(toSvg).mock.calls[0]![1]!
+    expect(options.style).not.toHaveProperty('transform')
   })
 })
