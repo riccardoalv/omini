@@ -28,7 +28,19 @@ jobs:
           GOOS=linux GOARCH=arm64 go build ./...
           GOOS=linux GOARCH=arm GOARM=7 go build ./...
       - name: Test
-        run: go test -race ./...
+        run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: |
+          grep -v '_gen.go:' coverage.out > coverage.handwritten.out # skip generated code
+          {
+            echo "### Go test coverage"
+            echo
+            echo "| Package | Coverage |"
+            echo "|---|---|"
+            go test -cover ./... 2>/dev/null | awk -f scripts/coverage-table.awk
+            echo
+            echo "**Total (excluding generated code):** $(go tool cover -func=coverage.handwritten.out | awk '/^total:/ {print $3}')"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -60,4 +72,5 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
       - name: Test
-        run: uv run pytest
+        run: |
+          uv run pytest --cov=omini_sdk --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"

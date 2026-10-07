@@ -9,7 +9,7 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test lint fmt hooks
+.PHONY: generate check-generated test cover lint fmt hooks
 
 ## generate: regenerate Go types and Python models from the JSON Schema
 generate:
@@ -34,6 +34,14 @@ check-generated: generate
 test:
 	go test ./...
 	cd sdk/python && uv run pytest
+
+## cover: run tests with a coverage report per package
+cover:
+	go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+	go test -cover ./... | awk -f scripts/coverage-table.awk
+	grep -v '_gen.go:' coverage.out > coverage.handwritten.out
+	go tool cover -func=coverage.handwritten.out | tail -1
+	cd sdk/python && uv run pytest --cov=omini_sdk --cov-report=term
 
 ## lint: run all linters (Go + Python SDK)
 lint:
