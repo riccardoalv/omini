@@ -123,6 +123,15 @@ var migrations = []string{
 	`
 	ALTER TABLE integrations ADD COLUMN interval_s INTEGER NOT NULL DEFAULT 0;
 	`,
+	// 9: where each MAC was last learned by a switch (kept across restarts).
+	`
+	CREATE TABLE mac_ports (
+		mac     TEXT PRIMARY KEY,
+		node_id TEXT NOT NULL,
+		port    TEXT NOT NULL,
+		seen_at INTEGER NOT NULL -- unix seconds
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

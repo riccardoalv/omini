@@ -349,8 +349,11 @@ func (c *Collector) rebuild(ctx context.Context) error {
 		})
 	}
 	now := c.opts.Now()
+	c.loadPorts(ctx, now)
 	topo := topology.BuildWith(sources, topology.Options{LastSeen: c.rememberedPorts(now)})
-	c.rememberPorts(topo, now)
+	if err := c.store.SaveMACPorts(ctx, c.rememberPorts(topo, now), now.Add(-LastSeenTTL)); err != nil {
+		slog.Warn("could not save where MACs were learned", "err", err)
+	}
 
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
@@ -536,18 +539,42 @@ func (c *Collector) rememberedPorts(now time.Time) map[model.MACAddress]topology
 	return out
 }
 
-func (c *Collector) rememberPorts(topo topology.Topology, now time.Time) {
+// loadPorts reads the remembered ports from the database once, so they
+// survive a restart.
+func (c *Collector) loadPorts(ctx context.Context, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lastSeen != nil {
+		return
+	}
+	c.lastSeen = map[model.MACAddress]seenAt{}
+	saved, err := c.store.MACPorts(ctx, now.Add(-LastSeenTTL))
+	if err != nil {
+		slog.Warn("could not read where MACs were learned", "err", err)
+		return
+	}
+	for _, p := range saved {
+		c.lastSeen[model.MACAddress(p.MAC)] = seenAt{topology.PortRef{Node: p.NodeID, Port: p.Port}, p.SeenAt}
+	}
+}
+
+// rememberPorts notes where the switches learned each MAC this round and
+// returns those entries, to be saved.
+func (c *Collector) rememberPorts(topo topology.Topology, now time.Time) []store.MACPort {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.lastSeen == nil {
 		c.lastSeen = map[model.MACAddress]seenAt{}
 	}
+	var seen []store.MACPort
 	for _, n := range topo.Nodes {
 		if n.Kind != topology.KindDevice || n.Device == nil || !n.Online {
 			continue
 		}
 		for _, f := range n.Device.Fdb {
 			c.lastSeen[f.MAC] = seenAt{topology.PortRef{Node: n.ID, Port: f.Port}, now}
+			seen = append(seen, store.MACPort{MAC: string(f.MAC), NodeID: n.ID, Port: f.Port, SeenAt: now})
 		}
 	}
+	return seen
 }
