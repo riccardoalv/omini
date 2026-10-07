@@ -101,6 +101,18 @@ class Host(BaseModel):
     """
     How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
     """
+    titles: list[str] | None = None
+    """
+    Titles of the web interfaces found on the host (e.g. "TrueNAS", "Proxmox Virtual Environment").
+    """
+    ttl: Annotated[int | None, Field(ge=1, le=255)] = None
+    """
+    TTL of ICMP replies: hints the OS family (64 Unix-like, 128 Windows, 255 network gear).
+    """
+    banners: list[str] | None = None
+    """
+    Service banners, e.g. the SSH version string.
+    """
 
 
 class Interface(BaseModel):

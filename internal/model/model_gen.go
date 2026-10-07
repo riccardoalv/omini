@@ -341,6 +341,9 @@ func (j *FormField) UnmarshalJSON(value []byte) error {
 
 // An end device observed on the network, with whatever could be learned about it.
 type Host struct {
+	// Service banners, e.g. the SSH version string.
+	Banners []string `json:"banners,omitempty,omitzero" yaml:"banners,omitempty"`
+
 	// Names from DNS, mDNS, NetBIOS, DHCP...
 	Hostnames []string `json:"hostnames,omitempty,omitzero" yaml:"hostnames,omitempty"`
 
@@ -368,6 +371,14 @@ type Host struct {
 	// How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
 	Sources []string `json:"sources,omitempty,omitzero" yaml:"sources,omitempty"`
 
+	// Titles of the web interfaces found on the host (e.g. "TrueNAS", "Proxmox
+	// Virtual Environment").
+	Titles []string `json:"titles,omitempty,omitzero" yaml:"titles,omitempty"`
+
+	// TTL of ICMP replies: hints the OS family (64 Unix-like, 128 Windows, 255
+	// network gear).
+	TTL *uint8 `json:"ttl,omitempty,omitzero" yaml:"ttl,omitempty"`
+
 	// Hardware vendor (e.g. from the MAC prefix).
 	Vendor *string `json:"vendor,omitempty,omitzero" yaml:"vendor,omitempty"`
 }
@@ -385,6 +396,9 @@ func (j *Host) UnmarshalJSON(value []byte) error {
 	var plain Plain
 	if err := json.Unmarshal(value, &plain); err != nil {
 		return err
+	}
+	if plain.TTL != nil && 1 > *plain.TTL {
+		return fmt.Errorf("field %s: must be >= %v", "ttl", 1)
 	}
 	*j = Host(plain)
 	return nil

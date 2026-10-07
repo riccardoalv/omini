@@ -38,7 +38,7 @@ web/node_modules: web/package-lock.json
 ## generate: regenerate Go types and Python models from the JSON Schema
 generate:
 	go run $(GO_JSONSCHEMA) --package model --min-sized-ints \
-		--capitalization ID,IP,IPs,MAC,MACs,URL,SSID,DBM,CPU,OS \
+		--capitalization ID,IP,IPs,MAC,MACs,URL,SSID,DBM,CPU,OS,TTL \
 		--tags json,yaml --output $(GO_MODEL) $(SCHEMA)
 	$(SDK) --with '$(DATAMODEL_CODEGEN)' datamodel-codegen \
 		--input $(SCHEMA) --input-file-type jsonschema \

@@ -544,6 +544,26 @@
             "type": "string"
           },
           "description": "How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios."
+        },
+        "titles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Titles of the web interfaces found on the host (e.g. \"TrueNAS\", \"Proxmox Virtual Environment\")."
+        },
+        "ttl": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 255,
+          "description": "TTL of ICMP replies: hints the OS family (64 Unix-like, 128 Windows, 255 network gear)."
+        },
+        "banners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Service banners, e.g. the SSH version string."
         }
       }
     }
