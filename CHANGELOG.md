@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/riccardoalv/omini/compare/v0.2.0...v0.3.0) (2026-10-07)
+
+
+### Features
+
+* Horaco and Mercusys in the store; clients keep their switch port while the switch forgets them ([f854e60](https://github.com/riccardoalv/omini/commit/f854e609751c423029a95a9cef376a58c32a73fb))
+* **map:** port options on click, port names mid-link, switch uplinks from MAC tables ([1421e7b](https://github.com/riccardoalv/omini/commit/1421e7b2f40b809a55a386e5c848ad51b15c7453))
+
 ## [0.2.0](https://github.com/riccardoalv/omini/compare/v0.1.2...v0.2.0) (2026-10-07)
 
 
