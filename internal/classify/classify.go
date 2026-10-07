@@ -31,6 +31,7 @@ const (
 	Camera         = "camera"
 	SmartHome      = "smart_home"
 	Appliance      = "appliance"
+	AirConditioner = "air_conditioner"
 	GameConsole    = "game_console"
 	Wearable       = "wearable"
 	Segment        = "segment"
@@ -418,8 +419,10 @@ func deviceType(s *state) {
 		s.set(&r.Type, Speaker, "mdns:_sonos._tcp")
 	case s.service("_hue._tcp") || s.service("_hap._tcp") || s.service("_matter._tcp") || slices.Contains(smartHome, r.Brand):
 		s.set(&r.Type, SmartHome, "")
+	case strings.Contains(strings.ToLower(in.Vendor), "air-condition") || strings.Contains(strings.ToLower(in.Vendor), "air condition"):
+		s.set(&r.Type, AirConditioner, "vendor:"+in.Vendor)
 	case r.Brand == "midea":
-		s.set(&r.Type, Appliance, "vendor:"+in.Vendor) // air conditioners
+		s.set(&r.Type, Appliance, "vendor:"+in.Vendor)
 	case r.Brand == "nintendo" || r.Brand == "playstation":
 		s.set(&r.Type, GameConsole, "vendor:"+in.Vendor)
 	}

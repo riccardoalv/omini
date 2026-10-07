@@ -285,3 +285,16 @@ func TestNodesAreClassifiedAndUserCorrectionsWin(t *testing.T) {
 		t.Fatalf("user correction not applied: %+v", nas)
 	}
 }
+
+func TestStatusCountsScannedHosts(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	gw := model.MACAddress("aa:00:00:00:00:01")
+	e.fake.set([]model.Device{{
+		Key: string(gw), Name: "gw", MACs: []model.MACAddress{gw}, IPs: []string{"10.0.0.1"},
+		Hosts: []model.Host{{IP: "10.0.0.1", MAC: &gw}, {IP: "10.0.0.2"}, {IP: "10.0.0.3"}},
+	}}, nil)
+	if got := e.collect(t).Statuses[0].Devices; got != 3 {
+		t.Fatalf("devices = %d, want 3 (gateway + 2 hosts)", got)
+	}
+}

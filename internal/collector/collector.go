@@ -240,7 +240,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 		sources = append(sources, topology.Source{IntegrationID: s.IntegrationID, Online: s.OK, Devices: s.Devices})
 		statuses = append(statuses, Status{
 			IntegrationID: s.IntegrationID, OK: s.OK, Error: s.Error,
-			CollectedAt: s.CollectedAt, DurationMs: s.DurationMs, Devices: len(s.Devices),
+			CollectedAt: s.CollectedAt, DurationMs: s.DurationMs, Devices: countDevices(s.Devices),
 		})
 	}
 	topo := topology.Build(sources)
@@ -348,4 +348,29 @@ func applyOverrides(n *topology.Node, e store.InventoryEntry) {
 	if e.Icon != "" {
 		n.Icon = e.Icon
 	}
+}
+
+// countDevices counts devices and the hosts they report (a network scan
+// reports a single gateway with every host under it), without counting a
+// device twice when it also appears among the hosts.
+func countDevices(devices []model.Device) int {
+	n := len(devices)
+	own := map[string]bool{}
+	for _, d := range devices {
+		for _, m := range d.MACs {
+			own[string(m)] = true
+		}
+		for _, ip := range d.IPs {
+			own[ip] = true
+		}
+	}
+	for _, d := range devices {
+		for _, h := range d.Hosts {
+			if (h.MAC != nil && own[string(*h.MAC)]) || own[h.IP] {
+				continue
+			}
+			n++
+		}
+	}
+	return n
 }

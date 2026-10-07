@@ -50,6 +50,11 @@ func TestClassify(t *testing.T) {
 		{
 			"Midea air conditioner",
 			Input{Kind: "client", Vendor: "GD Midea Air-Conditioning Equipment"},
+			Result{Type: AirConditioner, Brand: "midea"},
+		},
+		{
+			"Midea appliance that is not an air conditioner",
+			Input{Kind: "client", Vendor: "Midea Group"},
 			Result{Type: Appliance, Brand: "midea"},
 		},
 		{
