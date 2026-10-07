@@ -8,12 +8,14 @@ package topology
 
 import (
 	"fmt"
+	"net"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/oui"
 )
 
 // Source is the output of one integration instance.
@@ -64,8 +66,11 @@ type Node struct {
 	SignalDBM     *int64        `json:"signal_dbm,omitempty"`
 	MACCount      int           `json:"mac_count,omitempty"` // segments: MACs seen behind the port
 	Device        *model.Device `json:"device,omitempty"`    // managed devices: full collected data
-	Pinned        bool          `json:"pinned,omitempty"`    // pinned by the user: never collapsed
-	LastSeen      *time.Time    `json:"last_seen,omitempty"` // offline nodes: when they were last present
+	OS            string        `json:"os,omitempty"`
+	OpenPorts     []int         `json:"open_ports,omitempty"` // found by the network scan
+	Services      []string      `json:"services,omitempty"`   // mDNS/UPnP services
+	Pinned        bool          `json:"pinned,omitempty"`     // pinned by the user: never collapsed
+	LastSeen      *time.Time    `json:"last_seen,omitempty"`  // offline nodes: when they were last present
 }
 
 type Edge struct {
@@ -96,6 +101,9 @@ type builder struct {
 	// fdbPorts lists where each MAC was learned; portMACs counts MACs per port.
 	fdbPorts map[model.MACAddress][]portKey
 	portMACs map[portKey]int
+	// sources keeps every device record merged into a managed node (one per
+	// integration that reports it), so no integration's data is lost.
+	sources map[string][]*model.Device
 }
 
 // Build computes the topology for the given sources.
@@ -109,6 +117,7 @@ func Build(sources []Source) Topology {
 		uplinks:  map[portKey]string{},
 		fdbPorts: map[model.MACAddress][]portKey{},
 		portMACs: map[portKey]int{},
+		sources:  map[string][]*model.Device{},
 	}
 	for _, src := range sources {
 		for i := range src.Devices {
@@ -137,6 +146,7 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 			if richness(d) > richness(n.Device) {
 				n.Device = d
 			}
+			b.sources[id] = append(b.sources[id], d)
 			b.index(id, d, macs)
 			return
 		}
@@ -167,6 +177,7 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 		n.MAC = string(macs[0])
 	}
 	b.nodes[id] = n
+	b.sources[id] = []*model.Device{d}
 	b.index(id, d, macs)
 }
 
@@ -255,7 +266,12 @@ func (b *builder) lookup(nb *model.Neighbor) string {
 }
 
 func (b *builder) addNeighborEdges(id string) {
-	d := b.nodes[id].Device
+	for _, d := range b.sources[id] {
+		b.addNeighborEdgesOf(id, d)
+	}
+}
+
+func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 	for i := range d.Neighbors {
 		nb := &d.Neighbors[i]
 		target := b.lookup(nb)
@@ -355,7 +371,11 @@ func portSpeed(d *model.Device, port string) uint64 {
 func (b *builder) indexFDB(managed []string) {
 	for _, id := range managed {
 		seen := map[portKey]map[model.MACAddress]bool{}
-		for _, e := range b.nodes[id].Device.Fdb {
+		var fdb []model.FdbEntry
+		for _, d := range b.sources[id] {
+			fdb = append(fdb, d.Fdb...)
+		}
+		for _, e := range fdb {
 			if e.MAC.IsGroup() {
 				continue
 			}
@@ -464,34 +484,116 @@ type arpSeen struct {
 	ip    string
 }
 
+// hostSeen is a host reported by an integration (network scan, controller).
+type hostSeen struct {
+	node string
+	h    model.Host
+}
+
+func mergeHost(a, b model.Host) model.Host {
+	a.Hostnames = appendUniqueStr(a.Hostnames, b.Hostnames...)
+	a.Services = appendUniqueStr(a.Services, b.Services...)
+	a.Sources = appendUniqueStr(a.Sources, b.Sources...)
+	for _, p := range b.OpenPorts {
+		if !slices.Contains(a.OpenPorts, p) {
+			a.OpenPorts = append(a.OpenPorts, p)
+		}
+	}
+	if a.MAC == nil {
+		a.MAC = b.MAC
+	}
+	if a.Vendor == nil {
+		a.Vendor = b.Vendor
+	}
+	if a.Manufacturer == nil {
+		a.Manufacturer = b.Manufacturer
+	}
+	if a.Model == nil {
+		a.Model = b.Model
+	}
+	if a.OS == nil {
+		a.OS = b.OS
+	}
+	return a
+}
+
 func (b *builder) placeClients(managed []string) {
 	wifi := map[model.MACAddress]wifiSeen{}
 	arp := map[model.MACAddress]arpSeen{}
 	hostnames := map[model.MACAddress]string{}
 	leaseIPs := map[model.MACAddress]string{}
+	hostsByMAC := map[model.MACAddress]hostSeen{}
+	hostsByIP := map[string]hostSeen{} // hosts without a known MAC (e.g. other subnets)
 	for _, id := range managed {
-		d := b.nodes[id].Device
-		for _, w := range d.WirelessClients {
-			prev, ok := wifi[w.MAC]
-			if !ok || model.Deref(w.SignalDBM) > model.Deref(prev.c.SignalDBM) {
-				wifi[w.MAC] = wifiSeen{node: id, c: w}
-			}
+		for _, d := range b.sources[id] {
+			b.collectClientsOf(id, d, wifi, arp, hostnames, leaseIPs, hostsByMAC, hostsByIP)
 		}
-		for _, a := range d.Arp {
-			if _, ok := arp[a.MAC]; !ok {
-				arp[a.MAC] = arpSeen{node: id, iface: model.Deref(a.Interface), ip: a.IP}
-			}
+	}
+	b.placeCollected(wifi, arp, hostnames, leaseIPs, hostsByMAC, hostsByIP)
+}
+
+func (b *builder) collectClientsOf(id string, d *model.Device,
+	wifi map[model.MACAddress]wifiSeen, arp map[model.MACAddress]arpSeen,
+	hostnames, leaseIPs map[model.MACAddress]string,
+	hostsByMAC map[model.MACAddress]hostSeen, hostsByIP map[string]hostSeen,
+) {
+	for _, w := range d.WirelessClients {
+		prev, ok := wifi[w.MAC]
+		if !ok || model.Deref(w.SignalDBM) > model.Deref(prev.c.SignalDBM) {
+			wifi[w.MAC] = wifiSeen{node: id, c: w}
 		}
-		for _, l := range d.DhcpLeases {
-			if h := model.Deref(l.Hostname); h != "" {
-				hostnames[l.MAC] = h
+	}
+	for _, a := range d.Arp {
+		if _, ok := arp[a.MAC]; !ok {
+			arp[a.MAC] = arpSeen{node: id, iface: model.Deref(a.Interface), ip: a.IP}
+		}
+	}
+	for _, l := range d.DhcpLeases {
+		if h := model.Deref(l.Hostname); h != "" {
+			hostnames[l.MAC] = h
+		}
+		leaseIPs[l.MAC] = l.IP
+	}
+	for _, h := range d.Hosts {
+		if h.MAC != nil && !h.MAC.IsGroup() {
+			prev, ok := hostsByMAC[*h.MAC]
+			if ok {
+				h = mergeHost(prev.h, h)
+			} else {
+				prev.node = id
 			}
-			leaseIPs[l.MAC] = l.IP
+			hostsByMAC[*h.MAC] = hostSeen{node: prev.node, h: h}
+			continue
+		}
+		prev, ok := hostsByIP[h.IP]
+		if ok {
+			h = mergeHost(prev.h, h)
+		} else {
+			prev.node = id
+		}
+		hostsByIP[h.IP] = hostSeen{node: prev.node, h: h}
+	}
+}
+
+func (b *builder) placeCollected(
+	wifi map[model.MACAddress]wifiSeen, arp map[model.MACAddress]arpSeen,
+	hostnames, leaseIPs map[model.MACAddress]string,
+	hostsByMAC map[model.MACAddress]hostSeen, hostsByIP map[string]hostSeen,
+) {
+	// Hosts that are infrastructure we already know (e.g. the gateway) enrich that node.
+	for m, hs := range hostsByMAC {
+		if id, ok := b.byMAC[m]; ok {
+			enrich(b.nodes[id], hs.h)
+		}
+	}
+	for ip, hs := range hostsByIP {
+		if id, ok := b.byIP[ip]; ok {
+			enrich(b.nodes[id], hs.h)
 		}
 	}
 
-	// A client must be present now (Wi-Fi, MAC table or ARP); a DHCP lease alone
-	// only enriches, since leases outlive devices leaving the network.
+	// A client must be present now (Wi-Fi, MAC table, ARP or a scan); a DHCP
+	// lease alone only enriches, since leases outlive devices leaving the network.
 	present := map[model.MACAddress]bool{}
 	for m := range wifi {
 		present[m] = true
@@ -502,6 +604,9 @@ func (b *builder) placeClients(managed []string) {
 	for m := range arp {
 		present[m] = true
 	}
+	for m := range hostsByMAC {
+		present[m] = true
+	}
 	macs := make([]model.MACAddress, 0, len(present))
 	for m := range present {
 		if _, known := b.byMAC[m]; !known && !m.IsGroup() {
@@ -510,16 +615,21 @@ func (b *builder) placeClients(managed []string) {
 	}
 	slices.Sort(macs)
 
+	placed := map[string]bool{} // IPs that already have a node
 	for _, m := range macs {
+		hs, scanned := hostsByMAC[m]
 		n := &Node{
 			ID: "mac:" + string(m), Kind: KindClient, Role: "client", Online: true, MAC: string(m),
 			RandomMAC: m.IsRandomized(), Hostname: hostnames[m],
 		}
-		n.IP = arp[m].ip
-		if n.IP == "" {
-			n.IP = leaseIPs[m]
+		n.IP = firstNonEmpty(arp[m].ip, hs.h.IP, leaseIPs[m])
+		if scanned {
+			enrich(n, hs.h)
 		}
-		n.Label = firstNonEmpty(n.Hostname, n.IP, n.MAC)
+		if n.Vendor == "" {
+			n.Vendor = oui.Lookup(string(m))
+		}
+		n.Label = firstNonEmpty(shortName(n.Hostname), n.IP, n.MAC)
 
 		var kind EdgeKind
 		if w, ok := wifi[m]; ok {
@@ -536,12 +646,99 @@ func (b *builder) placeClients(managed []string) {
 			}
 		} else if a, ok := arp[m]; ok {
 			n.ParentID, n.Port, kind = a.node, a.iface, EdgeInferred
+		} else if scanned {
+			n.ParentID, kind = hs.node, EdgeInferred
 		}
 		b.nodes[n.ID] = n
+		placed[n.IP] = true
 		if n.ParentID != "" {
 			b.addEdge(n.ParentID, n.Port, n.ID, "", kind, 0)
 		}
 	}
+
+	// Hosts known only by IP (routed subnets, no ARP).
+	ips := make([]string, 0, len(hostsByIP))
+	for ip := range hostsByIP {
+		ips = append(ips, ip)
+	}
+	slices.Sort(ips)
+	for _, ip := range ips {
+		if _, known := b.byIP[ip]; known || placed[ip] {
+			continue
+		}
+		hs := hostsByIP[ip]
+		n := &Node{ID: "ip:" + ip, Kind: KindClient, Role: "client", Online: true, IP: ip, ParentID: hs.node}
+		enrich(n, hs.h)
+		n.Label = firstNonEmpty(shortName(n.Hostname), ip)
+		b.nodes[n.ID] = n
+		b.addEdge(hs.node, "", n.ID, "", EdgeInferred, 0)
+	}
+}
+
+// enrich copies what a scan learned about a host into its node.
+func enrich(n *Node, h model.Host) {
+	if n.Hostname == "" {
+		n.Hostname = bestHostname(h.Hostnames)
+	}
+	if n.Vendor == "" {
+		n.Vendor = firstNonEmpty(model.Deref(h.Manufacturer), model.Deref(h.Vendor))
+	}
+	if n.Model == "" {
+		n.Model = model.Deref(h.Model)
+	}
+	if n.OS == "" {
+		n.OS = model.Deref(h.OS)
+	}
+	for _, p := range h.OpenPorts {
+		if !slices.Contains(n.OpenPorts, int(p)) {
+			n.OpenPorts = append(n.OpenPorts, int(p))
+		}
+	}
+	slices.Sort(n.OpenPorts)
+	n.Services = appendUniqueStr(n.Services, h.Services...)
+}
+
+// bestHostname prefers real names over reverse-DNS placeholders and machine
+// identifiers (e.g. Home Assistant announces itself as "<uuid>.local").
+func bestHostname(names []string) string {
+	for _, n := range names {
+		if !strings.HasSuffix(n, ".arpa") && net.ParseIP(n) == nil && !isIdentifier(shortName(n)) {
+			return n
+		}
+	}
+	return ""
+}
+
+// isIdentifier reports whether a name is a long hex/UUID string rather than a name.
+func isIdentifier(s string) bool {
+	s = strings.ReplaceAll(s, "-", "")
+	if len(s) < 16 {
+		return false
+	}
+	for _, c := range strings.ToLower(s) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// shortName turns "nas.home.lan" or "Living-Room.local" into "nas" / "Living-Room".
+func shortName(name string) string {
+	if name == "" || net.ParseIP(name) != nil {
+		return name
+	}
+	short, _, _ := strings.Cut(name, ".")
+	return short
+}
+
+func appendUniqueStr(list []string, items ...string) []string {
+	for _, it := range items {
+		if it != "" && !slices.Contains(list, it) {
+			list = append(list, it)
+		}
+	}
+	return list
 }
 
 // groupSegments replaces "many clients behind one access port" with a
