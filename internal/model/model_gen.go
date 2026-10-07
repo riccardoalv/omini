@@ -54,6 +54,9 @@ type Device struct {
 	// Fdb corresponds to the JSON schema field "fdb".
 	Fdb []FdbEntry `json:"fdb,omitempty,omitzero" yaml:"fdb,omitempty"`
 
+	// Firmware corresponds to the JSON schema field "firmware".
+	Firmware *Firmware `json:"firmware,omitempty,omitzero" yaml:"firmware,omitempty"`
+
 	// Upstream gateways monitored by a router or firewall.
 	Gateways []Gateway `json:"gateways,omitempty,omitzero" yaml:"gateways,omitempty"`
 
@@ -73,6 +76,9 @@ type Device struct {
 	// Stable unique id of the device within its integration (e.g. base MAC or
 	// serial).
 	Key string `json:"key" yaml:"key"`
+
+	// System load averages over 1, 5 and 15 minutes.
+	LoadAvg []float64 `json:"load_avg,omitempty,omitzero" yaml:"load_avg,omitempty"`
 
 	// All MAC addresses owned by the device.
 	MACs []MACAddress `json:"macs,omitempty,omitzero" yaml:"macs,omitempty"`
@@ -97,6 +103,15 @@ type Device struct {
 
 	// Serial corresponds to the JSON schema field "serial".
 	Serial *string `json:"serial,omitempty,omitzero" yaml:"serial,omitempty"`
+
+	// Mounted file systems / volumes.
+	Storage []Storage `json:"storage,omitempty,omitzero" yaml:"storage,omitempty"`
+
+	// Swap in use.
+	SwapPct *float64 `json:"swap_pct,omitempty,omitzero" yaml:"swap_pct,omitempty"`
+
+	// Temperature sensors (CPU cores, disks, board).
+	Temperatures []Temperature `json:"temperatures,omitempty,omitzero" yaml:"temperatures,omitempty"`
 
 	// UptimeS corresponds to the JSON schema field "uptime_s".
 	UptimeS *uint64 `json:"uptime_s,omitempty,omitzero" yaml:"uptime_s,omitempty"`
@@ -169,11 +184,20 @@ func (j *Device) UnmarshalJSON(value []byte) error {
 	if plain.CPUPct != nil && 0 > *plain.CPUPct {
 		return fmt.Errorf("field %s: must be >= %v", "cpu_pct", 0)
 	}
+	if len(plain.LoadAvg) > 3 {
+		return fmt.Errorf("field %s length: must be <= %d", "load_avg", 3)
+	}
 	if plain.MemPct != nil && 100 < *plain.MemPct {
 		return fmt.Errorf("field %s: must be <= %v", "mem_pct", 100)
 	}
 	if plain.MemPct != nil && 0 > *plain.MemPct {
 		return fmt.Errorf("field %s: must be >= %v", "mem_pct", 0)
+	}
+	if plain.SwapPct != nil && 100 < *plain.SwapPct {
+		return fmt.Errorf("field %s: must be <= %v", "swap_pct", 100)
+	}
+	if plain.SwapPct != nil && 0 > *plain.SwapPct {
+		return fmt.Errorf("field %s: must be >= %v", "swap_pct", 0)
 	}
 	*j = Device(plain)
 	return nil
@@ -248,6 +272,28 @@ func (j *FdbEntry) UnmarshalJSON(value []byte) error {
 	}
 	*j = FdbEntry(plain)
 	return nil
+}
+
+// Installed software/firmware version and available updates, as last checked by
+// the device.
+type Firmware struct {
+	// When the device last checked for updates; absent if it never did.
+	CheckedAt *time.Time `json:"checked_at,omitempty,omitzero" yaml:"checked_at,omitempty"`
+
+	// Current corresponds to the JSON schema field "current".
+	Current *string `json:"current,omitempty,omitzero" yaml:"current,omitempty"`
+
+	// Newest version the device knows about.
+	Latest *string `json:"latest,omitempty,omitzero" yaml:"latest,omitempty"`
+
+	// Installing the updates requires a reboot.
+	NeedsReboot *bool `json:"needs_reboot,omitempty,omitzero" yaml:"needs_reboot,omitempty"`
+
+	// UpdateAvailable corresponds to the JSON schema field "update_available".
+	UpdateAvailable *bool `json:"update_available,omitempty,omitzero" yaml:"update_available,omitempty"`
+
+	// Number of pending package/firmware updates.
+	Updates *uint64 `json:"updates,omitempty,omitzero" yaml:"updates,omitempty"`
 }
 
 // One input of the 'add integration' form. Declared by core integrations and in
@@ -926,6 +972,109 @@ type PluginResponse struct {
 
 	// Message corresponds to the JSON schema field "message".
 	Message *string `json:"message,omitempty,omitzero" yaml:"message,omitempty"`
+}
+
+// A mounted file system or volume.
+type Storage struct {
+	// Device corresponds to the JSON schema field "device".
+	Device *string `json:"device,omitempty,omitzero" yaml:"device,omitempty"`
+
+	// FsType corresponds to the JSON schema field "fs_type".
+	FsType *string `json:"fs_type,omitempty,omitzero" yaml:"fs_type,omitempty"`
+
+	// Mount point, e.g. "/".
+	Mount string `json:"mount" yaml:"mount"`
+
+	// TotalBytes corresponds to the JSON schema field "total_bytes".
+	TotalBytes *uint64 `json:"total_bytes,omitempty,omitzero" yaml:"total_bytes,omitempty"`
+
+	// UsedBytes corresponds to the JSON schema field "used_bytes".
+	UsedBytes *uint64 `json:"used_bytes,omitempty,omitzero" yaml:"used_bytes,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Storage) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["mount"]; raw != nil && !ok {
+		return fmt.Errorf("field mount in Storage: required")
+	}
+	type Plain Storage
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = Storage(plain)
+	return nil
+}
+
+// One temperature sensor.
+type Temperature struct {
+	// Celsius corresponds to the JSON schema field "celsius".
+	Celsius float64 `json:"celsius" yaml:"celsius"`
+
+	// Kind corresponds to the JSON schema field "kind".
+	Kind *TemperatureKind `json:"kind,omitempty,omitzero" yaml:"kind,omitempty"`
+
+	// Readable sensor name, e.g. "CPU 0", "ada0".
+	Sensor string `json:"sensor" yaml:"sensor"`
+}
+
+type TemperatureKind string
+
+const TemperatureKindBoard TemperatureKind = "board"
+const TemperatureKindCPU TemperatureKind = "cpu"
+const TemperatureKindDisk TemperatureKind = "disk"
+const TemperatureKindOther TemperatureKind = "other"
+
+var enumValues_TemperatureKind = []interface{}{
+	"cpu",
+	"disk",
+	"board",
+	"other",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *TemperatureKind) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_TemperatureKind {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_TemperatureKind, v)
+	}
+	*j = TemperatureKind(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Temperature) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["celsius"]; raw != nil && !ok {
+		return fmt.Errorf("field celsius in Temperature: required")
+	}
+	if _, ok := raw["sensor"]; raw != nil && !ok {
+		return fmt.Errorf("field sensor in Temperature: required")
+	}
+	type Plain Temperature
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = Temperature(plain)
+	return nil
 }
 
 // A web interface found on a host.

@@ -92,6 +92,23 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    swap: 'Swap',
+    disk: 'Disco {mount}',
+    usedOf: '{used} de {total}',
+    updates: 'Atualizações',
+    updatesN: '1 atualização | {n} atualizações',
+    updateAvailable: 'Atualização disponível',
+    upToDate: 'Em dia',
+    needsReboot: 'precisa reiniciar',
+    checked: 'verificado {when}',
+    notChecked: 'Não verificado',
+    notCheckedHint:
+      'O dispositivo ainda não procurou atualizações (OPNsense: Sistema → Firmware → Verificar atualizações). O Omini nunca inicia uma verificação.',
+    temperature: 'Temperatura',
+    cpuTemperature: 'Temperatura da CPU',
+    load: 'Carga',
+    loadHint:
+      'Média de processos esperando pela CPU em 1, 5 e 15 minutos; acima do número de núcleos significa sobrecarga.',
     showAll: 'Mostrar todos ({n})',
     showLess: 'Mostrar menos',
     resize: 'Arraste para redimensionar',

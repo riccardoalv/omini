@@ -2,30 +2,64 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-const props = defineProps<{ cpu?: number; memory?: number }>()
+import { formatBytes } from '@/lib/format'
+import type { Storage } from '@/lib/types'
+
+const props = defineProps<{
+  cpu?: number
+  memory?: number
+  swap?: number
+  /** File systems: one bar each, with used of total. */
+  storage?: Storage[]
+}>()
 const { t } = useI18n()
 
-const level = (pct: number) => (pct >= 85 ? 'high' : pct >= 60 ? 'medium' : 'low')
+// Disks fill up on purpose (caches, logs): they warn later than CPU and memory.
+const level = (pct: number, warn = 60, high = 85) =>
+  pct >= high ? 'high' : pct >= warn ? 'medium' : 'low'
 
-const bars = computed(() =>
-  [
-    { key: 'cpu', label: t('panel.cpu'), value: props.cpu },
-    { key: 'memory', label: t('panel.memory'), value: props.memory },
-  ]
-    .filter((b): b is { key: string; label: string; value: number } => b.value !== undefined)
-    .map((b) => {
-      const pct = Math.min(100, Math.max(0, b.value))
-      return { ...b, pct, level: level(pct) }
-    }),
-)
+interface Bar {
+  key: string
+  label: string
+  pct: number
+  level: string
+  detail?: string
+}
+
+const bars = computed<Bar[]>(() => {
+  const out: Bar[] = []
+  const add = (key: string, label: string, value?: number, detail?: string, disk = false) => {
+    if (value === undefined) return
+    const pct = Math.min(100, Math.max(0, value))
+    out.push({ key, label, pct, level: disk ? level(pct, 80, 90) : level(pct), detail })
+  }
+  add('cpu', t('panel.cpu'), props.cpu)
+  add('memory', t('panel.memory'), props.memory)
+  add('swap', t('panel.swap'), props.swap)
+  for (const s of props.storage ?? []) {
+    if (!s.total_bytes) continue
+    const used = s.used_bytes ?? 0
+    add(
+      `disk:${s.mount}`,
+      t('panel.disk', { mount: s.mount }),
+      (used / s.total_bytes) * 100,
+      t('panel.usedOf', { used: formatBytes(used), total: formatBytes(s.total_bytes) }),
+      true,
+    )
+  }
+  return out
+})
 </script>
 
 <template>
   <div v-if="bars.length" class="bars">
     <div v-for="b in bars" :key="b.key" class="bar" :data-test="`bar-${b.key}`">
       <div class="head">
-        <span>{{ b.label }}</span>
-        <strong class="value" :class="b.level">{{ Math.round(b.pct) }}%</strong>
+        <span class="label">{{ b.label }}</span>
+        <span class="right">
+          <span v-if="b.detail" class="detail">{{ b.detail }}</span>
+          <strong class="value" :class="b.level">{{ Math.round(b.pct) }}%</strong>
+        </span>
       </div>
       <div
         class="track"
@@ -55,6 +89,22 @@ const bars = computed(() =>
   margin-bottom: 6px;
   font-size: 13px;
   color: var(--text-muted);
+}
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.right {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: none;
+}
+.detail {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .value {
   font-size: 15px;

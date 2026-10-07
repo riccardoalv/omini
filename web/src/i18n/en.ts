@@ -89,6 +89,23 @@ export default {
     },
   },
   panel: {
+    swap: 'Swap',
+    disk: 'Disk {mount}',
+    usedOf: '{used} of {total}',
+    updates: 'Updates',
+    updatesN: '1 update | {n} updates',
+    updateAvailable: 'Update available',
+    upToDate: 'Up to date',
+    needsReboot: 'needs a reboot',
+    checked: 'checked {when}',
+    notChecked: 'Not checked',
+    notCheckedHint:
+      'The device has not checked for updates yet (OPNsense: System → Firmware → Check for updates). Omini never starts a check.',
+    temperature: 'Temperature',
+    cpuTemperature: 'CPU temperature',
+    load: 'Load',
+    loadHint:
+      'Average number of processes waiting for the CPU over 1, 5 and 15 minutes; above the number of cores means it is overloaded.',
     showAll: 'Show all ({n})',
     showLess: 'Show fewer',
     resize: 'Drag to resize',

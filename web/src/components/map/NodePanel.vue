@@ -199,10 +199,73 @@ const summary = computed(() => {
   if (!node) return []
   const d = node.device
   const phys = physicalPorts.value
-  const out: { key: string; label: string; value: string }[] = []
+  const out: {
+    key: string
+    label: string
+    value: string
+    tone?: 'ok' | 'warn' | 'danger' | 'muted'
+    hint?: string
+  }[] = []
   if (d?.uptime_s !== undefined)
     out.push({ key: 'uptime', label: t('panel.uptime'), value: formatUptime(d.uptime_s) })
   if (d?.os_version) out.push({ key: 'version', label: t('panel.version'), value: d.os_version })
+  const fw = d?.firmware
+  if (fw) {
+    const checked = fw.checked_at ? formatAgo(fw.checked_at, locale.value) : undefined
+    if (fw.update_available)
+      out.push({
+        key: 'updates',
+        label: t('panel.updates'),
+        value: [
+          fw.updates ? t('panel.updatesN', fw.updates) : t('panel.updateAvailable'),
+          fw.latest && fw.latest !== fw.current ? `→ ${fw.latest}` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        tone: 'warn',
+        hint: [
+          fw.needs_reboot ? t('panel.needsReboot') : '',
+          checked ? t('panel.checked', { when: checked }) : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })
+    else if (fw.update_available === false)
+      out.push({
+        key: 'updates',
+        label: t('panel.updates'),
+        value: t('panel.upToDate'),
+        tone: 'ok',
+        hint: checked ? t('panel.checked', { when: checked }) : undefined,
+      })
+    else
+      out.push({
+        key: 'updates',
+        label: t('panel.updates'),
+        value: t('panel.notChecked'),
+        tone: 'muted',
+        hint: t('panel.notCheckedHint'),
+      })
+  }
+  const temps = d?.temperatures ?? []
+  if (temps.length) {
+    const cpu = temps.filter((x) => x.kind === 'cpu')
+    const hottest = Math.max(...(cpu.length ? cpu : temps).map((x) => x.celsius))
+    out.push({
+      key: 'temperature',
+      label: t(cpu.length ? 'panel.cpuTemperature' : 'panel.temperature'),
+      value: `${Math.round(hottest)} °C`,
+      tone: hottest >= 85 ? 'danger' : hottest >= 70 ? 'warn' : undefined,
+      hint: temps.map((x) => `${x.sensor}: ${Math.round(x.celsius)} °C`).join(' · '),
+    })
+  }
+  if (d?.load_avg?.length)
+    out.push({
+      key: 'load',
+      label: t('panel.load'),
+      value: d.load_avg.map((v) => v.toFixed(2)).join(' · '),
+      hint: t('panel.loadHint'),
+    })
   const model = node.model ?? d?.model
   if (model) out.push({ key: 'model', label: t('panel.model'), value: model })
   if (phys.length)
@@ -524,13 +587,28 @@ async function save(patch: {
               <span class="up"><ArrowUp :size="13" />{{ formatRate(flow.up) }}</span>
             </span>
           </div>
-          <div v-for="s in summary" :key="s.key" class="tile" :data-test="`tile-${s.key}`">
+          <div
+            v-for="s in summary"
+            :key="s.key"
+            class="tile"
+            :class="s.tone"
+            :title="s.hint"
+            :data-test="`tile-${s.key}`"
+          >
             <span class="tile-label">{{ s.label }}</span>
-            <span class="tile-value" :title="s.value">{{ s.value }}</span>
+            <span class="tile-value">{{ s.value }}</span>
+            <span v-if="s.hint && s.key === 'updates' && s.tone !== 'muted'" class="tile-hint">{{
+              s.hint
+            }}</span>
           </div>
         </div>
 
-        <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
+        <ResourceBars
+          :cpu="n.device?.cpu_pct"
+          :memory="n.device?.mem_pct"
+          :swap="n.device?.swap_pct"
+          :storage="n.device?.storage"
+        />
 
         <section v-if="n.kind === 'device'" class="block" data-test="ports-section">
           <h3>{{ t('panel.ports') }}</h3>
@@ -1007,6 +1085,29 @@ header {
 }
 .tile.traffic {
   grid-column: span 2;
+}
+.tile.ok .tile-value {
+  color: var(--ok);
+}
+.tile.warn {
+  border-color: color-mix(in srgb, var(--warn) 60%, var(--border));
+}
+.tile.warn .tile-value {
+  color: var(--warn);
+}
+.tile.danger {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+}
+.tile.danger .tile-value {
+  color: var(--danger);
+}
+.tile.muted .tile-value {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.tile-hint {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 .tile.traffic .tile-value {
   display: flex;

@@ -53,6 +53,37 @@
           "minimum": 0,
           "maximum": 100
         },
+        "swap_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Swap in use."
+        },
+        "load_avg": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 3,
+          "description": "System load averages over 1, 5 and 15 minutes."
+        },
+        "temperatures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Temperature"
+          },
+          "description": "Temperature sensors (CPU cores, disks, board)."
+        },
+        "storage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Storage"
+          },
+          "description": "Mounted file systems / volumes."
+        },
+        "firmware": {
+          "$ref": "#/$defs/Firmware"
+        },
         "macs": {
           "type": "array",
           "items": {
@@ -691,6 +722,92 @@
         },
         "title": {
           "type": "string"
+        }
+      }
+    },
+    "Temperature": {
+      "type": "object",
+      "description": "One temperature sensor.",
+      "required": [
+        "sensor",
+        "celsius"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sensor": {
+          "type": "string",
+          "description": "Readable sensor name, e.g. \"CPU 0\", \"ada0\"."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "cpu",
+            "disk",
+            "board",
+            "other"
+          ]
+        },
+        "celsius": {
+          "type": "number"
+        }
+      }
+    },
+    "Storage": {
+      "type": "object",
+      "description": "A mounted file system or volume.",
+      "required": [
+        "mount"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mount": {
+          "type": "string",
+          "description": "Mount point, e.g. \"/\"."
+        },
+        "device": {
+          "type": "string"
+        },
+        "fs_type": {
+          "type": "string"
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Firmware": {
+      "type": "object",
+      "description": "Installed software/firmware version and available updates, as last checked by the device.",
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "type": "string"
+        },
+        "latest": {
+          "type": "string",
+          "description": "Newest version the device knows about."
+        },
+        "update_available": {
+          "type": "boolean"
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of pending package/firmware updates."
+        },
+        "needs_reboot": {
+          "type": "boolean",
+          "description": "Installing the updates requires a reboot."
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the device last checked for updates; absent if it never did."
         }
       }
     }

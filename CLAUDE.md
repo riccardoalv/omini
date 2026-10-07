@@ -65,6 +65,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Device panel | CPU and memory as bars (green < 60%, yellow < 85%, red). **Front view of the ports** (2D, like a switch): one jack per physical port colored by link speed (10G purple, 5G blue, 2.5G teal, 1G green, ≤100M amber, down empty), two rows above 8 ports (odd on top), hover/focus for details (speed, duplex, media, IPs, MAC, traffic, errors, connected device), click opens the connected device. A table lists every port, VLANs included |
 | WAN nodes | Each internet uplink of a router/firewall (an interface with gateways, flagged `wan` by the integration) is a **WAN node, parent of the firewall** — several WANs, several parents. It shows the uplink's name, speed (of the physical port, following PPPoE → VLAN → port), gateway latency and a status dot (green / yellow if a gateway is degraded / red when down). Devices seen on the WAN port (the ISP modem) hang under it. Not stored in the inventory |
 | Port connector | Integrations report `connector` (rj45 / sfp / qsfp). OPNsense: from the current media (`1000baseT` = RJ45; `SR/LR/SX/LX/CX/CR/Twinax` = SFP), or from the supported media when the port is down and they all agree; virtual NICs (virtio...) have none and are not drawn. The front view draws SFP cages and names the generation by speed (SFP, SFP+, SFP28, QSFP+) |
+| System health | Vendor-neutral fields on `Device`, ready for insights: `swap_pct`, `load_avg` (1/5/15 min), `temperatures[]` (sensor, kind cpu/disk/board/other, °C), `storage[]` (mount, fs, total/used bytes) and `firmware` (current, latest, update_available, updates, needs_reboot, checked_at — what the device knows from **its own last check**: Omini never starts a check, read-only). Device panel: tiles for updates (yellow when pending, "Not checked" when the device never checked), hottest CPU temperature (yellow ≥ 70 °C, red ≥ 85 °C) and load; bars for swap and each disk (disks yellow ≥ 80 %, red ≥ 90 %). OPNsense reads them from the dashboard endpoints and `core/firmware/status` (privilege *System: Firmware*); plugins built for an older SDK still run without them |
 | Port descriptions | The user can describe any port ("Uplink to the rack"): pencil next to the port in the device panel; stored in Omini (`port_labels`, never written to the device), shown instead of the device's description; empty restores it |
 | Live traffic (early v0.2) | The collector turns interface byte counters into rates: difference between two collections ÷ time (average of the polling interval; counter resets skip a round; a failed collection clears them). Nodes carry `traffic` per interface. Map: links show only their **maximum speed**; **traffic is shown on the devices** as a ↓/↑ badge: routers/firewalls and WAN nodes show internet traffic, a device reached by a link of its own shows that link's traffic. A port shared by several devices (e.g. a LAN bridge with a switch behind it) gets one speed pill at the port (its traffic stays in the port view). A bridge runs at its fastest physical member's speed |
 | Link speed on the map | Shown as a colored pill at the end of each link whose speed is known: LLDP/switch-port links, and a device port with a single link (e.g. WAN → modem). A port shared through ARP (switch behind it) has no per-device speed. When the port has a name — the user's description, else the device's own if it differs from the interface name ("LAN" for igb1) — the pill shows it before the speed: "LAN · 10G" |
@@ -103,6 +104,7 @@ Every integration returns a list of devices in this vendor-neutral shape:
   - `arp[]` — IP, MAC, interface
   - `dhcp_leases[]` — IP, MAC, hostname
   - `wireless_clients[]` — MAC, interface, SSID, signal (dBm)
+  - health: `swap_pct`, `load_avg[]`, `temperatures[]`, `storage[]`, `firmware` (pending updates)
 
 Rules:
 - **MACs are always normalized** to `aa:bb:cc:dd:ee:ff`.
@@ -217,7 +219,7 @@ Traffic: rate = Δbytes / Δtime between consecutive polls, handling counter wra
 
 ## Insights
 
-Each rule is a function `(devices, topology) -> insights[]` with `severity` (`critical|warning|info`), `title`, `detail`, optional `node_id`. MVP rules: offline, duplicate IP, uplink < 1 Gbps, interface errors, Wi-Fi signal < -75 dBm, CPU > 80%, unmanaged segment, unknown LLDP neighbor, saturated link (> 80% utilization).
+Each rule is a function `(devices, topology) -> insights[]` with `severity` (`critical|warning|info`), `title`, `detail`, optional `node_id`. MVP rules: offline, duplicate IP, update pending, disk almost full, hot CPU, uplink < 1 Gbps, interface errors, Wi-Fi signal < -75 dBm, CPU > 80%, unmanaged segment, unknown LLDP neighbor, saturated link (> 80% utilization).
 
 ## Conventions
 

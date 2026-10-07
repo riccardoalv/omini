@@ -113,6 +113,28 @@ describe('ResourceBars', () => {
     expect(w.get('[data-test=bar-memory] [role=meter]').attributes('aria-valuenow')).toBe('91')
   })
 
+  it('adds swap and one bar per disk, which warn later', () => {
+    const GiB = 1024 ** 3
+    const w = mount(ResourceBars, {
+      props: {
+        swap: 0,
+        storage: [
+          { mount: '/', total_bytes: 10 * GiB, used_bytes: 8.2 * GiB },
+          { mount: '/boot/efi', total_bytes: 256 * 1024 ** 2, used_bytes: 0 },
+          { mount: '/dev', total_bytes: 0 },
+        ],
+      },
+      global: { plugins: plugins() },
+    })
+    expect(w.get('[data-test=bar-swap]').text()).toContain('0%')
+    const root = w.get('[data-test="bar-disk:/"]')
+    expect(root.text()).toContain('Disk /')
+    expect(root.text()).toContain('8.2 GiB of 10.0 GiB')
+    // 82% is yellow for a disk (it would be red for memory).
+    expect(root.get('.fill').classes()).toContain('medium')
+    expect(w.find('[data-test="bar-disk:/dev"]').exists()).toBe(false)
+  })
+
   it('shows nothing without data', () => {
     const w = mount(ResourceBars, { props: {}, global: { plugins: plugins() } })
     expect(w.find('.bars').exists()).toBe(false)

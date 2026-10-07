@@ -425,3 +425,53 @@ describe('NodePanel clients', () => {
     expect(w.get('[data-test=tile-clients]').text()).toContain('12')
   })
 })
+
+describe('NodePanel system health', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+  })
+
+  const withHealth = (device: Partial<NonNullable<TopoNode['device']>>): TopoNode => ({
+    ...firewall,
+    device: { key: 'fw', name: 'fw', ...device },
+  })
+
+  it('shows pending updates, the hottest CPU and the load', () => {
+    const w = mountPanel(
+      withHealth({
+        firmware: {
+          current: '26.7.4',
+          latest: '26.7.5',
+          update_available: true,
+          updates: 3,
+          needs_reboot: true,
+          checked_at: new Date().toISOString(),
+        },
+        temperatures: [
+          { sensor: 'CPU 0', kind: 'cpu', celsius: 47 },
+          { sensor: 'CPU 1', kind: 'cpu', celsius: 72.4 },
+          { sensor: 'Zone', kind: 'board', celsius: 90 },
+        ],
+        load_avg: [0.34, 0.35, 0.33],
+      }),
+    )
+    const updates = w.get('[data-test=tile-updates]')
+    expect(updates.text()).toContain('3 updates → 26.7.5')
+    expect(updates.text()).toContain('needs a reboot')
+    expect(updates.classes()).toContain('warn')
+    const temp = w.get('[data-test=tile-temperature]')
+    expect(temp.text()).toContain('CPU temperature')
+    expect(temp.text()).toContain('72 °C')
+    expect(temp.classes()).toContain('warn')
+    expect(temp.attributes('title')).toContain('Zone: 90 °C')
+    expect(w.get('[data-test=tile-load]').text()).toContain('0.34 · 0.35 · 0.33')
+  })
+
+  it('says when the device is up to date or never checked', () => {
+    const ok = mountPanel(withHealth({ firmware: { current: '26.7.5', update_available: false } }))
+    expect(ok.get('[data-test=tile-updates]').text()).toContain('Up to date')
+    const never = mountPanel(withHealth({ firmware: { current: '26.7.5' } }))
+    expect(never.get('[data-test=tile-updates]').text()).toContain('Not checked')
+    expect(never.get('[data-test=tile-updates]').attributes('title')).toContain('Check for updates')
+  })
+})

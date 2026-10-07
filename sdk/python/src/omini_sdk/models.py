@@ -78,6 +78,68 @@ class WebService(BaseModel):
     title: str | None = None
 
 
+class Temperature(BaseModel):
+    """
+    One temperature sensor.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    sensor: str
+    """
+    Readable sensor name, e.g. "CPU 0", "ada0".
+    """
+    kind: Literal["cpu", "disk", "board", "other"] | None = None
+    celsius: float
+
+
+class Storage(BaseModel):
+    """
+    A mounted file system or volume.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    mount: str
+    """
+    Mount point, e.g. "/".
+    """
+    device: str | None = None
+    fs_type: str | None = None
+    total_bytes: Annotated[int | None, Field(ge=0)] = None
+    used_bytes: Annotated[int | None, Field(ge=0)] = None
+
+
+class Firmware(BaseModel):
+    """
+    Installed software/firmware version and available updates, as last checked by the device.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    current: str | None = None
+    latest: str | None = None
+    """
+    Newest version the device knows about.
+    """
+    update_available: bool | None = None
+    updates: Annotated[int | None, Field(ge=0)] = None
+    """
+    Number of pending package/firmware updates.
+    """
+    needs_reboot: bool | None = None
+    """
+    Installing the updates requires a reboot.
+    """
+    checked_at: AwareDatetime | None = None
+    """
+    When the device last checked for updates; absent if it never did.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -349,6 +411,23 @@ class Device(BaseModel):
     uptime_s: Annotated[int | None, Field(ge=0)] = None
     cpu_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
     mem_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
+    swap_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
+    """
+    Swap in use.
+    """
+    load_avg: Annotated[list[float] | None, Field(max_length=3)] = None
+    """
+    System load averages over 1, 5 and 15 minutes.
+    """
+    temperatures: list[Temperature] | None = None
+    """
+    Temperature sensors (CPU cores, disks, board).
+    """
+    storage: list[Storage] | None = None
+    """
+    Mounted file systems / volumes.
+    """
+    firmware: Firmware | None = None
     macs: list[MacAddress] | None = None
     """
     All MAC addresses owned by the device.

@@ -46,6 +46,30 @@ export interface WANLink {
   gateways?: Gateway[]
 }
 
+export interface Temperature {
+  sensor: string
+  kind?: 'cpu' | 'disk' | 'board' | 'other'
+  celsius: number
+}
+
+export interface Storage {
+  mount: string
+  device?: string
+  fs_type?: string
+  total_bytes?: number
+  used_bytes?: number
+}
+
+/** Version and pending updates, as of the device's last check. */
+export interface Firmware {
+  current?: string
+  latest?: string
+  update_available?: boolean
+  updates?: number
+  needs_reboot?: boolean
+  checked_at?: string
+}
+
 export interface Device {
   key: string
   name: string
@@ -62,6 +86,12 @@ export interface Device {
   interfaces?: Interface[]
   gateways?: Gateway[]
   hosts?: { ip: string; mac?: string; sources?: string[] }[]
+  swap_pct?: number
+  /** Over 1, 5 and 15 minutes. */
+  load_avg?: number[]
+  temperatures?: Temperature[]
+  storage?: Storage[]
+  firmware?: Firmware
   dhcp_leases?: { ip: string; mac: string; hostname?: string }[]
   arp?: { ip: string; mac: string; interface?: string }[]
   serial?: string

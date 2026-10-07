@@ -30,7 +30,7 @@ What makes Omini, Omini:
 - **Traffic flow map** — per-link utilization computed from interface counters, refreshed periodically and rendered on the map.
 - **Connected clients** — every device on the network with IP, MAC, hostname, where it is attached (switch/port or AP/SSID) and Wi-Fi signal.
 - **Devices without API** — devices that cannot be integrated (e.g. consumer routers in AP mode, unmanaged switches) are **inferred** from what other devices see, and appear as "unmanaged" nodes you can name and position.
-- **Insights** — simple, useful alerts: device offline, duplicate IP, uplink negotiated below 1 Gbps, interface errors, weak Wi-Fi signal, high CPU, likely unmanaged switch, unknown LLDP neighbor, saturated link.
+- **Insights** — simple, useful alerts: device offline, duplicate IP, uplink negotiated below 1 Gbps, interface errors, weak Wi-Fi signal, high CPU, hot CPU, disk almost full, firmware update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link.
 - **Interactive map** — drag nodes (positions are saved), click a node to see its ports, traffic and clients.
 - **Plugin store** — install integrations with one click from a curated list, or from any GitHub repository URL.
 - **Short traffic history** — click a link to see its traffic over the last ~24h.
