@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/riccardoalv/omini/compare/v0.1.2...v0.2.0) (2026-10-07)
+
+
+### Features
+
+* **map:** resizable device panel with a clearer layout; quick nmap versions by default ([937c5e5](https://github.com/riccardoalv/omini/commit/937c5e5d693d0356866723d91e0d9a287b3c8c45))
+* **map:** show the port's name next to the link speed ([50ebe30](https://github.com/riccardoalv/omini/commit/50ebe306a201910c3294b0b62a8f57c527721957))
+* **nmap:** configurable device scan, light by default ([9fd084e](https://github.com/riccardoalv/omini/commit/9fd084ef089676107f73116c05fdfe6cb94e47ac))
+* **nmap:** deep scan from the device panel (top 1024 ports, -sV -sC, OS with permission) ([6f997b2](https://github.com/riccardoalv/omini/commit/6f997b2b853c2343990f193d109d56006436d273))
+* scan one device with nmap from its panel ([ba2a447](https://github.com/riccardoalv/omini/commit/ba2a4478610922b7d0a67bc503743d6311dfd0cd))
+* **schema:** system health — load, swap, disks, temperatures and pending updates ([3da871c](https://github.com/riccardoalv/omini/commit/3da871c05a13587bf206d2a8334b86e8a2418dd8))
+
 ## [0.1.2](https://github.com/riccardoalv/omini/compare/v0.1.1...v0.1.2) (2026-10-07)
 
 
