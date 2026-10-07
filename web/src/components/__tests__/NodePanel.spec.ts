@@ -35,7 +35,9 @@ const mountPanel = (node: TopoNode) =>
   })
 
 describe('NodePanel web interface', () => {
-  beforeEach(() => vi.mocked(api.webServices).mockReset())
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockReset()
+  })
 
   it('offers to open the detected web interface in a new tab', async () => {
     vi.mocked(api.webServices).mockResolvedValue([
@@ -73,7 +75,9 @@ describe('NodePanel web interface', () => {
 })
 
 describe('NodePanel identification', () => {
-  beforeEach(() => vi.mocked(api.webServices).mockResolvedValue([]))
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+  })
 
   it('shows what was detected and from what', async () => {
     const w = mountPanel({

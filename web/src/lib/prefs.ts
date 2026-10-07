@@ -14,6 +14,8 @@ export interface Prefs {
   layoutDirection: 'RIGHT' | 'DOWN'
   /** Sidebar shows labels next to icons. */
   sidebarExpanded: boolean
+  /** Hide devices that are offline from the map. */
+  hideOffline: boolean
 }
 
 const KEY = 'omini.prefs'
@@ -34,6 +36,7 @@ function load(): Prefs {
     collapsed: [],
     layoutDirection: 'RIGHT',
     sidebarExpanded: false,
+    hideOffline: false,
   }
   try {
     const raw = localStorage.getItem(KEY)

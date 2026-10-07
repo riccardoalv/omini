@@ -36,13 +36,12 @@ describe('iconChoice', () => {
       logo: 'espressif',
       badge: true,
     })
+    // Brands without a logo get no badge.
     expect(iconChoice({ type: 'air_conditioner', brand: 'midea' })).toEqual({
       type: 'air-vent',
       logo: undefined,
-      badge: true,
-      letter: 'Midea',
+      badge: false,
     })
-    expect(iconChoice({ type: 'ap', brand: 'mercusys' }).letter).toBe('Mercusys')
     expect(iconChoice({ type: 'appliance' })).toEqual({
       type: 'refrigerator',
       logo: undefined,

@@ -139,3 +139,13 @@ export function linkOnPort(
 export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): number {
   return childrenOf(id, nodes, edges).filter((n) => n.kind === 'client').length
 }
+
+/** Removes offline nodes and the links that lead to them. */
+export function withoutOffline(nodes: TopoNode[], edges: TopoEdge[]) {
+  const offline = new Set(nodes.filter((n) => !n.online).map((n) => n.id))
+  return {
+    nodes: nodes.filter((n) => !offline.has(n.id)),
+    edges: edges.filter((e) => !offline.has(e.source) && !offline.has(e.target)),
+    hidden: offline.size,
+  }
+}

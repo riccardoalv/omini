@@ -1,7 +1,7 @@
 import type {
   AuthStatus,
   Config,
-  DiscoveredHost,
+  CollectionStatus,
   Integration,
   IntegrationType,
   InventoryEntry,
@@ -103,6 +103,5 @@ export const api = {
   webServices: (nodeId: string) =>
     request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 
-  scan: (cidr: string, community: string) =>
-    request<DiscoveredHost[]>('POST', '/api/discovery/scan', { cidr, community }),
+  runIntegration: (id: number) => request<CollectionStatus>('POST', `/api/integrations/${id}/run`),
 }

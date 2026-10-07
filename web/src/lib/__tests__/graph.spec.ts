@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { childrenOf, collapseClients, edgeLook, groupId, linkOnPort } from '../graph'
+import {
+  childrenOf,
+  collapseClients,
+  edgeLook,
+  groupId,
+  linkOnPort,
+  withoutOffline,
+} from '../graph'
 import type { TopoEdge, TopoNode } from '../types'
 
 const device = (id: string, role = 'switch'): TopoNode => ({
@@ -142,5 +149,16 @@ describe('graph helpers', () => {
     expect(linkOnPort('sw', '3', nodes, edges)?.id).toBe('ap')
     expect(linkOnPort('ap', 'eth0', nodes, edges)?.id).toBe('sw')
     expect(linkOnPort('sw', '8', nodes, edges)).toBeUndefined()
+  })
+})
+
+describe('withoutOffline', () => {
+  it('removes offline nodes and their links', () => {
+    const nodes = [device('sw'), client('tv'), client('phone', { online: false })]
+    const edges = [edge('sw', 'tv'), edge('sw', 'phone')]
+    const view = withoutOffline(nodes, edges)
+    expect(view.nodes.map((n) => n.id)).toEqual(['sw', 'tv'])
+    expect(view.edges.map((e) => e.target)).toEqual(['tv'])
+    expect(view.hidden).toBe(1)
   })
 })

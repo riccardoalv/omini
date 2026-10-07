@@ -228,8 +228,6 @@ export interface IconChoice {
   /** Logo shown alone (product) or as a badge (OS or brand). */
   logo?: string
   badge: boolean
-  /** Brand name for a letter badge, when the brand has no logo. */
-  letter?: string
 }
 
 /** Display names of brands without a logo in Simple Icons. */
@@ -296,16 +294,8 @@ export function iconChoice(d: Classified): IconChoice {
   if (custom && productSlugs.has(custom)) return { logo: custom, badge: false }
   if (!custom && product) return { logo: product, badge: false }
   const badge = custom ?? [d.os, d.brand].find((s) => s && logos[s])
-  if (badge) return { type, logo: badge, badge: true }
-  if (d.brand) return { type, logo: undefined, badge: true, letter: slugName(d.brand) }
-  return { type, logo: undefined, badge: false }
-}
-
-/** A stable color for a letter badge. */
-export function letterColor(name: string): string {
-  let h = 0
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360
-  return `hsl(${h} 55% 45%)`
+  // Brands without a logo get no badge.
+  return { type, logo: badge, badge: !!badge }
 }
 
 /** Brand color usable on the current background, or undefined to use the text color. */

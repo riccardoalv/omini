@@ -157,14 +157,6 @@ export interface InventoryEntry {
   icon?: string
 }
 
-export interface DiscoveredHost {
-  ip: string
-  name: string
-  description?: string
-  vendor?: string
-  integrated: boolean
-}
-
 export interface AuthStatus {
   setup_required: boolean
   authenticated: boolean

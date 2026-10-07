@@ -3,7 +3,14 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import type { Edge, Node, NodeDragEvent, NodeMouseEvent } from '@vue-flow/core'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
-import { ArrowDownFromLine, ArrowRightFromLine, LayoutGrid, RefreshCw } from 'lucide-vue-next'
+import {
+  ArrowDownFromLine,
+  ArrowRightFromLine,
+  Eye,
+  EyeOff,
+  LayoutGrid,
+  RefreshCw,
+} from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -13,7 +20,7 @@ import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
 import { formatAgo, formatSpeed } from '@/lib/format'
-import { clientCount, collapseClients, edgeLook } from '@/lib/graph'
+import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
 import { layout, layoutKey, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import type { Integration, Point, TopoNode, TopologyResponse } from '@/lib/types'
@@ -41,8 +48,16 @@ const now = ref(Date.now())
 let lastLayout = '' // signature of the last laid out graph
 let timer: ReturnType<typeof setInterval> | undefined
 
-const nodes = computed(() => data.value?.topology.nodes ?? [])
-const edges = computed(() => data.value?.topology.edges ?? [])
+const allNodes = computed(() => data.value?.topology.nodes ?? [])
+const allEdges = computed(() => data.value?.topology.edges ?? [])
+const filtered = computed(() =>
+  prefs.hideOffline
+    ? withoutOffline(allNodes.value, allEdges.value)
+    : { nodes: allNodes.value, edges: allEdges.value, hidden: 0 },
+)
+const nodes = computed(() => filtered.value.nodes)
+const edges = computed(() => filtered.value.edges)
+const offlineCount = computed(() => allNodes.value.filter((n) => !n.online).length)
 const expanded = computed(() => new Set(prefs.expanded))
 const forced = computed(() => new Set(prefs.collapsed))
 const view = computed(() =>
@@ -309,6 +324,20 @@ onBeforeUnmount(() => clearInterval(timer))
       <div class="buttons">
         <button
           class="btn small"
+          :class="{ active: prefs.hideOffline }"
+          data-test="toggle-offline"
+          :aria-pressed="prefs.hideOffline"
+          :title="prefs.hideOffline ? t('map.showOffline') : t('map.hideOffline')"
+          @click="prefs.hideOffline = !prefs.hideOffline"
+        >
+          <component :is="prefs.hideOffline ? Eye : EyeOff" :size="15" />
+          <span class="label">
+            {{ prefs.hideOffline ? t('map.showOffline') : t('map.hideOffline') }}
+            <template v-if="offlineCount"> ({{ offlineCount }})</template>
+          </span>
+        </button>
+        <button
+          class="btn small"
           :title="prefs.layoutDirection === 'RIGHT' ? t('map.topDown') : t('map.leftToRight')"
           data-test="direction"
           @click="toggleDirection"
@@ -448,6 +477,11 @@ onBeforeUnmount(() => clearInterval(timer))
 }
 .spin {
   animation: spin 0.8s linear infinite;
+}
+.btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 @keyframes spin {
   to {

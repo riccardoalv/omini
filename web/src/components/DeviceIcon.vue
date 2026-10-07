@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { iconChoice, letterColor, logoColor, logos, type Classified } from '@/lib/icons'
+import { iconChoice, logoColor, logos, type Classified } from '@/lib/icons'
 
 import NodeIcon from './NodeIcon.vue'
 
@@ -36,9 +36,7 @@ const typeLabel = computed(() => {
   const key = `types.${props.device.type ?? 'unknown'}`
   return te(key) ? t(key) : ''
 })
-const title = computed(() =>
-  [typeLabel.value, logo.value?.title ?? choice.value.letter].filter(Boolean).join(' · '),
-)
+const title = computed(() => [typeLabel.value, logo.value?.title].filter(Boolean).join(' · '))
 const badgeSize = computed(() => Math.round(props.size * 0.8))
 </script>
 
@@ -68,18 +66,6 @@ const badgeSize = computed(() => Math.round(props.size * 0.8))
           <path :d="logo.path" fill="currentColor" />
         </svg>
       </span>
-      <span
-        v-else-if="choice.letter"
-        class="badge letter"
-        :style="{
-          width: `${badgeSize}px`,
-          height: `${badgeSize}px`,
-          fontSize: `${Math.round(badgeSize * 0.62)}px`,
-          background: letterColor(choice.letter),
-        }"
-        :aria-label="choice.letter"
-        >{{ choice.letter.charAt(0).toUpperCase() }}</span
-      >
     </template>
   </span>
 </template>
@@ -104,13 +90,6 @@ const badgeSize = computed(() => Math.round(props.size * 0.8))
   border-radius: 50%;
   background: var(--bg-elevated);
   box-shadow: 0 0 0 1.5px var(--border);
-}
-.badge.letter {
-  padding: 0;
-  color: #fff;
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: 0 0 0 1.5px var(--bg-elevated);
 }
 .badge svg {
   width: 100%;

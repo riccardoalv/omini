@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { ChevronDown, Plus, Radar, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import DiscoverDialog from '@/components/DiscoverDialog.vue'
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
-import type { Config, DiscoveredHost, Integration, IntegrationType } from '@/lib/types'
+import type { CollectionStatus, Config, Integration, IntegrationType } from '@/lib/types'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -21,7 +20,6 @@ const items = ref<Integration[]>([])
 const types = ref<IntegrationType[]>([])
 const loading = ref(true)
 const choosing = ref(false)
-const discovering = ref(false)
 const form = ref<{
   type: IntegrationType
   existing?: Integration
@@ -50,16 +48,13 @@ function toggleExpand(item: Integration) {
   expanded.value = expanded.value === item.id ? undefined : item.id
 }
 
+function onRan(item: Integration, status: CollectionStatus) {
+  items.value = items.value.map((i) => (i.id === item.id ? { ...i, status } : i))
+}
+
 function onDetailsSaved(updated: Integration) {
   items.value = items.value.map((i) => (i.id === updated.id ? { ...updated, status: i.status } : i))
   setTimeout(load, 2000) // the new settings apply on the next collection
-}
-
-function addDiscovered(host: DiscoveredHost, community: string) {
-  const type = typeByName.value.get('snmp')
-  if (!type) return
-  discovering.value = false
-  form.value = { type, prefill: { host: host.ip, community }, name: host.name }
 }
 
 const toggling = ref<number>()
@@ -104,9 +99,6 @@ onMounted(async () => {
         <p class="muted">{{ t('integrations.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn" @click="discovering = true">
-          <Radar :size="16" />{{ t('integrations.discover') }}
-        </button>
         <button class="btn primary" @click="choosing = true">
           <Plus :size="16" />{{ t('integrations.add') }}
         </button>
@@ -182,6 +174,7 @@ onMounted(async () => {
           :integration="item"
           :type="typeByName.get(item.type)!"
           @saved="onDetailsSaved"
+          @ran="(st) => onRan(item, st)"
         />
       </li>
     </ul>
@@ -202,8 +195,6 @@ onMounted(async () => {
         </button>
       </div>
     </ModalDialog>
-
-    <DiscoverDialog v-if="discovering" @close="discovering = false" @add="addDiscovered" />
 
     <IntegrationForm
       v-if="form"
