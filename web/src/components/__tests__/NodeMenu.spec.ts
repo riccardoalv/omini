@@ -29,3 +29,13 @@ describe('NodeMenu', () => {
     expect(w.emitted('close')).toHaveLength(1)
   })
 })
+
+describe('NodeMenu for a Wi-Fi network', () => {
+  it('has no details entry', () => {
+    const w = mount(NodeMenu, {
+      props: { x: 0, y: 0, canCollapse: true, canExpand: false, canDetails: false },
+      global: { plugins: plugins() },
+    })
+    expect(w.find('[data-test=details]').exists()).toBe(false)
+  })
+})

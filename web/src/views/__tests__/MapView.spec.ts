@@ -148,4 +148,47 @@ describe('MapView', () => {
     expect(net!.draggable).not.toBe(false)
     w.unmount()
   })
+
+  it("folds a Wi-Fi network's clients into a bubble", async () => {
+    localStorage.clear()
+    vi.mocked(api.integrations).mockResolvedValue([])
+    const phones = ['a', 'b', 'c'].map((x) => ({
+      id: `mac:${x}`,
+      kind: 'client' as const,
+      label: x,
+      online: true,
+      band: '5ghz' as const,
+    }))
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [{ id: 'dev:ap', kind: 'device', label: 'ap', online: true }, ...phones],
+        edges: phones.map((p) => ({
+          id: `e:${p.id}`,
+          source: 'dev:ap',
+          target: p.id,
+          kind: 'wifi' as const,
+          source_port: 'Home · 5 GHz',
+        })),
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const nodes = () => w.findAllComponents({ name: 'TopologyNode' })
+    const net = nodes().find((c) => c.props('data').node?.kind === 'ssid')
+    expect(net).toBeDefined()
+    net!.vm.$emit('toggle')
+    await flushPromises()
+    const bubble = nodes().find((c) => c.props('data').group)
+    expect(bubble?.props('data').group.parentId).toBe('wifi:dev:ap:Home · 5 GHz')
+    expect(bubble?.props('data').group.clients).toHaveLength(3)
+    w.unmount()
+  })
 })

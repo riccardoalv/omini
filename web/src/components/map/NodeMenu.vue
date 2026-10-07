@@ -3,7 +3,17 @@ import { ChevronsDownUp, ChevronsUpDown, Info } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ x: number; y: number; canCollapse: boolean; canExpand: boolean }>()
+withDefaults(
+  defineProps<{
+    x: number
+    y: number
+    canCollapse: boolean
+    canExpand: boolean
+    /** A Wi-Fi network has no panel to open. */
+    canDetails?: boolean
+  }>(),
+  { canDetails: true },
+)
 const emit = defineEmits<{ collapse: []; expand: []; details: []; close: [] }>()
 const { t } = useI18n()
 
@@ -32,7 +42,7 @@ onBeforeUnmount(() => {
     <button v-if="canExpand" role="menuitem" data-test="expand" @click="emit('expand')">
       <ChevronsUpDown :size="15" />{{ t('map.expandChildren') }}
     </button>
-    <button role="menuitem" data-test="details" @click="emit('details')">
+    <button v-if="canDetails" role="menuitem" data-test="details" @click="emit('details')">
       <Info :size="15" />{{ t('map.details') }}
     </button>
   </div>

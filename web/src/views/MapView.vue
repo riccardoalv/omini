@@ -595,7 +595,9 @@ function toggleDirection() {
 }
 
 function onNodeClick(e: NodeMouseEvent) {
-  if (areaIdOf(e.node.id) !== undefined || isWifiNetwork(e.node.id)) return
+  if (areaIdOf(e.node.id) !== undefined) return
+  // A Wi-Fi network has no panel: a click folds or unfolds its clients.
+  if (isWifiNetwork(e.node.id)) return toggleChildren(e.node.id)
   selectedId.value = e.node.id
 }
 
@@ -651,7 +653,6 @@ const mapEl = ref<HTMLElement>()
 function onContextMenu(e: NodeMouseEvent) {
   const ev = e.event as MouseEvent
   ev.preventDefault()
-  if (isWifiNetwork(e.node.id)) return
   const box = mapEl.value?.getBoundingClientRect()
   const x = ev.clientX - (box?.left ?? 0)
   const y = ev.clientY - (box?.top ?? 0)
@@ -675,7 +676,11 @@ const menuCanCollapse = computed(() => {
   const id = menuParent.value
   // Possible unless everything is already collapsed by the user (a partial
   // automatic group can still be extended to all clients).
-  return !!id && !prefs.collapsed.includes(id) && clientCount(id, nodes.value, edges.value) >= 2
+  return (
+    !!id &&
+    !prefs.collapsed.includes(id) &&
+    clientCount(id, mapGraph.value.nodes, mapGraph.value.edges) >= 2
+  )
 })
 const menuCanExpand = computed(() => {
   const id = menuParent.value
@@ -687,7 +692,8 @@ function toggleChildren(id: string) {
   if (id.startsWith('area-bubble:')) return expandArea(Number(id.slice(12)))
   const parent = view.value.groups.find((g) => g.id === id)?.parentId ?? id
   if (view.value.groups.some((g) => g.parentId === parent)) expand(parent)
-  else if (clientCount(parent, nodes.value, edges.value) >= 2) collapse(parent)
+  // Counted on the map's graph: a Wi-Fi network's clients are its children there.
+  else if (clientCount(parent, mapGraph.value.nodes, mapGraph.value.edges) >= 2) collapse(parent)
 }
 
 function menuAction(action: 'collapse' | 'expand' | 'details') {
@@ -896,6 +902,7 @@ onBeforeUnmount(() => {
       :y="menu.y"
       :can-collapse="menuCanCollapse"
       :can-expand="menuCanExpand"
+      :can-details="!isWifiNetwork(menu.id)"
       @collapse="menuAction('collapse')"
       @expand="menuAction('expand')"
       @details="menuAction('details')"

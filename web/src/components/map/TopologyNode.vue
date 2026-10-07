@@ -301,7 +301,7 @@ strong {
   padding: 0 10px;
   border-radius: 999px;
   border-style: dashed;
-  cursor: default;
+  cursor: pointer; /* a click folds or unfolds its clients */
   font-size: 11.5px;
 }
 .ssid-name {
