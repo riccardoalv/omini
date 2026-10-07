@@ -94,8 +94,10 @@ export const api = {
   resetLayout: () => request<void>('DELETE', '/api/layout'),
 
   inventory: () => request<InventoryEntry[]>('GET', '/api/inventory'),
-  updateInventory: (id: string, input: { alias?: string; pinned?: boolean }) =>
-    request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
+  updateInventory: (
+    id: string,
+    input: { alias?: string; pinned?: boolean; device_type?: string; icon?: string },
+  ) => request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),
 
   webServices: (nodeId: string) =>

@@ -9,7 +9,14 @@ import { plugins } from './helpers'
 
 vi.mock('@/lib/api', async (orig) => {
   const mod = await orig<typeof import('@/lib/api')>()
-  return { ...mod, api: { ...mod.api, webServices: vi.fn<typeof mod.api.webServices>() } }
+  return {
+    ...mod,
+    api: {
+      ...mod.api,
+      webServices: vi.fn<typeof mod.api.webServices>(),
+      updateInventory: vi.fn<typeof mod.api.updateInventory>(),
+    },
+  }
 })
 
 const firewall: TopoNode = {
@@ -62,5 +69,43 @@ describe('NodePanel web interface', () => {
     mountPanel({ ...firewall, id: 'seg:x', kind: 'segment', ip: undefined })
     await flushPromises()
     expect(api.webServices).not.toHaveBeenCalled()
+  })
+})
+
+describe('NodePanel identification', () => {
+  beforeEach(() => vi.mocked(api.webServices).mockResolvedValue([]))
+
+  it('shows what was detected and from what', async () => {
+    const w = mountPanel({
+      ...firewall,
+      type: 'firewall',
+      product: 'opnsense',
+      os: 'freebsd',
+      reasons: ['hostname:OPNsense', 'vendor:FreeBSD Foundation'],
+    })
+    await flushPromises()
+    const text = w.get('.classification').text()
+    expect(text).toContain('Firewall')
+    expect(text).toContain('OPNsense')
+    expect(text).toContain('FreeBSD')
+    expect(text).toContain('name: OPNsense')
+    expect(text).toContain('MAC vendor: FreeBSD Foundation')
+  })
+
+  it('lets the user correct the type and icon', async () => {
+    vi.mocked(api.updateInventory).mockResolvedValue({} as never)
+    const w = mountPanel({ ...firewall, id: 'mac:aa', kind: 'client', type: 'unknown' })
+    await flushPromises()
+    await w.get('[data-test=edit-classification]').trigger('click')
+    await w.get('[data-test=type-select]').setValue('phone')
+    await w.get('[data-test=icon-select]').setValue('android')
+    await w.get('.classify-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.updateInventory).toHaveBeenCalledWith('mac:aa', {
+      device_type: 'phone',
+      icon: 'android',
+    })
+    expect(w.emitted('changed')![0]).toEqual([{ type: 'phone', icon: 'android' }])
   })
 })

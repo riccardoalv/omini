@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { childrenOf, collapseClients, edgeLook, groupId, iconFor, linkOnPort } from '../graph'
+import { childrenOf, collapseClients, edgeLook, groupId, linkOnPort } from '../graph'
 import type { TopoEdge, TopoNode } from '../types'
 
 const device = (id: string, role = 'switch'): TopoNode => ({
@@ -76,6 +76,17 @@ describe('collapseClients', () => {
     expect(view.edges.some((e) => e.target === 'c0')).toBe(true)
   })
 
+  it('keeps infrastructure and homelab software visible', () => {
+    const { nodes, edges } = network(10)
+    nodes[1] = { ...nodes[1]!, type: 'nas', product: 'truenas' }
+    nodes[2] = { ...nodes[2]!, type: 'switch' }
+    nodes[3] = { ...nodes[3]!, type: 'virtual_machine' }
+    nodes[4] = { ...nodes[4]!, type: 'phone' }
+    const view = collapseClients(nodes, edges, 8, new Set())
+    expect(view.nodes.map((n) => n.id)).toEqual(['ap', 'c0', 'c1', 'c2'])
+    expect(view.groups[0]!.clients).toHaveLength(7)
+  })
+
   it('never collapses devices, only clients', () => {
     const nodes = [device('sw'), ...Array.from({ length: 10 }, (_, i) => device(`d${i}`))]
     const edges = nodes.slice(1).map((n) => edge('sw', n.id))
@@ -122,12 +133,5 @@ describe('graph helpers', () => {
     expect(linkOnPort('sw', '3', nodes, edges)?.id).toBe('ap')
     expect(linkOnPort('ap', 'eth0', nodes, edges)?.id).toBe('sw')
     expect(linkOnPort('sw', '8', nodes, edges)).toBeUndefined()
-  })
-
-  it('picks icons by role and kind', () => {
-    expect(iconFor({ kind: 'device', role: 'firewall' })).toBe('shield')
-    expect(iconFor({ kind: 'device', role: 'ap' })).toBe('wifi')
-    expect(iconFor({ kind: 'segment' })).toBe('network')
-    expect(iconFor({ kind: 'client', role: 'client', random_mac: true })).toBe('smartphone')
   })
 })

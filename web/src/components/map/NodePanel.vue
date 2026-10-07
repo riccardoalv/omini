@@ -3,11 +3,14 @@ import { Check, ExternalLink, Pencil, Pin, PinOff, X } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
-import { childrenOf, iconFor, linkOnPort } from '@/lib/graph'
+import { childrenOf, linkOnPort } from '@/lib/graph'
+import { deviceTypes, logos, productSlugs } from '@/lib/icons'
+import { parseReasons } from '@/lib/reasons'
 import type { Integration, TopoEdge, TopoNode, WebService } from '@/lib/types'
 
 const props = defineProps<{
@@ -69,7 +72,29 @@ const children = computed(() =>
 const ports = computed(() =>
   (n.value?.device?.interfaces ?? []).filter((i) => i.type !== 'loopback'),
 )
-const roleLabel = computed(() => (n.value?.role ? t(`roles.${n.value.role}`) : ''))
+const roleLabel = computed(() => (n.value?.type ? t(`types.${n.value.type}`) : ''))
+const reasons = computed(() => parseReasons(n.value?.reasons))
+const logoName = (slug?: string) => (slug ? (logos[slug]?.title ?? slug) : '')
+// Options for the user's corrections: products first, then systems and brands.
+const iconOptions = computed(() =>
+  Object.entries(logos)
+    .map(([slug, logo]) => ({ slug, title: logo.title, product: productSlugs.has(slug) }))
+    .sort((a, b) => Number(b.product) - Number(a.product) || a.title.localeCompare(b.title)),
+)
+const classifying = ref(false)
+const typeChoice = ref('')
+const iconChoiceValue = ref('')
+
+function startClassify() {
+  typeChoice.value = ''
+  iconChoiceValue.value = n.value?.icon ?? ''
+  classifying.value = true
+}
+
+async function saveClassification() {
+  await save({ device_type: typeChoice.value, icon: iconChoiceValue.value })
+  classifying.value = false
+}
 const title = computed(() => {
   if (!n.value) return ''
   if (n.value.kind === 'segment' && n.value.label === 'Unmanaged segment') return t('map.segment')
@@ -81,7 +106,12 @@ function startEdit() {
   editing.value = true
 }
 
-async function save(patch: { alias?: string; pinned?: boolean }) {
+async function save(patch: {
+  alias?: string
+  pinned?: boolean
+  device_type?: string
+  icon?: string
+}) {
   if (!n.value) return
   error.value = ''
   try {
@@ -89,6 +119,8 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
     const local: Partial<TopoNode> = {}
     if (patch.alias !== undefined && patch.alias !== '') local.label = patch.alias
     if (patch.pinned !== undefined) local.pinned = patch.pinned
+    if (patch.device_type) local.type = patch.device_type
+    if (patch.icon !== undefined) local.icon = patch.icon || undefined
     emit('changed', local)
     editing.value = false
   } catch (e) {
@@ -117,7 +149,7 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
       <ul class="client-list">
         <li v-for="c in group.clients" :key="c.id" @click="emit('select', c.id)">
           <span class="dot" :class="{ online: c.online }" />
-          <NodeIcon :name="iconFor(c)" :size="15" />
+          <DeviceIcon :device="c" :size="15" />
           <span class="grow">{{ c.label }}</span>
           <span class="muted mono">{{ c.ip }}</span>
         </li>
@@ -126,7 +158,7 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
 
     <template v-else-if="n">
       <header>
-        <span class="icon"><NodeIcon :name="iconFor(n)" /></span>
+        <span class="icon"><DeviceIcon :device="n" :size="22" /></span>
         <div class="title">
           <form v-if="editing" class="rename" @submit.prevent="save({ alias })">
             <input v-model="alias" class="input" autofocus :aria-label="t('panel.rename')" />
@@ -180,6 +212,68 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
 
       <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
       <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
+
+      <section v-if="n.kind !== 'segment'" class="classification">
+        <h3>{{ t('panel.classification') }}</h3>
+        <form v-if="classifying" class="classify-form" @submit.prevent="saveClassification">
+          <label class="field">
+            <span>{{ t('panel.changeType') }}</span>
+            <select v-model="typeChoice" class="select" data-test="type-select">
+              <option value="">{{ t('panel.automatic') }}</option>
+              <option v-for="ty in deviceTypes" :key="ty" :value="ty">
+                {{ t(`types.${ty}`) }}
+              </option>
+            </select>
+          </label>
+          <label class="field">
+            <span>{{ t('panel.changeIcon') }}</span>
+            <select v-model="iconChoiceValue" class="select" data-test="icon-select">
+              <option value="">{{ t('panel.automatic') }}</option>
+              <option v-for="o in iconOptions" :key="o.slug" :value="o.slug">{{ o.title }}</option>
+            </select>
+          </label>
+          <div class="row-actions">
+            <button class="btn small" type="button" @click="classifying = false">
+              {{ t('common.cancel') }}
+            </button>
+            <button class="btn small primary" type="submit">{{ t('common.save') }}</button>
+          </div>
+        </form>
+        <template v-else>
+          <dl class="facts compact">
+            <dt>{{ t('panel.role') }}</dt>
+            <dd>
+              {{ roleLabel }}
+              <button
+                class="link"
+                type="button"
+                data-test="edit-classification"
+                @click="startClassify"
+              >
+                {{ t('common.edit') }}
+              </button>
+            </dd>
+            <template v-if="n.product"
+              ><dt>{{ t('panel.product') }}</dt>
+              <dd>{{ logoName(n.product) }}</dd></template
+            >
+            <template v-if="n.os"
+              ><dt>{{ t('panel.os') }}</dt>
+              <dd>{{ logoName(n.os) }}</dd></template
+            >
+            <template v-if="n.brand"
+              ><dt>{{ t('panel.brand') }}</dt>
+              <dd>{{ logoName(n.brand) }}</dd></template
+            >
+          </dl>
+          <div v-if="reasons.length" class="reasons">
+            <span class="muted">{{ t('panel.detectedBy') }}:</span>
+            <span v-for="(r, i) in reasons" :key="i" class="badge">
+              {{ t(`panel.${r.key}`) }}<template v-if="r.value">: {{ r.value }}</template>
+            </span>
+          </div>
+        </template>
+      </section>
 
       <dl class="facts">
         <template v-if="n.ip"
@@ -278,7 +372,7 @@ async function save(patch: { alias?: string; pinned?: boolean }) {
         <ul class="client-list">
           <li v-for="c in children" :key="c.id" @click="emit('select', c.id)">
             <span class="dot" :class="{ online: c.online }" />
-            <NodeIcon :name="iconFor(c)" :size="15" />
+            <DeviceIcon :device="c" :size="15" />
             <span class="grow">{{ c.label }}</span>
             <span class="muted mono">{{ c.ip }}</span>
           </li>
@@ -357,6 +451,38 @@ h2 {
 .small {
   font-size: 12.5px;
   margin: 0 0 12px;
+}
+.classification {
+  margin-bottom: 10px;
+}
+.facts.compact {
+  margin-bottom: 8px;
+}
+.reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.classify-form .field {
+  margin-bottom: 10px;
+}
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.link {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
 }
 .hint {
   margin: 0 0 12px;

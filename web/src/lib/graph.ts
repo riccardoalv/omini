@@ -16,10 +16,26 @@ export interface GraphView {
 
 export const groupId = (parentId: string) => `grp:${parentId}`
 
+/** Infrastructure is never collapsed into a client group. */
+const infrastructure = new Set([
+  'firewall',
+  'router',
+  'switch',
+  'ap',
+  'server',
+  'nas',
+  'hypervisor',
+  'virtual_machine',
+])
+
+/** Pinned devices, homelab software and infrastructure always stay on the map. */
+export const alwaysVisible = (n: TopoNode) =>
+  !!n.pinned || !!n.product || infrastructure.has(n.type ?? '')
+
 /**
  * Collapses clients into a group bubble when a parent (AP, switch, segment)
  * has more than `threshold` of them, unless the user expanded that parent.
- * Pinned clients always stay visible.
+ * Pinned clients, homelab software and infrastructure always stay visible.
  */
 export function collapseClients(
   nodes: TopoNode[],
@@ -41,7 +57,7 @@ export function collapseClients(
   const groups: ClientGroup[] = []
   for (const [parentId, clients] of children) {
     if (clients.length <= threshold || expanded.has(parentId)) continue
-    const collapsible = clients.filter((c) => !c.pinned)
+    const collapsible = clients.filter((c) => !alwaysVisible(c))
     if (collapsible.length < 2) continue
     for (const c of collapsible) hidden.add(c.id)
     groups.push({
@@ -113,25 +129,4 @@ export function linkOnPort(
     if (e.target === id && e.target_port === port) return byId.get(e.source)
   }
   return undefined
-}
-
-/** Icon name (lucide) for a node. */
-export function iconFor(node: Pick<TopoNode, 'kind' | 'role' | 'random_mac'>): string {
-  if (node.kind === 'segment') return 'network'
-  if (node.kind === 'unmanaged') return 'box'
-  switch (node.role) {
-    case 'firewall':
-      return 'shield'
-    case 'router':
-      return 'router'
-    case 'switch':
-      return 'ethernet-port'
-    case 'ap':
-      return 'wifi'
-    case 'server':
-      return 'server'
-    case 'client':
-      return node.random_mac ? 'smartphone' : 'monitor'
-  }
-  return 'box'
 }

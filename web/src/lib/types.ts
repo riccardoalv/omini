@@ -54,6 +54,17 @@ export interface TopoNode {
   device?: Device
   pinned?: boolean
   last_seen?: string
+  os?: string
+  open_ports?: number[]
+  services?: string[]
+  titles?: string[]
+  banners?: string[]
+  ttl?: number
+  type?: string
+  brand?: string
+  product?: string
+  reasons?: string[]
+  icon?: string
 }
 
 export interface TopoEdge {
@@ -136,6 +147,12 @@ export interface InventoryEntry {
   last_seen: string
   online: boolean
   role?: string
+  type?: string
+  os?: string
+  brand?: string
+  product?: string
+  device_type?: string
+  icon?: string
 }
 
 export interface DiscoveredHost {

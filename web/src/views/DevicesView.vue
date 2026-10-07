@@ -3,10 +3,9 @@ import { Pencil, Pin, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import NodeIcon from '@/components/NodeIcon.vue'
+import DeviceIcon from '@/components/DeviceIcon.vue'
 import { api } from '@/lib/api'
 import { formatAgo, formatDateTime } from '@/lib/format'
-import { iconFor } from '@/lib/graph'
 import { displayName, filterInventory, isRandomMAC, type StatusFilter } from '@/lib/inventory'
 import type { InventoryEntry } from '@/lib/types'
 
@@ -138,15 +137,9 @@ onMounted(load)
             <td>
               <div class="name">
                 <span class="dot" :class="{ online: e.online }" />
-                <NodeIcon
-                  :name="
-                    iconFor({
-                      kind: e.kind,
-                      role: e.role ?? (e.kind === 'client' ? 'client' : undefined),
-                      random_mac: isRandomMAC(e.mac),
-                    })
-                  "
-                  :size="15"
+                <DeviceIcon
+                  :device="{ ...e, type: e.device_type || e.type, icon: e.icon }"
+                  :size="18"
                 />
                 <span>{{ nameOf(e) }}</span>
                 <Pin v-if="e.pinned" :size="12" class="muted" />

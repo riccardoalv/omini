@@ -4,9 +4,9 @@ import { Pin, SignalLow } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import type { ClientGroup } from '@/lib/graph'
-import { iconFor } from '@/lib/graph'
 import type { TopoNode } from '@/lib/types'
 
 export interface NodeData {
@@ -54,7 +54,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
 
     <template v-else-if="n">
       <span class="icon">
-        <NodeIcon :name="iconFor(n)" :size="variant === 'client' ? 15 : 18" />
+        <DeviceIcon :device="n" :size="variant === 'client' ? 17 : 20" />
       </span>
       <div class="text">
         <strong>{{ label }}</strong>
