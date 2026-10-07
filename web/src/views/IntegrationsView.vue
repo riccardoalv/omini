@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DiscoverDialog from '@/components/DiscoverDialog.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
+import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
 import type { Config, DiscoveredHost, Integration, IntegrationType } from '@/lib/types'
@@ -54,9 +55,16 @@ function addDiscovered(host: DiscoveredHost, community: string) {
   form.value = { type, prefill: { host: host.ip, community }, name: host.name }
 }
 
+const toggling = ref<number>()
+
 async function toggle(item: Integration) {
-  const updated = await api.updateIntegration(item.id, { enabled: !item.enabled })
-  items.value = items.value.map((i) => (i.id === item.id ? updated : i))
+  toggling.value = item.id
+  try {
+    const updated = await api.updateIntegration(item.id, { enabled: !item.enabled })
+    items.value = items.value.map((i) => (i.id === item.id ? { ...updated, status: i.status } : i))
+  } finally {
+    toggling.value = undefined
+  }
 }
 
 async function remove(item: Integration) {
@@ -132,9 +140,12 @@ onMounted(async () => {
             {{ item.status.error }}
           </p>
         </div>
-        <label class="checkbox switch" :title="t('integrations.enabled')">
-          <input type="checkbox" :checked="item.enabled" @change="toggle(item)" />
-        </label>
+        <ToggleSwitch
+          :model-value="item.enabled"
+          :label="item.enabled ? t('integrations.enabled') : t('integrations.disabled')"
+          :disabled="toggling === item.id"
+          @update:model-value="toggle(item)"
+        />
         <button class="btn ghost icon" :aria-label="t('common.edit')" @click="openEdit(item)">
           <Pencil :size="16" />
         </button>
