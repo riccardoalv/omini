@@ -178,8 +178,14 @@ describe('Wi-Fi clients', () => {
   })
 })
 
-describe('Wi-Fi links', () => {
-  it('have no pill: the device shows its network', () => {
+describe('links without a pill', () => {
+  it("an app's link: the app shows its port itself", () => {
+    const app: TopoNode = { id: 'app:vm:8096', kind: 'app', label: 'Jellyfin', online: true }
+    const edges = [edge(fw.id, app.id, { source_port: '8096' })]
+    expect(linkLabels(edges, [fw, app]).has(`${fw.id}>${app.id}`)).toBe(false)
+  })
+
+  it('a Wi-Fi link: its network is a node of its own', () => {
     const edges = [edge(fw.id, 'phone', { source_port: 'IOT · 2.4 GHz', kind: 'wifi' })]
     expect(linkLabels(edges, [fw, client('phone')]).has(`${fw.id}>phone`)).toBe(false)
   })

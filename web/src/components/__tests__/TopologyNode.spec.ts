@@ -19,28 +19,25 @@ describe('TopologyNode', () => {
   })
 })
 
-describe('TopologyNode Wi-Fi client', () => {
-  it('shows the network and band it uses', () => {
+describe('TopologyNode Wi-Fi network', () => {
+  it('is a small picture with the network name, colored by band', () => {
     const w = mount(TopologyNode, {
       props: {
         data: {
           node: {
-            id: 'mac:02',
-            kind: 'client',
-            label: 'A36',
+            id: 'wifi:dev:ap:IOT · 2.4 GHz',
+            kind: 'ssid',
+            label: 'IOT · 2.4 GHz',
             online: true,
-            ip: '192.168.1.41',
-            ssid: 'IOT',
             band: '2.4ghz',
           },
         },
       },
       global: { plugins: plugins(), stubs: { Handle: true } },
     })
-    const tag = w.get('[data-test=wifi-tag]')
-    expect(tag.text()).toBe('IOT · 2.4G')
-    expect(tag.classes()).toContain('band-2.4ghz')
-    expect(w.text()).toContain('192.168.1.41')
+    expect(w.get('[data-test=ssid]').text()).toBe('IOT · 2.4 GHz')
+    expect(w.get('.ssid-icon').classes()).toContain('band-2.4ghz')
+    expect(w.get('.topo-node').classes()).toContain('ssid')
   })
 })
 

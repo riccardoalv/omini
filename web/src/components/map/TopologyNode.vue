@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { Pin, SignalLow } from 'lucide-vue-next'
+import { Pin, SignalLow, Wifi } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -42,14 +42,6 @@ const label = computed(() => {
 const identified = computed(() => {
   const node = n.value
   return !!node && (node.type !== 'unknown' || !!node.brand || !!node.product || !!node.icon)
-})
-// Wi-Fi clients: the network and band they use ("IOT · 2.4G"), on the device
-// itself — the links of an access point all leave from one point.
-const wifi = computed(() => {
-  const node = n.value
-  if (!node || node.kind !== 'client' || !node.band) return ''
-  const band = { '2.4ghz': '2.4G', '5ghz': '5G', '6ghz': '6G' }[node.band]
-  return [node.ssid, band].filter(Boolean).join(' · ')
 })
 const sub = computed(() => {
   const node = n.value
@@ -115,18 +107,19 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       </div>
     </template>
 
+    <!-- A Wi-Fi network of an access point: only a picture between it and its clients. -->
+    <template v-else-if="n && n.kind === 'ssid'">
+      <Wifi :size="13" class="ssid-icon" :class="`band-${n.band ?? 'none'}`" />
+      <span class="ssid-name" data-test="ssid">{{ n.label }}</span>
+    </template>
+
     <template v-else-if="n">
       <span class="icon" :class="{ identified }">
         <DeviceIcon :device="n" :size="variant === 'client' || variant === 'app' ? 17 : 20" />
       </span>
       <div class="text">
         <strong>{{ label }}</strong>
-        <span v-if="sub || wifi" class="sub">
-          {{ sub }}
-          <span v-if="wifi" class="wifi-tag" :class="`band-${n.band}`" data-test="wifi-tag">{{
-            wifi
-          }}</span>
-        </span>
+        <span v-if="sub" class="sub">{{ sub }}</span>
       </div>
       <SignalLow v-if="weak" class="warn-icon" :size="14" />
       <Pin v-if="n.pinned" class="pin" :size="12" />
@@ -302,13 +295,22 @@ strong {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.wifi-tag {
-  margin-left: 4px;
-  padding: 0 5px;
-  border: 1px solid currentColor;
+.topo-node.ssid {
+  gap: 6px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
+  border-style: dashed;
+  cursor: default;
+  font-size: 11.5px;
+}
+.ssid-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ssid-icon {
+  flex: none;
+  color: var(--text-muted);
 }
 .band-2\.4ghz {
   color: var(--speed-100m);

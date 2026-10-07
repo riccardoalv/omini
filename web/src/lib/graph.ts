@@ -188,3 +188,40 @@ export function withoutOffline(nodes: TopoNode[], edges: TopoEdge[]) {
     hidden: offline.size,
   }
 }
+
+/** Id of a Wi-Fi network's mini node: "wifi:<access point>:<network>". */
+export const isWifiNetwork = (id: string) => id.startsWith('wifi:')
+
+/**
+ * Puts each Wi-Fi network of an access point between it and its clients, as a
+ * mini node ("IOT · 2.4 GHz"): AP → network → clients. Only visual (not in
+ * the inventory, not clickable); the clients keep the AP as their parent.
+ */
+export function withWifiNetworks(
+  nodes: TopoNode[],
+  edges: TopoEdge[],
+): { nodes: TopoNode[]; edges: TopoEdge[] } {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const networks = new Map<string, TopoNode>()
+  const out: TopoEdge[] = []
+  for (const e of edges) {
+    if (e.kind !== 'wifi' || !e.source_port) {
+      out.push(e)
+      continue
+    }
+    const id = `wifi:${e.source}:${e.source_port}`
+    if (!networks.has(id)) {
+      networks.set(id, {
+        id,
+        kind: 'ssid',
+        label: e.source_port,
+        online: true,
+        parent_id: e.source,
+        band: byId.get(e.target)?.band,
+      })
+      out.push({ id: `e:${id}`, source: e.source, target: id, kind: 'wifi' })
+    }
+    out.push({ ...e, id: `${e.id}:net`, source: id, source_port: undefined })
+  }
+  return { nodes: [...nodes, ...networks.values()], edges: out }
+}

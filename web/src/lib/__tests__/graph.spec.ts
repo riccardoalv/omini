@@ -6,9 +6,11 @@ import {
   collapseClients,
   edgeLook,
   groupId,
+  isWifiNetwork,
   linkOnPort,
   withoutHidden,
   withoutOffline,
+  withWifiNetworks,
 } from '../graph'
 import type { TopoEdge, TopoNode } from '../types'
 
@@ -198,5 +200,55 @@ describe('withoutHidden', () => {
     expect(view.nodes.map((n) => n.id)).toEqual(['gw', 'tv'])
     expect(view.edges.map((e) => e.target)).toEqual(['tv'])
     expect(view.hidden).toBe(1)
+  })
+})
+
+describe('withWifiNetworks', () => {
+  it('puts each Wi-Fi network between the access point and its clients', () => {
+    const ap: TopoNode = { id: 'dev:ap', kind: 'device', label: 'Bedroom', online: true }
+    const phone: TopoNode = {
+      id: 'mac:1',
+      kind: 'client',
+      label: 'phone',
+      online: true,
+      band: '5ghz',
+    }
+    const bulb: TopoNode = {
+      id: 'mac:2',
+      kind: 'client',
+      label: 'bulb',
+      online: true,
+      band: '2.4ghz',
+    }
+    const tv: TopoNode = { id: 'mac:3', kind: 'client', label: 'tv', online: true, band: '5ghz' }
+    const pc: TopoNode = { id: 'mac:4', kind: 'client', label: 'pc', online: true }
+    const wifi = (target: string, net: string): TopoEdge => ({
+      id: `e:${target}`,
+      source: ap.id,
+      target,
+      kind: 'wifi',
+      source_port: net,
+    })
+    const { nodes, edges } = withWifiNetworks(
+      [ap, phone, bulb, tv, pc],
+      [
+        wifi(phone.id, 'Home · 5 GHz'),
+        wifi(bulb.id, 'IOT · 2.4 GHz'),
+        wifi(tv.id, 'Home · 5 GHz'),
+        { id: 'e:pc', source: ap.id, target: pc.id, kind: 'fdb', source_port: 'LAN' },
+      ],
+    )
+    const nets = nodes.filter((n) => n.kind === 'ssid')
+    expect(nets.map((n) => [n.label, n.band])).toEqual([
+      ['Home · 5 GHz', '5ghz'],
+      ['IOT · 2.4 GHz', '2.4ghz'],
+    ])
+    expect(nets.every((n) => isWifiNetwork(n.id))).toBe(true)
+    const parentOf = (id: string) => edges.find((e) => e.target === id)!.source
+    expect(parentOf(phone.id)).toBe('wifi:dev:ap:Home · 5 GHz')
+    expect(parentOf(tv.id)).toBe('wifi:dev:ap:Home · 5 GHz')
+    expect(parentOf(bulb.id)).toBe('wifi:dev:ap:IOT · 2.4 GHz')
+    expect(parentOf('wifi:dev:ap:Home · 5 GHz')).toBe(ap.id)
+    expect(parentOf(pc.id)).toBe(ap.id) // wired: unchanged
   })
 })

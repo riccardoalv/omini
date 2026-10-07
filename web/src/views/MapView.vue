@@ -37,7 +37,15 @@ import {
   withDescendants,
 } from '@/lib/areas'
 import { formatAgo } from '@/lib/format'
-import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
+import {
+  clientCount,
+  collapseClients,
+  edgeLook,
+  isWifiNetwork,
+  withoutHidden,
+  withoutOffline,
+  withWifiNetworks,
+} from '@/lib/graph'
 import {
   alignOn,
   clearSaved,
@@ -68,6 +76,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
   client: { width: 200, height: 38 },
   app: { width: 180, height: 34 },
   wan: { width: 180, height: 56 },
+  ssid: { width: 150, height: 26 },
   group: { width: 150, height: 44 },
 }
 
@@ -107,11 +116,14 @@ const expanded = computed(() => new Set(prefs.expanded))
 const forced = computed(() => new Set(prefs.collapsed))
 // Map areas: declared before the view, which collapses them.
 const areas = ref<MapArea[]>([])
+// The map's graph: each access point's Wi-Fi networks as mini nodes between it
+// and its clients (the panel and lists use the plain graph).
+const mapGraph = computed(() => withWifiNetworks(nodes.value, edges.value))
 const view = computed(() =>
   collapseAreas(
     collapseClients(
-      nodes.value,
-      edges.value,
+      mapGraph.value.nodes,
+      mapGraph.value.edges,
       prefs.collapseThreshold,
       expanded.value,
       forced.value,
@@ -175,6 +187,8 @@ const flowNodes = computed<Node[]>(() => {
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
+    // A Wi-Fi network is only a picture: no click, menu or drag.
+    ...(n.kind === 'ssid' ? { selectable: false, draggable: false, focusable: false } : {}),
   }))
   out.push(...devices)
   for (const g of view.value.groups) {
@@ -581,7 +595,7 @@ function toggleDirection() {
 }
 
 function onNodeClick(e: NodeMouseEvent) {
-  if (areaIdOf(e.node.id) !== undefined) return
+  if (areaIdOf(e.node.id) !== undefined || isWifiNetwork(e.node.id)) return
   selectedId.value = e.node.id
 }
 
@@ -633,6 +647,7 @@ const mapEl = ref<HTMLElement>()
 function onContextMenu(e: NodeMouseEvent) {
   const ev = e.event as MouseEvent
   ev.preventDefault()
+  if (isWifiNetwork(e.node.id)) return
   const box = mapEl.value?.getBoundingClientRect()
   const x = ev.clientX - (box?.left ?? 0)
   const y = ev.clientY - (box?.top ?? 0)

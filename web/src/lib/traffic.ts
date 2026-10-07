@@ -107,10 +107,11 @@ export function linkLabels(edges: TopoEdge[], nodes: TopoNode[]): Map<string, Li
   }
   const out = new Map<string, LinkLabel>()
   for (const e of edges) {
-    // A Wi-Fi link has no pill: the device shows its network and band.
-    if (e.kind === 'wifi') continue
     const source = byId.get(e.source)
     const target = byId.get(e.target)
+    // No pill on a Wi-Fi link (its network is a node of its own) nor on an
+    // app's link (the app shows its port itself).
+    if (e.kind === 'wifi' || target?.kind === 'app') continue
     const group = e.source_port ? shared.get(`${e.source}|${e.source_port}`)! : [e]
     let flow: Flow | undefined
     const sr = rate(source, e.source_port)
