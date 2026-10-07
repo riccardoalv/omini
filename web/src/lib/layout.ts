@@ -173,7 +173,8 @@ export async function layout(
       'elk.direction': direction,
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN', // one layout across the area boxes
       'elk.layered.spacing.nodeNodeBetweenLayers': direction === 'RIGHT' ? '110' : '80',
-      'elk.spacing.nodeNode': direction === 'RIGHT' ? '14' : '24',
+      // Room for the traffic badge on top of a node.
+      'elk.spacing.nodeNode': direction === 'RIGHT' ? '22' : '24',
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED', // parents centered over children
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',

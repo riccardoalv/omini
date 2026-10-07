@@ -42,7 +42,7 @@ describe('TopologyNode Wi-Fi network', () => {
 })
 
 describe('TopologyNode traffic badge', () => {
-  it('goes beside a client, above other devices', () => {
+  it('is on top of every node, compact on a client', () => {
     const at = (kind: 'client' | 'device') =>
       mount(TopologyNode, {
         props: {
@@ -55,7 +55,7 @@ describe('TopologyNode traffic badge', () => {
       })
         .get('[data-test=node-flow]')
         .classes()
-    expect(at('client')).toContain('side')
-    expect(at('device')).not.toContain('side')
+    expect(at('client')).toContain('compact')
+    expect(at('device')).not.toContain('compact')
   })
 })

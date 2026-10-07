@@ -78,11 +78,11 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     @auxclick.prevent="onAuxClick"
   >
     <Handle type="target" :position="horizontal ? Position.Left : Position.Top" class="handle" />
-    <!-- Clients are leaves stacked close together: their badge goes beside them. -->
+    <!-- On top; on a client (stacked close together) a compact one on its border. -->
     <div
       v-if="data.flow"
       class="flow-badge"
-      :class="{ side: variant === 'client' && horizontal }"
+      :class="{ compact: variant === 'client' }"
       data-test="node-flow"
       :title="t('map.trafficHint')"
     >
@@ -157,11 +157,12 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   transform: translateX(-50%);
   pointer-events: none;
 }
-.flow-badge.side {
-  top: 50%;
-  bottom: auto;
-  left: calc(100% + 8px);
-  transform: translateY(-50%);
+.flow-badge.compact {
+  bottom: calc(100% - 7px);
+  gap: 6px;
+  padding: 0 7px;
+  font-size: 10px;
+  line-height: 15px;
 }
 .flow-badge .down {
   color: var(--speed-1g);
