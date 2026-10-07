@@ -9,17 +9,21 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test cover lint fmt hooks ci web run dev
+.PHONY: generate check-generated test cover lint fmt hooks ci web run dev demo oui
 
-## run: build the web UI and run Omini on http://localhost:8080 (with the demo network)
+## run: build the web UI and run Omini on http://localhost:8080 (scans your network)
 run: web
-	OMINI_DEMO=1 go run ./cmd/omini
+	go run ./cmd/omini
 
-## dev: backend (:8080) + Vite dev server with hot reload (http://localhost:5173), demo network on
+## demo: run with the demo network only, in a separate data directory
+demo: web
+	OMINI_DEMO=1 OMINI_AUTOSCAN=false OMINI_DATA_DIR=./data-demo go run ./cmd/omini
+
+## dev: backend (:8080) + Vite dev server with hot reload (http://localhost:5173)
 dev: web/node_modules
 	@echo "→ open http://localhost:5173 (UI with hot reload; the API runs on :8080)"
 	@trap 'kill 0' INT TERM EXIT; \
-		OMINI_DEMO=1 go run ./cmd/omini & \
+		go run ./cmd/omini & \
 		(cd web && npm run dev) & \
 		wait
 
@@ -46,9 +50,19 @@ generate:
 		--output $(PY_MODEL)
 	cd sdk/python && uv run ruff format src/omini_sdk/models.py
 
-## check-generated: fail if generated code is out of date (used in CI)
-check-generated: generate
-	git diff --exit-code -- $(GO_MODEL) $(PY_MODEL)
+## oui: refresh the embedded MAC vendor database from the IEEE registry
+oui:
+	go run ./internal/oui/gen
+
+## check-generated: fail if generated code does not match schema/ (works before committing too)
+check-generated:
+	@tmp=$$(mktemp -d) && cp $(GO_MODEL) $(PY_MODEL) $$tmp/ && \
+	$(MAKE) -s generate >/dev/null 2>&1 && \
+	if diff -q $$tmp/model_gen.go $(GO_MODEL) >/dev/null && diff -q $$tmp/models.py $(PY_MODEL) >/dev/null; then \
+		echo "generated code is up to date"; \
+	else \
+		echo "generated code is out of date: run 'make generate' and commit the result"; exit 1; \
+	fi
 
 ## test: run all test suites
 test: web/node_modules
