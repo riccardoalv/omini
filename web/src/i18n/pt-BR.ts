@@ -41,7 +41,7 @@ const ptBR: typeof en = {
     signOut: 'Sair',
   },
   map: {
-    trafficHint: 'Tráfego de internet: média do último minuto',
+    trafficHint: 'Tráfego (↓ recebido, ↑ enviado): média do último intervalo de coleta',
     devices: '{n} equipamento | {n} equipamentos',
     clients: '{n} cliente | {n} clientes',
     problems: '{n} problema | {n} problemas',

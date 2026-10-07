@@ -37,6 +37,7 @@ type Integration struct {
 	Subnets func(spec string) ([]netip.Prefix, error)                            // default netscan.Subnets
 	Gateway func() netip.Addr                                                    // default netscan.Gateway
 	Root    *bool                                                                // default: euid == 0
+	ARP     func() map[string]model.MACAddress                                   // default netscan.ARPTable
 	Now     func() time.Time
 
 	mu      sync.Mutex
@@ -98,6 +99,9 @@ func (s *Integration) defaults() {
 	}
 	if s.Gateway == nil {
 		s.Gateway = netscan.Gateway
+	}
+	if s.ARP == nil {
+		s.ARP = netscan.ARPTable
 	}
 	if s.Root == nil {
 		root := os.Geteuid() == 0
@@ -235,7 +239,16 @@ func runNmap(ctx context.Context, bin string, args []string) ([]byte, error) {
 
 // devices puts the hosts under the gateway (like the network scan), so both
 // integrations describe the same router node and their hosts merge by MAC.
+// Without root nmap reports no MACs: they come from the system's ARP cache.
 func (s *Integration) devices(hosts []model.Host) []model.Device {
+	arp := s.ARP()
+	for i := range hosts {
+		if hosts[i].MAC == nil {
+			if m, ok := arp[hosts[i].IP]; ok {
+				hosts[i].MAC = &m
+			}
+		}
+	}
 	gw := s.Gateway()
 	d := model.Device{Key: "nmap", Name: "Gateway", Role: model.Ptr(model.DeviceRoleRouter)}
 	var rest []model.Host

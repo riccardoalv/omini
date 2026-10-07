@@ -305,3 +305,28 @@ func TestWANsAreParentsOfTheFirewall(t *testing.T) {
 		t.Fatalf("LAN devices stay under the firewall: %v", got)
 	}
 }
+
+func TestDeviceWithoutMACMergesByIP(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, IPs: []string{"192.168.1.1"},
+		Role: model.Ptr(model.DeviceRoleFirewall),
+	}
+	scan := model.Device{ // a scan that could not read MACs
+		Key: "gw:192.168.1.1", Name: "Gateway", Host: model.Ptr("192.168.1.1"),
+		Role: model.Ptr(model.DeviceRoleRouter), Hosts: []model.Host{{IP: "192.168.1.20"}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{scan}},
+	})
+	devices := 0
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindDevice {
+			devices++
+		}
+	}
+	if devices != 1 {
+		t.Fatalf("one firewall expected, got %d device nodes: %+v", devices, topo.Nodes)
+	}
+}

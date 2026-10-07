@@ -47,7 +47,7 @@ import {
   positionsFor,
 } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
-import { linkLabels, nodeFlow } from '@/lib/traffic'
+import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
   AreaColor,
   Integration,
@@ -138,6 +138,19 @@ const empty = computed(() => loaded.value && allNodes.value.length === 0)
 
 const nodeById = computed(() => new Map(allNodes.value.map((n) => [n.id, n])))
 
+/**
+ * Links show their maximum speed; the traffic goes on the devices: internet
+ * traffic on routers and WANs, a link's traffic on the device it reaches.
+ * Speed pills move away from devices showing a badge.
+ */
+const linkInfo = computed(() => {
+  const flows = deviceFlows(linkLabels(view.value.edges, nodes.value), view.value.edges)
+  const badged = new Set(
+    view.value.nodes.filter((n) => flows.has(n.id) || nodeFlow(n, nodeById.value)).map((n) => n.id),
+  )
+  return { labels: linkLabels(view.value.edges, nodes.value, badged), flows }
+})
+
 const flowNodes = computed<Node[]>(() => {
   const out: Node[] = visibleAreas.value.map((a) => ({
     id: areaNodeId(a.id),
@@ -159,7 +172,7 @@ const flowNodes = computed<Node[]>(() => {
       node: n,
       error: n.integration_id ? failedIntegrations.value.has(n.integration_id) : false,
       direction: prefs.layoutDirection,
-      flow: nodeFlow(n, nodeById.value),
+      flow: nodeFlow(n, nodeById.value) ?? linkInfo.value.flows.get(n.id),
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
@@ -180,10 +193,7 @@ const flowNodes = computed<Node[]>(() => {
 
 const flowEdges = computed<Edge[]>(() => {
   const byId = new Map(nodes.value.map((n) => [n.id, n]))
-  const badged = new Set(
-    view.value.nodes.filter((n) => nodeFlow(n, nodeById.value)).map((n) => n.id),
-  )
-  const labels = linkLabels(view.value.edges, nodes.value, badged)
+  const labels = linkInfo.value.labels
   return view.value.edges.map((e) => {
     const source = byId.get(e.source)
     const target = byId.get(e.target)

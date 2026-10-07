@@ -98,3 +98,16 @@ export function linkLabels(
   }
   return out
 }
+
+/**
+ * Traffic of each device reached by a link of its own (not a port shared by
+ * several devices): shown on the device, since the link only shows its speed.
+ */
+export function deviceFlows(labels: Map<string, LinkLabel>, edges: TopoEdge[]): Map<string, Flow> {
+  const out = new Map<string, Flow>()
+  for (const e of edges) {
+    const l = labels.get(e.id)
+    if (l?.flow && l.hidden === undefined) out.set(e.target, l.flow)
+  }
+  return out
+}

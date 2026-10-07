@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TopoEdge, TopoNode } from '../types'
-import { formatRate, linkLabels, nodeFlow } from '../traffic'
+import { deviceFlows, formatRate, linkLabels, nodeFlow } from '../traffic'
 
 const fw: TopoNode = {
   id: 'dev:fw',
@@ -88,5 +88,17 @@ describe('traffic', () => {
     const edges = [edge(wan.id, fw.id, { target_port: 're0', speed_mbps: 2500 })]
     const labels = linkLabels(edges, [fw, wan], new Set([fw.id]))
     expect(labels.get(`${wan.id}>${fw.id}`)!.at).toBe('source')
+  })
+
+  it("puts a link's traffic on the device it reaches, not on shared ports", () => {
+    const nodes = [fw, wan, client('a'), client('b'), client('nas')]
+    const edges = [
+      edge(fw.id, 'a', { source_port: 'bridge0' }),
+      edge(fw.id, 'b', { source_port: 'bridge0' }),
+      edge(fw.id, 'nas', { source_port: 're0' }),
+    ]
+    const flows = deviceFlows(linkLabels(edges, nodes), edges)
+    expect(flows.get('nas')).toEqual({ down: 9e6, up: 125e6 })
+    expect(flows.has('a')).toBe(false) // the bridge is shared: no per-device traffic
   })
 })

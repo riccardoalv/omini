@@ -203,6 +203,17 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 			return
 		}
 	}
+	// Without MACs, a device with the address of one already on the map is
+	// that device (e.g. a scan that could not read MACs).
+	if len(macs) == 0 && d.Host != nil {
+		if id, ok := b.byIP[*d.Host]; ok && b.nodes[id].Kind == KindDevice {
+			n := b.nodes[id]
+			n.Online = n.Online || src.Online
+			b.sources[id] = append(b.sources[id], d)
+			b.index(id, d, macs)
+			return
+		}
+	}
 
 	id := managedID(src, d, macs)
 	n := &Node{

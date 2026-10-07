@@ -5,7 +5,7 @@ import { computed } from 'vue'
 
 import { formatSpeed } from '@/lib/format'
 import { speedColor } from '@/lib/speed'
-import { formatRate, type LinkLabel } from '@/lib/traffic'
+import type { LinkLabel } from '@/lib/traffic'
 
 export type LinkData = LinkLabel
 
@@ -26,26 +26,24 @@ const path = computed(() =>
   }),
 )
 
+// A link shows its maximum speed only; the traffic is shown on the devices.
 const label = computed(() => {
   const d = props.data
   if (!d || d.hidden) return undefined
   const speed = formatSpeed(d.speed)
-  const flow = d.flow ? `↓${formatRate(d.flow.down)} ↑${formatRate(d.flow.up)}` : ''
-  if (!speed && !flow) return undefined
+  if (!speed) return undefined
   const vertical = props.targetPosition === Position.Top
-  // Wider with traffic: keep it clear of the node it is next to.
-  const gap = flow ? 70 : 26
   const at =
     d.at === 'source'
       ? {
-          x: vertical ? props.sourceX : props.sourceX + gap,
+          x: vertical ? props.sourceX : props.sourceX + 26,
           y: vertical ? props.sourceY + 16 : props.sourceY,
         }
       : {
-          x: vertical ? props.targetX : props.targetX - gap,
+          x: vertical ? props.targetX : props.targetX - 26,
           y: vertical ? props.targetY - 16 : props.targetY,
         }
-  return { speed, flow, color: speedColor(d.speed), ...at }
+  return { speed, color: speedColor(d.speed), ...at }
 })
 </script>
 
@@ -61,7 +59,6 @@ const label = computed(() => {
       }"
     >
       <span v-if="label.speed" class="speed">{{ label.speed }}</span>
-      <span v-if="label.flow" class="flow" data-test="link-flow">{{ label.flow }}</span>
     </div>
   </EdgeLabelRenderer>
 </template>
@@ -83,9 +80,5 @@ const label = computed(() => {
   line-height: 1.4;
   pointer-events: none;
   white-space: nowrap;
-}
-.flow {
-  color: var(--text-muted);
-  font-weight: 500;
 }
 </style>

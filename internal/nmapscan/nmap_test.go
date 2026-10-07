@@ -65,6 +65,7 @@ func newTest(root bool) (*Integration, *fakeNmap) {
 		},
 		Gateway: func() netip.Addr { return netip.MustParseAddr("192.168.1.1") },
 		Root:    &root,
+		ARP:     func() map[string]model.MACAddress { return nil },
 		Now:     func() time.Time { return clock },
 	}, f
 }
@@ -157,5 +158,27 @@ func TestRealNmapIfInstalled(t *testing.T) {
 	msg, err := s.Test(context.Background(), integration.Config{})
 	if err != nil || !strings.Contains(msg, "Nmap version") {
 		t.Fatalf("real nmap: %q %v", msg, err)
+	}
+}
+
+// Without root nmap shows no MACs: the system's ARP cache names the hosts,
+// so the gateway merges with the router node of the other integrations.
+func TestMACsFromARPWithoutRoot(t *testing.T) {
+	s, _ := newTest(false)
+	s.ARP = func() map[string]model.MACAddress {
+		return map[string]model.MACAddress{"192.168.1.1": "58:9c:fc:10:8f:2c", "192.168.1.7": "aa:bb:cc:00:00:07"}
+	}
+	hosts := []model.Host{{IP: "192.168.1.1"}, {IP: "192.168.1.7"}, {IP: "192.168.1.8"}}
+	devs := s.devices(hosts)
+	gw := devs[0]
+	if gw.Key != "58:9c:fc:10:8f:2c" || len(gw.MACs) != 1 {
+		t.Fatalf("gateway: %+v", gw)
+	}
+	byIP := map[string]model.Host{}
+	for _, h := range gw.Hosts {
+		byIP[h.IP] = h
+	}
+	if byIP["192.168.1.7"].MAC == nil || *byIP["192.168.1.7"].MAC != "aa:bb:cc:00:00:07" || byIP["192.168.1.8"].MAC != nil {
+		t.Fatalf("hosts: %+v", gw.Hosts)
 	}
 }

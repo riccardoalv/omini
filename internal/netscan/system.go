@@ -218,3 +218,20 @@ func Gateway() netip.Addr {
 	a, _, _ := defaultGateway("/proc/net/route")
 	return a
 }
+
+// ARPTable returns this server's ARP cache: IP → MAC. Other integrations use
+// it to name hosts by MAC when they cannot see MACs themselves (nmap without
+// root).
+func ARPTable() map[string]model.MACAddress {
+	out := map[string]model.MACAddress{}
+	entries, err := readARP("/proc/net/arp")
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		if !e.MAC.IsGroup() {
+			out[e.IP.String()] = e.MAC
+		}
+	}
+	return out
+}
