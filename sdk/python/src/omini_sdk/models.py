@@ -61,6 +61,48 @@ class DhcpLease(BaseModel):
     expires_at: AwareDatetime | None = None
 
 
+class OpenPort(RootModel[int]):
+    root: Annotated[int, Field(ge=1, le=65535)]
+
+
+class Host(BaseModel):
+    """
+    An end device observed on the network, with whatever could be learned about it.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ip: str
+    mac: Annotated[str | None, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")] = None
+    """
+    Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
+    """
+    hostnames: list[str] | None = None
+    """
+    Names from DNS, mDNS, NetBIOS, DHCP...
+    """
+    vendor: str | None = None
+    """
+    Hardware vendor (e.g. from the MAC prefix).
+    """
+    manufacturer: str | None = None
+    """
+    Manufacturer reported by the device itself (UPnP).
+    """
+    model: str | None = None
+    os: str | None = None
+    open_ports: list[OpenPort] | None = None
+    services: list[str] | None = None
+    """
+    Advertised services, e.g. mDNS types like _airplay._tcp.
+    """
+    sources: list[str] | None = None
+    """
+    How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -241,6 +283,10 @@ class Device(BaseModel):
     arp: list[ArpEntry] | None = None
     dhcp_leases: list[DhcpLease] | None = None
     wireless_clients: list[WirelessClient] | None = None
+    hosts: list[Host] | None = None
+    """
+    End devices observed by this integration with extra details (network scans, controllers).
+    """
 
 
 class PluginResponse(BaseModel):

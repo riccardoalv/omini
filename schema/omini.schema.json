@@ -102,6 +102,13 @@
           "items": {
             "$ref": "#/$defs/WirelessClient"
           }
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Host"
+          },
+          "description": "End devices observed by this integration with extra details (network scans, controllers)."
         }
       }
     },
@@ -480,6 +487,65 @@
         "collect",
         "test"
       ]
+    },
+    "Host": {
+      "type": "object",
+      "description": "An end device observed on the network, with whatever could be learned about it.",
+      "required": [
+        "ip"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ip": {
+          "type": "string"
+        },
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "hostnames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names from DNS, mDNS, NetBIOS, DHCP..."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "Hardware vendor (e.g. from the MAC prefix)."
+        },
+        "manufacturer": {
+          "type": "string",
+          "description": "Manufacturer reported by the device itself (UPnP)."
+        },
+        "model": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "open_ports": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Advertised services, e.g. mDNS types like _airplay._tcp."
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios."
+        }
+      }
     }
   }
 }

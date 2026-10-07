@@ -57,6 +57,10 @@ type Device struct {
 	// Management IP or hostname.
 	Host *string `json:"host,omitempty,omitzero" yaml:"host,omitempty"`
 
+	// End devices observed by this integration with extra details (network scans,
+	// controllers).
+	Hosts []Host `json:"hosts,omitempty,omitzero" yaml:"hosts,omitempty"`
+
 	// Interfaces corresponds to the JSON schema field "interfaces".
 	Interfaces []Interface `json:"interfaces,omitempty,omitzero" yaml:"interfaces,omitempty"`
 
@@ -332,6 +336,57 @@ func (j *FormField) UnmarshalJSON(value []byte) error {
 		plain.Required = false
 	}
 	*j = FormField(plain)
+	return nil
+}
+
+// An end device observed on the network, with whatever could be learned about it.
+type Host struct {
+	// Names from DNS, mDNS, NetBIOS, DHCP...
+	Hostnames []string `json:"hostnames,omitempty,omitzero" yaml:"hostnames,omitempty"`
+
+	// IP corresponds to the JSON schema field "ip".
+	IP string `json:"ip" yaml:"ip"`
+
+	// MAC corresponds to the JSON schema field "mac".
+	MAC *MACAddress `json:"mac,omitempty,omitzero" yaml:"mac,omitempty"`
+
+	// Manufacturer reported by the device itself (UPnP).
+	Manufacturer *string `json:"manufacturer,omitempty,omitzero" yaml:"manufacturer,omitempty"`
+
+	// Model corresponds to the JSON schema field "model".
+	Model *string `json:"model,omitempty,omitzero" yaml:"model,omitempty"`
+
+	// OpenPorts corresponds to the JSON schema field "open_ports".
+	OpenPorts []uint16 `json:"open_ports,omitempty,omitzero" yaml:"open_ports,omitempty"`
+
+	// OS corresponds to the JSON schema field "os".
+	OS *string `json:"os,omitempty,omitzero" yaml:"os,omitempty"`
+
+	// Advertised services, e.g. mDNS types like _airplay._tcp.
+	Services []string `json:"services,omitempty,omitzero" yaml:"services,omitempty"`
+
+	// How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
+	Sources []string `json:"sources,omitempty,omitzero" yaml:"sources,omitempty"`
+
+	// Hardware vendor (e.g. from the MAC prefix).
+	Vendor *string `json:"vendor,omitempty,omitzero" yaml:"vendor,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Host) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["ip"]; raw != nil && !ok {
+		return fmt.Errorf("field ip in Host: required")
+	}
+	type Plain Host
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = Host(plain)
 	return nil
 }
 
