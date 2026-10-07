@@ -6,6 +6,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core'
 import {
   ArrowDownFromLine,
   ArrowRightFromLine,
+  Download,
   Eye,
   EyeOff,
   LayoutGrid,
@@ -56,6 +57,7 @@ import {
   positionsFor,
 } from '@/lib/layout'
 import { displayName } from '@/lib/names'
+import { download, exportName, mapImage, mapJSON, type ExportFormat } from '@/lib/export'
 import { prefs } from '@/lib/prefs'
 import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
@@ -82,8 +84,14 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const { fitView, onNodesInitialized, updateNodeInternals, viewport, screenToFlowCoordinate } =
-  useVueFlow('omini-map')
+const {
+  fitView,
+  getNodes,
+  onNodesInitialized,
+  updateNodeInternals,
+  viewport,
+  screenToFlowCoordinate,
+} = useVueFlow('omini-map')
 
 const data = shallowRef<TopologyResponse>()
 const integrations = ref<Integration[]>([])
@@ -612,6 +620,31 @@ async function refresh() {
   }
 }
 
+// Export: the whole map as an image (PNG, SVG) or its data (JSON).
+const exportOpen = ref(false)
+const exporting = ref(false)
+const exportError = ref('')
+async function exportMap(format: ExportFormat) {
+  exportOpen.value = false
+  exportError.value = ''
+  if (!data.value) return
+  exporting.value = true
+  try {
+    if (format === 'json') {
+      download(mapJSON(data.value), exportName('json'))
+      return
+    }
+    const viewportEl = mapEl.value?.querySelector<HTMLElement>('.vue-flow__viewport')
+    if (!viewportEl) return
+    const background = getComputedStyle(mapEl.value!).backgroundColor
+    download(await mapImage(format, viewportEl, getNodes.value, background), exportName(format))
+  } catch {
+    exportError.value = t('map.exportFailed')
+  } finally {
+    exporting.value = false
+  }
+}
+
 async function resetLayout() {
   await api.resetLayout()
   for (const k of Object.keys(draggedPositions)) delete draggedPositions[k]
@@ -807,6 +840,32 @@ onBeforeUnmount(() => {
         >
           <SquareDashed :size="15" /><span class="label">{{ t('map.areas.new') }}</span>
         </button>
+        <div class="export-wrap" @keydown.esc="exportOpen = false">
+          <button
+            class="btn small"
+            data-test="export"
+            :disabled="exporting"
+            :aria-expanded="exportOpen"
+            aria-haspopup="menu"
+            @click="exportOpen = !exportOpen"
+          >
+            <Download :size="15" /><span class="label">{{ t('map.export') }}</span>
+          </button>
+          <p v-if="exportError" class="export-menu card export-error" role="alert">
+            {{ exportError }}
+          </p>
+          <div v-if="exportOpen" class="export-menu card" role="menu">
+            <button
+              v-for="f in ['png', 'svg', 'json'] as const"
+              :key="f"
+              role="menuitem"
+              :data-test="`export-${f}`"
+              @click="exportMap(f)"
+            >
+              {{ t(`map.exportAs.${f}`) }}
+            </button>
+          </div>
+        </div>
         <button class="btn small" :title="t('map.resetLayout')" @click="resetLayout">
           <LayoutGrid :size="15" /><span class="label">{{ t('map.resetLayout') }}</span>
         </button>
@@ -933,6 +992,39 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.export-wrap {
+  position: relative;
+}
+.export-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  box-shadow: var(--shadow);
+}
+.export-menu button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.export-error {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--danger);
+  font-size: 13px;
+}
+.export-menu button:hover {
+  background: var(--surface-hover);
+}
 .map {
   position: relative;
   height: 100%;

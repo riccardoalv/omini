@@ -41,6 +41,9 @@ const ptBR: typeof en = {
     signOut: 'Sair',
   },
   map: {
+    export: 'Exportar',
+    exportAs: { png: 'Imagem (PNG)', svg: 'Imagem vetorial (SVG)', json: 'Dados (JSON)' },
+    exportFailed: 'Não foi possível exportar o mapa.',
     trafficHint: 'Tráfego (↓ recebido, ↑ enviado): média do último intervalo de coleta',
     devices: '{n} equipamento | {n} equipamentos',
     clients: '{n} cliente | {n} clientes',

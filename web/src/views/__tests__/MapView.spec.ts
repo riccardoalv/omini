@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { plugins } from '@/components/__tests__/helpers'
 import { api } from '@/lib/api'
+import { download } from '@/lib/export'
 
 import MapView from '../MapView.vue'
 
@@ -17,6 +18,11 @@ vi.mock('@/lib/api', async (orig) => {
       integrations: vi.fn<typeof mod.api.integrations>(),
     },
   }
+})
+
+vi.mock('@/lib/export', async (orig) => {
+  const mod = await orig<typeof import('@/lib/export')>()
+  return { ...mod, download: vi.fn<typeof mod.download>() }
 })
 
 beforeAll(() => {
@@ -193,6 +199,35 @@ describe('MapView', () => {
     const bubble = nodes().find((c) => c.props('data').group)
     expect(bubble?.props('data').group.parentId).toBe('wifi:dev:ap:Home · 5 GHz')
     expect(bubble?.props('data').group.clients).toHaveLength(3)
+    w.unmount()
+  })
+
+  it('exports the map data as JSON from the toolbar', async () => {
+    vi.mocked(api.integrations).mockResolvedValue([])
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: { nodes: [{ id: 'dev:fw', kind: 'device', label: 'fw', online: true }], edges: [] },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    await w.get('[data-test=export]').trigger('click')
+    expect(w.findAll('[role=menuitem]').map((b) => b.text())).toEqual([
+      'Image (PNG)',
+      'Vector image (SVG)',
+      'Data (JSON)',
+    ])
+    await w.get('[data-test=export-json]').trigger('click')
+    await flushPromises()
+    const [content, name] = vi.mocked(download).mock.calls[0]!
+    expect(JSON.parse(content).topology.nodes[0].id).toBe('dev:fw')
+    expect(name).toMatch(/^omini-map-\d{4}-\d{2}-\d{2}\.json$/)
     w.unmount()
   })
 })

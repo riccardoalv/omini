@@ -315,7 +315,7 @@ Omini ships in incremental releases, each one usable on its own.
 - More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense
 - VLAN view
 - Notifications (Telegram, e-mail, webhook)
-- Topology export (PNG, SVG, draw.io, JSON)
+- Topology export to draw.io (PNG, SVG and JSON: done)
 - Collapsing an area into a bubble
 
 ### Ideas under discussion

@@ -39,6 +39,9 @@ export default {
     signOut: 'Sign out',
   },
   map: {
+    export: 'Export',
+    exportAs: { png: 'Image (PNG)', svg: 'Vector image (SVG)', json: 'Data (JSON)' },
+    exportFailed: 'Could not export the map.',
     trafficHint: 'Traffic (↓ received, ↑ sent): average of the last collection interval',
     devices: '{n} device | {n} devices',
     clients: '{n} client | {n} clients',
