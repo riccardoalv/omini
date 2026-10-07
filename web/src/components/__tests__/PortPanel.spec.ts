@@ -80,10 +80,43 @@ describe('PortPanel', () => {
       expect(tip).toContain(s)
     }
     expect(w.get('[data-test=port-tip] .err').text()).toBe('2')
-    await p.trigger('click')
-    expect(w.emitted('select')![0]).toEqual(['mac:aa'])
     await p.trigger('mouseleave')
     expect(w.find('[data-test=port-tip]').exists()).toBe(false)
+  })
+
+  it('opens a card with the port options on click', async () => {
+    const w = mountPanel([port('igb0', { up: true, speed_mbps: 1000 })], { igb0: modem })
+    await w.get('[data-port=igb0]').trigger('click')
+    const card = w.get('[data-test=port-card]')
+    expect(card.text()).toContain('ISP modem')
+    // Open what is connected.
+    await card.get('[data-test=open-linked]').trigger('click')
+    expect(w.emitted('select')![0]).toEqual(['mac:aa'])
+    // Name the port.
+    await card.get('[data-test=edit-port]').trigger('click')
+    await w.get('[data-test=port-label-input]').setValue(' Uplink ')
+    await w.get('.name-form').trigger('submit')
+    expect(w.emitted('label')![0]).toEqual(['igb0', 'Uplink'])
+    // A second click closes it.
+    await w.get('[data-port=igb0]').trigger('click')
+    expect(w.find('[data-test=port-card]').exists()).toBe(false)
+  })
+
+  it("shows the name the user gave a port, with the device's own name next to it", async () => {
+    const w = mount(PortPanel, {
+      props: {
+        ports: [port('mlxen0', { up: true, speed_mbps: 10000, description: 'LAN_PHYSICAL' })],
+        links: {},
+        labels: { mlxen0: 'Porta LAN' },
+      },
+      global: { plugins: plugins() },
+    })
+    expect(w.get('[data-port=mlxen0] .name').text()).toBe('Porta LAN')
+    await w.get('[data-port=mlxen0]').trigger('click')
+    const card = w.get('[data-test=port-card]').text()
+    expect(card).toContain('Porta LAN')
+    expect(card).toContain('mlxen0')
+    expect(card).toContain('LAN_PHYSICAL')
   })
   it('draws SFP cages and names the generation by speed', async () => {
     const w = mountPanel([

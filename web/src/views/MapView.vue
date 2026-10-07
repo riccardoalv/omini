@@ -139,16 +139,13 @@ const empty = computed(() => loaded.value && allNodes.value.length === 0)
 const nodeById = computed(() => new Map(allNodes.value.map((n) => [n.id, n])))
 
 /**
- * Links show their maximum speed; the traffic goes on the devices: internet
- * traffic on routers and WANs, a link's traffic on the device it reaches.
- * Speed pills move away from devices showing a badge.
+ * Links show their port's name and maximum speed in the middle; the traffic
+ * goes on the devices: internet traffic on routers and WANs, a link's traffic
+ * on the device it reaches.
  */
 const linkInfo = computed(() => {
-  const flows = deviceFlows(linkLabels(view.value.edges, nodes.value), view.value.edges)
-  const badged = new Set(
-    view.value.nodes.filter((n) => flows.has(n.id) || nodeFlow(n, nodeById.value)).map((n) => n.id),
-  )
-  return { labels: linkLabels(view.value.edges, nodes.value, badged), flows }
+  const labels = linkLabels(view.value.edges, nodes.value)
+  return { labels, flows: deviceFlows(labels, view.value.edges) }
 })
 
 const flowNodes = computed<Node[]>(() => {

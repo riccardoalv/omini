@@ -204,6 +204,13 @@
           "type": "string",
           "description": "Interface this one runs on: a VLAN's port, the port carrying a PPPoE link."
         },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ports a bridge or LAG is made of, by interface name."
+        },
         "up": {
           "type": "boolean",
           "description": "Operational status."

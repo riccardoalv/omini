@@ -173,6 +173,10 @@ class Interface(BaseModel):
     """
     Interface this one runs on: a VLAN's port, the port carrying a PPPoE link.
     """
+    members: list[str] | None = None
+    """
+    Ports a bridge or LAG is made of, by interface name.
+    """
     up: bool | None = None
     """
     Operational status.

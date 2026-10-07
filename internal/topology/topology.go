@@ -503,10 +503,28 @@ func (b *builder) placeUnlinkedDevices(managed []string) {
 			continue
 		}
 		if peer, iface := b.arpPeer(id, managed); peer != "" {
-			b.addEdge(peer, iface, id, "", EdgeInferred, 0)
+			// Our end: the port of our MAC table where the peer is learned.
+			// It is our uplink, so what is seen only there is behind the peer.
+			local := b.portOf(id, deviceMACs(b.nodes[peer].Device))
+			if local != "" {
+				b.uplinks[portKey{id, local}] = peer
+			}
+			b.addEdge(peer, iface, id, local, EdgeInferred, portSpeed(b.nodes[id].Device, local))
 			linked[id], linked[peer] = true, true
 		}
 	}
+}
+
+// portOf is the port of a device's own MAC table where any of macs is learned.
+func (b *builder) portOf(id string, macs []model.MACAddress) string {
+	for _, m := range macs {
+		for _, k := range b.fdbPorts[m] {
+			if k.node == id {
+				return k.port
+			}
+		}
+	}
+	return ""
 }
 
 func arpInterface(d *model.Device, macs []model.MACAddress) string {

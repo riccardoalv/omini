@@ -219,32 +219,18 @@ describe('NodePanel firewall data', () => {
     vi.mocked(api.webServices).mockResolvedValue([])
   })
 
-  it('shows port speed, half duplex and gateways', () => {
+  it('shows gateways with status, latency and loss', () => {
     const w = mountPanel({
       ...firewall,
       device: {
         key: 'fw',
         name: 'fw',
-        interfaces: [
-          {
-            name: 'igb0',
-            description: 'WAN',
-            up: true,
-            speed_mbps: 2500,
-            media: '2500Base-T <full-duplex>',
-          },
-          { name: 'igb1', description: 'LAN', up: true, speed_mbps: 100, duplex: 'half' },
-        ],
         gateways: [
           { name: 'WAN_DHCP', status: 'up', rtt_ms: 1.2, loss_pct: 0 },
           { name: 'WAN2', status: 'down', loss_pct: 100 },
         ],
       },
     })
-    const rows = w.findAll('.ports tr')
-    expect(rows[0]!.text()).toContain('2.5G')
-    expect(rows[0]!.find('[title]').attributes('title')).toBe('2500Base-T <full-duplex>')
-    expect(rows[1]!.text()).toContain('half duplex')
     const gws = w.get('[data-test=gateways]').text()
     expect(gws).toContain('WAN_DHCP')
     expect(gws).toContain('1.2 ms')
@@ -253,35 +239,37 @@ describe('NodePanel firewall data', () => {
   })
 })
 
-describe('NodePanel port descriptions', () => {
+describe('NodePanel port names', () => {
   beforeEach(() => {
     vi.mocked(api.webServices).mockResolvedValue([])
     vi.mocked(api.setPortLabel).mockReset().mockResolvedValue()
   })
 
-  const sw = (labels?: Record<string, string>): TopoNode => ({
+  const sw: TopoNode = {
     ...firewall,
-    port_labels: labels,
     device: {
       key: 'sw',
       name: 'sw',
-      interfaces: [{ name: 'ge1', description: 'port 1', up: true, speed_mbps: 1000 }],
+      interfaces: [
+        { name: 'ge1', description: 'port 1', up: true, speed_mbps: 1000 },
+        { name: 'vlan10', type: 'vlan', up: true },
+      ],
     },
+  }
+
+  it('shows only the front view of the ports, no list', () => {
+    const w = mountPanel(sw)
+    expect(w.findAll('[data-port]')).toHaveLength(1) // the VLAN has no jack
+    expect(w.find('.ports').exists()).toBe(false)
+    expect(w.text()).not.toContain('All ports')
   })
 
-  it("shows the user's description instead of the device's", () => {
-    const w = mountPanel(sw({ ge1: 'Uplink to rack' }))
-    expect(w.get('.ports').text()).toContain('Uplink to rack')
-    expect(w.get('.ports').text()).not.toContain('port 1')
-  })
-
-  it('edits a description inline', async () => {
-    const w = mountPanel(sw())
+  it('names a port from its card', async () => {
+    const w = mountPanel(sw)
+    await w.get('[data-port=ge1]').trigger('click')
     await w.get('[data-test=edit-port]').trigger('click')
-    const input = w.get('[data-test=port-label-input]')
-    expect((input.element as HTMLInputElement).value).toBe('port 1')
-    await input.setValue(' TV room ')
-    await w.get('.port-edit').trigger('submit')
+    await w.get('[data-test=port-label-input]').setValue('TV room')
+    await w.get('.name-form').trigger('submit')
     await flushPromises()
     expect(api.setPortLabel).toHaveBeenCalledWith(firewall.id, 'ge1', 'TV room')
     const changed = w.emitted('changed')!

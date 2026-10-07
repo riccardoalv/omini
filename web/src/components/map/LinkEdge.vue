@@ -10,8 +10,7 @@ import type { LinkLabel } from '@/lib/traffic'
 export type LinkData = LinkLabel
 
 /**
- * A link of the map. Links from one node share their first segment, so the
- * speed is drawn at the end of each link, next to the device it reaches.
+ * A link of the map, with its port's name and speed in the middle.
  */
 const props = defineProps<EdgeProps<LinkData>>()
 
@@ -26,23 +25,22 @@ const path = computed(() =>
   }),
 )
 
-// A link shows its maximum speed only (the traffic is shown on the devices),
-// with the port's name when it has one: "LAN · 10G".
+// A link shows its maximum speed (the traffic is shown on the devices) with
+// its port's name — "Porta LAN | 10G" — in the middle of the wire. Links
+// sharing a port show one pill in the middle of the part they share.
 const label = computed(() => {
   const d = props.data
   if (!d || d.hidden) return undefined
   const speed = formatSpeed(d.speed)
   if (!speed && !d.name) return undefined
+  const [, cx, cy] = path.value
   const vertical = props.targetPosition === Position.Top
-  // The pill grows away from the node it sits next to.
   const at =
-    d.at === 'source'
+    d.at === 'shared'
       ? vertical
-        ? { x: props.sourceX, y: props.sourceY + 16, shift: '-50%, -50%' }
-        : { x: props.sourceX + 10, y: props.sourceY, shift: '0, -50%' }
-      : vertical
-        ? { x: props.targetX, y: props.targetY - 16, shift: '-50%, -50%' }
-        : { x: props.targetX - 10, y: props.targetY, shift: '-100%, -50%' }
+        ? { x: props.sourceX, y: (props.sourceY + cy) / 2 }
+        : { x: (props.sourceX + cx) / 2, y: props.sourceY }
+      : { x: cx, y: cy }
   return { speed, name: d.name, color: speedColor(d.speed), ...at }
 })
 </script>
@@ -54,7 +52,7 @@ const label = computed(() => {
       class="link-speed nodrag nopan"
       data-test="link-speed"
       :style="{
-        transform: `translate(${label.x}px, ${label.y}px) translate(${label.shift})`,
+        transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)`,
         '--c': label.color,
       }"
     >

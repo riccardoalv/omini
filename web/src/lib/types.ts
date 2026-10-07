@@ -21,6 +21,8 @@ export interface Interface {
   wan?: boolean
   /** Interface it runs on (a VLAN's port, the port carrying PPPoE). */
   parent?: string
+  /** Ports a bridge or LAG is made of. */
+  members?: string[]
   rx_bytes?: number
   tx_bytes?: number
   rx_errors?: number

@@ -3,7 +3,6 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
-  ChevronRight,
   Eye,
   EyeOff,
   ExternalLink,
@@ -111,29 +110,14 @@ const portLinks = computed(() => {
     out[p.name] = linkOnPort(id, p.name, props.nodes, props.edges)
   return out
 })
-/** Ports, with the user's description in place of the device's. */
 const ports = computed(() =>
-  (n.value?.device?.interfaces ?? [])
-    .filter((i) => i.type !== 'loopback')
-    .map((i) => {
-      const own = n.value?.port_labels?.[i.name]
-      return own ? { ...i, description: own } : i
-    }),
+  (n.value?.device?.interfaces ?? []).filter((i) => i.type !== 'loopback'),
 )
 
-// Editing a port's description inline.
-const editingPort = ref<string>()
-const portDraft = ref('')
-function editPort(name: string, current?: string) {
-  editingPort.value = name
-  portDraft.value = current ?? ''
-}
-async function savePort() {
+// Naming a port (from its card in the front view).
+async function savePort(port: string, label: string) {
   const node = n.value
-  const port = editingPort.value
-  if (!node || !port) return
-  editingPort.value = undefined
-  const label = portDraft.value.trim()
+  if (!node) return
   try {
     await api.setPortLabel(node.id, port, label)
     const labels = { ...node.port_labels }
@@ -282,7 +266,6 @@ const summary = computed(() => {
 })
 /** Internet traffic right now (routers, firewalls and WAN nodes). */
 const flow = computed(() => (n.value ? nodeFlow(n.value, byId.value) : undefined))
-const portListOpen = ref(false)
 // Long client lists show the first few; the rest on demand.
 const CLIENTS_SHOWN = 8
 const allClients = ref(false)
@@ -612,82 +595,15 @@ async function save(patch: {
 
         <section v-if="n.kind === 'device'" class="block" data-test="ports-section">
           <h3>{{ t('panel.ports') }}</h3>
-          <p v-if="!ports.length" class="muted">{{ t('panel.noPorts') }}</p>
+          <p v-if="!physicalPorts.length" class="muted">{{ t('panel.noPorts') }}</p>
           <PortPanel
             v-if="physicalPorts.length"
             :ports="physicalPorts"
             :links="portLinks"
+            :labels="n.port_labels"
             @select="(id) => emit('select', id)"
+            @label="savePort"
           />
-          <details
-            v-if="ports.length"
-            class="port-list"
-            :open="portListOpen || !physicalPorts.length"
-            @toggle="portListOpen = ($event.target as HTMLDetailsElement).open"
-          >
-            <summary>
-              <ChevronRight :size="14" class="chev" />
-              {{ t('panel.portList', { n: ports.length }) }}
-            </summary>
-            <table class="table ports">
-              <tbody>
-                <tr v-for="p in ports" :key="p.name">
-                  <td><span class="dot" :class="{ online: p.up }" /></td>
-                  <td class="mono">{{ p.name }}</td>
-                  <td :title="p.media" class="nowrap">
-                    {{ p.up ? formatSpeed(p.speed_mbps) : t('panel.portDown') }}
-                    <span v-if="p.up && p.duplex === 'half'" class="warn">{{
-                      t('panel.halfDuplex')
-                    }}</span>
-                  </td>
-                  <td class="grow">
-                    <form
-                      v-if="editingPort === p.name"
-                      class="port-edit"
-                      @submit.prevent="savePort"
-                    >
-                      <input
-                        v-model="portDraft"
-                        class="input"
-                        maxlength="80"
-                        autofocus
-                        data-test="port-label-input"
-                        :placeholder="t('panel.portLabelHint')"
-                        :aria-label="t('panel.portLabel')"
-                        @keydown.esc.prevent="editingPort = undefined"
-                      />
-                      <button class="btn icon" type="submit" :aria-label="t('common.save')">
-                        <Check :size="14" />
-                      </button>
-                    </form>
-                    <template
-                      v-for="other in [linkOnPort(n.id, p.name, nodes, edges)]"
-                      v-else
-                      :key="other?.id"
-                    >
-                      <a v-if="other" href="#" @click.prevent="emit('select', other.id)">{{
-                        other.label
-                      }}</a>
-                      <span v-else class="muted">{{ p.description }}</span>
-                      <span v-if="other && p.description" class="muted">
-                        · {{ p.description }}</span
-                      >
-                      <button
-                        class="btn ghost icon edit-port"
-                        type="button"
-                        data-test="edit-port"
-                        :aria-label="t('panel.portLabel')"
-                        :title="t('panel.portLabel')"
-                        @click="editPort(p.name, n.port_labels?.[p.name] ?? p.description)"
-                      >
-                        <Pencil :size="12" />
-                      </button>
-                    </template>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </details>
         </section>
 
         <section v-if="n.wan || gateways.length" class="block">
@@ -902,25 +818,6 @@ async function save(patch: {
     transform: rotate(360deg);
   }
 }
-.port-edit {
-  display: flex;
-  gap: 4px;
-}
-.port-edit .input {
-  padding: 2px 6px;
-  font-size: 12.5px;
-}
-.edit-port {
-  width: 22px;
-  height: 22px;
-  margin-left: 2px;
-  opacity: 0;
-  vertical-align: middle;
-}
-tr:hover .edit-port,
-.edit-port:focus-visible {
-  opacity: 1;
-}
 .name-row {
   display: flex;
   align-items: center;
@@ -1129,27 +1026,6 @@ header {
   padding-top: 12px;
   margin: 14px 0 0;
   border-top: 1px solid var(--border);
-}
-.port-list {
-  margin-top: 10px;
-}
-.port-list summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  cursor: pointer;
-  list-style: none;
-}
-.port-list summary::-webkit-details-marker {
-  display: none;
-}
-.port-list[open] .chev {
-  transform: rotate(90deg);
-}
-.chev {
-  transition: transform 0.15s;
 }
 .nowrap {
   white-space: nowrap;

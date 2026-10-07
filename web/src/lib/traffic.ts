@@ -1,4 +1,4 @@
-import type { TopoEdge, TopoNode } from './types'
+import type { Interface, TopoEdge, TopoNode } from './types'
 
 /** Traffic seen from the device a link reaches: down = towards it. */
 export interface Flow {
@@ -11,8 +11,8 @@ export interface LinkLabel {
   /** Name of the port the link leaves from (or reaches): "LAN", "Uplink to the rack". */
   name?: string
   flow?: Flow
-  /** Where the pill goes: next to the device reached, or at the source. */
-  at: 'target' | 'source'
+  /** Where the pill goes: the middle of the link, or of the part a shared port's links have in common. */
+  at: 'middle' | 'shared'
   /** Links sharing a port show one pill for all (on the first of them). */
   hidden?: boolean
 }
@@ -53,15 +53,38 @@ const portSpeed = (n: TopoNode | undefined, port?: string) =>
   port ? n?.device?.interfaces?.find((i) => i.name === port)?.speed_mbps : undefined
 
 /**
- * A port's name worth showing: the user's description, else the device's own
- * when it says more than the interface name ("LAN" for igb1).
+ * The physical port behind a bridge or LAG: its fastest member that is up
+ * (the link runs at its speed). Without a member list (older integrations),
+ * the only physical port up at the bridge's speed, if there is exactly one.
+ */
+export function physicalPort(n: TopoNode, port: string): string | undefined {
+  const ifaces = n.device?.interfaces ?? []
+  const iface = ifaces.find((i) => i.name === port)
+  if (!iface || (iface.type !== 'bridge' && iface.type !== 'lag')) return undefined
+  const physical = (i: Interface) => (!i.type || i.type === 'ethernet') && i.up
+  if (iface.members?.length) {
+    const members = ifaces.filter((i) => iface.members!.includes(i.name) && physical(i))
+    members.sort((x, y) => (y.speed_mbps ?? 0) - (x.speed_mbps ?? 0))
+    return members[0]?.name
+  }
+  const same = ifaces.filter(
+    (i) => physical(i) && !i.wan && !i.parent && i.speed_mbps === iface.speed_mbps,
+  )
+  return same.length === 1 ? same[0]!.name : undefined
+}
+
+/**
+ * The name shown next to a link's speed: the name the user gave the port,
+ * else the interface's own ("mlxen0", "Port 1"). A bridge shows the physical
+ * port behind it.
  */
 export function portName(n: TopoNode | undefined, port?: string): string | undefined {
   if (!n || !port) return undefined
-  const own = n.port_labels?.[port]?.trim()
+  const label = (p: string) => n.port_labels?.[p]?.trim() || undefined
+  const own = label(port)
   if (own) return own
-  const desc = n.device?.interfaces?.find((i) => i.name === port)?.description?.trim()
-  return desc && desc.toLowerCase() !== port.toLowerCase() ? desc : undefined
+  const phys = physicalPort(n, port)
+  return phys ? (label(phys) ?? phys) : port
 }
 
 /**
@@ -69,17 +92,10 @@ export function portName(n: TopoNode | undefined, port?: string): string | undef
  * switch behind a firewall port) gets a single pill at the port with the
  * port's speed and traffic; a direct link gets its own pill.
  */
-export function linkLabels(
-  edges: TopoEdge[],
-  nodes: TopoNode[],
-  /** Nodes with a traffic badge above them: pills go to the other end. */
-  badged: ReadonlySet<string> = new Set(),
-): Map<string, LinkLabel> {
+export function linkLabels(edges: TopoEdge[], nodes: TopoNode[]): Map<string, LinkLabel> {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const shared = new Map<string, TopoEdge[]>()
-  const incoming = new Map<string, number>()
   for (const e of edges) {
-    incoming.set(e.target, (incoming.get(e.target) ?? 0) + 1)
     if (e.source_port) {
       const key = `${e.source}|${e.source_port}`
       shared.set(key, [...(shared.get(key) ?? []), e])
@@ -100,7 +116,7 @@ export function linkLabels(
         speed: portSpeed(source, e.source_port),
         name: portName(source, e.source_port),
         flow,
-        at: 'source',
+        at: 'shared',
         hidden: group[0]!.id !== e.id,
       })
       continue
@@ -109,7 +125,7 @@ export function linkLabels(
       speed: e.speed_mbps,
       name: portName(source, e.source_port) ?? portName(target, e.target_port),
       flow,
-      at: (incoming.get(e.target) ?? 0) > 1 || badged.has(e.target) ? 'source' : 'target',
+      at: 'middle',
     })
   }
   return out

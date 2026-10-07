@@ -92,6 +92,9 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    deviceName: 'Nome no aparelho',
+    portClickHint: 'Clique para opções',
+    openLinked: 'Abrir {name}',
     swap: 'Swap',
     disk: 'Disco {mount}',
     usedOf: '{used} de {total}',
@@ -127,7 +130,7 @@ const ptBR: typeof en = {
       'Escaneia este dispositivo com o nmap agora: portas abertas, versões dos serviços e sistema. A profundidade é definida na integração nmap (Escanear um dispositivo).',
     scanned: 'Escaneado: {result}.',
     scanPorts: 'nenhuma porta aberta | 1 porta aberta | {n} portas abertas',
-    portLabel: 'Descrever esta porta',
+    portLabel: 'Dar nome à porta',
     portLabelHint: 'ex.: Uplink para o rack (vazio: a do equipamento)',
     uplink: 'Link de internet',
     interface: 'Interface',

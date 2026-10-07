@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check, ExternalLink, Pencil, X } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -15,8 +16,14 @@ const props = defineProps<{
   ports: Interface[]
   /** Node connected to each port, by port name. */
   links: Record<string, TopoNode | undefined>
+  /** Names the user gave the ports. */
+  labels?: Record<string, string>
 }>()
-const emit = defineEmits<{ select: [id: string] }>()
+const emit = defineEmits<{
+  select: [id: string]
+  /** Rename a port (empty: back to the device's own name). */
+  label: [port: string, label: string]
+}>()
 const { t } = useI18n()
 
 /** More than 8 ports: two rows, odd ports on top like on a switch. */
@@ -44,9 +51,60 @@ function show(p: Interface, e: Event) {
   tip.value = { top: r.bottom - (box?.top ?? 0) + 6 }
 }
 
-function open(p: Interface) {
+// Clicking a port opens its card: details and what can be done with it.
+const selected = ref<string>()
+const current = computed(() => props.ports.find((p) => p.name === selected.value))
+const naming = ref(false)
+const draft = ref('')
+function toggle(p: Interface) {
+  hovered.value = undefined
+  naming.value = false
+  selected.value = selected.value === p.name ? undefined : p.name
+}
+function startNaming(p: Interface) {
+  draft.value = props.labels?.[p.name] ?? ''
+  naming.value = true
+}
+function saveName(p: Interface) {
+  emit('label', p.name, draft.value.trim())
+  naming.value = false
+}
+function openLinked(p: Interface) {
   const other = props.links[p.name]
   if (other) emit('select', other.id)
+}
+
+/** What a port's tooltip and card list. */
+function details(p: Interface) {
+  const out: { key: string; label: string; value: string; mono?: boolean; err?: boolean }[] = []
+  out.push({
+    key: 'status',
+    label: t('panel.status'),
+    value: p.up ? portStatus(p) : t('panel.portDown'),
+  })
+  if (p.connector)
+    out.push({ key: 'connector', label: t('panel.connector'), value: connectorName(p) })
+  if (p.description && p.description !== props.labels?.[p.name])
+    out.push({ key: 'description', label: t('panel.deviceName'), value: p.description })
+  if (p.media) out.push({ key: 'media', label: t('panel.media'), value: p.media, mono: true })
+  const other = props.links[p.name]
+  if (other) out.push({ key: 'linked', label: t('panel.connectedTo'), value: other.label })
+  if (p.ips?.length) out.push({ key: 'ips', label: 'IP', value: p.ips.join(', '), mono: true })
+  if (p.mac) out.push({ key: 'mac', label: 'MAC', value: p.mac, mono: true })
+  if (p.rx_bytes !== undefined)
+    out.push({
+      key: 'traffic',
+      label: t('panel.traffic'),
+      value: `↓ ${formatBytes(p.rx_bytes)} · ↑ ${formatBytes(p.tx_bytes)}`,
+    })
+  if (p.rx_errors || p.tx_errors)
+    out.push({
+      key: 'errors',
+      label: t('panel.errors'),
+      value: String((p.rx_errors ?? 0) + (p.tx_errors ?? 0)),
+      err: true,
+    })
+  return out
 }
 
 /** "2.5G · full duplex" */
@@ -81,15 +139,14 @@ function shortName(name: string) {
           :key="p.name"
           type="button"
           class="port"
-          :class="{ up: p.up, linked: !!links[p.name] }"
+          :class="{ up: p.up, linked: !!links[p.name], selected: selected === p.name }"
           :style="{ '--c': p.up ? speedColor(p.speed_mbps) : undefined }"
           :data-port="p.name"
           :aria-label="`${p.name}: ${p.up ? formatSpeed(p.speed_mbps) || t('panel.portUp') : t('panel.portDown')}`"
-          @mouseenter="show(p, $event)"
-          @focus="show(p, $event)"
+          :aria-pressed="selected === p.name"
+          @mouseenter="!selected && show(p, $event)"
           @mouseleave="hovered = undefined"
-          @blur="hovered = undefined"
-          @click="open(p)"
+          @click="toggle(p)"
         >
           <!-- SFP / QSFP: a cage with the module's latch; otherwise an RJ45 jack. -->
           <svg
@@ -115,7 +172,9 @@ function shortName(name: string) {
             />
           </svg>
           <span class="led" />
-          <span class="name" :title="p.name">{{ shortName(p.name) }}</span>
+          <span class="name" :title="labels?.[p.name] ? `${labels[p.name]} (${p.name})` : p.name">{{
+            labels?.[p.name] || shortName(p.name)
+          }}</span>
           <span class="speed">{{ p.up ? formatSpeed(p.speed_mbps) || '·' : '—' }}</span>
         </button>
       </div>
@@ -137,7 +196,7 @@ function shortName(name: string) {
     </div>
 
     <div
-      v-if="hovered"
+      v-if="hovered && !current"
       class="tip card"
       role="tooltip"
       data-test="port-tip"
@@ -148,45 +207,81 @@ function shortName(name: string) {
           class="dot"
           :style="{ background: hovered.up ? speedColor(hovered.speed_mbps) : undefined }"
         />
-        <strong>{{ hovered.name }}</strong>
-        <span v-if="hovered.description" class="muted">{{ hovered.description }}</span>
+        <strong>{{ labels?.[hovered.name] || hovered.name }}</strong>
+        <span v-if="labels?.[hovered.name]" class="muted mono">{{ hovered.name }}</span>
       </div>
       <dl>
-        <dt>{{ t('panel.status') }}</dt>
-        <dd>
-          <template v-if="hovered.up">{{ portStatus(hovered) }}</template>
-          <template v-else>{{ t('panel.portDown') }}</template>
-        </dd>
-        <template v-if="hovered.connector">
-          <dt>{{ t('panel.connector') }}</dt>
-          <dd>{{ connectorName(hovered) }}</dd>
-        </template>
-        <template v-if="hovered.media">
-          <dt>{{ t('panel.media') }}</dt>
-          <dd class="mono">{{ hovered.media }}</dd>
-        </template>
-        <template v-if="links[hovered.name]">
-          <dt>{{ t('panel.connectedTo') }}</dt>
-          <dd>{{ links[hovered.name]!.label }}</dd>
-        </template>
-        <template v-if="hovered.ips?.length">
-          <dt>IP</dt>
-          <dd class="mono">{{ hovered.ips.join(', ') }}</dd>
-        </template>
-        <template v-if="hovered.mac">
-          <dt>MAC</dt>
-          <dd class="mono">{{ hovered.mac }}</dd>
-        </template>
-        <template v-if="hovered.rx_bytes !== undefined">
-          <dt>{{ t('panel.traffic') }}</dt>
-          <dd>↓ {{ formatBytes(hovered.rx_bytes) }} · ↑ {{ formatBytes(hovered.tx_bytes) }}</dd>
-        </template>
-        <template v-if="hovered.rx_errors || hovered.tx_errors">
-          <dt>{{ t('panel.errors') }}</dt>
-          <dd class="err">{{ (hovered.rx_errors ?? 0) + (hovered.tx_errors ?? 0) }}</dd>
+        <template v-for="d in details(hovered)" :key="d.key">
+          <dt>{{ d.label }}</dt>
+          <dd :class="{ mono: d.mono, err: d.err }">{{ d.value }}</dd>
         </template>
       </dl>
+      <p class="tip-hint">{{ t('panel.portClickHint') }}</p>
     </div>
+
+    <section v-if="current" class="port-card" data-test="port-card">
+      <header>
+        <span
+          class="dot"
+          :style="{ background: current.up ? speedColor(current.speed_mbps) : undefined }"
+        />
+        <form v-if="naming" class="name-form" @submit.prevent="saveName(current)">
+          <input
+            v-model="draft"
+            class="input"
+            maxlength="80"
+            autofocus
+            data-test="port-label-input"
+            :placeholder="current.name"
+            :aria-label="t('panel.portLabel')"
+            @keydown.esc.prevent="naming = false"
+          />
+          <button class="btn icon" type="submit" :aria-label="t('common.save')">
+            <Check :size="14" />
+          </button>
+        </form>
+        <template v-else>
+          <strong>{{ labels?.[current.name] || current.name }}</strong>
+          <span v-if="labels?.[current.name]" class="muted mono">{{ current.name }}</span>
+        </template>
+        <button
+          class="btn ghost icon close"
+          type="button"
+          :aria-label="t('common.close')"
+          @click="selected = undefined"
+        >
+          <X :size="14" />
+        </button>
+      </header>
+      <dl>
+        <template v-for="d in details(current)" :key="d.key">
+          <dt>{{ d.label }}</dt>
+          <dd :class="{ mono: d.mono, err: d.err }">{{ d.value }}</dd>
+        </template>
+      </dl>
+      <div class="card-actions">
+        <button
+          v-if="!naming"
+          class="btn small"
+          type="button"
+          data-test="edit-port"
+          @click="startNaming(current)"
+        >
+          <Pencil :size="13" />{{ t('panel.portLabel') }}
+        </button>
+        <button
+          v-if="links[current.name]"
+          class="btn small"
+          type="button"
+          data-test="open-linked"
+          @click="openLinked(current)"
+        >
+          <ExternalLink :size="13" />{{
+            t('panel.openLinked', { name: links[current.name]!.label })
+          }}
+        </button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -210,8 +305,7 @@ function shortName(name: string) {
 }
 .row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 .port {
   --c: var(--border-strong);
@@ -220,8 +314,9 @@ function shortName(name: string) {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  width: 60px;
-  padding: 6px 3px 4px;
+  flex: 0 1 60px;
+  min-width: 36px;
+  padding: 6px 2px 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -239,8 +334,58 @@ function shortName(name: string) {
   outline: none;
 }
 .port svg {
-  width: 44px;
-  height: 36px;
+  width: 100%;
+  max-width: 44px;
+  height: auto;
+  aspect-ratio: 36 / 30;
+}
+.port.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.tip-hint {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.port-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  font-size: 12.5px;
+}
+.port-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.port-card .close {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+}
+.name-form {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+.name-form .input {
+  padding: 3px 6px;
+  font-size: 12.5px;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.card-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .jack {
   fill: var(--bg-sunken);

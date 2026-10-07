@@ -69,25 +69,26 @@ describe('traffic', () => {
     // WAN → firewall: traffic seen at the firewall's re0, towards the firewall.
     expect(labels.get(`${wan.id}>${fw.id}`)).toEqual({
       speed: 2500,
+      name: 're0',
       flow: { down: 125e6, up: 9e6 },
-      at: 'target',
+      at: 'middle',
     })
     // The LAN bridge: one pill at the firewall with the port's 10G and traffic.
     expect(labels.get(`${fw.id}>a`)).toEqual({
       speed: 10000,
+      name: 'bridge0',
       flow: { down: 118e6, up: 10e6 },
-      at: 'source',
+      at: 'shared',
       hidden: false,
     })
     expect(labels.get(`${fw.id}>b`)!.hidden).toBe(true)
     // A port with a single device keeps the link's own speed, no traffic known.
-    expect(labels.get(`${fw.id}>modem`)).toEqual({ speed: 1000, flow: undefined, at: 'target' })
-  })
-
-  it('moves a pill away from a node that shows a traffic badge', () => {
-    const edges = [edge(wan.id, fw.id, { target_port: 're0', speed_mbps: 2500 })]
-    const labels = linkLabels(edges, [fw, wan], new Set([fw.id]))
-    expect(labels.get(`${wan.id}>${fw.id}`)!.at).toBe('source')
+    expect(labels.get(`${fw.id}>modem`)).toEqual({
+      speed: 1000,
+      name: 'igb3',
+      flow: undefined,
+      at: 'middle',
+    })
   })
 
   it("puts a link's traffic on the device it reaches, not on shared ports", () => {
@@ -106,22 +107,51 @@ describe('traffic', () => {
 describe('port names on links', () => {
   const named: TopoNode = {
     ...fw,
-    port_labels: { igb3: 'Uplink to the rack' },
+    port_labels: { igb3: 'Uplink to the rack', mlxen0: 'Porta LAN' },
     device: {
       ...fw.device!,
       interfaces: [
-        { name: 'bridge0', description: 'LAN', speed_mbps: 10000 },
-        { name: 'igb3', description: 'OPT1', speed_mbps: 1000 },
-        { name: 're0', description: 're0', speed_mbps: 2500 },
+        {
+          name: 'bridge0',
+          type: 'bridge',
+          description: 'LAN',
+          speed_mbps: 10000,
+          up: true,
+          members: ['mlxen0', 'vtnet0'],
+        },
+        {
+          name: 'mlxen0',
+          type: 'ethernet',
+          description: 'LAN_PHYSICAL',
+          speed_mbps: 10000,
+          up: true,
+        },
+        { name: 'vtnet0', type: 'other', up: true },
+        { name: 'igb3', type: 'ethernet', description: 'OPT1', speed_mbps: 1000, up: true },
+        { name: 're0', type: 'ethernet', description: 'WAN_PHYSICAL', speed_mbps: 2500, up: true },
       ],
     },
   }
 
-  it("prefers the user's description, then the device's, never the bare interface name", () => {
+  it("uses the name the user gave, else the interface's own — never its description", () => {
     expect(portName(named, 'igb3')).toBe('Uplink to the rack')
-    expect(portName(named, 'bridge0')).toBe('LAN')
-    expect(portName(named, 're0')).toBeUndefined()
+    expect(portName(named, 're0')).toBe('re0')
     expect(portName(named, undefined)).toBeUndefined()
+  })
+
+  it('names a bridge after the physical port behind it', () => {
+    expect(portName(named, 'bridge0')).toBe('Porta LAN')
+    const unnamed = { ...named, port_labels: {} }
+    expect(portName(unnamed, 'bridge0')).toBe('mlxen0')
+    // Without a member list: the only physical port up at the bridge's speed.
+    const old: TopoNode = {
+      ...unnamed,
+      device: {
+        ...unnamed.device!,
+        interfaces: unnamed.device!.interfaces!.map((i) => ({ ...i, members: undefined })),
+      },
+    }
+    expect(portName(old, 'bridge0')).toBe('mlxen0')
   })
 
   it('names the shared port and a direct link', () => {
@@ -131,7 +161,7 @@ describe('port names on links', () => {
       edge(named.id, 'sw', { source_port: 'igb3', speed_mbps: 1000 }),
     ]
     const labels = linkLabels(edges, [named, client('a'), client('b'), client('sw')])
-    expect(labels.get(`${named.id}>a`)).toMatchObject({ name: 'LAN', speed: 10000 })
+    expect(labels.get(`${named.id}>a`)).toMatchObject({ name: 'Porta LAN', speed: 10000 })
     expect(labels.get(`${named.id}>sw`)).toMatchObject({
       name: 'Uplink to the rack',
       speed: 1000,

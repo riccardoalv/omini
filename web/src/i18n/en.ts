@@ -89,6 +89,9 @@ export default {
     },
   },
   panel: {
+    deviceName: "Device's name",
+    portClickHint: 'Click for options',
+    openLinked: 'Open {name}',
     swap: 'Swap',
     disk: 'Disk {mount}',
     usedOf: '{used} of {total}',
@@ -124,7 +127,7 @@ export default {
       'Scans this device with nmap now: open ports, service versions and system. How deep is set in the nmap integration (Scan one device).',
     scanned: 'Scanned: {result}.',
     scanPorts: 'no open ports | 1 open port | {n} open ports',
-    portLabel: 'Describe this port',
+    portLabel: 'Name this port',
     portLabelHint: "e.g. Uplink to the rack (empty: the device's own)",
     uplink: 'Internet uplink',
     interface: 'Interface',

@@ -330,3 +330,71 @@ func TestDeviceWithoutMACMergesByIP(t *testing.T) {
 		t.Fatalf("one firewall expected, got %d device nodes: %+v", devices, topo.Nodes)
 	}
 }
+
+// A switch read through its web interface (MAC table, no LLDP) behind a
+// firewall that only has ARP: the switch hangs under the firewall by its
+// uplink port, and what the switch sees only on that port stays with the
+// firewall instead of becoming a segment.
+func TestSwitchUplinkFoundFromItsMACTable(t *testing.T) {
+	const (
+		fwMAC  = "58:9c:fc:00:00:01"
+		swMAC  = "1c:2a:a3:00:00:01"
+		vm     = "bc:24:11:00:00:01" // a VM on the firewall's bridge, seen on the uplink
+		pc     = "00:e0:4c:00:00:01" // directly on Port 1
+		hubA   = "30:16:9d:00:00:01" // three behind an unmanaged switch on Port 5
+		hubB   = "30:16:9d:00:00:02"
+		hubC   = "30:16:9d:00:00:03"
+		bridge = "bridge0"
+	)
+	arp := []model.ArpEntry{}
+	for i, m := range []string{swMAC, vm, pc, hubA, hubB, hubC} {
+		arp = append(arp, model.ArpEntry{IP: "192.168.1." + string(rune('2'+i)), MAC: model.MACAddress(m), Interface: model.Ptr(bridge)})
+	}
+	fwDev := model.Device{
+		Key: fwMAC, Name: "OPNsense", Host: model.Ptr("192.168.1.1"), Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{fwMAC}, IPs: []string{"192.168.1.1"}, Arp: arp,
+		Interfaces: []model.Interface{{Name: bridge, SpeedMbps: model.Ptr(uint64(10000)), Up: model.Ptr(true)}},
+	}
+	port := func(n string, speed uint64) model.Interface {
+		return model.Interface{Name: n, SpeedMbps: model.Ptr(speed), Up: model.Ptr(true)}
+	}
+	fdb := func(m, p string) model.FdbEntry { return model.FdbEntry{MAC: model.MACAddress(m), Port: p} }
+	swDev := model.Device{
+		Key: swMAC, Name: "HC-SWTGW218AS", Host: model.Ptr("192.168.1.2"), Role: model.Ptr(model.DeviceRoleSwitch),
+		MACs:       []model.MACAddress{swMAC},
+		Interfaces: []model.Interface{port("Port 1", 1000), port("Port 5", 2500), port("Port 9", 10000)},
+		Fdb: []model.FdbEntry{
+			fdb(fwMAC, "Port 9"), fdb(vm, "Port 9"), fdb(pc, "Port 1"),
+			fdb(hubA, "Port 5"), fdb(hubB, "Port 5"), fdb(hubC, "Port 5"),
+		},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fwDev}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{swDev}},
+	})
+	nodes := map[string]topology.Node{}
+	for _, n := range topo.Nodes {
+		nodes[n.ID] = n
+	}
+	edges := map[string]topology.Edge{}
+	for _, e := range topo.Edges {
+		edges[e.Source+">"+e.Target] = e
+	}
+	fwID, swID := "dev:"+fwMAC, "dev:"+swMAC
+	up, ok := edges[fwID+">"+swID]
+	if !ok || up.TargetPort != "Port 9" || up.SpeedMbps != 10000 {
+		t.Fatalf("firewall → switch: %+v (found %v)", up, ok)
+	}
+	if _, ok := nodes["seg:"+swID+":Port 9"]; ok {
+		t.Fatal("the uplink must not become a segment")
+	}
+	if p := nodes["mac:"+vm].ParentID; p != fwID {
+		t.Errorf("the VM seen only on the uplink belongs to the firewall, got %q", p)
+	}
+	if n := nodes["mac:"+pc]; n.ParentID != swID || n.Port != "Port 1" {
+		t.Errorf("pc: parent %q port %q", n.ParentID, n.Port)
+	}
+	if seg, ok := nodes["seg:"+swID+":Port 5"]; !ok || seg.MACCount != 3 {
+		t.Errorf("an unmanaged switch on Port 5 expected: %+v", seg)
+	}
+}

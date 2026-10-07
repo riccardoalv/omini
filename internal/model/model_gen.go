@@ -564,6 +564,9 @@ type Interface struct {
 	// Negotiated media as reported by the device, e.g. "1000baseT <full-duplex>".
 	Media *string `json:"media,omitempty,omitzero" yaml:"media,omitempty"`
 
+	// Ports a bridge or LAG is made of, by interface name.
+	Members []string `json:"members,omitempty,omitzero" yaml:"members,omitempty"`
+
 	// Readable port name (ifName), never a numeric index.
 	Name string `json:"name" yaml:"name"`
 
