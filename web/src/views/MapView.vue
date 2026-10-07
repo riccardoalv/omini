@@ -8,11 +8,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import NodeMenu from '@/components/map/NodeMenu.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
 import { formatAgo, formatSpeed } from '@/lib/format'
-import { collapseClients, edgeLook } from '@/lib/graph'
+import { clientCount, collapseClients, edgeLook } from '@/lib/graph'
 import { layout, layoutKey, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import type { Integration, Point, TopoNode, TopologyResponse } from '@/lib/types'
@@ -22,7 +23,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
   device: { width: 220, height: 60 },
   unmanaged: { width: 200, height: 56 },
   segment: { width: 240, height: 56 },
-  client: { width: 170, height: 38 },
+  client: { width: 200, height: 38 },
   group: { width: 150, height: 44 },
 }
 
@@ -43,8 +44,9 @@ let timer: ReturnType<typeof setInterval> | undefined
 const nodes = computed(() => data.value?.topology.nodes ?? [])
 const edges = computed(() => data.value?.topology.edges ?? [])
 const expanded = computed(() => new Set(prefs.expanded))
+const forced = computed(() => new Set(prefs.collapsed))
 const view = computed(() =>
-  collapseClients(nodes.value, edges.value, prefs.collapseThreshold, expanded.value),
+  collapseClients(nodes.value, edges.value, prefs.collapseThreshold, expanded.value, forced.value),
 )
 const failedIntegrations = computed(
   () => new Set((data.value?.statuses ?? []).filter((s) => !s.ok).map((s) => s.integration_id)),
@@ -224,12 +226,52 @@ async function loadDemo() {
 }
 
 function expand(parentId: string) {
+  prefs.collapsed = prefs.collapsed.filter((id) => id !== parentId)
   if (!prefs.expanded.includes(parentId)) prefs.expanded.push(parentId)
   selectedId.value = parentId
 }
 
 function collapse(parentId: string) {
   prefs.expanded = prefs.expanded.filter((id) => id !== parentId)
+  if (!prefs.collapsed.includes(parentId)) prefs.collapsed.push(parentId)
+}
+
+// Context menu (right click on a node).
+const menu = ref<{ x: number; y: number; id: string }>()
+const mapEl = ref<HTMLElement>()
+
+function onContextMenu(e: NodeMouseEvent) {
+  const ev = e.event as MouseEvent
+  ev.preventDefault()
+  const box = mapEl.value?.getBoundingClientRect()
+  menu.value = { x: ev.clientX - (box?.left ?? 0), y: ev.clientY - (box?.top ?? 0), id: e.node.id }
+}
+
+/** The parent whose clients a menu action applies to (a group acts for its parent). */
+const menuParent = computed(() => {
+  const id = menu.value?.id
+  if (!id) return undefined
+  return view.value.groups.find((g) => g.id === id)?.parentId ?? id
+})
+const menuCanCollapse = computed(() => {
+  const id = menuParent.value
+  // Possible unless everything is already collapsed by the user (a partial
+  // automatic group can still be extended to all clients).
+  return !!id && !prefs.collapsed.includes(id) && clientCount(id, nodes.value, edges.value) >= 2
+})
+const menuCanExpand = computed(() => {
+  const id = menuParent.value
+  return !!id && view.value.groups.some((g) => g.parentId === id)
+})
+
+function menuAction(action: 'collapse' | 'expand' | 'details') {
+  const id = menuParent.value
+  const target = menu.value?.id
+  menu.value = undefined
+  if (!id) return
+  if (action === 'collapse') collapse(id)
+  else if (action === 'expand') expand(id)
+  else selectedId.value = target
 }
 
 function patchSelected(patch: Partial<TopoNode>) {
@@ -252,7 +294,7 @@ onBeforeUnmount(() => clearInterval(timer))
 </script>
 
 <template>
-  <div class="map">
+  <div ref="mapEl" class="map">
     <div class="toolbar">
       <div class="chips">
         <span class="chip">{{ t('map.devices', summary.devices) }}</span>
@@ -313,6 +355,7 @@ onBeforeUnmount(() => clearInterval(timer))
       :default-edge-options="{ selectable: false }"
       class="flow"
       @node-click="onNodeClick"
+      @node-context-menu="onContextMenu"
       @node-drag-stop="onDragStop"
       @pane-click="selectedId = undefined"
     >
@@ -322,6 +365,18 @@ onBeforeUnmount(() => clearInterval(timer))
       <Background :gap="22" :size="1.2" pattern-color="var(--border)" />
       <Controls position="bottom-left" :show-interactive="false" />
     </VueFlow>
+
+    <NodeMenu
+      v-if="menu"
+      :x="menu.x"
+      :y="menu.y"
+      :can-collapse="menuCanCollapse"
+      :can-expand="menuCanExpand"
+      @collapse="menuAction('collapse')"
+      @expand="menuAction('expand')"
+      @details="menuAction('details')"
+      @close="menu = undefined"
+    />
 
     <NodePanel
       v-if="selectedNode || selectedGroup"

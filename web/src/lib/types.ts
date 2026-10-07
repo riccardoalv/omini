@@ -31,6 +31,7 @@ export interface Device {
   macs?: string[]
   ips?: string[]
   interfaces?: Interface[]
+  hosts?: { ip: string; mac?: string; sources?: string[] }[]
 }
 
 export interface TopoNode {
@@ -103,6 +104,7 @@ export type FieldType = 'string' | 'secret' | 'host' | 'url' | 'int' | 'bool' | 
 export interface FormField {
   key: string
   type: FieldType
+  group?: string
   label?: string
   help?: string
   required?: boolean

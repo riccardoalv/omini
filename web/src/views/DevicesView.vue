@@ -7,6 +7,7 @@ import DeviceIcon from '@/components/DeviceIcon.vue'
 import { api } from '@/lib/api'
 import { formatAgo, formatDateTime } from '@/lib/format'
 import { displayName, filterInventory, isRandomMAC, type StatusFilter } from '@/lib/inventory'
+import { displayName as nodeName } from '@/lib/names'
 import type { InventoryEntry } from '@/lib/types'
 
 const { t, locale } = useI18n()
@@ -19,8 +20,11 @@ const randomOnly = ref(false)
 const selected = ref(new Set<string>())
 
 // Segments are named by the server in English; translate unless the user renamed them.
-const nameOf = (e: InventoryEntry) =>
-  e.kind === 'segment' && !e.alias ? t('map.segment') : displayName(e)
+const nameOf = (e: InventoryEntry) => {
+  if (e.alias) return e.alias
+  if (e.kind === 'segment') return t('map.segment')
+  return nodeName({ ...e, type: e.device_type || e.type }, t)
+}
 
 const byId = computed(() => new Map(entries.value.map((e) => [e.id, e])))
 const rows = computed(() =>

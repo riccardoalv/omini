@@ -8,6 +8,8 @@ export interface Prefs {
   collapseThreshold: number
   /** Parent node ids whose client group the user expanded. */
   expanded: string[]
+  /** Parent node ids whose clients the user collapsed (context menu). */
+  collapsed: string[]
   /** Map orientation: left-to-right or top-down. */
   layoutDirection: 'RIGHT' | 'DOWN'
   /** Sidebar shows labels next to icons. */
@@ -29,6 +31,7 @@ function load(): Prefs {
     locale: defaultLocale(),
     collapseThreshold: DEFAULT_COLLAPSE_THRESHOLD,
     expanded: [],
+    collapsed: [],
     layoutDirection: 'RIGHT',
     sidebarExpanded: false,
   }

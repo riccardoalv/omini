@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Pencil, Plus, Radar, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, Radar, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import DiscoverDialog from '@/components/DiscoverDialog.vue'
+import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
@@ -43,9 +44,15 @@ function openAdd(type: IntegrationType) {
   form.value = { type }
 }
 
-function openEdit(item: Integration) {
-  const type = typeByName.value.get(item.type)
-  if (type) form.value = { type, existing: item }
+const expanded = ref<number>()
+
+function toggleExpand(item: Integration) {
+  expanded.value = expanded.value === item.id ? undefined : item.id
+}
+
+function onDetailsSaved(updated: Integration) {
+  items.value = items.value.map((i) => (i.id === updated.id ? { ...updated, status: i.status } : i))
+  setTimeout(load, 2000) // the new settings apply on the next collection
 }
 
 function addDiscovered(host: DiscoveredHost, community: string) {
@@ -110,52 +117,72 @@ onMounted(async () => {
     <p v-else-if="!items.length" class="card empty muted">{{ t('integrations.empty') }}</p>
 
     <ul v-else class="list">
-      <li v-for="item in items" :key="item.id" class="card item">
-        <span
-          class="dot"
-          :class="{
-            online: item.enabled && item.status?.ok,
-            error: item.enabled && item.status && !item.status.ok,
-          }"
-        />
-        <div class="info">
-          <div class="name-row">
-            <strong>{{ item.name }}</strong>
-            <span class="badge">{{ typeByName.get(item.type)?.name ?? item.type }}</span>
-            <span v-if="item.config.host" class="muted mono">{{ item.config.host }}</span>
-          </div>
-          <div class="muted status">
-            <template v-if="!item.enabled">{{ t('integrations.disabled') }}</template>
-            <template v-else-if="!item.status">{{ t('integrations.neverCollected') }}</template>
-            <template v-else>
-              {{
-                t('integrations.lastCollected', {
-                  ago: formatAgo(item.status.collected_at, locale),
-                })
-              }}
-              · {{ t('integrations.deviceCount', item.status.devices) }}
-            </template>
-          </div>
-          <p v-if="item.enabled && item.status?.error" class="error-text">
-            {{ item.status.error }}
-          </p>
-        </div>
-        <ToggleSwitch
-          :model-value="item.enabled"
-          :label="item.enabled ? t('integrations.enabled') : t('integrations.disabled')"
-          :disabled="toggling === item.id"
-          @update:model-value="toggle(item)"
-        />
-        <button class="btn ghost icon" :aria-label="t('common.edit')" @click="openEdit(item)">
-          <Pencil :size="16" />
-        </button>
-        <button
-          class="btn ghost icon danger"
-          :aria-label="t('common.delete')"
-          @click="remove(item)"
+      <li
+        v-for="item in items"
+        :key="item.id"
+        class="card item"
+        :class="{ open: expanded === item.id }"
+      >
+        <div
+          class="row"
+          role="button"
+          tabindex="0"
+          :aria-expanded="expanded === item.id"
+          data-test="integration-row"
+          @click="toggleExpand(item)"
+          @keydown.enter.self="toggleExpand(item)"
         >
-          <Trash2 :size="16" />
-        </button>
+          <span
+            class="dot"
+            :class="{
+              online: item.enabled && item.status?.ok,
+              error: item.enabled && item.status && !item.status.ok,
+            }"
+          />
+          <div class="info">
+            <div class="name-row">
+              <strong>{{ item.name }}</strong>
+              <span class="badge">{{ typeByName.get(item.type)?.name ?? item.type }}</span>
+              <span v-if="item.config.host" class="muted mono">{{ item.config.host }}</span>
+            </div>
+            <div class="muted status">
+              <template v-if="!item.enabled">{{ t('integrations.disabled') }}</template>
+              <template v-else-if="!item.status">{{ t('integrations.neverCollected') }}</template>
+              <template v-else>
+                {{
+                  t('integrations.lastCollected', {
+                    ago: formatAgo(item.status.collected_at, locale),
+                  })
+                }}
+                · {{ t('integrations.deviceCount', item.status.devices) }}
+              </template>
+            </div>
+            <p v-if="item.enabled && item.status?.error" class="error-text">
+              {{ item.status.error }}
+            </p>
+          </div>
+          <ToggleSwitch
+            :model-value="item.enabled"
+            :label="item.enabled ? t('integrations.enabled') : t('integrations.disabled')"
+            :disabled="toggling === item.id"
+            @click.stop
+            @update:model-value="toggle(item)"
+          />
+          <button
+            class="btn ghost icon danger"
+            :aria-label="t('common.delete')"
+            @click.stop="remove(item)"
+          >
+            <Trash2 :size="16" />
+          </button>
+          <ChevronDown :size="18" class="chevron" />
+        </div>
+        <IntegrationDetails
+          v-if="expanded === item.id && typeByName.get(item.type)"
+          :integration="item"
+          :type="typeByName.get(item.type)!"
+          @saved="onDetailsSaved"
+        />
       </li>
     </ul>
 
@@ -209,10 +236,25 @@ onMounted(async () => {
   gap: 8px;
 }
 .item {
+  padding: 0;
+  overflow: hidden;
+}
+.row {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 14px 12px 14px 18px;
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--surface-hover);
+}
+.chevron {
+  color: var(--text-muted);
+  transition: transform 0.15s;
+}
+.open .chevron {
+  transform: rotate(180deg);
 }
 .info {
   flex: 1;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { iconChoice, logoColor, logos } from '../icons'
+import { displayName } from '../names'
 import { parseReasons } from '../reasons'
 
 describe('iconChoice', () => {
@@ -35,8 +36,15 @@ describe('iconChoice', () => {
       logo: 'espressif',
       badge: true,
     })
-    expect(iconChoice({ type: 'appliance', brand: 'midea' })).toEqual({
+    expect(iconChoice({ type: 'air_conditioner', brand: 'midea' })).toEqual({
       type: 'air-vent',
+      logo: undefined,
+      badge: true,
+      letter: 'Midea',
+    })
+    expect(iconChoice({ type: 'ap', brand: 'mercusys' }).letter).toBe('Mercusys')
+    expect(iconChoice({ type: 'appliance' })).toEqual({
+      type: 'refrigerator',
       logo: undefined,
       badge: false,
     })
@@ -91,5 +99,44 @@ describe('parseReasons', () => {
       { key: 'reasonPrivate' },
       { key: 'reasonUser' },
     ])
+  })
+})
+
+describe('displayName', () => {
+  const t = (key: string, p?: Record<string, unknown>) =>
+    key === 'names.typeBrand'
+      ? `${p!.brand} ${p!.type}`
+      : ((
+          { 'types.air_conditioner': 'Air conditioner', 'types.phone': 'Phone' } as Record<
+            string,
+            string
+          >
+        )[key] ?? key)
+
+  it('keeps real names', () => {
+    expect(displayName({ label: 'TRUENAS', ip: '192.168.1.51', product: 'truenas' }, t)).toBe(
+      'TRUENAS',
+    )
+  })
+
+  it('names devices without a name by what they are', () => {
+    expect(
+      displayName({ label: '192.168.1.54', ip: '192.168.1.54', product: 'homeassistant' }, t),
+    ).toBe('Home Assistant')
+    expect(
+      displayName(
+        { label: '192.168.1.240', ip: '192.168.1.240', type: 'air_conditioner', brand: 'midea' },
+        t,
+      ),
+    ).toBe('Midea Air conditioner')
+    expect(displayName({ label: '192.168.1.41', ip: '192.168.1.41', type: 'phone' }, t)).toBe(
+      'Phone',
+    )
+  })
+
+  it('falls back to the address when nothing is known', () => {
+    expect(displayName({ label: '192.168.1.9', ip: '192.168.1.9', type: 'unknown' }, t)).toBe(
+      '192.168.1.9',
+    )
   })
 })

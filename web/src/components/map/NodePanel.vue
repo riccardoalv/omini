@@ -9,7 +9,8 @@ import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, linkOnPort } from '@/lib/graph'
-import { deviceTypes, logos, productSlugs } from '@/lib/icons'
+import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
+import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
 import type { Integration, TopoEdge, TopoNode, WebService } from '@/lib/types'
 
@@ -74,7 +75,7 @@ const ports = computed(() =>
 )
 const roleLabel = computed(() => (n.value?.type ? t(`types.${n.value.type}`) : ''))
 const reasons = computed(() => parseReasons(n.value?.reasons))
-const logoName = (slug?: string) => (slug ? (logos[slug]?.title ?? slug) : '')
+const logoName = slugName
 // Options for the user's corrections: products first, then systems and brands.
 const iconOptions = computed(() =>
   Object.entries(logos)
@@ -98,7 +99,7 @@ async function saveClassification() {
 const title = computed(() => {
   if (!n.value) return ''
   if (n.value.kind === 'segment' && n.value.label === 'Unmanaged segment') return t('map.segment')
-  return n.value.label
+  return displayName(n.value, t)
 })
 
 function startEdit() {
@@ -150,7 +151,7 @@ async function save(patch: {
         <li v-for="c in group.clients" :key="c.id" @click="emit('select', c.id)">
           <span class="dot" :class="{ online: c.online }" />
           <DeviceIcon :device="c" :size="15" />
-          <span class="grow">{{ c.label }}</span>
+          <span class="grow">{{ displayName(c, t) }}</span>
           <span class="muted mono">{{ c.ip }}</span>
         </li>
       </ul>
@@ -373,7 +374,7 @@ async function save(patch: {
           <li v-for="c in children" :key="c.id" @click="emit('select', c.id)">
             <span class="dot" :class="{ online: c.online }" />
             <DeviceIcon :device="c" :size="15" />
-            <span class="grow">{{ c.label }}</span>
+            <span class="grow">{{ displayName(c, t) }}</span>
             <span class="muted mono">{{ c.ip }}</span>
           </li>
         </ul>

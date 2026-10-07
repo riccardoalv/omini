@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import type { ClientGroup } from '@/lib/graph'
+import { displayName } from '@/lib/names'
 import type { TopoNode } from '@/lib/types'
 
 export interface NodeData {
@@ -22,14 +23,21 @@ const { t } = useI18n()
 const n = computed(() => props.data.node)
 const variant = computed(() => (props.data.group ? 'group' : (n.value?.kind ?? 'client')))
 const label = computed(() => {
-  if (n.value?.kind === 'segment' && n.value.label === 'Unmanaged segment') return t('map.segment')
-  return n.value?.label ?? ''
+  const node = n.value
+  if (!node) return ''
+  if (node.kind === 'segment' && node.label === 'Unmanaged segment') return t('map.segment')
+  return displayName(node, t)
+})
+// Gray only when nothing could be identified.
+const identified = computed(() => {
+  const node = n.value
+  return !!node && (node.type !== 'unknown' || !!node.brand || !!node.product || !!node.icon)
 })
 const sub = computed(() => {
   const node = n.value
   if (!node) return ''
   if (node.kind === 'segment') return t('map.clients', { n: node.mac_count ?? 0 })
-  if (node.kind === 'client') return node.hostname && node.ip ? node.ip : ''
+  if (node.kind === 'client') return label.value !== node.ip ? (node.ip ?? '') : ''
   return [node.ip, node.model ?? node.vendor].filter(Boolean).join(' · ')
 })
 const horizontal = computed(() => props.data.direction !== 'DOWN')
@@ -53,7 +61,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     </template>
 
     <template v-else-if="n">
-      <span class="icon">
+      <span class="icon" :class="{ identified }">
         <DeviceIcon :device="n" :size="variant === 'client' ? 17 : 20" />
       </span>
       <div class="text">
@@ -142,6 +150,10 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   width: 26px;
   height: 26px;
   border-radius: 50%;
+}
+.client .icon.identified {
+  background: var(--accent-soft);
+  color: var(--text);
 }
 .text {
   display: flex;

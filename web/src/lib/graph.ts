@@ -36,12 +36,14 @@ export const alwaysVisible = (n: TopoNode) =>
  * Collapses clients into a group bubble when a parent (AP, switch, segment)
  * has more than `threshold` of them, unless the user expanded that parent.
  * Pinned clients, homelab software and infrastructure always stay visible.
+ * Parents in `forced` (collapsed by the user) group all their clients except pinned ones.
  */
 export function collapseClients(
   nodes: TopoNode[],
   edges: TopoEdge[],
   threshold: number,
   expanded: ReadonlySet<string>,
+  forced: ReadonlySet<string> = new Set(),
 ): GraphView {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const children = new Map<string, TopoNode[]>()
@@ -56,8 +58,10 @@ export function collapseClients(
   const hidden = new Set<string>()
   const groups: ClientGroup[] = []
   for (const [parentId, clients] of children) {
-    if (clients.length <= threshold || expanded.has(parentId)) continue
-    const collapsible = clients.filter((c) => !alwaysVisible(c))
+    // The user can collapse every client of a node (context menu), whatever the count.
+    const force = forced.has(parentId)
+    if (!force && (clients.length <= threshold || expanded.has(parentId))) continue
+    const collapsible = clients.filter((c) => (force ? !c.pinned : !alwaysVisible(c)))
     if (collapsible.length < 2) continue
     for (const c of collapsible) hidden.add(c.id)
     groups.push({
@@ -129,4 +133,9 @@ export function linkOnPort(
     if (e.target === id && e.target_port === port) return byId.get(e.source)
   }
   return undefined
+}
+
+/** Number of client children of a node. */
+export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): number {
+  return childrenOf(id, nodes, edges).filter((n) => n.kind === 'client').length
 }

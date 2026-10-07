@@ -47,6 +47,9 @@ const ptBR: typeof en = {
     updated: 'Atualizado {ago}',
     refresh: 'Atualizar agora',
     resetLayout: 'Reorganizar mapa',
+    collapseChildren: 'Compactar filhos',
+    expandChildren: 'Expandir filhos',
+    details: 'Detalhes',
     leftToRight: 'Esquerda para direita',
     topDown: 'De cima para baixo',
     emptyTitle: 'Seu mapa está vazio',
@@ -78,7 +81,7 @@ const ptBR: typeof en = {
     hostname: 'Hostname',
     vendor: 'Fabricante',
     model: 'Modelo',
-    role: 'Função',
+    role: 'Tipo',
     uptime: 'Ligado há',
     cpu: 'CPU',
     memory: 'Memória',
@@ -117,7 +120,9 @@ const ptBR: typeof en = {
     webPort: 'porta {port}',
     detectingWeb: 'Procurando interface web…',
   },
+  names: { typeBrand: '{brand} {type}' },
   types: {
+    air_conditioner: 'Ar-condicionado',
     firewall: 'Firewall',
     router: 'Roteador',
     switch: 'Switch',
@@ -188,7 +193,83 @@ const ptBR: typeof en = {
     testing: 'Testando…',
     secretSaved: 'Salva — deixe em branco para manter',
     core: 'Nativa',
+    lastCollection: 'Última coleta',
+    duration: 'Duração',
+    devicesFound: 'Dispositivos encontrados',
+    foundBy: 'Encontrados por',
+    settings: 'Configurações',
+    saved: 'Salvo. As novas configurações valem a partir da próxima coleta.',
+    method: {
+      arp: 'ARP',
+      icmp: 'Ping',
+      tcp: 'Portas',
+      dns: 'DNS',
+      netbios: 'NetBIOS',
+      mdns: 'mDNS',
+      ssdp: 'UPnP',
+    },
     plugin: 'Plugin',
+  },
+  fieldGroups: {
+    Methods: 'Métodos',
+    Advanced: 'Avançado',
+  },
+  fields: {
+    network: {
+      subnets: {
+        label: 'Sub-redes',
+        help: '"auto" varre as redes às quais este servidor está conectado, ou liste-as: 192.168.1.0/24, 10.0.20.0/24',
+      },
+      arp: {
+        label: 'ARP',
+        help: 'Encontra todo dispositivo da rede local, mesmo os que ignoram todo o resto.',
+      },
+      ping: {
+        label: 'Ping (ICMP)',
+        help: 'Encontra dispositivos que respondem ao ping; a resposta também indica o sistema operacional.',
+      },
+      port_scan: {
+        label: 'Portas abertas',
+        help: 'Testa portas comuns para identificar serviços (web, SSH, SMB, impressoras, câmeras...).',
+      },
+      dns: {
+        label: 'DNS reverso',
+        help: 'Pergunta o nome dos dispositivos ao DNS deste servidor e ao do roteador.',
+      },
+      netbios: { label: 'NetBIOS', help: 'Pergunta o nome a máquinas Windows e Samba.' },
+      mdns: {
+        label: 'mDNS / Bonjour',
+        help: 'Escuta o que os dispositivos anunciam: nomes, modelos e serviços (AirPlay, Chromecast, impressoras...).',
+      },
+      ssdp: {
+        label: 'SSDP / UPnP',
+        help: 'Lê fabricante e modelo de TVs, roteadores e media players.',
+      },
+      web_titles: {
+        label: 'Títulos de páginas web',
+        help: 'Lê o título das interfaces web para reconhecer apps (Proxmox, TrueNAS, Home Assistant...).',
+      },
+      ssh_banners: {
+        label: 'Banners SSH',
+        help: 'Lê a linha de versão do SSH, que costuma dizer o sistema operacional.',
+      },
+      ports: {
+        label: 'Portas a testar',
+        help: 'Vazio usa as portas comuns de homelab. Exemplo: 22,80,443,8000-8100 (no máximo 1024 portas).',
+      },
+      deep_interval: {
+        label: 'Verificar portas e nomes de novo a cada (horas)',
+        help: 'Portas, nomes e banners são verificados uma vez por dispositivo novo e de novo depois dessas horas.',
+      },
+    },
+    snmp: {
+      host: { label: 'Host' },
+      community: {
+        label: 'Community',
+        help: 'Community somente leitura configurada no equipamento.',
+      },
+      port: { label: 'Porta' },
+    },
   },
   discover: {
     title: 'Descobrir dispositivos',

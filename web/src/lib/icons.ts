@@ -228,7 +228,34 @@ export interface IconChoice {
   /** Logo shown alone (product) or as a badge (OS or brand). */
   logo?: string
   badge: boolean
+  /** Brand name for a letter badge, when the brand has no logo. */
+  letter?: string
 }
+
+/** Display names of brands without a logo in Simple Icons. */
+export const brandNames: Record<string, string> = {
+  mercusys: 'Mercusys',
+  midea: 'Midea',
+  horaco: 'Horaco',
+  realtek: 'Realtek',
+  amazon: 'Amazon',
+  tuya: 'Tuya',
+  hikvision: 'Hikvision',
+  dahua: 'Dahua',
+  reolink: 'Reolink',
+  brother: 'Brother',
+  canon: 'Canon',
+  gigabyte: 'Gigabyte',
+  tenda: 'Tenda',
+  dlink: 'D-Link',
+  zte: 'ZTE',
+  realme: 'realme',
+  nintendo: 'Nintendo',
+}
+
+/** Human name of a logo or brand slug. */
+export const slugName = (slug?: string) =>
+  slug ? (logos[slug]?.title ?? brandNames[slug] ?? slug) : ''
 
 /** Lucide icon for each device type. */
 export const typeIcons: Record<string, string> = {
@@ -249,7 +276,8 @@ export const typeIcons: Record<string, string> = {
   printer: 'printer',
   camera: 'cctv',
   smart_home: 'house',
-  appliance: 'air-vent',
+  air_conditioner: 'air-vent',
+  appliance: 'refrigerator',
   game_console: 'gamepad-2',
   wearable: 'watch',
   segment: 'network',
@@ -268,7 +296,16 @@ export function iconChoice(d: Classified): IconChoice {
   if (custom && productSlugs.has(custom)) return { logo: custom, badge: false }
   if (!custom && product) return { logo: product, badge: false }
   const badge = custom ?? [d.os, d.brand].find((s) => s && logos[s])
-  return { type, logo: badge, badge: !!badge }
+  if (badge) return { type, logo: badge, badge: true }
+  if (d.brand) return { type, logo: undefined, badge: true, letter: slugName(d.brand) }
+  return { type, logo: undefined, badge: false }
+}
+
+/** A stable color for a letter badge. */
+export function letterColor(name: string): string {
+  let h = 0
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360
+  return `hsl(${h} 55% 45%)`
 }
 
 /** Brand color usable on the current background, or undefined to use the text color. */

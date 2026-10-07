@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { api, ApiError } from '@/lib/api'
-import { fieldLabel, initialValues, inputType, missingRequired, toConfig } from '@/lib/forms'
-import type { Config, Integration, IntegrationType, TestResult } from '@/lib/types'
+import { useIntegrationForm } from '@/composables/useIntegrationForm'
+import type { Config, Integration, IntegrationType } from '@/lib/types'
 
+import IntegrationFields from './IntegrationFields.vue'
 import ModalDialog from './ModalDialog.vue'
-import SecretInput from './SecretInput.vue'
-import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   type: IntegrationType
@@ -21,54 +18,18 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; saved: [integration: Integration] }>()
 const { t } = useI18n()
 
-const name = ref(props.existing?.name ?? props.prefillName ?? props.type.name)
-const values = ref<Config>(
-  initialValues(props.type.fields, { ...props.prefill, ...props.existing?.config }),
-)
-const busy = ref(false)
-const testing = ref(false)
-const error = ref('')
-const result = ref<TestResult>()
+const { editing, name, values, busy, testing, error, result, missing, test, save } =
+  useIntegrationForm(props.type, props.existing, props.prefill, props.prefillName)
 
-const editing = !!props.existing
-const missing = computed(() => missingRequired(props.type.fields, values.value, editing))
-
-async function test() {
-  testing.value = true
-  result.value = undefined
-  try {
-    result.value = await api.testIntegration({
-      id: props.existing?.id,
-      type: props.type.type,
-      config: toConfig(props.type.fields, values.value, editing),
-    })
-  } catch (e) {
-    result.value = { ok: false, error: e instanceof ApiError ? e.message : t('common.error') }
-  } finally {
-    testing.value = false
-  }
-}
-
-async function save() {
-  busy.value = true
-  error.value = ''
-  try {
-    const config = toConfig(props.type.fields, values.value, editing)
-    const saved = props.existing
-      ? await api.updateIntegration(props.existing.id, { name: name.value, config })
-      : await api.createIntegration({ name: name.value, type: props.type.type, config })
-    emit('saved', saved)
-  } catch (e) {
-    error.value = e instanceof ApiError ? e.message : t('common.error')
-  } finally {
-    busy.value = false
-  }
+async function submit() {
+  const saved = await save()
+  if (saved) emit('saved', saved)
 }
 </script>
 
 <template>
   <ModalDialog :title="existing ? existing.name : type.name" @close="emit('close')">
-    <form id="integration-form" @submit.prevent="save">
+    <form id="integration-form" @submit.prevent="submit">
       <p v-if="type.description" class="muted description">{{ type.description }}</p>
 
       <div class="field">
@@ -76,48 +37,12 @@ async function save() {
         <input id="f-name" v-model="name" class="input" required />
       </div>
 
-      <div v-for="f in type.fields" :key="f.key" class="field">
-        <div v-if="f.type === 'bool'" class="bool-field">
-          <ToggleSwitch
-            :model-value="!!values[f.key]"
-            :label="fieldLabel(f)"
-            :data-field="f.key"
-            @update:model-value="(v: boolean) => (values[f.key] = v)"
-          />
-          <span>{{ fieldLabel(f) }}</span>
-        </div>
-        <template v-else>
-          <label :for="`f-${f.key}`">{{ fieldLabel(f) }}<span v-if="f.required"> *</span></label>
-          <select
-            v-if="f.type === 'select'"
-            :id="`f-${f.key}`"
-            v-model="values[f.key]"
-            class="select"
-            :name="f.key"
-          >
-            <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
-          </select>
-          <SecretInput
-            v-else-if="f.type === 'secret'"
-            :id="`f-${f.key}`"
-            v-model="values[f.key]"
-            :name="f.key"
-            :required="f.required && !editing"
-            :placeholder="editing ? t('integrations.secretSaved') : undefined"
-          />
-          <input
-            v-else
-            :id="`f-${f.key}`"
-            v-model="values[f.key]"
-            class="input"
-            :name="f.key"
-            :type="inputType(f)"
-            :required="f.required"
-            autocomplete="off"
-          />
-        </template>
-        <span v-if="f.help" class="help">{{ f.help }}</span>
-      </div>
+      <IntegrationFields
+        v-model="values"
+        :type="type.type"
+        :fields="type.fields"
+        :editing="editing"
+      />
 
       <p v-if="result" class="alert" :class="result.ok ? 'ok' : 'error'" role="status">
         {{ result.ok ? result.message : result.error }}
