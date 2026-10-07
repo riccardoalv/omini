@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), zero-config network scan (with SNMP), device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API, the web UI (map, devices, integrations, settings; en + pt-BR), the Python plugin runtime + SDK and the OPNsense plugin (`omini-plugin-opnsense`, to be checked against a real firewall). Next: nmap integration, model names, port panel, Docker image.
+**v0.1 released.** Network scan (with SNMP), identification (types, OS, brands, products, model names), app nodes, nmap, topology map (areas, WANs, port front view, live traffic), plugin runtime + SDK + store, OPNsense plugin, Docker image, auth, en + pt-BR. Next (v0.2): animated traffic flow, 24h traffic history, insights, presence timeline.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -26,6 +26,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Core | **Go**: discovery, generic SNMP + YAML profiles, LLDP, topology engine, traffic rates, insights, API, serving the UI |
 | Integrations | **Go** for standard protocols (SNMP/LLDP/ARP/ICMP); **Python plugins** for anything vendor/software specific (OPNsense, Mercusys, UniFi, MikroTik...) |
 | Plugin runtime | uv-managed venv per plugin, SDK embedded in the core and installed into every venv, install from GitHub release tarballs, `OMINI_PLUGIN_DIRS` for development — see "Plugin runtime (core)" |
+| Docker image | `ghcr.io/riccardoalv/omini` (amd64 + arm64), built and pushed by the release workflow when release-please creates a release: Debian slim with Python 3 and uv (plugins), app icons bundled; data in `/data`; `network_mode: host` recommended; `OMINI_NMAP=install` installs nmap on start |
 | Python runtime | Always bundled in the official image, so every plugin works out of the box |
 | Plugin protocol | Exec per collection: core runs the plugin, sends config as JSON on stdin, reads devices as JSON on stdout |
 | Frontend | **Vue 3** + TypeScript (Vite); map with **Vue Flow** + **ELK.js** auto-layout (left-to-right: firewall on the left, clients stacked on the right — top-down made wide networks unreadable); vue-i18n; built assets embedded in the Go binary. Tooling: Vitest, ESLint + oxlint, Prettier, vue-tsc. Node.js 24 |
@@ -202,7 +203,8 @@ make ci          # everything CI runs, locally (run before pushing)
 make lint        # golangci-lint + ruff + eslint/oxlint/prettier/vue-tsc
 make fmt         # format Go, Python and web
 make hooks       # install git hooks (lefthook)
-make build       # (planned) production Docker image
+make image       # build the Docker image locally (omini:dev)
+make models      # refresh the device model names
 ```
 
 ## Topology engine

@@ -4,7 +4,7 @@
 
 Omini connects to your routers, switches, access points and network software — from different vendors — reads what each one knows about the network, and automatically builds a **live topology map** showing **where traffic is flowing**, **which devices are connected** and **how healthy the network is**. All in a clean web UI running on your own hardware.
 
-> ⚠️ **Status:** v0.1 in progress — the core (SNMP, topology, collector, API) and the web UI work; the OPNsense plugin and the Docker image are next. Not ready for production use yet.
+> **Status:** v0.1 — first release, for homelabs. The network scan, device identification, the map (areas, live traffic, port view), the nmap integration and the plugin store with the OPNsense plugin work today; traffic history and insights come in v0.2.
 
 ---
 
@@ -160,23 +160,32 @@ Each poll reads interface byte counters; the rate is `Δbytes / Δtime` between 
 
 Why: Go keeps the always-on core fast and light (like Caddy, Traefik, AdGuard Home, Beszel); Python makes writing integrations easy for the community (like Home Assistant). No external services — runs on a Raspberry Pi, a small VM or a NAS.
 
-## Installation (planned)
+## Installation
+
+With Docker (amd64 and arm64, e.g. a Raspberry Pi 4/5), save this as `docker-compose.yml`:
 
 ```yaml
 services:
   omini:
-    image: ghcr.io/<org>/omini:latest
+    image: ghcr.io/riccardoalv/omini:latest
     container_name: omini
+    network_mode: host   # the network scan must see your LAN (ARP, mDNS, SSDP)
     restart: unless-stopped
-    network_mode: host   # recommended for discovery (ARP/ICMP)
     volumes:
       - ./data:/data
+    environment:
+      TZ: UTC
+      # OMINI_NMAP: install   # let Omini install nmap for the nmap integration
 ```
 
 ```bash
 docker compose up -d
 # open http://<your-server>:8080 — the first visit asks you to create the admin user
 ```
+
+The network scan starts by itself. Add more in **Integrations → Add integration** (the store): OPNsense, nmap, or any plugin from a GitHub address.
+
+Without Docker: `make run` builds and starts Omini (needs Go and Node.js; plugins need [uv](https://docs.astral.sh/uv/)).
 
 ### Configuration
 
@@ -188,6 +197,9 @@ docker compose up -d
 | `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
 | `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |
+| `OMINI_NMAP` | — | Docker image only: `install` installs nmap on start, for the nmap integration (Omini does not ship nmap) |
+| `OMINI_PLUGIN_DIRS` | — | Comma-separated plugin folders loaded in place (plugin development) |
+| `OMINI_UV` | `uv` | The uv binary used to build plugin environments |
 
 ## Development
 
@@ -243,17 +255,16 @@ The MVP scope above ships in incremental releases, each one usable on its own:
 
 | Release | Delivers | You can... |
 |---|---|---|
-| **v0.1** | Go core, generic SNMP, OPNsense plugin (manual install), network scan, device identification, topology engine, map (Vue Flow), login | See a map of your real network and its clients |
-| **v0.2** | Per-link traffic (animated flow), 24h traffic history, insights, device presence timeline | See where traffic flows, what is wrong, and who joined or left |
-| **v0.3** | Plugin store, trust levels, install from URL, YAML SNMP profiles | Install integrations with one click |
-| **v0.4** | Mercusys plugin (scraping), `pt-BR` UI, refined subnet discovery | Cover a full mixed homelab — public launch |
+| **v0.1** ✅ | Network scan (with SNMP), device identification and model names, nmap, topology map with areas, WANs, port view and live traffic, plugin runtime, store and the OPNsense plugin, Docker image, login, `pt-BR` UI | See a map of your real network and its clients |
+| **v0.2** | Animated traffic flow, 24h traffic history, insights, device presence timeline | See where traffic flows, what is wrong, and who joined or left |
+| **v0.3** | Remote store index, YAML SNMP profiles | Find and install community integrations |
+| **v0.4** | Mercusys and Horaco plugins (web UI), refined subnet discovery | Cover a full mixed homelab — public launch |
 
 **Later:**
 - Long-term traffic history
 - "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
 - SNMP v3
-- OUI vendor database (identify "Apple", "Raspberry Pi"...)
 - More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense
 - VLAN view
 - Notifications (Telegram, e-mail, webhook)

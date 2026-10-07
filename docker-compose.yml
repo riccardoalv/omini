@@ -1,0 +1,14 @@
+# Omini with Docker Compose: docker compose up -d, then open http://<host>:8080
+services:
+  omini:
+    image: ghcr.io/riccardoalv/omini:latest
+    container_name: omini
+    # Host networking: the network scan must see your LAN (ARP, mDNS, SSDP).
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      TZ: UTC
+      # Uncomment to let Omini install nmap for the nmap integration:
+      # OMINI_NMAP: install
