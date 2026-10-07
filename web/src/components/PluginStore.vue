@@ -15,6 +15,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
+import { deviceTypes } from '@/lib/icons'
 import type {
   CatalogEntry,
   Integration,
@@ -295,9 +296,14 @@ onMounted(load)
           <div class="top">
             <span class="logo">
               <Network v-if="item.builtin" :size="26" class="builtin-icon" />
+              <!-- A logo, or a device type's icon when the brand has none (e.g. "switch"). -->
               <DeviceIcon
                 v-else-if="item.icon"
-                :device="{ product: item.icon, type: 'app' }"
+                :device="
+                  deviceTypes.includes(item.icon)
+                    ? { type: item.icon }
+                    : { product: item.icon, type: 'app' }
+                "
                 :size="30"
               />
               <Puzzle v-else :size="26" />

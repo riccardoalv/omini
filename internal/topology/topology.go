@@ -143,6 +143,8 @@ type builder struct {
 	byName map[string]string
 	// uplinks are ports connected to infrastructure; value is the node on the other end.
 	uplinks map[portKey]string
+	// lastPort: where MACs missing from the MAC tables right now were last learned.
+	lastPort map[model.MACAddress]portKey
 	// fdbPorts lists where each MAC was learned; portMACs counts MACs per port.
 	fdbPorts map[model.MACAddress][]portKey
 	portMACs map[portKey]int
@@ -156,7 +158,24 @@ type builder struct {
 }
 
 // Build computes the topology for the given sources.
-func Build(sources []Source) Topology {
+// PortRef is a port of a device on the map, e.g. where a MAC was learned.
+type PortRef struct {
+	Node string `json:"node"`
+	Port string `json:"port"`
+}
+
+// Options tune a build.
+type Options struct {
+	// LastSeen holds, per MAC, the switch port where it was last learned.
+	// Switches forget idle MACs after a few minutes (a phone asleep): such a
+	// MAC keeps its port instead of jumping to wherever ARP sees it.
+	LastSeen map[model.MACAddress]PortRef
+}
+
+func Build(sources []Source) Topology { return BuildWith(sources, Options{}) }
+
+// BuildWith builds the topology with options.
+func BuildWith(sources []Source, opts Options) Topology {
 	b := &builder{
 		nodes:    map[string]*Node{},
 		edges:    map[string]*Edge{},
@@ -179,6 +198,7 @@ func Build(sources []Source) Topology {
 		b.addNeighborEdges(id)
 	}
 	b.indexFDB(managed)
+	b.rememberFDB(opts.LastSeen)
 	b.placeUnlinkedDevices(managed)
 	b.addWANs(managed)
 	b.placeClients(managed)
@@ -456,6 +476,33 @@ func (b *builder) indexFDB(managed []string) {
 	}
 }
 
+// rememberFDB keeps, for MACs that no MAC table lists right now, the port
+// where they were last learned (if that device is still on the map). It only
+// places a device seen by other means (ARP, Wi-Fi...): it never makes one
+// that left look present.
+func (b *builder) rememberFDB(last map[model.MACAddress]PortRef) {
+	b.lastPort = map[model.MACAddress]portKey{}
+	for m, ref := range last {
+		if len(b.fdbPorts[m]) > 0 || ref.Port == "" {
+			continue
+		}
+		if n := b.nodes[ref.Node]; n != nil && n.Kind == KindDevice {
+			b.lastPort[m] = portKey{ref.Node, ref.Port}
+		}
+	}
+}
+
+// fdbOrLast: the ports where a MAC is learned now, else where it last was.
+func (b *builder) fdbOrLast(m model.MACAddress) []portKey {
+	if ports := b.fdbPorts[m]; len(ports) > 0 {
+		return ports
+	}
+	if k, ok := b.lastPort[m]; ok {
+		return []portKey{k}
+	}
+	return nil
+}
+
 // bestPort picks the edge-most port among candidates: non-uplink first, then
 // the one with the fewest learned MACs (closest to the device).
 func (b *builder) bestPort(cands []portKey, exclude string) (portKey, bool, bool) {
@@ -716,7 +763,7 @@ func (b *builder) placeCollected(
 		if w, ok := wifi[m]; ok {
 			n.ParentID, n.Port, kind = w.node, model.Deref(w.c.Interface), EdgeWifi
 			n.SSID, n.SignalDBM = model.Deref(w.c.SSID), w.c.SignalDBM
-		} else if port, ok, uplink := b.bestPort(b.fdbPorts[m], ""); ok {
+		} else if port, ok, uplink := b.bestPort(b.fdbOrLast(m), ""); ok {
 			n.ParentID, n.Port, kind = port.node, port.port, EdgeFDB
 			if uplink {
 				// Only seen towards other infrastructure: the client is behind it.

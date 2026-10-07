@@ -60,6 +60,9 @@ type Collector struct {
 
 	traffic *trafficMeter
 
+	// Where each MAC was last learned by a switch (see topology.Options).
+	lastSeen map[model.MACAddress]seenAt
+
 	round   sync.Mutex // one collection round at a time
 	trigger chan struct{}
 }
@@ -345,8 +348,9 @@ func (c *Collector) rebuild(ctx context.Context) error {
 			CollectedAt: s.CollectedAt, DurationMs: s.DurationMs, Devices: countDevices(s.Devices),
 		})
 	}
-	topo := topology.Build(sources)
 	now := c.opts.Now()
+	topo := topology.BuildWith(sources, topology.Options{LastSeen: c.rememberedPorts(now)})
+	c.rememberPorts(topo, now)
 
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
@@ -507,4 +511,43 @@ func countDevices(devices []model.Device) int {
 		}
 	}
 	return n
+}
+
+// LastSeenTTL is how long a MAC keeps its last switch port after the switch
+// forgets it (MAC tables age idle entries out after about five minutes).
+const LastSeenTTL = 6 * time.Hour
+
+type seenAt struct {
+	topology.PortRef
+	at time.Time
+}
+
+func (c *Collector) rememberedPorts(now time.Time) map[model.MACAddress]topology.PortRef {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[model.MACAddress]topology.PortRef, len(c.lastSeen))
+	for m, s := range c.lastSeen {
+		if now.Sub(s.at) > LastSeenTTL {
+			delete(c.lastSeen, m)
+			continue
+		}
+		out[m] = s.PortRef
+	}
+	return out
+}
+
+func (c *Collector) rememberPorts(topo topology.Topology, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lastSeen == nil {
+		c.lastSeen = map[model.MACAddress]seenAt{}
+	}
+	for _, n := range topo.Nodes {
+		if n.Kind != topology.KindDevice || n.Device == nil || !n.Online {
+			continue
+		}
+		for _, f := range n.Device.Fdb {
+			c.lastSeen[f.MAC] = seenAt{topology.PortRef{Node: n.ID, Port: f.Port}, now}
+		}
+	}
 }

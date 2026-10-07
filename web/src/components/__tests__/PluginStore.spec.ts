@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import type { CatalogEntry, PluginInfo } from '@/lib/types'
 
+import DeviceIcon from '../DeviceIcon.vue'
 import PluginStore from '../PluginStore.vue'
 import { plugins } from './helpers'
 
@@ -63,6 +64,16 @@ describe('PluginStore', () => {
     vi.mocked(api.removePlugin).mockReset().mockResolvedValue()
     vi.mocked(api.integrationTypes).mockReset().mockResolvedValue([])
     vi.mocked(api.integrations).mockReset().mockResolvedValue([])
+  })
+
+  it('shows a logo, or the icon of a device type when the brand has none', async () => {
+    vi.mocked(api.pluginCatalog).mockResolvedValue([
+      { ...opnsenseEntry, id: 'mercusys', name: 'Mercusys Halo', icon: 'mercusys' },
+      { ...opnsenseEntry, id: 'horaco', name: 'Horaco switch', icon: 'switch' },
+    ])
+    const w = await mountStore()
+    const icons = w.findAllComponents(DeviceIcon).map((c) => c.props('device'))
+    expect(icons).toEqual([{ product: 'mercusys', type: 'app' }, { type: 'switch' }])
   })
 
   it('shows the catalog as cards with trust badges and searches it', async () => {

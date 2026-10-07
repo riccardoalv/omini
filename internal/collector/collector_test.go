@@ -351,3 +351,39 @@ func TestEachIntegrationHasItsOwnInterval(t *testing.T) {
 		t.Fatalf("the hourly integration must wait: %v", at[slow.ID])
 	}
 }
+
+func TestClientKeepsItsSwitchPortWhileTheSwitchForgetsIt(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	phone := model.MACAddress("92:34:c8:00:00:01")
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"},
+		Arp: []model.ArpEntry{
+			{IP: "192.168.1.2", MAC: "1c:2a:a3:00:00:01", Interface: model.Ptr("bridge0")},
+			{IP: "192.168.1.41", MAC: phone, Interface: model.Ptr("bridge0")},
+		},
+	}
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch),
+		MACs: []model.MACAddress{"1c:2a:a3:00:00:01"},
+		Fdb:  []model.FdbEntry{{MAC: "58:9c:fc:00:00:01", Port: "Port 9"}, {MAC: phone, Port: "Port 2"}},
+	}
+	e.fake.set([]model.Device{fw, sw}, nil)
+	e.collect(t)
+
+	asleep := sw
+	asleep.Fdb = sw.Fdb[:1] // the switch aged the phone out; the firewall still has it in ARP
+	e.fake.set([]model.Device{fw, asleep}, nil)
+	e.clock = e.clock.Add(10 * time.Minute)
+	n, _ := node(e.collect(t), "mac:"+string(phone))
+	if n.ParentID != "dev:1c:2a:a3:00:00:01" || n.Port != "Port 2" || !n.Online {
+		t.Fatalf("the phone stays on Port 2: %+v", n)
+	}
+
+	e.clock = e.clock.Add(collector.LastSeenTTL)
+	n, _ = node(e.collect(t), "mac:"+string(phone))
+	if n.ParentID != "dev:58:9c:fc:00:00:01" {
+		t.Fatalf("after %v the memory is forgotten: %+v", collector.LastSeenTTL, n)
+	}
+}

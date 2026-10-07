@@ -2,9 +2,27 @@
   {
     "id": "opnsense",
     "name": "OPNsense",
-    "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, ARP, DHCP leases, CPU, memory and uptime. Read-only.",
+    "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, ARP, DHCP leases, CPU, memory, disks, temperatures, pending updates and uptime. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-opnsense",
     "icon": "opnsense",
+    "publisher": "official",
+    "trust": "experimental"
+  },
+  {
+    "id": "horaco",
+    "name": "Horaco switch",
+    "description": "Horaco HC-SWTGW218AS and managed switches with the same web interface: ports with link speed and connector, traffic counters and MAC table. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-horaco",
+    "icon": "switch",
+    "publisher": "official",
+    "trust": "experimental"
+  },
+  {
+    "id": "mercusys",
+    "name": "Mercusys Halo",
+    "description": "Mercusys Halo mesh systems through their local web interface: every unit, Wi-Fi and wired clients with names, band and rates, CPU and memory. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-mercusys",
+    "icon": "mercusys",
     "publisher": "official",
     "trust": "experimental"
   }

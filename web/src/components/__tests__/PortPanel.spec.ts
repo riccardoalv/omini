@@ -34,17 +34,13 @@ describe('PortPanel', () => {
     expect(w.get('.legend').text()).toBe('2.5 Gbps 1 Gbps down')
   })
 
-  it('puts odd ports on top and even ports below when there are more than 8', () => {
+  it('keeps every port in one row, in order', () => {
     const w = mountPanel(Array.from({ length: 10 }, (_, i) => port(`p${i + 1}`)))
     const rows = w.findAll('.row')
-    expect(rows).toHaveLength(2)
-    expect(rows[0]!.findAll('.port').map((p) => p.attributes('data-port'))).toEqual([
-      'p1',
-      'p3',
-      'p5',
-      'p7',
-      'p9',
-    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.findAll('.port').map((p) => p.attributes('data-port'))).toEqual(
+      Array.from({ length: 10 }, (_, i) => `p${i + 1}`),
+    )
   })
 
   it('shows the details of a port on hover and opens what is connected on click', async () => {

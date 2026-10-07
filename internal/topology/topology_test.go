@@ -398,3 +398,52 @@ func TestSwitchUplinkFoundFromItsMACTable(t *testing.T) {
 		t.Errorf("an unmanaged switch on Port 5 expected: %+v", seg)
 	}
 }
+
+// A phone asleep drops out of the switch's MAC table while the firewall still
+// has it in ARP: it stays on the switch port where it was last learned.
+func TestClientKeepsItsLastSwitchPort(t *testing.T) {
+	const (
+		fwMAC = "58:9c:fc:00:00:01"
+		swMAC = "1c:2a:a3:00:00:01"
+		phone = "92:34:c8:00:00:01"
+	)
+	fwDev := model.Device{
+		Key: fwMAC, Name: "OPNsense", Host: model.Ptr("192.168.1.1"), Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{fwMAC},
+		Arp: []model.ArpEntry{
+			{IP: "192.168.1.2", MAC: swMAC, Interface: model.Ptr("bridge0")},
+			{IP: "192.168.1.41", MAC: phone, Interface: model.Ptr("bridge0")},
+		},
+	}
+	swDev := model.Device{
+		Key: swMAC, Name: "switch", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{swMAC},
+		Fdb: []model.FdbEntry{{MAC: fwMAC, Port: "Port 9"}}, // the phone is not there right now
+	}
+	sources := []topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fwDev}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{swDev}},
+	}
+	parent := func(topo topology.Topology) (string, string) {
+		for _, n := range topo.Nodes {
+			if n.ID == "mac:"+phone {
+				return n.ParentID, n.Port
+			}
+		}
+		return "", ""
+	}
+	if p, _ := parent(topology.Build(sources)); p != "dev:"+fwMAC {
+		t.Fatalf("without memory the phone is where ARP sees it, got %q", p)
+	}
+	remembered := topology.Options{LastSeen: map[model.MACAddress]topology.PortRef{
+		phone: {Node: "dev:" + swMAC, Port: "Port 2"},
+	}}
+	if p, port := parent(topology.BuildWith(sources, remembered)); p != "dev:"+swMAC || port != "Port 2" {
+		t.Fatalf("the phone keeps its last switch port, got %q %q", p, port)
+	}
+	gone := topology.Options{LastSeen: map[model.MACAddress]topology.PortRef{
+		phone: {Node: "dev:aa:aa:aa:aa:aa:aa", Port: "Port 2"}, // a switch no longer on the map
+	}}
+	if p, _ := parent(topology.BuildWith(sources, gone)); p != "dev:"+fwMAC {
+		t.Fatalf("a memory of a device that is gone is ignored, got %q", p)
+	}
+}

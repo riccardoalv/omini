@@ -26,12 +26,8 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-/** More than 8 ports: two rows, odd ports on top like on a switch. */
-const rows = computed(() => {
-  const list = props.ports.map((p, i) => ({ p, n: i + 1 }))
-  if (list.length <= 8) return [list]
-  return [list.filter((x) => x.n % 2 === 1), list.filter((x) => x.n % 2 === 0)]
-})
+/** One row, in order: ports shrink to fit (and the row scrolls past that). */
+const rows = computed(() => [props.ports.map((p, i) => ({ p, n: i + 1 }))])
 
 const legend = computed(() => {
   const present = new Set(props.ports.filter((p) => p.up).map((p) => speedTier(p.speed_mbps)))

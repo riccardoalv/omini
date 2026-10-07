@@ -55,8 +55,8 @@ Integrations are layered so that most contributions require little or no core co
 | Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models. Devices with SNMP v2c are read in full (`SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP): ports, traffic, neighbors, MAC tables |
 | nmap | Core (Go), optional, uses the nmap installed on the host | Operating system and service versions of every device (deeper than the network scan; runs in the background, daily) |
 | OPNsense | Python plugin ([omini-plugin-opnsense](https://github.com/riccardoalv/omini-plugin-opnsense), official REST API, key/secret) | Interfaces with link speed and traffic, ARP, DHCP leases (ISC, Kea or dnsmasq), CPU/memory/uptime, gateway status |
-| Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
-| Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
+| Horaco HC-SWTGW218AS | Python plugin ([omini-plugin-horaco](https://github.com/riccardoalv/omini-plugin-horaco), web interface — no SNMP on stock firmware) | Ports with speed and RJ45/SFP, traffic, MAC table, model, firmware, uptime |
+| Mercusys Halo | Python plugin ([omini-plugin-mercusys](https://github.com/riccardoalv/omini-plugin-mercusys), local web interface) | Every mesh unit, Wi-Fi and wired clients with names, band and rates, CPU/memory |
 
 Later: MikroTik (REST API), UniFi controller, TP-Link Omada, OpenWrt, Proxmox, pfSense.
 
@@ -301,8 +301,8 @@ Omini ships in incremental releases, each one usable on its own.
 
 ### v0.4 — public launch
 
-- **Horaco** switch plugin (web interface: ports, counters, MAC table) — in progress
-- **Mercusys** plugin (access points)
+- ✅ **Horaco** switch plugin (web interface: ports, counters, MAC table)
+- ✅ **Mercusys Halo** plugin (mesh units and their clients) — first version, being validated
 - Refined subnet discovery
 - Repositories move to a GitHub organization
 
