@@ -107,11 +107,10 @@ describe('top-down layout', () => {
     const width = Math.max(...xs) + 200 - Math.min(...xs)
     expect(width).toBeLessThan(2200) // a single row of 17 would be ~3800
     const all = Object.entries(pos)
-    for (const [a, pa] of all) {
-      for (const [b, pb] of all) {
-        if (a < b) expect(overlap(pa, pb), `${a} overlaps ${b}`).toBe(false)
-      }
-    }
+    const overlapping = all.flatMap(([a, pa]) =>
+      all.filter(([b, pb]) => a < b && overlap(pa, pb)).map(([b]) => `${a}/${b}`),
+    )
+    expect(overlapping).toEqual([])
     // The VM keeps its place in the tree; its apps are below it.
     expect(pos.a0!.y).toBeGreaterThan(pos.vm!.y)
   })
