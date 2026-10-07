@@ -297,6 +297,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	}
 	classifyNodes(&topo)
 	expandApps(&topo)
+	attachVMs(&topo)
 	applyInventory(&topo, inventory, now)
 
 	c.mu.Lock()

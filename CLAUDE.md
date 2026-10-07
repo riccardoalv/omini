@@ -56,6 +56,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | MAC vendors | IEEE MA-L registry embedded gzipped (`internal/oui`, refresh with `make oui`) |
 | Device identification | `internal/classify` (rules + evidence) → type, OS, brand, product. Icons: homelab software shows its logo alone; other devices show the type icon with an OS/brand badge. Users can override type and icon |
 | Icon/device lists | IEEE OUI and Simple Icons (in use); **Dashboard Icons** (Apache-2.0, homelab apps, bundled for offline use); Apple/Google model-name lists; **nmap optional** (OS detection when the binary is installed). Not used: Fingerbank (sends data to a third party), nmap databases (NPSL, incompatible with MIT) |
+| Proxmox VMs | A VM recognized by Proxmox's MAC OUI is drawn under the Proxmox host **only when the network has exactly one Proxmox host**; with several hosts no inference is made (a Proxmox integration can place them later) |
 | Several apps on one IP | One node per app (e.g. Jellyfin + qBittorrent on a VM), attached to the device and collapsed above the threshold like clients |
 | Integration settings | Clicking an integration expands it inline with its settings and status. The network scan exposes each method (ARP, ping, ports, DNS, NetBIOS, mDNS, SSDP, web titles, SSH banners), ports and intervals |
 | Demo network | Removed from the product; `internal/demo` is only a test fixture. Leftover demo integrations are deleted on start |
