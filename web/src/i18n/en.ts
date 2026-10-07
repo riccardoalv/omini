@@ -227,6 +227,7 @@ export default {
       netbios: 'NetBIOS',
       mdns: 'mDNS',
       ssdp: 'UPnP',
+      snmp: 'SNMP',
     },
     plugin: 'Plugin',
   },

@@ -30,14 +30,14 @@ describe('api client', () => {
 
   it('sends the CSRF header and JSON body on state-changing requests', async () => {
     const fetch = mockFetch(201, { id: 1 })
-    await api.createIntegration({ name: 'demo', type: 'demo', config: {} })
+    await api.createIntegration({ type: 'demo', config: {} })
 
     const c = call(fetch)
     expect(c.url).toBe('/api/integrations')
     expect(c.method).toBe('POST')
     expect(c.headers['X-Omini-Request']).toBe('1')
     expect(c.headers['Content-Type']).toBe('application/json')
-    expect(c.body).toEqual({ name: 'demo', type: 'demo', config: {} })
+    expect(c.body).toEqual({ type: 'demo', config: {} })
   })
 
   it('does not send the CSRF header on GET', async () => {

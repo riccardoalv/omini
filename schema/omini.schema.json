@@ -547,7 +547,7 @@
           "items": {
             "type": "string"
           },
-          "description": "How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios."
+          "description": "How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios, snmp."
         },
         "titles": {
           "type": "array",

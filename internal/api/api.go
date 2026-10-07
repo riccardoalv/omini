@@ -17,7 +17,6 @@ import (
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/secret"
-	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
 )
@@ -27,9 +26,6 @@ const sessionCookie = "omini_session"
 // CSRFHeader must be sent with every state-changing request. Browsers do not
 // let other sites set custom headers without CORS, which Omini never allows.
 const CSRFHeader = "X-Omini-Request"
-
-// Discoverer scans a subnet for devices (snmp.Discover in production).
-type Discoverer func(ctx context.Context, cidr string, opts snmp.ScanOptions) ([]snmp.Found, error)
 
 // WebFinder detects web interfaces on an IP (*webui.Prober in production).
 type WebFinder interface {
@@ -42,7 +38,6 @@ type Server struct {
 	Box       *secret.Box
 	Collector *collector.Collector
 	Auth      *auth.Service
-	Discover  Discoverer
 	WebUI     WebFinder
 	Icons     http.Handler // app icons (internal/appicons); public, used by <img>
 	UI        fs.FS        // built web UI; nil serves a placeholder page
@@ -87,7 +82,6 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/areas", s.createArea)
 	private.HandleFunc("PATCH /api/areas/{id}", s.updateArea)
 	private.HandleFunc("DELETE /api/areas/{id}", s.deleteArea)
-	private.HandleFunc("POST /api/discovery/scan", s.scan)
 	private.HandleFunc("GET /api/nodes/{id}/web", s.nodeWeb)
 	mux.Handle("/api/", s.requireAuth(private))
 

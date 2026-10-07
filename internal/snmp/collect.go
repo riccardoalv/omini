@@ -12,65 +12,70 @@ import (
 
 	"github.com/gosnmp/gosnmp"
 
-	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 )
 
-// Integration is the generic SNMP v2c integration.
-type Integration struct {
-	// Timeout per SNMP request (one retry is made). Defaults to 3s.
-	Timeout time.Duration
+// Target is an SNMP v2c agent to read.
+type Target struct {
+	Host      string
+	Port      int           // default 161
+	Community string        // default "public"
+	Timeout   time.Duration // per request (one retry is made); default 3s
 }
 
-func New() *Integration { return &Integration{Timeout: 3 * time.Second} }
-
-func (*Integration) Info() integration.Info {
-	return integration.Info{
-		Type:        "snmp",
-		Name:        "SNMP (generic)",
-		Description: "Any managed switch, router or firewall with SNMP v2c: ports, traffic, LLDP neighbors, MAC table and ARP.",
-		Kind:        integration.KindCore,
-		Fields: []model.FormField{
-			{Key: "host", Type: model.FormFieldTypeHost, Label: model.Ptr("Host"), Required: true},
-			{
-				Key: "community", Type: model.FormFieldTypeSecret, Label: model.Ptr("Community"), Default: "public", Required: true,
-				Help: model.Ptr("Read-only community configured on the device."),
-			},
-			{Key: "port", Type: model.FormFieldTypeInt, Label: model.Ptr("Port"), Default: 161},
-		},
+func (t Target) dial(ctx context.Context) (*client, error) {
+	if t.Host == "" {
+		return nil, fmt.Errorf("host is required")
 	}
+	if t.Port == 0 {
+		t.Port = 161
+	}
+	if t.Community == "" {
+		t.Community = "public"
+	}
+	if t.Timeout == 0 {
+		t.Timeout = 3 * time.Second
+	}
+	return dial(ctx, t.Host, t.Port, t.Community, t.Timeout)
 }
 
-func (s *Integration) Test(ctx context.Context, cfg integration.Config) (string, error) {
-	c, err := s.connect(ctx, cfg)
+// Probe returns the first community the host answers to, if any. A single
+// quick request per community, without retries: most hosts have no agent.
+func Probe(ctx context.Context, t Target, communities []string) (string, bool) {
+	for _, community := range communities {
+		t.Community = community
+		c, err := t.dial(ctx)
+		if err != nil {
+			return "", false
+		}
+		c.g.Retries = 0
+		sys, err := c.get(oidSysName, oidSysObjectID)
+		c.close()
+		if err == nil && len(sys) > 0 {
+			return community, true
+		}
+		if ctx.Err() != nil {
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// Collect reads a managed switch, router or firewall: system, interfaces and
+// traffic counters, IPs, ARP, MAC table, LLDP neighbors and resources.
+func Collect(ctx context.Context, t Target) (model.Device, error) {
+	c, err := t.dial(ctx)
 	if err != nil {
-		return "", err
+		return model.Device{}, err
 	}
 	defer c.close()
-	sys, err := c.get(oidSysName, oidSysDescr)
-	if err != nil {
-		return "", fmt.Errorf("no SNMP response (check host, community and that SNMP v2c is enabled): %w", err)
-	}
-	name := pduString(sys[oidSysName])
-	if name == "" {
-		name = cfg.String("host")
-	}
-	return fmt.Sprintf("Connected to %s", name), nil
-}
-
-func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]model.Device, error) {
-	c, err := s.connect(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-	defer c.close()
-	host := cfg.String("host")
+	host := t.Host
 
 	d, err := collectSystem(c, host)
 	if err != nil {
-		return nil, err
+		return d, err
 	}
-	log := slog.With("integration", "snmp", "host", host)
+	log := slog.With("snmp", host)
 
 	// Everything below is optional: agents implement different subsets of MIBs.
 	ifNames, err := collectInterfaces(c, &d)
@@ -98,23 +103,7 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	if len(d.MACs) > 0 {
 		d.Key = string(d.MACs[0])
 	}
-	return []model.Device{d}, nil
-}
-
-func (s *Integration) connect(ctx context.Context, cfg integration.Config) (*client, error) {
-	host := cfg.String("host")
-	if host == "" {
-		return nil, fmt.Errorf("host is required")
-	}
-	community := cfg.String("community")
-	if community == "" {
-		community = "public"
-	}
-	timeout := s.Timeout
-	if timeout == 0 {
-		timeout = 3 * time.Second
-	}
-	return dial(ctx, host, cfg.Int("port", 161), community, timeout)
+	return d, nil
 }
 
 func collectSystem(c *client, host string) (model.Device, error) {

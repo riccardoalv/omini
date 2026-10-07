@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 )
 
@@ -101,7 +103,7 @@ func TestFirstRunCreatesTheNetworkScan(t *testing.T) {
 	}
 	defer st.Close()
 
-	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
+	if err := firstRun(ctx, st, testBox(t), config{AutoScan: true}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := st.ListIntegrations(ctx)
@@ -109,7 +111,7 @@ func TestFirstRunCreatesTheNetworkScan(t *testing.T) {
 		t.Fatalf("integrations = %+v", list)
 	}
 	// Only on the very first start: existing setups are never touched.
-	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
+	if err := firstRun(ctx, st, testBox(t), config{AutoScan: true}); err != nil {
 		t.Fatal(err)
 	}
 	if list, _ := st.ListIntegrations(ctx); len(list) != 1 {
@@ -127,11 +129,62 @@ func TestFirstRunRemovesTheFormerDemoNetwork(t *testing.T) {
 	if _, err := st.CreateIntegration(ctx, store.Integration{Name: "Demo network", Type: "demo", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
+	if err := firstRun(ctx, st, testBox(t), config{AutoScan: true}); err != nil {
 		t.Fatal(err)
 	}
 	list, _ := st.ListIntegrations(ctx)
 	if len(list) != 1 || list[0].Type != "network" {
 		t.Fatalf("integrations = %+v (demo removed, network scan created)", list)
+	}
+}
+
+func testBox(t *testing.T) *secret.Box {
+	t.Helper()
+	box, err := secret.New(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return box
+}
+
+func TestFirstRunMovesSNMPIntoTheNetworkScan(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	box := testBox(t)
+	for _, c := range []string{"homelab", "public"} {
+		sealed, _ := box.Seal(c)
+		if _, err := st.CreateIntegration(ctx, store.Integration{
+			Name: "switch", Type: "snmp", Enabled: true,
+			Config: integration.Config{"host": "192.168.1.2", "community": sealed},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := firstRun(ctx, st, box, config{}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := st.ListIntegrations(ctx)
+	if len(list) != 1 || list[0].Type != "network" {
+		t.Fatalf("integrations = %+v (SNMP removed, network scan created)", list)
+	}
+	communities, err := box.Open(list[0].Config.String("snmp_communities"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if communities != "homelab, public" {
+		t.Fatalf("communities = %q", communities)
+	}
+
+	// Idempotent: nothing left to move.
+	if err := firstRun(ctx, st, box, config{}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := st.ListIntegrations(ctx); len(list) != 1 {
+		t.Fatalf("integrations after second start = %+v", list)
 	}
 }

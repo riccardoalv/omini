@@ -231,6 +231,7 @@ const ptBR: typeof en = {
       netbios: 'NetBIOS',
       mdns: 'mDNS',
       ssdp: 'UPnP',
+      snmp: 'SNMP',
     },
     plugin: 'Plugin',
   },
@@ -277,6 +278,14 @@ const ptBR: typeof en = {
         label: 'Banners SSH',
         help: 'Lê a linha de versão do SSH, que costuma dizer o sistema operacional.',
       },
+      snmp: {
+        label: 'SNMP',
+        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP v2c ativado. Somente leitura.',
+      },
+      snmp_communities: {
+        label: 'Communities SNMP',
+        help: 'Communities somente leitura a testar, separadas por vírgula (ex.: "public, homelab"). É a "community" ou "read community" configurada no SNMP do equipamento.',
+      },
       ports: {
         label: 'Portas a testar',
         help: 'Vazio usa as portas comuns de homelab. Exemplo: 22,80,443,8000-8100 (no máximo 1024 portas).',
@@ -285,14 +294,6 @@ const ptBR: typeof en = {
         label: 'Verificar portas e nomes de novo a cada (horas)',
         help: 'Portas, nomes e banners são verificados uma vez por dispositivo novo e de novo depois dessas horas.',
       },
-    },
-    snmp: {
-      host: { label: 'Host' },
-      community: {
-        label: 'Community',
-        help: 'Community somente leitura configurada no equipamento.',
-      },
-      port: { label: 'Porta' },
     },
   },
   settings: {

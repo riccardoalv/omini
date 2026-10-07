@@ -10,18 +10,13 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/demo"
-	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/snmp/snmptest"
 )
 
-func newIntegration() *snmp.Integration {
-	return &snmp.Integration{Timeout: 300 * time.Millisecond}
-}
-
-func config(a *snmptest.Agent, community string) integration.Config {
-	return integration.Config{"host": "127.0.0.1", "community": community, "port": float64(a.Port)}
+func target(a *snmptest.Agent, community string) snmp.Target {
+	return snmp.Target{Host: "127.0.0.1", Port: a.Port, Community: community, Timeout: 300 * time.Millisecond}
 }
 
 // TestCollectRoundTrip exposes each demo device through a fake SNMP agent and
@@ -41,18 +36,15 @@ func TestCollectRoundTrip(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.device.Name, func(t *testing.T) {
 			agent := snmptest.Start(t, "s3cret", snmptest.FromDevice(tc.device, snmptest.Options{Enterprise: tc.enterprise}))
-			got, err := newIntegration().Collect(context.Background(), config(agent, "s3cret"))
+			got, err := snmp.Collect(context.Background(), target(agent, "s3cret"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(got) != 1 {
-				t.Fatalf("got %d devices, want 1", len(got))
-			}
 			want := expected(tc.device, tc.vendor, tc.role)
-			normalize(&got[0])
+			normalize(&got)
 			normalize(&want)
-			if !reflect.DeepEqual(got[0], want) {
-				g, _ := json.MarshalIndent(got[0], "", "  ")
+			if !reflect.DeepEqual(got, want) {
+				g, _ := json.MarshalIndent(got, "", "  ")
 				w, _ := json.MarshalIndent(want, "", "  ")
 				t.Fatalf("collected device differs\n--- got\n%s\n--- want\n%s", g, w)
 			}
@@ -97,16 +89,16 @@ func normalize(d *model.Device) {
 	sort.Strings(d.IPs)
 }
 
-func TestTestConnection(t *testing.T) {
+func TestProbeFindsTheCommunity(t *testing.T) {
 	sw := demo.Network(time.Now())[1]
-	agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, snmptest.Options{}))
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
 
-	msg, err := newIntegration().Test(context.Background(), config(agent, "public"))
-	if err != nil {
-		t.Fatal(err)
+	community, ok := snmp.Probe(context.Background(), target(agent, ""), []string{"public", "homelab"})
+	if !ok || community != "homelab" {
+		t.Fatalf("probe = %q %v", community, ok)
 	}
-	if msg != "Connected to sw-core" {
-		t.Errorf("message = %q", msg)
+	if _, ok := snmp.Probe(context.Background(), target(agent, ""), []string{"public"}); ok {
+		t.Fatal("a wrong community must not answer")
 	}
 }
 
@@ -114,7 +106,7 @@ func TestWrongCommunityFails(t *testing.T) {
 	sw := demo.Network(time.Now())[1]
 	agent := snmptest.Start(t, "right", snmptest.FromDevice(sw, snmptest.Options{}))
 
-	_, err := newIntegration().Collect(context.Background(), config(agent, "wrong"))
+	_, err := snmp.Collect(context.Background(), target(agent, "wrong"))
 	if err == nil {
 		t.Fatal("expected an error with the wrong community")
 	}
@@ -128,17 +120,17 @@ func TestMinimalAgent(t *testing.T) {
 	d := model.Device{Key: "x", Name: "printer", Model: model.Ptr("Laser Printer")}
 	agent := snmptest.Start(t, "public", snmptest.FromDevice(d, snmptest.Options{}))
 
-	got, err := newIntegration().Collect(context.Background(), config(agent, "public"))
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got[0].Name != "printer" || model.Deref(got[0].Model) != "Laser Printer" {
-		t.Fatalf("unexpected device: %+v", got[0])
+	if got.Name != "printer" || model.Deref(got.Model) != "Laser Printer" {
+		t.Fatalf("unexpected device: %+v", got)
 	}
 }
 
 func TestMissingHost(t *testing.T) {
-	if _, err := newIntegration().Collect(context.Background(), integration.Config{}); err == nil {
+	if _, err := snmp.Collect(context.Background(), snmp.Target{}); err == nil {
 		t.Fatal("expected error without host")
 	}
 }

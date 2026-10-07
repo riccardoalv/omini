@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,7 +24,6 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/secret"
-	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
 	"github.com/riccardoalv/omini/web"
@@ -120,17 +121,16 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	}
 
 	reg := integration.NewRegistry()
-	reg.Register(snmp.New())
 	reg.Register(netscan.New())
 
-	if err := firstRun(ctx, st, cfg); err != nil {
+	if err := firstRun(ctx, st, box, cfg); err != nil {
 		return err
 	}
 
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
-		Discover: snmp.Discover, WebUI: webui.New(), UI: web.FS(), Version: version,
+		WebUI: webui.New(), UI: web.FS(), Version: version,
 		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 	}
 	httpServer := &http.Server{
@@ -169,33 +169,81 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 }
 
 // firstRun sets up the network scan when there are no integrations yet, so
-// Omini shows the network with zero configuration. It also removes
-// integrations of types that no longer exist (the former demo network).
-func firstRun(ctx context.Context, st *store.Store, cfg config) error {
+// Omini shows the network with zero configuration. It also upgrades older
+// setups: the former demo network is removed, and standalone SNMP
+// integrations become communities of the network scan (which now reads SNMP
+// from every device it finds).
+func firstRun(ctx context.Context, st *store.Store, box *secret.Box, cfg config) error {
 	existing, err := st.ListIntegrations(ctx)
 	if err != nil {
 		return err
 	}
-	kept := 0
+	var (
+		scan        *store.Integration
+		communities []string
+		kept        int
+	)
 	for _, in := range existing {
-		if in.Type == "demo" {
-			if err := st.DeleteIntegration(ctx, in.ID); err != nil {
-				return err
+		switch in.Type {
+		case "demo":
+		case "snmp":
+			if c, err := openSecret(box, in.Config.String("community")); err == nil && c != "" {
+				communities = append(communities, c)
 			}
+		default:
+			if in.Type == "network" && scan == nil {
+				scan = &in
+			}
+			kept++
 			continue
 		}
-		kept++
-	}
-	if kept > 0 {
-		return nil
-	}
-	if cfg.AutoScan {
-		if _, err := st.CreateIntegration(ctx, store.Integration{
-			Name: "Network scan", Type: "network", Enabled: true,
-			Config: integration.Config{"subnets": "auto", "port_scan": true},
-		}); err != nil {
+		if err := st.DeleteIntegration(ctx, in.ID); err != nil {
 			return err
 		}
 	}
-	return nil
+	if kept == 0 && (cfg.AutoScan || len(communities) > 0) {
+		created, err := st.CreateIntegration(ctx, store.Integration{
+			Name: "Network scan", Type: "network", Enabled: true,
+			Config: integration.Config{"subnets": "auto", "port_scan": true},
+		})
+		if err != nil {
+			return err
+		}
+		scan = &created
+	}
+	if scan == nil || len(communities) == 0 {
+		return nil
+	}
+	return addCommunities(ctx, st, box, *scan, communities)
+}
+
+// addCommunities adds SNMP communities to the network scan's list.
+func addCommunities(ctx context.Context, st *store.Store, box *secret.Box, scan store.Integration, add []string) error {
+	current, err := openSecret(box, scan.Config.String("snmp_communities"))
+	if err != nil {
+		return err
+	}
+	var list []string
+	for _, c := range append(strings.Split(current, ","), add...) {
+		if c = strings.TrimSpace(c); c != "" && !slices.Contains(list, c) {
+			list = append(list, c)
+		}
+	}
+	if current == "" && !slices.Contains(list, "public") {
+		list = append([]string{"public"}, list...) // keep trying the default community too
+	}
+	sealed, err := box.Seal(strings.Join(list, ", "))
+	if err != nil {
+		return err
+	}
+	scan.Config["snmp_communities"] = sealed
+	_, err = st.UpdateIntegration(ctx, scan)
+	return err
+}
+
+func openSecret(box *secret.Box, v string) (string, error) {
+	if v == "" || !secret.IsSealed(v) {
+		return v, nil
+	}
+	return box.Open(v)
 }

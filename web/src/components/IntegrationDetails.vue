@@ -14,8 +14,10 @@ const props = defineProps<{ integration: Integration; type: IntegrationType }>()
 const emit = defineEmits<{ saved: [integration: Integration]; ran: [status: CollectionStatus] }>()
 const { t, locale } = useI18n()
 
-const { editing, name, values, busy, testing, error, result, missing, test, save } =
-  useIntegrationForm(props.type, props.integration)
+const { editing, values, busy, testing, error, result, missing, test, save } = useIntegrationForm(
+  props.type,
+  props.integration,
+)
 const saved = ref(false)
 
 async function submit() {
@@ -128,10 +130,6 @@ const status = computed(() => lastRun.value ?? props.integration.status)
 
     <form class="settings" @submit.prevent="submit">
       <h3>{{ t('integrations.settings') }}</h3>
-      <div class="field">
-        <label :for="`d${integration.id}-name`">{{ t('integrations.name') }}</label>
-        <input :id="`d${integration.id}-name`" v-model="name" class="input" required />
-      </div>
       <IntegrationFields
         v-model="values"
         :type="integration.type"

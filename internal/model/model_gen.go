@@ -372,7 +372,7 @@ type Host struct {
 	// Advertised services, e.g. mDNS types like _airplay._tcp.
 	Services []string `json:"services,omitempty,omitzero" yaml:"services,omitempty"`
 
-	// How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
+	// How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios, snmp.
 	Sources []string `json:"sources,omitempty,omitzero" yaml:"sources,omitempty"`
 
 	// Titles of the web interfaces found on the host (e.g. "TrueNAS", "Proxmox

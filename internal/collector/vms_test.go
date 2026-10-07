@@ -14,11 +14,14 @@ func proxmoxNet(hosts int) topology.Topology {
 		topo.Edges = append(topo.Edges, topology.Edge{ID: "e:gw|" + id, Source: "gw", Target: id})
 	}
 	topo.Nodes = append(topo.Nodes,
-		topology.Node{ID: "vm", Kind: topology.KindClient, Type: "virtual_machine", Brand: "proxmox", ParentID: "gw", Port: "lan"},
+		topology.Node{ID: "vm", Kind: topology.KindClient, Type: "virtual_machine", Vendor: "Proxmox Server Solutions", ParentID: "gw", Port: "lan"},
+		// A guest classified by what runs in it is still a guest.
+		topology.Node{ID: "nas", Kind: topology.KindClient, Type: "nas", Product: "truenas", Vendor: "Proxmox Server Solutions", ParentID: "gw"},
 		topology.Node{ID: "phone", Kind: topology.KindClient, Type: "phone", ParentID: "gw"},
 	)
 	topo.Edges = append(topo.Edges,
 		topology.Edge{ID: "e:gw|vm", Source: "gw", Target: "vm", SourcePort: "lan"},
+		topology.Edge{ID: "e:gw|nas", Source: "gw", Target: "nas"},
 		topology.Edge{ID: "e:gw|phone", Source: "gw", Target: "phone"},
 	)
 	return topo
@@ -44,6 +47,9 @@ func TestVMsGoUnderTheOnlyProxmoxHost(t *testing.T) {
 	}
 	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "pve1" {
 		t.Fatalf("vm uplinks = %v", got)
+	}
+	if got := parentEdges(topo, "nas"); len(got) != 1 || got[0] != "pve1" {
+		t.Fatalf("TrueNAS guest uplinks = %v", got)
 	}
 	if got := parentEdges(topo, "phone"); len(got) != 1 || got[0] != "gw" {
 		t.Fatalf("other devices must not move: %v", got)

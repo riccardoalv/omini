@@ -257,7 +257,7 @@ class Host(BaseModel):
     """
     sources: list[str] | None = None
     """
-    How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
+    How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios, snmp.
     """
     titles: list[str] | None = None
     """

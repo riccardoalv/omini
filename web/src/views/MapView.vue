@@ -520,7 +520,6 @@ async function resetLayout() {
 
 async function scanNetwork() {
   await api.createIntegration({
-    name: 'Network scan',
     type: 'network',
     config: { subnets: 'auto', port_scan: true },
   })

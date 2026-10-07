@@ -11,15 +11,17 @@ const props = defineProps<{
   type: IntegrationType
   /** Set when editing an existing integration. */
   existing?: Integration
-  /** Prefilled values (e.g. from discovery). */
+  /** Prefilled values. */
   prefill?: Config
-  prefillName?: string
 }>()
 const emit = defineEmits<{ close: []; saved: [integration: Integration] }>()
 const { t } = useI18n()
 
-const { editing, name, values, busy, testing, error, result, missing, test, save } =
-  useIntegrationForm(props.type, props.existing, props.prefill, props.prefillName)
+const { editing, values, busy, testing, error, result, missing, test, save } = useIntegrationForm(
+  props.type,
+  props.existing,
+  props.prefill,
+)
 
 async function submit() {
   const saved = await save()
@@ -31,11 +33,6 @@ async function submit() {
   <ModalDialog :title="existing ? existing.name : type.name" @close="emit('close')">
     <form id="integration-form" @submit.prevent="submit">
       <p v-if="type.description" class="muted description">{{ type.description }}</p>
-
-      <div class="field">
-        <label for="f-name">{{ t('integrations.name') }}</label>
-        <input id="f-name" v-model="name" class="input" required />
-      </div>
 
       <IntegrationFields
         v-model="values"

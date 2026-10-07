@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, zero-config network scan, device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), zero-config network scan (with SNMP), device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -56,8 +56,10 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | MAC vendors | IEEE MA-L registry embedded gzipped (`internal/oui`, refresh with `make oui`) |
 | Device identification | `internal/classify` (rules + evidence) → type, OS, brand, product. Icons: homelab software shows its logo alone; other devices show the type icon with an OS/brand badge. Users can override type and icon |
 | Icon/device lists | IEEE OUI and Simple Icons (in use); **Dashboard Icons** (Apache-2.0, homelab apps, bundled for offline use); Apple/Google model-name lists; **nmap optional** (OS detection when the binary is installed). Not used: Fingerbank (sends data to a third party), nmap databases (NPSL, incompatible with MIT) |
-| Proxmox VMs | A VM recognized by Proxmox's MAC OUI is drawn under the Proxmox host **only when the network has exactly one Proxmox host**; with several hosts no inference is made (a Proxmox integration can place them later) |
+| Proxmox guests | Any device with a Proxmox MAC (OUI) — VM or container, whatever it runs (Ubuntu, TrueNAS...) — is drawn under the Proxmox host **only when the network has exactly one Proxmox host**; with several hosts no inference is made (a Proxmox integration can place them later) |
 | Several apps on one IP | One node per app (e.g. Jellyfin + qBittorrent on a VM), attached to the device and collapsed above the threshold like clients |
+| SNMP | Not a separate integration: an option (method) of the network scan, on by default. Every host found is probed with the configured read-only communities (default `public`, secret field, comma-separated) once per deep scan; hosts that answer are read in full (interfaces, traffic, LLDP, FDB, ARP) on every run. Older standalone SNMP integrations are converted on start (their community is added to the scan) |
+| Integration names | Not editable: an integration is named after its type ("Network scan", "OPNsense") |
 | Integration settings | Clicking an integration expands it inline with its settings and status. The network scan exposes each method (ARP, ping, ports, DNS, NetBIOS, mDNS, SSDP, web titles, SSH banners), ports and intervals |
 | Demo network | Removed from the product; `internal/demo` is only a test fixture. Leftover demo integrations are deleted on start |
 | nmap | Built-in integration that runs the nmap installed on the host (NPSL: Omini must not ship nmap itself to stay MIT). Docker image installs it on first start only when asked (`OMINI_NMAP=install`) |

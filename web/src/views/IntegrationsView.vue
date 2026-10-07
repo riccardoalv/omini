@@ -24,7 +24,6 @@ const form = ref<{
   type: IntegrationType
   existing?: Integration
   prefill?: Config
-  name?: string
 }>()
 
 const typeByName = computed(() => new Map(types.value.map((x) => [x.type, x])))
@@ -201,7 +200,6 @@ onMounted(async () => {
       :type="form.type"
       :existing="form.existing"
       :prefill="form.prefill"
-      :prefill-name="form.name"
       @close="form = undefined"
       @saved="onSaved"
     />

@@ -52,8 +52,7 @@ Integrations are layered so that most contributions require little or no core co
 
 | Integration | Type | Data |
 |---|---|---|
-| Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models |
-| Generic SNMP v2c | Core (Go) | `SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP |
+| Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models. Devices with SNMP v2c are read in full (`SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP): ports, traffic, neighbors, MAC tables |
 | OPNsense | Python plugin (official REST API, key/secret) | Interfaces, traffic, ARP, DHCP leases, CPU/memory |
 | Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
 | Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
@@ -225,7 +224,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 ## Preparing your devices
 
 - **Network scan:** run Omini with **host networking** (`network_mode: host` in Docker) so it sees your LAN directly. If the host has a firewall, allow inbound **UDP 5353** (mDNS) and **UDP 1900** (SSDP) — otherwise names and models announced by devices are not received. To get hostnames from your router, enable registering DHCP leases in its DNS (OPNsense: *Services → Unbound DNS → General → Register DHCP leases*).
-- **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. Without LLDP Omini still works, but links between switches become *inferred*.
+- **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. The network scan finds them by itself and tries the community `public`; if yours is different, add it in *Integrations → Network scan → SNMP communities*. Without LLDP Omini still works, but links between switches become *inferred*.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
 
 ## Security

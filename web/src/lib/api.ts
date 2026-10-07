@@ -61,8 +61,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await res.json()) as T
 }
 
+/** Integrations are named after their type; the name is not editable. */
 export interface IntegrationInput {
-  name?: string
   type?: string
   config?: Config
   enabled?: boolean

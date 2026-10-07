@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/snmp/snmptest"
 )
 
 // TestCollectOnLoopback runs the whole scan on 127.0.0.0/30 with fixture ARP
@@ -25,7 +27,7 @@ func TestCollectOnLoopback(t *testing.T) {
 	s := &Integration{
 		ARPPath: "testdata/arp", RoutePath: "testdata/route",
 		Ports: []int{port}, PortTimeout: 500 * time.Millisecond, SettleTime: 10 * time.Millisecond,
-		NoMulticast: true, NoPing: true,
+		NoMulticast: true, NoPing: true, SNMPTimeout: 100 * time.Millisecond,
 		Locals: func() []localNet { return nil },
 	}
 	devices, err := s.Collect(context.Background(), integration.Config{"subnets": "127.0.0.0/30"})
@@ -132,5 +134,39 @@ func TestDisabledMethodsAreNotUsed(t *testing.T) {
 		if slices.Contains(h.Sources, "arp") {
 			t.Fatalf("ARP disabled but used: %+v", h)
 		}
+	}
+}
+
+// TestSNMPDevicesAreRead runs the scan with a fake SNMP agent on 127.0.0.1:
+// the agent answers the second community, and its device is returned in full.
+func TestSNMPDevicesAreRead(t *testing.T) {
+	sw := model.Device{Key: "x", Name: "sw-core", Model: model.Ptr("Managed switch")}
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
+
+	s := &Integration{
+		ARPPath: "testdata/arp", RoutePath: "testdata/route", Ports: []int{},
+		SettleTime: 10 * time.Millisecond, NoMulticast: true, NoPing: true, NoWebTitles: true,
+		SNMPPort: agent.Port, SNMPTimeout: 300 * time.Millisecond,
+		Locals: func() []localNet { return nil },
+	}
+	devices, err := s.Collect(context.Background(), integration.Config{
+		"subnets": "127.0.0.0/30", "snmp_communities": "public, homelab",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(devices) != 2 || devices[1].Name != "sw-core" || model.Deref(devices[1].Host) != "127.0.0.1" {
+		t.Fatalf("devices = %+v", devices)
+	}
+	if gw := devices[0].Hosts[0]; gw.IP != "127.0.0.1" || !slices.Contains(gw.Sources, "snmp") {
+		t.Fatalf("the host should be marked as found by SNMP: %+v", gw)
+	}
+
+	// Turned off: no SNMP reads.
+	devices, err = s.Collect(context.Background(), integration.Config{
+		"subnets": "127.0.0.0/30", "snmp_communities": "homelab", "snmp": false,
+	})
+	if err != nil || len(devices) != 1 {
+		t.Fatalf("with SNMP off: %d devices, %v", len(devices), err)
 	}
 }

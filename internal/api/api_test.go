@@ -24,7 +24,6 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/secret"
-	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
 )
@@ -63,7 +62,6 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	box, _ := secret.New(make([]byte, 32))
 	reg := integration.NewRegistry()
 	reg.Register(demo.New())
-	reg.Register(snmp.New())
 	reg.Register(netscan.New())
 	coll := collector.New(st, reg, box, collector.Options{})
 
@@ -74,12 +72,6 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	s := &api.Server{
 		Icons: icons,
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test", WebUI: web,
-		Discover: func(_ context.Context, cidr string, opts snmp.ScanOptions) ([]snmp.Found, error) {
-			if cidr != "192.168.1.0/24" || opts.Community != "public" {
-				return nil, nil
-			}
-			return []snmp.Found{{IP: "192.168.1.2", Name: "sw-core"}, {IP: "192.168.1.9", Name: "printer"}}, nil
-		},
 	}
 	if ui != nil {
 		s.UI = ui
@@ -176,45 +168,49 @@ func TestIntegrationLifecycleKeepsSecretsSecret(t *testing.T) {
 
 	var types []integration.Info
 	h.do("GET", "/api/integration-types", nil, &types)
-	if len(types) != 3 {
+	if len(types) != 2 {
 		t.Fatalf("integration types: %+v", types)
 	}
 
 	var created map[string]any
 	code := h.do("POST", "/api/integrations", map[string]any{
-		"name": "core switch", "type": "snmp", "config": map[string]any{"host": "192.168.1.2", "community": "s3cret"},
+		"name": "ignored", "type": "network", "config": map[string]any{"subnets": "192.168.1.0/24", "snmp_communities": "s3cret"},
 	}, &created)
 	if code != http.StatusCreated {
 		t.Fatalf("create: %d %v", code, created)
 	}
 	cfg := created["config"].(map[string]any)
-	if cfg["community"] != integration.Masked || cfg["port"] != float64(161) || created["enabled"] != true {
+	if cfg["snmp_communities"] != integration.Masked || cfg["deep_interval"] != float64(6) || created["enabled"] != true {
 		t.Fatalf("created integration: %v", created)
+	}
+	// Integrations are named after their type; names are not editable.
+	if created["name"] != "Network scan" {
+		t.Fatalf("name = %v", created["name"])
 	}
 	id := int64(created["id"].(float64))
 
 	// Stored sealed, never in clear text.
 	stored, _ := h.store.GetIntegration(context.Background(), id)
-	if c := stored.Config.String("community"); c == "s3cret" || !secret.IsSealed(c) {
-		t.Fatalf("community stored as %q", c)
+	if c := stored.Config.String("snmp_communities"); c == "s3cret" || !secret.IsSealed(c) {
+		t.Fatalf("communities stored as %q", c)
 	}
 
 	// Updating with the masked value keeps the stored secret.
 	var updated map[string]any
 	code = h.do("PUT", "/api/integrations/"+itoa(id), map[string]any{
-		"name": "sw-core", "config": map[string]any{"host": "192.168.1.3", "community": integration.Masked},
+		"name": "renamed", "config": map[string]any{"subnets": "10.0.0.0/24", "snmp_communities": integration.Masked},
 	}, &updated)
-	if code != 200 || updated["name"] != "sw-core" {
+	if code != 200 || updated["name"] != "Network scan" {
 		t.Fatalf("update: %d %v", code, updated)
 	}
 	stored, _ = h.store.GetIntegration(context.Background(), id)
-	if plain, _ := h.box.Open(stored.Config.String("community")); plain != "s3cret" || stored.Config.String("host") != "192.168.1.3" {
-		t.Fatalf("after update: community=%q host=%q", plain, stored.Config.String("host"))
+	if plain, _ := h.box.Open(stored.Config.String("snmp_communities")); plain != "s3cret" || stored.Config.String("subnets") != "10.0.0.0/24" {
+		t.Fatalf("after update: communities=%q subnets=%q", plain, stored.Config.String("subnets"))
 	}
 
 	var list []map[string]any
 	h.do("GET", "/api/integrations", nil, &list)
-	if len(list) != 1 || list[0]["config"].(map[string]any)["community"] != integration.Masked {
+	if len(list) != 1 || list[0]["config"].(map[string]any)["snmp_communities"] != integration.Masked {
 		t.Fatalf("list leaks secrets or is wrong: %v", list)
 	}
 
@@ -230,11 +226,10 @@ func TestIntegrationValidation(t *testing.T) {
 	h := newHarness(t, nil)
 	h.login()
 	cases := []map[string]any{
-		{"name": "x", "type": "nope", "config": map[string]any{}},
-		{"name": "x", "type": "snmp", "config": map[string]any{}},                         // host missing
-		{"name": "", "type": "demo", "config": map[string]any{}},                          // name missing
-		{"name": "x", "type": "snmp", "config": map[string]any{"host": "h", "port": "x"}}, // bad type
-		{"name": "x", "type": "network", "config": map[string]any{"ports": "80-70"}},      // integration validation
+		{"type": "nope", "config": map[string]any{}},
+		{"type": "network", "config": map[string]any{"deep_interval": "x"}},      // bad type
+		{"type": "network", "config": map[string]any{"ports": "80-70"}},          // integration validation
+		{"type": "network", "config": map[string]any{"subnets": "not a subnet"}}, // integration validation
 	}
 	for _, c := range cases {
 		var resp map[string]string
@@ -244,7 +239,7 @@ func TestIntegrationValidation(t *testing.T) {
 	}
 	var created map[string]any
 	h.do("POST", "/api/integrations", map[string]any{"name": "demo", "type": "demo", "config": map[string]any{}}, &created)
-	if code := h.do("PUT", "/api/integrations/"+itoa(int64(created["id"].(float64))), map[string]any{"type": "snmp"}, nil); code != http.StatusBadRequest {
+	if code := h.do("PUT", "/api/integrations/"+itoa(int64(created["id"].(float64))), map[string]any{"type": "network"}, nil); code != http.StatusBadRequest {
 		t.Errorf("changing the type should fail: %d", code)
 	}
 }
@@ -280,9 +275,10 @@ func TestConnectionTest(t *testing.T) {
 	if resp["ok"] != true || resp["message"] != "Demo network ready" {
 		t.Fatalf("demo test: %v", resp)
 	}
-	h.do("POST", "/api/integrations/test", map[string]any{"type": "snmp", "config": map[string]any{"host": "127.0.0.1", "port": 9}}, &resp)
-	if resp["ok"] != false || resp["error"] == "" {
-		t.Fatalf("unreachable SNMP should fail with a message: %v", resp)
+	resp = nil
+	h.do("POST", "/api/integrations/test", map[string]any{"type": "network", "config": map[string]any{"subnets": "nonsense"}}, &resp)
+	if resp["ok"] == true || resp["error"] == nil {
+		t.Fatalf("an invalid subnet should fail with a message: %v", resp)
 	}
 }
 
@@ -352,19 +348,6 @@ func TestTopologyInventoryAndLayout(t *testing.T) {
 	h.do("GET", "/api/topology", nil, &afterReset)
 	if len(afterReset.Layout) != 0 {
 		t.Fatalf("layout not reset: %v", afterReset.Layout)
-	}
-}
-
-func TestDiscoveryFlagsIntegratedHosts(t *testing.T) {
-	h := newHarness(t, nil)
-	h.login()
-	h.do("POST", "/api/integrations", map[string]any{"name": "sw", "type": "snmp", "config": map[string]any{"host": "192.168.1.2"}}, nil)
-	var found []map[string]any
-	if code := h.do("POST", "/api/discovery/scan", map[string]any{"cidr": "192.168.1.0/24", "community": "public"}, &found); code != 200 {
-		t.Fatalf("scan: %d", code)
-	}
-	if len(found) != 2 || found[0]["integrated"] != true || found[1]["integrated"] != false {
-		t.Fatalf("scan results: %v", found)
 	}
 }
 

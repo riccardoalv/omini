@@ -11,7 +11,6 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
-	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 	"github.com/riccardoalv/omini/internal/webui"
@@ -183,8 +182,10 @@ func (s *Server) listIntegrations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// integrationInput is what the UI sends. An integration is named after its
+// type (e.g. "Network scan"); names are not editable.
 type integrationInput struct {
-	Name    string             `json:"name"`
+	Name    string             `json:"name"` // ignored: accepted so older clients keep working
 	Type    string             `json:"type"`
 	Config  integration.Config `json:"config"`
 	Enabled *bool              `json:"enabled"`
@@ -223,18 +224,15 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	if strings.TrimSpace(in.Name) == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
 	cfg, err := s.prepare(in.Type, in.Config, nil)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	impl, _ := s.Registry.Get(in.Type) // prepare checked the type
 	enabled := in.Enabled == nil || *in.Enabled
 	created, err := s.Store.CreateIntegration(r.Context(), store.Integration{
-		Name: strings.TrimSpace(in.Name), Type: in.Type, Config: cfg, Enabled: enabled,
+		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled,
 	})
 	if err != nil {
 		internalError(w, err)
@@ -264,9 +262,6 @@ func (s *Server) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	if in.Type != "" && in.Type != current.Type {
 		writeError(w, http.StatusBadRequest, "the integration type cannot be changed")
 		return
-	}
-	if name := strings.TrimSpace(in.Name); name != "" {
-		current.Name = name
 	}
 	if in.Config != nil {
 		cfg, err := s.prepare(current.Type, in.Config, current.Config)
@@ -537,41 +532,7 @@ func (s *Server) deleteInventory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// --- discovery ---
-
-func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		CIDR      string `json:"cidr"`
-		Community string `json:"community"`
-		Port      int    `json:"port"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	ctx, cancel := contextWithTimeout(r, 2*time.Minute)
-	defer cancel()
-	found, err := s.Discover(ctx, in.CIDR, snmp.ScanOptions{Community: in.Community, Port: in.Port})
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	// Flag hosts that are already integrated.
-	existing := map[string]bool{}
-	if all, err := s.Store.ListIntegrations(r.Context()); err == nil {
-		for _, in := range all {
-			existing[in.Config.String("host")] = true
-		}
-	}
-	type result struct {
-		snmp.Found
-		Integrated bool `json:"integrated"`
-	}
-	out := make([]result, 0, len(found))
-	for _, f := range found {
-		out = append(out, result{f, existing[f.IP]})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
+// --- web interfaces ---
 
 // nodeWeb returns the web interfaces of a node on the map. Only IPs of nodes
 // on the map are probed, so this endpoint cannot be used to scan arbitrary hosts.

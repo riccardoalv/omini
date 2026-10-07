@@ -10,11 +10,9 @@ export function useIntegrationForm(
   type: IntegrationType,
   existing?: Integration,
   prefill?: Config,
-  prefillName?: string,
 ) {
   const { t } = useI18n()
   const editing = !!existing
-  const name = ref(existing?.name ?? prefillName ?? type.name)
   const values = ref<Config>(initialValues(type.fields, { ...prefill, ...existing?.config }))
   const busy = ref(false)
   const testing = ref(false)
@@ -47,8 +45,8 @@ export function useIntegrationForm(
     try {
       const config = toConfig(type.fields, values.value, editing)
       return existing
-        ? await api.updateIntegration(existing.id, { name: name.value, config })
-        : await api.createIntegration({ name: name.value, type: type.type, config })
+        ? await api.updateIntegration(existing.id, { config })
+        : await api.createIntegration({ type: type.type, config })
     } catch (e) {
       error.value = message(e)
       return undefined
@@ -57,5 +55,5 @@ export function useIntegrationForm(
     }
   }
 
-  return { editing, name, values, busy, testing, error, result, missing, test, save }
+  return { editing, values, busy, testing, error, result, missing, test, save }
 }

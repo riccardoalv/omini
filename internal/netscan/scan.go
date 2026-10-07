@@ -19,6 +19,7 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/oui"
+	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/webui"
 )
 
@@ -35,6 +36,8 @@ type Integration struct {
 	NoPing      bool          // disable ICMP (tests)
 	NoWebTitles bool          // disable web title detection (tests)
 	OSRelease   string        // default /etc/os-release
+	SNMPPort    int           // default 161 (tests use a fake agent)
+	SNMPTimeout time.Duration // per SNMP request; default 2s
 	Locals      func() []localNet
 
 	mu   sync.Mutex
@@ -49,6 +52,7 @@ type deepInfo struct {
 	banner  string   // SSH version string
 	titles  []string // web interface titles
 	web     []webui.Service
+	snmp    string // community the host's SNMP agent answered to; empty without SNMP
 	at      time.Time
 }
 
@@ -59,7 +63,7 @@ func (*Integration) Info() integration.Info {
 		Type: "network",
 		Name: "Network scan",
 		Description: "Finds every device on your network with no setup on them: ARP, ping, open ports, " +
-			"reverse DNS, NetBIOS, mDNS/Bonjour and UPnP. Run Omini with host networking for best results.",
+			"reverse DNS, NetBIOS, mDNS/Bonjour, UPnP and SNMP. Run Omini with host networking for best results.",
 		Kind:   integration.KindCore,
 		Fields: fields(),
 	}
@@ -85,6 +89,11 @@ func fields() []model.FormField {
 		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players."),
 		method("web_titles", "Web page titles", "Reads the title of web interfaces to recognize apps (Proxmox, TrueNAS, Home Assistant...)."),
 		method("ssh_banners", "SSH banners", "Reads the SSH version line, which often names the operating system."),
+		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP v2c enabled. Read-only."),
+		{
+			Key: "snmp_communities", Type: model.FormFieldTypeSecret, Label: model.Ptr("SNMP communities"), Default: "public", Group: methods,
+			Help: model.Ptr(`Read-only communities to try, separated by commas (e.g. "public, homelab"). It is the "community" or "read community" set in the device's SNMP settings.`),
+		},
 		{
 			Key: "ports", Type: model.FormFieldTypeString, Label: model.Ptr("Ports to check"), Group: advanced,
 			Help: model.Ptr("Empty uses the common homelab ports. Example: 22,80,443,8000-8100 (at most 1024 ports)."),
@@ -99,9 +108,10 @@ func fields() []model.FormField {
 
 // options are the scan settings of one integration instance.
 type options struct {
-	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners bool
-	portList                                                    []int
-	deepEvery                                                   time.Duration
+	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners, snmp bool
+	communities                                                       []string
+	portList                                                          []int
+	deepEvery                                                         time.Duration
 }
 
 // Validate checks the settings before they are saved.
@@ -122,7 +132,18 @@ func (s *Integration) options(cfg integration.Config) (options, error) {
 		ports: cfg.Bool("port_scan", true), dns: cfg.Bool("dns", true), netbios: cfg.Bool("netbios", true),
 		mdns: cfg.Bool("mdns", true) && !s.NoMulticast, ssdp: cfg.Bool("ssdp", true) && !s.NoMulticast,
 		titles: cfg.Bool("web_titles", true) && !s.NoWebTitles, banners: cfg.Bool("ssh_banners", true),
-		portList: s.Ports, deepEvery: s.DeepEvery,
+		snmp: cfg.Bool("snmp", true), portList: s.Ports, deepEvery: s.DeepEvery,
+	}
+	for _, c := range strings.Split(cfg.String("snmp_communities"), ",") {
+		if c = strings.TrimSpace(c); c != "" && !slices.Contains(o.communities, c) {
+			o.communities = append(o.communities, c)
+		}
+	}
+	if len(o.communities) == 0 {
+		o.communities = []string{"public"}
+	}
+	if len(o.communities) > 10 {
+		return o, fmt.Errorf("at most 10 SNMP communities")
 	}
 	if spec := strings.TrimSpace(cfg.String("ports")); spec != "" {
 		list, err := parsePorts(spec)
@@ -211,6 +232,9 @@ func (s *Integration) defaults() {
 	}
 	if s.now == nil {
 		s.now = time.Now
+	}
+	if s.SNMPTimeout == 0 {
+		s.SNMPTimeout = 2 * time.Second
 	}
 	if s.deep == nil {
 		s.deep = map[string]deepInfo{}
@@ -417,10 +441,45 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		}
 	})
 
+	// Managed devices: a full SNMP read every run (traffic needs fresh counters).
+	var managed []model.Device
+	if opts.snmp {
+		managed = s.collectSNMP(ctx, list)
+	}
+
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return s.devices(prefixes, locals, hosts), nil
+	return append(s.devices(prefixes, locals, hosts), managed...), nil
+}
+
+func (s *Integration) snmpTarget(ip netip.Addr, community string) snmp.Target {
+	return snmp.Target{Host: ip.String(), Port: s.SNMPPort, Community: community, Timeout: s.SNMPTimeout}
+}
+
+// collectSNMP reads every host whose SNMP agent answered during the deep scan.
+func (s *Integration) collectSNMP(ctx context.Context, hosts []*hostAcc) []model.Device {
+	var (
+		mu  sync.Mutex
+		out []model.Device
+	)
+	sweepHosts(ctx, hosts, 8, func(h *hostAcc) {
+		community := s.cached(h).snmp
+		if community == "" {
+			return
+		}
+		d, err := snmp.Collect(ctx, s.snmpTarget(h.ip, community))
+		if err != nil {
+			slog.Debug("snmp read failed", "host", h.ip, "err", err)
+			return
+		}
+		mu.Lock()
+		h.src = appendUnique(h.src, "snmp")
+		out = append(out, d)
+		mu.Unlock()
+	})
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
 }
 
 // deepScan returns cached port/name results, refreshing them when stale.
@@ -445,6 +504,9 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	}
 	if opts.netbios {
 		d.netbios = netbiosName(h.ip, 800*time.Millisecond)
+	}
+	if opts.snmp {
+		d.snmp, _ = snmp.Probe(ctx, s.snmpTarget(h.ip, ""), opts.communities)
 	}
 	if opts.banners && slices.Contains(d.ports, 22) {
 		d.banner = sshBanner(ctx, h.ip, 1500*time.Millisecond)

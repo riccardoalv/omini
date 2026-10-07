@@ -20,10 +20,11 @@ vi.mock('@/lib/api', async (orig) => {
   }
 })
 
-const snmp: IntegrationType = {
-  type: 'snmp',
-  name: 'SNMP (generic)',
-  kind: 'core',
+// A plugin-like integration type with a host, a secret and a number.
+const router: IntegrationType = {
+  type: 'router',
+  name: 'Router',
+  kind: 'plugin',
   fields: [
     { key: 'host', type: 'host', label: 'Host', required: true },
     { key: 'community', type: 'secret', label: 'Community', required: true, default: 'public' },
@@ -32,7 +33,7 @@ const snmp: IntegrationType = {
 }
 
 const mountForm = (props: Record<string, unknown> = {}) =>
-  mount(IntegrationForm, { props: { type: snmp, ...props }, global: { plugins: plugins() } })
+  mount(IntegrationForm, { props: { type: router, ...props }, global: { plugins: plugins() } })
 
 describe('IntegrationForm', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -63,23 +64,26 @@ describe('IntegrationForm', () => {
 
     expect(api.testIntegration).toHaveBeenCalledWith({
       id: undefined,
-      type: 'snmp',
+      type: 'router',
       config: { host: '192.168.1.2', community: 'public', port: 161 },
     })
     expect(w.get('[role=status]').text()).toBe('Connected to sw-core')
   })
 
+  it('has no name field: integrations are named after their type', () => {
+    expect(mountForm().find('#f-name').exists()).toBe(false)
+  })
+
   it('creates a new integration with typed values', async () => {
     const created = { id: 1 } as Integration
     vi.mocked(api.createIntegration).mockResolvedValue(created)
-    const w = mountForm({ prefill: { host: '192.168.1.2' }, prefillName: 'sw-core' })
+    const w = mountForm({ prefill: { host: '192.168.1.2' } })
     await w.get('input[name=port]').setValue('1161')
     await w.get('form').trigger('submit')
     await flushPromises()
 
     expect(api.createIntegration).toHaveBeenCalledWith({
-      name: 'sw-core',
-      type: 'snmp',
+      type: 'router',
       config: { host: '192.168.1.2', community: 'public', port: 1161 },
     })
     expect(w.emitted('saved')![0]).toEqual([created])
@@ -89,7 +93,7 @@ describe('IntegrationForm', () => {
     const existing = {
       id: 7,
       name: 'core switch',
-      type: 'snmp',
+      type: 'router',
       config: { host: '192.168.1.2', community: '********', port: 161 },
     } as unknown as Integration
     vi.mocked(api.updateIntegration).mockResolvedValue(existing)
@@ -103,7 +107,6 @@ describe('IntegrationForm', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(api.updateIntegration).toHaveBeenLastCalledWith(7, {
-      name: 'core switch',
       config: { host: '192.168.1.2', community: '********', port: 161 },
     })
 
@@ -111,7 +114,6 @@ describe('IntegrationForm', () => {
     await w.get('form').trigger('submit')
     await flushPromises()
     expect(api.updateIntegration).toHaveBeenLastCalledWith(7, {
-      name: 'core switch',
       config: { host: '192.168.1.2', community: 'n3w-community', port: 161 },
     })
   })
