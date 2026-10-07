@@ -69,6 +69,12 @@ type Integration interface {
 	Test(ctx context.Context, cfg Config) (string, error)
 }
 
+// Validator is implemented by integrations that check settings beyond the
+// field types (e.g. port ranges); it runs before settings are saved.
+type Validator interface {
+	Validate(cfg Config) error
+}
+
 // Registry holds the available integration types.
 type Registry struct {
 	mu    sync.RWMutex

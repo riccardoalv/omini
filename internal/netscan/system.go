@@ -185,3 +185,12 @@ func parseSubnets(s string) ([]netip.Prefix, error) {
 	}
 	return out, nil
 }
+
+// parseSubnetSpec returns nil for "auto" (or empty), else the parsed subnets.
+func parseSubnetSpec(spec string) ([]netip.Prefix, error) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" || strings.EqualFold(spec, "auto") {
+		return nil, nil
+	}
+	return parseSubnets(spec)
+}

@@ -155,6 +155,11 @@ func (s *Server) prepare(typ string, cfg, stored integration.Config) (integratio
 	if err != nil {
 		return nil, err
 	}
+	if v, ok := impl.(integration.Validator); ok {
+		if err := v.Validate(normalized); err != nil {
+			return nil, err
+		}
+	}
 	return integration.SealSecrets(s.Box, fields, normalized)
 }
 

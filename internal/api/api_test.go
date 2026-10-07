@@ -21,6 +21,7 @@ import (
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/demo"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
@@ -62,6 +63,7 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	reg := integration.NewRegistry()
 	reg.Register(demo.New())
 	reg.Register(snmp.New())
+	reg.Register(netscan.New())
 	coll := collector.New(st, reg, box, collector.Options{})
 
 	web := &fakeWeb{}
@@ -169,7 +171,7 @@ func TestIntegrationLifecycleKeepsSecretsSecret(t *testing.T) {
 
 	var types []integration.Info
 	h.do("GET", "/api/integration-types", nil, &types)
-	if len(types) != 2 {
+	if len(types) != 3 {
 		t.Fatalf("integration types: %+v", types)
 	}
 
@@ -227,6 +229,7 @@ func TestIntegrationValidation(t *testing.T) {
 		{"name": "x", "type": "snmp", "config": map[string]any{}},                         // host missing
 		{"name": "", "type": "demo", "config": map[string]any{}},                          // name missing
 		{"name": "x", "type": "snmp", "config": map[string]any{"host": "h", "port": "x"}}, // bad type
+		{"name": "x", "type": "network", "config": map[string]any{"ports": "80-70"}},      // integration validation
 	}
 	for _, c := range cases {
 		var resp map[string]string

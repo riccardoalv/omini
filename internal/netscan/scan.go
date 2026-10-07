@@ -11,6 +11,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,18 +59,116 @@ func (*Integration) Info() integration.Info {
 		Name: "Network scan",
 		Description: "Finds every device on your network with no setup on them: ARP, ping, open ports, " +
 			"reverse DNS, NetBIOS, mDNS/Bonjour and UPnP. Run Omini with host networking for best results.",
-		Kind: integration.KindCore,
-		Fields: []model.FormField{
-			{
-				Key: "subnets", Type: model.FormFieldTypeString, Label: model.Ptr("Subnets"), Default: "auto",
-				Help: model.Ptr(`"auto" scans the networks this server is connected to, or list them: 192.168.1.0/24, 10.0.20.0/24`),
-			},
-			{
-				Key: "port_scan", Type: model.FormFieldTypeBool, Label: model.Ptr("Detect services (open ports)"), Default: true,
-				Help: model.Ptr("Checks common ports once per new device (and every few hours) to identify it."),
-			},
+		Kind:   integration.KindCore,
+		Fields: fields(),
+	}
+}
+
+func fields() []model.FormField {
+	methods := model.Ptr("Methods")
+	advanced := model.Ptr("Advanced")
+	method := func(key, label, help string) model.FormField {
+		return model.FormField{Key: key, Type: model.FormFieldTypeBool, Label: model.Ptr(label), Help: model.Ptr(help), Default: true, Group: methods}
+	}
+	return []model.FormField{
+		{
+			Key: "subnets", Type: model.FormFieldTypeString, Label: model.Ptr("Subnets"), Default: "auto",
+			Help: model.Ptr(`"auto" scans the networks this server is connected to, or list them: 192.168.1.0/24, 10.0.20.0/24`),
+		},
+		method("arp", "ARP", "Finds every device on the local network, even ones that ignore everything else."),
+		method("ping", "Ping (ICMP)", "Finds devices that answer ping; the reply also hints the operating system."),
+		method("port_scan", "Open ports", "Checks common ports to identify services (web, SSH, SMB, printers, cameras...)."),
+		method("dns", "Reverse DNS", "Asks this server's DNS and the router's DNS for device names."),
+		method("netbios", "NetBIOS", "Asks Windows and Samba machines for their names."),
+		method("mdns", "mDNS / Bonjour", "Listens to what devices announce: names, models and services (AirPlay, Chromecast, printers...)."),
+		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players."),
+		method("web_titles", "Web page titles", "Reads the title of web interfaces to recognize apps (Proxmox, TrueNAS, Home Assistant...)."),
+		method("ssh_banners", "SSH banners", "Reads the SSH version line, which often names the operating system."),
+		{
+			Key: "ports", Type: model.FormFieldTypeString, Label: model.Ptr("Ports to check"), Group: advanced,
+			Help: model.Ptr("Empty uses the common homelab ports. Example: 22,80,443,8000-8100 (at most 1024 ports)."),
+		},
+		{
+			Key: "deep_interval", Type: model.FormFieldTypeInt, Label: model.Ptr("Re-check ports and names every (hours)"),
+			Default: 6, Group: advanced,
+			Help: model.Ptr("Ports, names and banners are checked once per new device and again after this many hours."),
 		},
 	}
+}
+
+// options are the scan settings of one integration instance.
+type options struct {
+	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners bool
+	portList                                                    []int
+	deepEvery                                                   time.Duration
+}
+
+// Validate checks the settings before they are saved.
+func (s *Integration) Validate(cfg integration.Config) error {
+	if _, err := parseSubnetSpec(cfg.String("subnets")); err != nil {
+		return err
+	}
+	_, err := s.options(cfg)
+	return err
+}
+
+func (s *Integration) options(cfg integration.Config) (options, error) {
+	s.mu.Lock()
+	s.defaults()
+	s.mu.Unlock()
+	o := options{
+		arp: cfg.Bool("arp", true), ping: cfg.Bool("ping", true) && !s.NoPing,
+		ports: cfg.Bool("port_scan", true), dns: cfg.Bool("dns", true), netbios: cfg.Bool("netbios", true),
+		mdns: cfg.Bool("mdns", true) && !s.NoMulticast, ssdp: cfg.Bool("ssdp", true) && !s.NoMulticast,
+		titles: cfg.Bool("web_titles", true) && !s.NoWebTitles, banners: cfg.Bool("ssh_banners", true),
+		portList: s.Ports, deepEvery: s.DeepEvery,
+	}
+	if spec := strings.TrimSpace(cfg.String("ports")); spec != "" {
+		list, err := parsePorts(spec)
+		if err != nil {
+			return o, err
+		}
+		o.portList = list
+	}
+	if h := cfg.Int("deep_interval", 0); h > 0 {
+		if h > 24*30 {
+			return o, fmt.Errorf("re-check interval must be at most 720 hours")
+		}
+		o.deepEvery = time.Duration(h) * time.Hour
+	}
+	return o, nil
+}
+
+// parsePorts parses "22,80,8000-8100".
+func parsePorts(spec string) ([]int, error) {
+	var out []int
+	seen := map[int]bool{}
+	for _, part := range strings.Split(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		lo, hi, isRange := strings.Cut(part, "-")
+		a, err1 := strconv.Atoi(strings.TrimSpace(lo))
+		b := a
+		var err2 error
+		if isRange {
+			b, err2 = strconv.Atoi(strings.TrimSpace(hi))
+		}
+		if err1 != nil || err2 != nil || a < 1 || b > 65535 || a > b {
+			return nil, fmt.Errorf("invalid port or range %q (use e.g. 22,80,8000-8100)", part)
+		}
+		for p := a; p <= b; p++ {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+		if len(out) > 1024 {
+			return nil, fmt.Errorf("too many ports (at most 1024)")
+		}
+	}
+	return out, nil
 }
 
 func (s *Integration) Test(ctx context.Context, cfg integration.Config) (string, error) {
@@ -121,8 +220,11 @@ func (s *Integration) prefixes(cfg integration.Config) ([]netip.Prefix, error) {
 	s.mu.Lock()
 	s.defaults()
 	s.mu.Unlock()
-	spec := strings.TrimSpace(cfg.String("subnets"))
-	if spec == "" || strings.EqualFold(spec, "auto") {
+	spec, err := parseSubnetSpec(cfg.String("subnets"))
+	if err != nil {
+		return nil, err
+	}
+	if spec == nil {
 		var out []netip.Prefix
 		for _, l := range s.Locals() {
 			if !containsPrefix(out, l.Prefix) {
@@ -134,7 +236,7 @@ func (s *Integration) prefixes(cfg integration.Config) ([]netip.Prefix, error) {
 		}
 		return out, nil
 	}
-	return parseSubnets(spec)
+	return spec, nil
 }
 
 func containsPrefix(list []netip.Prefix, p netip.Prefix) bool {
@@ -161,7 +263,10 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	if err != nil {
 		return nil, err
 	}
-	portScan := cfg.Bool("port_scan", true)
+	opts, err := s.options(cfg)
+	if err != nil {
+		return nil, err
+	}
 	locals := s.Locals()
 	inScope := func(ip netip.Addr) bool {
 		for _, p := range prefixes {
@@ -210,15 +315,18 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		wg               sync.WaitGroup
 		mdnsRes, ssdpRes map[netip.Addr]announce
 	)
-	if !s.NoMulticast {
-		wg.Add(2)
+	if opts.mdns {
+		wg.Add(1)
 		go func() { defer wg.Done(); mdnsRes = browseMDNS(ctx, 3*time.Second) }()
+	}
+	if opts.ssdp {
+		wg.Add(1)
 		go func() { defer wg.Done(); ssdpRes = browseSSDP(ctx, 3*time.Second, inScope) }()
 	}
 
 	// Sweep: every address gets one UDP datagram (forces ARP) and an ICMP echo.
 	var ping *pinger
-	if !s.NoPing {
+	if opts.ping {
 		if p, err := newPinger(); err == nil {
 			ping = p
 			defer p.close()
@@ -227,7 +335,9 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		}
 	}
 	sweep(ctx, targets, 128, func(ip netip.Addr) {
-		triggerARP(ip)
+		if opts.arp {
+			triggerARP(ip)
+		}
 		if ping != nil {
 			ping.send(ip, 1)
 		}
@@ -236,7 +346,7 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 
 	// ARP cache: every device that answered ARP, even if it ignores everything else.
 	arpOK := false
-	if entries, err := readARP(s.ARPPath); err == nil {
+	if entries, err := readARP(s.ARPPath); opts.arp && err == nil {
 		arpOK = true
 		for _, e := range entries {
 			if inScope(e.IP) && !e.MAC.IsGroup() {
@@ -294,7 +404,7 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	}
 	gateway, _, _ := defaultGateway(s.RoutePath)
 	sweepHosts(ctx, list, 32, func(h *hostAcc) {
-		d := s.deepScan(ctx, h, gateway, portScan)
+		d := s.deepScan(ctx, h, gateway, opts)
 		if len(d.ports) > 0 {
 			h.src = appendUnique(h.src, "tcp")
 		}
@@ -313,7 +423,7 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 }
 
 // deepScan returns cached port/name results, refreshing them when stale.
-func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Addr, portScan bool) deepInfo {
+func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Addr, opts options) deepInfo {
 	key := string(h.mac)
 	if key == "" {
 		key = h.ip.String()
@@ -321,20 +431,24 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	s.mu.Lock()
 	d, ok := s.deep[key]
 	s.mu.Unlock()
-	if ok && s.now().Sub(d.at) < s.DeepEvery {
+	if ok && s.now().Sub(d.at) < opts.deepEvery {
 		return d
 	}
 	d = deepInfo{at: s.now()}
-	if portScan {
-		d.ports = scanPorts(ctx, h.ip, s.Ports, s.PortTimeout)
+	if opts.ports {
+		d.ports = scanPorts(ctx, h.ip, opts.portList, s.PortTimeout)
 		sort.Ints(d.ports)
 	}
-	d.names = reverseDNS(ctx, h.ip, gateway, 2*time.Second)
-	d.netbios = netbiosName(h.ip, 800*time.Millisecond)
-	if slices.Contains(d.ports, 22) {
+	if opts.dns {
+		d.names = reverseDNS(ctx, h.ip, gateway, 2*time.Second)
+	}
+	if opts.netbios {
+		d.netbios = netbiosName(h.ip, 800*time.Millisecond)
+	}
+	if opts.banners && slices.Contains(d.ports, 22) {
 		d.banner = sshBanner(ctx, h.ip, 1500*time.Millisecond)
 	}
-	if !s.NoWebTitles {
+	if opts.titles {
 		var web []int
 		for _, p := range d.ports {
 			if webPorts[p] {

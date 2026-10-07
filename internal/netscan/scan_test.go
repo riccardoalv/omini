@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"slices"
 	"testing"
 	"time"
 
@@ -57,14 +58,15 @@ func TestDeepScanIsCached(t *testing.T) {
 	s.defaults()
 	s.now = func() time.Time { return clock }
 	h := &hostAcc{ip: netip.MustParseAddr("127.0.0.1")}
+	opts := options{ports: true, deepEvery: time.Hour}
 
-	first := s.deepScan(context.Background(), h, netip.Addr{}, true)
+	first := s.deepScan(context.Background(), h, netip.Addr{}, opts)
 	s.deep[h.ip.String()] = deepInfo{ports: []int{22}, at: first.at}
-	if got := s.deepScan(context.Background(), h, netip.Addr{}, true); len(got.ports) != 1 {
+	if got := s.deepScan(context.Background(), h, netip.Addr{}, opts); len(got.ports) != 1 {
 		t.Fatal("fresh results must come from the cache")
 	}
 	clock = clock.Add(2 * time.Hour)
-	if got := s.deepScan(context.Background(), h, netip.Addr{}, true); len(got.ports) != 0 {
+	if got := s.deepScan(context.Background(), h, netip.Addr{}, opts); len(got.ports) != 0 {
 		t.Fatal("stale results must be refreshed")
 	}
 }
@@ -80,5 +82,55 @@ func TestTestReportsSubnets(t *testing.T) {
 	s.Locals = func() []localNet { return nil }
 	if _, err := s.Test(context.Background(), integration.Config{}); err == nil {
 		t.Fatal("no local network and no subnets should fail")
+	}
+}
+
+func TestOptions(t *testing.T) {
+	s := &Integration{}
+	o, err := s.options(integration.Config{
+		"ping": false, "mdns": false, "ports": "22, 80,8000-8002", "deep_interval": float64(12),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.ping || o.mdns || !o.arp || !o.ssdp || !o.dns {
+		t.Errorf("method flags = %+v", o)
+	}
+	if want := []int{22, 80, 8000, 8001, 8002}; !slices.Equal(o.portList, want) {
+		t.Errorf("ports = %v, want %v", o.portList, want)
+	}
+	if o.deepEvery != 12*time.Hour {
+		t.Errorf("deepEvery = %v", o.deepEvery)
+	}
+	if o, _ := s.options(integration.Config{}); !slices.Equal(o.portList, CommonPorts) || o.deepEvery != 6*time.Hour {
+		t.Errorf("defaults = %+v", o)
+	}
+	for _, bad := range []integration.Config{
+		{"ports": "0"},
+		{"ports": "80-70"},
+		{"ports": "http"},
+		{"ports": "1-2000"},
+		{"deep_interval": float64(10000)},
+		{"subnets": "192.168.1.0"},
+	} {
+		if err := s.Validate(bad); err == nil {
+			t.Errorf("Validate(%v) should fail", bad)
+		}
+	}
+}
+
+func TestDisabledMethodsAreNotUsed(t *testing.T) {
+	s := &Integration{
+		ARPPath: "testdata/arp", RoutePath: "testdata/route", Ports: []int{1}, SettleTime: time.Millisecond,
+		NoMulticast: true, NoPing: true, Locals: func() []localNet { return nil },
+	}
+	devices, err := s.Collect(context.Background(), integration.Config{"subnets": "127.0.0.0/30", "arp": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range devices[0].Hosts {
+		if slices.Contains(h.Sources, "arp") {
+			t.Fatalf("ARP disabled but used: %+v", h)
+		}
 	}
 }
