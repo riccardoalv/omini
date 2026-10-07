@@ -110,6 +110,15 @@ var migrations = []string{
 	`
 	ALTER TABLE inventory ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	`,
+	// 7: the user's descriptions of device ports ("Uplink to rack", "TV room").
+	`
+	CREATE TABLE port_labels (
+		node_id TEXT NOT NULL,
+		port    TEXT NOT NULL,
+		label   TEXT NOT NULL,
+		PRIMARY KEY (node_id, port)
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

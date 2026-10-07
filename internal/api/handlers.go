@@ -599,6 +599,28 @@ func (s *Server) deleteInventory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// --- ports ---
+
+// setPortLabel saves the user's description of a device port (an empty one
+// restores the description reported by the device).
+func (s *Server) setPortLabel(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Label string `json:"label"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	err := s.Store.SetPortLabel(r.Context(), r.PathValue("id"), r.PathValue("port"), in.Label)
+	switch {
+	case errors.Is(err, store.ErrInvalidPortLabel):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // --- web interfaces ---
 
 // nodeWeb returns the web interfaces of a node on the map. Only IPs of nodes

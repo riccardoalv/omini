@@ -562,3 +562,36 @@ func TestPlugins(t *testing.T) {
 		t.Fatalf("install from a non-GitHub URL: %d %v", code, resp)
 	}
 }
+
+func TestPortLabelsShowInTheTopology(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	h.do("POST", "/api/integrations", map[string]any{"type": "demo", "config": map[string]any{}}, nil)
+	sw := "dev:1c:2a:a3:10:00:01"
+	path := "/api/nodes/" + url.PathEscape(sw) + "/ports/" + url.PathEscape("ge-0/1")
+	if code := h.do("PUT", path, map[string]string{"label": "Uplink to rack"}, nil); code != http.StatusNoContent {
+		t.Fatalf("set: %d", code)
+	}
+	if err := h.coll.CollectNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var topo struct {
+		Topology struct {
+			Nodes []map[string]any `json:"nodes"`
+		} `json:"topology"`
+	}
+	h.do("GET", "/api/topology", nil, &topo)
+	found := false
+	for _, n := range topo.Topology.Nodes {
+		if n["id"] == sw {
+			labels, _ := n["port_labels"].(map[string]any)
+			found = labels["ge-0/1"] == "Uplink to rack"
+		}
+	}
+	if !found {
+		t.Fatal("the port description must reach the topology")
+	}
+	if code := h.do("PUT", path, map[string]string{"label": strings.Repeat("x", 100)}, nil); code != http.StatusBadRequest {
+		t.Fatalf("too long: %d", code)
+	}
+}

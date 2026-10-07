@@ -93,9 +93,39 @@ const portLinks = computed(() => {
     out[p.name] = linkOnPort(id, p.name, props.nodes, props.edges)
   return out
 })
+/** Ports, with the user's description in place of the device's. */
 const ports = computed(() =>
-  (n.value?.device?.interfaces ?? []).filter((i) => i.type !== 'loopback'),
+  (n.value?.device?.interfaces ?? [])
+    .filter((i) => i.type !== 'loopback')
+    .map((i) => {
+      const own = n.value?.port_labels?.[i.name]
+      return own ? { ...i, description: own } : i
+    }),
 )
+
+// Editing a port's description inline.
+const editingPort = ref<string>()
+const portDraft = ref('')
+function editPort(name: string, current?: string) {
+  editingPort.value = name
+  portDraft.value = current ?? ''
+}
+async function savePort() {
+  const node = n.value
+  const port = editingPort.value
+  if (!node || !port) return
+  editingPort.value = undefined
+  const label = portDraft.value.trim()
+  try {
+    await api.setPortLabel(node.id, port, label)
+    const labels = { ...node.port_labels }
+    if (label) labels[port] = label
+    else delete labels[port]
+    emit('changed', { port_labels: labels })
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : t('common.error')
+  }
+}
 const gateways = computed(() => n.value?.device?.gateways ?? n.value?.wan?.gateways ?? [])
 const roleLabel = computed(() => (n.value?.type ? t(`types.${n.value.type}`) : ''))
 const reasons = computed(() => parseReasons(n.value?.reasons))
@@ -458,8 +488,24 @@ async function save(patch: {
                 }}</span>
               </td>
               <td class="grow">
+                <form v-if="editingPort === p.name" class="port-edit" @submit.prevent="savePort">
+                  <input
+                    v-model="portDraft"
+                    class="input"
+                    maxlength="80"
+                    autofocus
+                    data-test="port-label-input"
+                    :placeholder="t('panel.portLabelHint')"
+                    :aria-label="t('panel.portLabel')"
+                    @keydown.esc.prevent="editingPort = undefined"
+                  />
+                  <button class="btn icon" type="submit" :aria-label="t('common.save')">
+                    <Check :size="14" />
+                  </button>
+                </form>
                 <template
                   v-for="other in [linkOnPort(n.id, p.name, nodes, edges)]"
+                  v-else
                   :key="other?.id"
                 >
                   <a v-if="other" href="#" @click.prevent="emit('select', other.id)">{{
@@ -467,6 +513,16 @@ async function save(patch: {
                   }}</a>
                   <span v-else class="muted">{{ p.description }}</span>
                   <span v-if="other && p.description" class="muted"> · {{ p.description }}</span>
+                  <button
+                    class="btn ghost icon edit-port"
+                    type="button"
+                    data-test="edit-port"
+                    :aria-label="t('panel.portLabel')"
+                    :title="t('panel.portLabel')"
+                    @click="editPort(p.name, n.port_labels?.[p.name] ?? p.description)"
+                  >
+                    <Pencil :size="12" />
+                  </button>
                 </template>
               </td>
             </tr>
@@ -525,6 +581,25 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.port-edit {
+  display: flex;
+  gap: 4px;
+}
+.port-edit .input {
+  padding: 2px 6px;
+  font-size: 12.5px;
+}
+.edit-port {
+  width: 22px;
+  height: 22px;
+  margin-left: 2px;
+  opacity: 0;
+  vertical-align: middle;
+}
+tr:hover .edit-port,
+.edit-port:focus-visible {
+  opacity: 1;
+}
 .name-row {
   display: flex;
   align-items: center;

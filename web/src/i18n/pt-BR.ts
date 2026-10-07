@@ -89,6 +89,8 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    portLabel: 'Descrever esta porta',
+    portLabelHint: 'ex.: Uplink para o rack (vazio: a do equipamento)',
     uplink: 'Link de internet',
     interface: 'Interface',
     speed: 'Velocidade',

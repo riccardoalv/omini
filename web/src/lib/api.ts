@@ -113,6 +113,12 @@ export const api = {
   ) => request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),
 
+  setPortLabel: (nodeId: string, port: string, label: string) =>
+    request<void>(
+      'PUT',
+      `/api/nodes/${encodeURIComponent(nodeId)}/ports/${encodeURIComponent(port)}`,
+      { label },
+    ),
   webServices: (nodeId: string) =>
     request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 

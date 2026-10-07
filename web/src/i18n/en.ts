@@ -86,6 +86,8 @@ export default {
     },
   },
   panel: {
+    portLabel: 'Describe this port',
+    portLabelHint: "e.g. Uplink to the rack (empty: the device's own)",
     uplink: 'Internet uplink',
     interface: 'Interface',
     speed: 'Speed',

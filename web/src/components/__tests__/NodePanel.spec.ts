@@ -16,6 +16,7 @@ vi.mock('@/lib/api', async (orig) => {
       webServices: vi.fn<typeof mod.api.webServices>(),
       updateInventory: vi.fn<typeof mod.api.updateInventory>(),
       deleteInventory: vi.fn<typeof mod.api.deleteInventory>(),
+      setPortLabel: vi.fn<typeof mod.api.setPortLabel>(),
     },
   }
 })
@@ -248,5 +249,41 @@ describe('NodePanel firewall data', () => {
     expect(gws).toContain('1.2 ms')
     expect(gws).toContain('Offline')
     expect(gws).toContain('100% loss')
+  })
+})
+
+describe('NodePanel port descriptions', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    vi.mocked(api.setPortLabel).mockReset().mockResolvedValue()
+  })
+
+  const sw = (labels?: Record<string, string>): TopoNode => ({
+    ...firewall,
+    port_labels: labels,
+    device: {
+      key: 'sw',
+      name: 'sw',
+      interfaces: [{ name: 'ge1', description: 'port 1', up: true, speed_mbps: 1000 }],
+    },
+  })
+
+  it("shows the user's description instead of the device's", () => {
+    const w = mountPanel(sw({ ge1: 'Uplink to rack' }))
+    expect(w.get('.ports').text()).toContain('Uplink to rack')
+    expect(w.get('.ports').text()).not.toContain('port 1')
+  })
+
+  it('edits a description inline', async () => {
+    const w = mountPanel(sw())
+    await w.get('[data-test=edit-port]').trigger('click')
+    const input = w.get('[data-test=port-label-input]')
+    expect((input.element as HTMLInputElement).value).toBe('port 1')
+    await input.setValue(' TV room ')
+    await w.get('.port-edit').trigger('submit')
+    await flushPromises()
+    expect(api.setPortLabel).toHaveBeenCalledWith(firewall.id, 'ge1', 'TV room')
+    const changed = w.emitted('changed')!
+    expect(changed[changed.length - 1]).toEqual([{ port_labels: { ge1: 'TV room' } }])
   })
 })

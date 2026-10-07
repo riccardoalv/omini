@@ -303,6 +303,13 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	expandApps(&topo)
 	attachVMs(&topo)
 	applyInventory(&topo, inventory, now)
+	labels, err := c.store.PortLabels(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range topo.Nodes {
+		topo.Nodes[i].PortLabels = labels[topo.Nodes[i].ID]
+	}
 
 	c.mu.Lock()
 	c.state = State{Topology: topo, Statuses: statuses, GeneratedAt: now}

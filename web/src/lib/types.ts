@@ -84,6 +84,8 @@ export interface TopoNode {
   mac_count?: number
   device?: Device
   wan?: WANLink
+  /** The user's port descriptions, by port name. */
+  port_labels?: Record<string, string>
   pinned?: boolean
   /** Hidden from the map by the user. */
   hidden?: boolean
