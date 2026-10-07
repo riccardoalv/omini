@@ -57,6 +57,16 @@ type Manager struct {
 func (m *Manager) init() {
 	if m.plugins == nil {
 		m.plugins = map[string]*Plugin{}
+		// Plugins run in their own folder: relative paths (OMINI_DATA_DIR=./data)
+		// would point elsewhere from there.
+		if abs, err := filepath.Abs(m.Dir); err == nil {
+			m.Dir = abs
+		}
+		for i, d := range m.DevDirs {
+			if abs, err := filepath.Abs(d); err == nil {
+				m.DevDirs[i] = abs
+			}
+		}
 	}
 	if m.UV == "" {
 		m.UV = "uv"

@@ -314,3 +314,25 @@ func TestCatalog(t *testing.T) {
 		t.Fatal("unknown repositories are not curated")
 	}
 }
+
+// TestRelativeDataDir: OMINI_DATA_DIR=./data must work, although plugins run
+// with their own folder as working directory.
+func TestRelativeDataDir(t *testing.T) {
+	gh := fakeGitHub(t, map[string]string{"x/plugin.yaml": manifest, "x/main.sh": script})
+	cwd, _ := os.Getwd()
+	rel, err := filepath.Rel(cwd, t.TempDir())
+	if err != nil {
+		t.Skip("temp dir not reachable relatively")
+	}
+	m := &Manager{Dir: rel, Interpreter: "/bin/sh", GitHub: gh.URL, Codeload: gh.URL, HTTP: gh.Client()}
+	p, err := m.Install(context.Background(), "https://github.com/someone/omini-plugin-fake", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(p.root) {
+		t.Fatalf("plugin root must be absolute: %s", p.root)
+	}
+	if _, err := m.Integration(p).Collect(context.Background(), integration.Config{"host": "x"}); err != nil {
+		t.Fatal(err)
+	}
+}

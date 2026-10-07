@@ -51,11 +51,14 @@ async function load() {
 // Picking a plugin that is not installed installs it, then opens its form.
 const installing = ref<string>()
 const installError = ref('')
-async function installAndAdd(e: CatalogEntry) {
+const pluginURL = ref('')
+
+async function installAndAdd(e: Pick<CatalogEntry, 'id' | 'url'>) {
   installing.value = e.id
   installError.value = ''
   try {
-    const p = await api.installPlugin(e.url)
+    const p = await api.installPlugin(e.url.trim())
+    if (e.id === 'url') pluginURL.value = ''
     await load()
     const type = types.value.find((x) => x.type === p.manifest.id)
     if (type) openAdd(type)
@@ -238,6 +241,28 @@ onMounted(async () => {
           }}</span>
         </button>
       </div>
+      <form class="from-url" @submit.prevent="installAndAdd({ id: 'url', url: pluginURL })">
+        <label for="add-plugin-url">{{ t('plugins.fromUrl') }}</label>
+        <div class="row">
+          <input
+            id="add-plugin-url"
+            v-model="pluginURL"
+            class="input"
+            type="url"
+            required
+            placeholder="https://github.com/user/omini-plugin-…"
+          />
+          <button
+            class="btn primary"
+            type="submit"
+            data-test="install-url"
+            :disabled="!!installing || !pluginURL"
+          >
+            {{ installing === 'url' ? t('plugins.installing') : t('plugins.install') }}
+          </button>
+        </div>
+        <span class="help">{{ t('plugins.trustHint.unverified') }}</span>
+      </form>
       <p v-if="installError" class="alert error" role="alert">{{ installError }}</p>
     </ModalDialog>
 
@@ -331,6 +356,28 @@ onMounted(async () => {
 }
 .type .muted {
   font-size: 12.5px;
+}
+.from-url {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.from-url label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.from-url .row {
+  display: flex;
+  gap: 8px;
+}
+.from-url .input {
+  flex: 1;
+}
+.from-url .help {
+  display: block;
+  margin-top: 6px;
 }
 .install-hint {
   margin-top: auto;
