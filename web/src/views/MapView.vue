@@ -18,6 +18,7 @@ import { useRouter } from 'vue-router'
 
 import AreaMenu from '@/components/map/AreaMenu.vue'
 import AreaNode from '@/components/map/AreaNode.vue'
+import LinkEdge from '@/components/map/LinkEdge.vue'
 import NodeMenu from '@/components/map/NodeMenu.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
@@ -34,7 +35,7 @@ import {
   regroup,
   withDescendants,
 } from '@/lib/areas'
-import { formatAgo, formatSpeed } from '@/lib/format'
+import { formatAgo } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
 import { alignOn, layout, layoutKey, type LayoutGroup, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
@@ -155,13 +156,12 @@ const flowEdges = computed<Edge[]>(() => {
     const source = byId.get(e.source)
     const target = byId.get(e.target)
     const look = edgeLook(e, source, target)
-    const speed = target?.kind !== 'client' ? formatSpeed(e.speed_mbps) : ''
     return {
       id: e.id,
       source: e.source,
       target: e.target,
-      type: 'smoothstep',
-      label: speed || undefined,
+      type: 'link',
+      data: { speed: e.speed_mbps },
       class: { slow: look.slow, offline: target ? !target.online : false },
       style: {
         strokeWidth: look.width,
@@ -770,6 +770,9 @@ onBeforeUnmount(() => {
           :selected="nodeProps.id === selectedId"
           @toggle="toggleChildren(nodeProps.id)"
         />
+      </template>
+      <template #edge-link="edgeProps">
+        <LinkEdge v-bind="edgeProps" />
       </template>
       <template #node-area="nodeProps">
         <AreaNode

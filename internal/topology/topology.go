@@ -156,6 +156,7 @@ func Build(sources []Source) Topology {
 	b.placeUnlinkedDevices(managed)
 	b.placeClients(managed)
 	b.groupSegments()
+	b.fillDirectLinkSpeeds()
 	return b.result()
 }
 
@@ -812,6 +813,37 @@ func (b *builder) groupSegments() {
 			delete(b.edges, edgeKey(k.node, c.ID))
 			c.ParentID, c.Port = seg.ID, ""
 			b.addEdge(seg.ID, "", c.ID, "", EdgeInferred, 0)
+		}
+	}
+}
+
+// fillDirectLinkSpeeds gives a link the speed of the device port it uses when
+// that port has a single link: nothing else is behind it, so the port speed is
+// the link speed (e.g. a firewall's WAN port and the modem). A port shared by
+// many devices (seen through ARP) has a switch behind it; its speed is not
+// the speed of each device's link.
+func (b *builder) fillDirectLinkSpeeds() {
+	uses := map[portKey]int{}
+	for _, e := range b.edges {
+		if e.SourcePort != "" {
+			uses[portKey{e.Source, e.SourcePort}]++
+		}
+		if e.TargetPort != "" {
+			uses[portKey{e.Target, e.TargetPort}]++
+		}
+	}
+	for _, e := range b.edges {
+		if e.SpeedMbps != 0 {
+			continue
+		}
+		for _, end := range []portKey{{e.Source, e.SourcePort}, {e.Target, e.TargetPort}} {
+			if end.port == "" || uses[end] != 1 || b.nodes[end.node] == nil {
+				continue
+			}
+			if speed := portSpeed(b.nodes[end.node].Device, end.port); speed > 0 {
+				e.SpeedMbps = speed
+				break
+			}
 		}
 	}
 }

@@ -86,6 +86,13 @@ export default {
     },
   },
   panel: {
+    status: 'Status',
+    media: 'Media',
+    traffic: 'Traffic',
+    errors: 'Errors',
+    portUp: 'up',
+    fullDuplex: 'full duplex',
+    speedUnknown: 'Speed unknown',
     overview: 'Overview',
     ports: 'Ports',
     clients: 'Connected devices',

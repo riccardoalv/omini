@@ -89,6 +89,13 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    status: 'Status',
+    media: 'Mídia',
+    traffic: 'Tráfego',
+    errors: 'Erros',
+    portUp: 'ligada',
+    fullDuplex: 'full duplex',
+    speedUnknown: 'Velocidade desconhecida',
     overview: 'Visão geral',
     ports: 'Portas',
     clients: 'Dispositivos conectados',

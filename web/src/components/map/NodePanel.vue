@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
+import PortPanel from '@/components/map/PortPanel.vue'
+import ResourceBars from '@/components/map/ResourceBars.vue'
 import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
@@ -77,6 +79,18 @@ const children = computed(() =>
     ? childrenOf(n.value.id, props.nodes, props.edges).filter((c) => c.kind === 'client')
     : [],
 )
+/** Ports with a jack: what the front view draws (VLANs and tunnels are listed only). */
+const physicalPorts = computed(() =>
+  ports.value.filter((i) => !i.type || i.type === 'ethernet' || i.type === 'lag'),
+)
+const portLinks = computed(() => {
+  const id = n.value?.id
+  const out: Record<string, TopoNode | undefined> = {}
+  if (!id) return out
+  for (const p of physicalPorts.value)
+    out[p.name] = linkOnPort(id, p.name, props.nodes, props.edges)
+  return out
+})
 const ports = computed(() =>
   (n.value?.device?.interfaces ?? []).filter((i) => i.type !== 'loopback'),
 )
@@ -251,6 +265,8 @@ async function save(patch: {
       </div>
       <p v-if="error" class="alert error">{{ error }}</p>
 
+      <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
+
       <div v-if="web.length" class="web">
         <a
           v-for="(svc, i) in web"
@@ -362,14 +378,6 @@ async function save(patch: {
           <dt>{{ t('panel.uptime') }}</dt>
           <dd>{{ formatUptime(n.device.uptime_s) }}</dd>
         </template>
-        <template v-if="n.device?.cpu_pct !== undefined">
-          <dt>{{ t('panel.cpu') }}</dt>
-          <dd>{{ Math.round(n.device.cpu_pct) }}%</dd>
-        </template>
-        <template v-if="n.device?.mem_pct !== undefined">
-          <dt>{{ t('panel.memory') }}</dt>
-          <dd>{{ Math.round(n.device.mem_pct) }}%</dd>
-        </template>
         <template v-if="parent">
           <dt>{{ t('panel.connectedTo') }}</dt>
           <dd>
@@ -404,7 +412,13 @@ async function save(patch: {
       <section v-if="n.kind === 'device'">
         <h3>{{ t('panel.ports') }}</h3>
         <p v-if="!ports.length" class="muted">{{ t('panel.noPorts') }}</p>
-        <table v-else class="table ports">
+        <PortPanel
+          v-if="physicalPorts.length"
+          :ports="physicalPorts"
+          :links="portLinks"
+          @select="(id) => emit('select', id)"
+        />
+        <table v-if="ports.length" class="table ports">
           <tbody>
             <tr v-for="p in ports" :key="p.name">
               <td><span class="dot" :class="{ online: p.up }" /></td>
@@ -486,7 +500,7 @@ async function save(patch: {
   width: 360px;
   max-width: calc(100% - 24px);
   padding: 16px;
-  overflow: auto;
+  overflow: hidden auto;
   box-shadow: var(--shadow);
   z-index: 5;
 }
@@ -615,6 +629,12 @@ h3 {
 }
 section {
   margin-bottom: 14px;
+}
+/* Long links and descriptions wrap instead of widening the panel. */
+.ports td.grow {
+  width: 100%;
+  max-width: 0; /* take the remaining width, never more */
+  overflow-wrap: anywhere;
 }
 .ports td {
   padding: 6px 6px;

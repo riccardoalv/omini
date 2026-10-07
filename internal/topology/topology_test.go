@@ -213,3 +213,35 @@ func keys[V any](m map[string]V) []string {
 	}
 	return out
 }
+
+func TestDirectLinksGetThePortSpeed(t *testing.T) {
+	// A firewall seen through its API: the modem alone on igb0 (WAN), three
+	// devices on igb1 (LAN, a switch is in between).
+	fw := model.Device{
+		Key: "00:0d:b9:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{"00:0d:b9:00:00:01"},
+		Interfaces: []model.Interface{
+			{Name: "igb0", Up: model.Ptr(true), SpeedMbps: model.Ptr(uint64(2500))},
+			{Name: "igb1", Up: model.Ptr(true), SpeedMbps: model.Ptr(uint64(1000))},
+		},
+		Arp: []model.ArpEntry{
+			{IP: "203.0.113.1", MAC: "aa:00:00:00:00:01", Interface: model.Ptr("igb0")},
+			{IP: "192.168.1.10", MAC: "aa:00:00:00:00:02", Interface: model.Ptr("igb1")},
+			{IP: "192.168.1.11", MAC: "aa:00:00:00:00:03", Interface: model.Ptr("igb1")},
+			{IP: "192.168.1.12", MAC: "aa:00:00:00:00:04", Interface: model.Ptr("igb1")},
+		},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{fw}}})
+	speeds := map[string]uint64{}
+	for _, e := range topo.Edges {
+		speeds[e.Target] = e.SpeedMbps
+	}
+	if speeds["mac:aa:00:00:00:00:01"] != 2500 {
+		t.Errorf("modem alone on the WAN port: speed %d, want 2500", speeds["mac:aa:00:00:00:00:01"])
+	}
+	for _, m := range []string{"02", "03", "04"} {
+		if s := speeds["mac:aa:00:00:00:00:"+m]; s != 0 {
+			t.Errorf("device %s shares the LAN port: speed %d, want unknown", m, s)
+		}
+	}
+}
