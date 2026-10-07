@@ -624,3 +624,21 @@ func TestNetworkScanIsSingle(t *testing.T) {
 		t.Fatalf("second: %d %v", code, resp)
 	}
 }
+
+func TestScanNode(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	h.do("POST", "/api/integrations", map[string]any{"type": "demo", "config": map[string]any{}}, nil)
+	if err := h.coll.CollectNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var resp map[string]string
+	// No nmap integration: says what to do.
+	if code := h.do("POST", "/api/nodes/"+url.PathEscape("mac:00:11:32:aa:00:01")+"/scan", nil, &resp); code != http.StatusConflict || !strings.Contains(resp["error"], "nmap") {
+		t.Fatalf("without nmap: %d %v", code, resp)
+	}
+	// Only devices on the map.
+	if code := h.do("POST", "/api/nodes/nope/scan", nil, nil); code != http.StatusNotFound {
+		t.Fatalf("unknown node: %d", code)
+	}
+}

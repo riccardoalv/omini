@@ -111,6 +111,12 @@ func (c *Collector) Run(ctx context.Context) error {
 	}
 }
 
+// CollectOne collects one integration now (without skipping its caches, unlike
+// CollectIntegration) and rebuilds the map: e.g. after a device was scanned.
+func (c *Collector) CollectOne(ctx context.Context, id int64) error {
+	return c.collect(ctx, func(in store.Integration) bool { return in.ID == id })
+}
+
 // CollectDue collects the integrations whose interval has passed.
 func (c *Collector) CollectDue(ctx context.Context) error { return c.collect(ctx, c.due) }
 

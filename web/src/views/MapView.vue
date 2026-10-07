@@ -887,6 +887,7 @@ onBeforeUnmount(() => {
       :edges="edges"
       :integration="selectedIntegration"
       :expanded-parent="!!selectedNode && prefs.expanded.includes(selectedNode.id)"
+      :can-scan="integrations.some((i) => i.type === 'nmap' && i.enabled)"
       @close="selectedId = undefined"
       @select="(id) => (selectedId = id)"
       @changed="patchSelected"
@@ -896,6 +897,7 @@ onBeforeUnmount(() => {
       "
       @collapse="collapse"
       @deleted="removeNode"
+      @scanned="load"
     />
   </div>
 </template>

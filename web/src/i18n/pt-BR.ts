@@ -92,6 +92,12 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    scan: 'Escanear (nmap)',
+    scanning: 'Escaneando… (até um minuto)',
+    scanHint:
+      'Escaneia este dispositivo com o nmap agora: portas abertas, versões dos serviços e sistema.',
+    scanned: 'Escaneado: {result}.',
+    scanPorts: 'nenhuma porta aberta | 1 porta aberta | {n} portas abertas',
     portLabel: 'Descrever esta porta',
     portLabelHint: 'ex.: Uplink para o rack (vazio: a do equipamento)',
     uplink: 'Link de internet',

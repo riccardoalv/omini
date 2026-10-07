@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PATCH /api/areas/{id}", s.updateArea)
 	private.HandleFunc("DELETE /api/areas/{id}", s.deleteArea)
 	private.HandleFunc("GET /api/nodes/{id}/web", s.nodeWeb)
+	private.HandleFunc("POST /api/nodes/{id}/scan", s.scanNode)
 	private.HandleFunc("PUT /api/nodes/{id}/ports/{port}", s.setPortLabel)
 	mux.Handle("/api/", s.requireAuth(private))
 

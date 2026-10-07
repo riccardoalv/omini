@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -722,6 +723,62 @@ func (s *Server) nodeWeb(w http.ResponseWriter, r *http.Request) {
 		services = []webui.Service{}
 	}
 	writeJSON(w, http.StatusOK, services)
+}
+
+// HostScanner is implemented by integrations that can scan one device on
+// demand (the nmap integration).
+type HostScanner interface {
+	ScanHost(ctx context.Context, cfg integration.Config, ip string) (model.Host, error)
+}
+
+// scanNode scans one device on the map with the nmap integration. Only nodes
+// on the map can be scanned, so it cannot be used to scan arbitrary hosts.
+func (s *Server) scanNode(w http.ResponseWriter, r *http.Request) {
+	var ip string
+	for _, n := range s.Collector.State().Topology.Nodes {
+		if n.ID == r.PathValue("id") {
+			ip = n.IP
+			break
+		}
+	}
+	if ip == "" {
+		writeError(w, http.StatusNotFound, "this device has no address on the map")
+		return
+	}
+	all, err := s.Store.ListIntegrations(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	for _, in := range all {
+		impl, err := s.Registry.Get(in.Type)
+		if err != nil || !in.Enabled {
+			continue
+		}
+		scanner, ok := impl.(HostScanner)
+		if !ok {
+			continue
+		}
+		cfg, err := integration.OpenSecrets(s.Box, impl.Info().Fields, in.Config)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		ctx, cancel := contextWithTimeout(r, 3*time.Minute)
+		defer cancel()
+		host, err := scanner.ScanHost(ctx, cfg, ip)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if err := s.Collector.CollectOne(r.Context(), in.ID); err != nil {
+			internalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, host)
+		return
+	}
+	writeError(w, http.StatusConflict, "add the nmap integration to scan devices")
 }
 
 // --- UI ---

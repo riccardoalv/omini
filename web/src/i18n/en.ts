@@ -89,6 +89,11 @@ export default {
     },
   },
   panel: {
+    scan: 'Scan (nmap)',
+    scanning: 'Scanning… (up to a minute)',
+    scanHint: 'Scan this device with nmap now: open ports, service versions and system.',
+    scanned: 'Scanned: {result}.',
+    scanPorts: 'no open ports | 1 open port | {n} open ports',
     portLabel: 'Describe this port',
     portLabelHint: "e.g. Uplink to the rack (empty: the device's own)",
     uplink: 'Internet uplink',

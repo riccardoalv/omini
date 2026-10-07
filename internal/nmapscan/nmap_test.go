@@ -182,3 +182,39 @@ func TestMACsFromARPWithoutRoot(t *testing.T) {
 		t.Fatalf("hosts: %+v", gw.Hosts)
 	}
 }
+
+func TestScanOneDevice(t *testing.T) {
+	s, f := newTest(true)
+	ctx := context.Background()
+	host, err := s.ScanHost(ctx, integration.Config{}, "192.168.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Join(f.calls[0], " ")
+	if !strings.HasSuffix(args, " 192.168.1.1") || strings.Contains(args, "/24") || !strings.Contains(args, "-sV") {
+		t.Fatalf("args: %q", args)
+	}
+	if host.IP != "192.168.1.1" || len(host.OpenPorts) != 1 {
+		t.Fatalf("host: %+v", host)
+	}
+	// Shown before any full scan has finished.
+	devices, err := s.Collect(ctx, integration.Config{})
+	if err != nil || len(devices) != 1 || len(devices[0].Hosts) == 0 {
+		t.Fatalf("collect after a single scan: %+v %v", devices, err)
+	}
+	s.wait()
+
+	if _, err := s.ScanHost(ctx, integration.Config{}, "not an ip"); err == nil {
+		t.Fatal("invalid addresses are refused")
+	}
+}
+
+func TestScanOneDeviceThatDoesNotAnswer(t *testing.T) {
+	s, _ := newTest(true)
+	s.Run = func(context.Context, string, []string) ([]byte, error) {
+		return []byte(`<nmaprun><host><status state="down"/><address addr="192.168.1.9" addrtype="ipv4"/></host></nmaprun>`), nil
+	}
+	if _, err := s.ScanHost(context.Background(), integration.Config{}, "192.168.1.9"); !errors.Is(err, ErrNoAnswer) {
+		t.Fatalf("err = %v", err)
+	}
+}

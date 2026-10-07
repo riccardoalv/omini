@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { Check, Eye, EyeOff, ExternalLink, Pencil, Pin, PinOff, Trash2, X } from 'lucide-vue-next'
+import {
+  Check,
+  Eye,
+  EyeOff,
+  ExternalLink,
+  Pencil,
+  Pin,
+  PinOff,
+  Radar,
+  Trash2,
+  X,
+} from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -23,6 +34,8 @@ const props = defineProps<{
   edges: TopoEdge[]
   integration?: Integration
   expandedParent: boolean
+  /** The nmap integration is added: devices can be scanned on demand. */
+  canScan?: boolean
 }>()
 const emit = defineEmits<{
   close: []
@@ -31,6 +44,7 @@ const emit = defineEmits<{
   expand: [parentId: string]
   collapse: [parentId: string]
   deleted: [id: string]
+  scanned: []
 }>()
 const { t, locale } = useI18n()
 
@@ -155,6 +169,36 @@ const title = computed(() => {
   if (n.value.kind === 'segment' && n.value.label === 'Unmanaged segment') return t('map.segment')
   return displayName(n.value, t)
 })
+
+// "Scan": nmap on this device now; the map is updated with what it finds.
+const scanning = ref(false)
+const scanResult = ref('')
+watch(
+  () => props.node?.id,
+  () => (scanResult.value = ''),
+)
+const scannable = computed(
+  () =>
+    !!props.canScan && !!n.value?.ip && ['device', 'client', 'unmanaged'].includes(n.value.kind),
+)
+async function scan() {
+  if (!n.value) return
+  scanning.value = true
+  scanResult.value = ''
+  error.value = ''
+  try {
+    const host = await api.scanNode(n.value.id)
+    const ports = host.open_ports?.length ?? 0
+    scanResult.value = [t('panel.scanPorts', ports), host.os ? slugName(host.os) : '']
+      .filter(Boolean)
+      .join(' · ')
+    emit('scanned')
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : t('common.error')
+  } finally {
+    scanning.value = false
+  }
+}
 
 // Deleting takes a second click (no blocking dialog).
 const confirmDelete = ref(false)
@@ -328,6 +372,17 @@ async function save(patch: {
         <button v-if="expandedParent" class="btn small" @click="emit('collapse', n.id)">
           {{ t('panel.collapseGroup') }}
         </button>
+        <button
+          v-if="scannable"
+          class="btn small"
+          data-test="scan"
+          :disabled="scanning"
+          :title="t('panel.scanHint')"
+          @click="scan"
+        >
+          <Radar :size="14" :class="{ spin: scanning }" />
+          {{ scanning ? t('panel.scanning') : t('panel.scan') }}
+        </button>
         <template v-if="n.kind !== 'app'">
           <button
             class="btn small"
@@ -350,6 +405,9 @@ async function save(patch: {
         </template>
       </div>
       <p v-if="error" class="alert error">{{ error }}</p>
+      <p v-if="scanResult" class="alert ok" role="status" data-test="scan-result">
+        {{ t('panel.scanned', { result: scanResult }) }}
+      </p>
 
       <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
 
@@ -591,6 +649,14 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.spin {
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .port-edit {
   display: flex;
   gap: 4px;

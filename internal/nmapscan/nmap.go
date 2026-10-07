@@ -20,6 +20,7 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,14 @@ type Integration struct {
 	mu      sync.Mutex
 	results map[string]result // by settings
 	running map[string]bool
+	single  map[string]single // devices scanned on their own (ScanHost), by IP
 	wg      sync.WaitGroup
+}
+
+// single is the result of scanning one device ("Scan" in its panel).
+type single struct {
+	host model.Host
+	at   time.Time
 }
 
 type result struct {
@@ -113,6 +121,7 @@ func (s *Integration) defaults() {
 	if s.results == nil {
 		s.results = map[string]result{}
 		s.running = map[string]bool{}
+		s.single = map[string]single{}
 	}
 }
 
@@ -171,7 +180,70 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	if ok && last.err != nil {
 		return nil, last.err
 	}
-	return last.devices, nil // empty until the first scan finishes
+	return s.withSingles(last), nil // empty until a scan finishes
+}
+
+// withSingles adds the devices scanned on their own since the last full scan.
+func (s *Integration) withSingles(last result) []model.Device {
+	s.mu.Lock()
+	var newer []model.Host
+	for _, sh := range s.single {
+		if sh.at.After(last.at) {
+			newer = append(newer, sh.host)
+		}
+	}
+	s.mu.Unlock()
+	if len(newer) == 0 {
+		return last.devices
+	}
+	var hosts []model.Host
+	for _, d := range last.devices {
+		hosts = append(hosts, d.Hosts...)
+	}
+	for _, n := range newer {
+		hosts = slices.DeleteFunc(hosts, func(h model.Host) bool { return h.IP == n.IP })
+		hosts = append(hosts, n)
+	}
+	return s.devices(hosts)
+}
+
+// ErrNoAnswer is returned when the scanned device did not answer nmap.
+var ErrNoAnswer = errors.New("the device did not answer nmap (offline, or it filters every port)")
+
+// ScanHost scans one device now, with the integration's settings, and keeps
+// the result until the next full scan.
+func (s *Integration) ScanHost(ctx context.Context, cfg integration.Config, ip string) (model.Host, error) {
+	s.mu.Lock()
+	s.defaults()
+	s.mu.Unlock()
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return model.Host{}, fmt.Errorf("invalid address %q", ip)
+	}
+	out, err := s.Run(ctx, s.Binary, append(s.baseArgs(cfg), addr.String()))
+	if errors.Is(err, exec.ErrNotFound) {
+		return model.Host{}, ErrNotInstalled
+	}
+	if err != nil && len(out) == 0 {
+		return model.Host{}, fmt.Errorf("nmap failed: %w", err)
+	}
+	hosts, err := parse(out)
+	if err != nil {
+		return model.Host{}, err
+	}
+	if len(hosts) == 0 {
+		return model.Host{}, ErrNoAnswer
+	}
+	h := hosts[0]
+	if h.MAC == nil {
+		if m, ok := s.ARP()[h.IP]; ok {
+			h.MAC = &m
+		}
+	}
+	s.mu.Lock()
+	s.single[h.IP] = single{host: h, at: s.Now()}
+	s.mu.Unlock()
+	return h, nil
 }
 
 // wait blocks until background scans finish (tests).
@@ -205,6 +277,15 @@ func (s *Integration) scan(key string, args []string) {
 }
 
 func (s *Integration) args(cfg integration.Config, prefixes []netip.Prefix) []string {
+	args := s.baseArgs(cfg)
+	for _, p := range prefixes {
+		args = append(args, p.String())
+	}
+	return args
+}
+
+// baseArgs are the nmap options of the settings, without targets.
+func (s *Integration) baseArgs(cfg integration.Config) []string {
 	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "120s"}
 	if cfg.Bool("versions", true) {
 		args = append(args, "-sV", "--version-light", "--top-ports", "100")
@@ -213,9 +294,6 @@ func (s *Integration) args(cfg integration.Config, prefixes []netip.Prefix) []st
 	}
 	if cfg.Bool("os_detection", true) && *s.Root {
 		args = append(args, "-O", "--osscan-limit")
-	}
-	for _, p := range prefixes {
-		args = append(args, p.String())
 	}
 	return args
 }

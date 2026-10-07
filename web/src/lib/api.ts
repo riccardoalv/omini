@@ -121,6 +121,12 @@ export const api = {
       `/api/nodes/${encodeURIComponent(nodeId)}/ports/${encodeURIComponent(port)}`,
       { label },
     ),
+  /** Scans one device with the nmap integration (takes up to a minute). */
+  scanNode: (nodeId: string) =>
+    request<{ ip: string; open_ports?: number[]; os?: string; banners?: string[] }>(
+      'POST',
+      `/api/nodes/${encodeURIComponent(nodeId)}/scan`,
+    ),
   webServices: (nodeId: string) =>
     request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 

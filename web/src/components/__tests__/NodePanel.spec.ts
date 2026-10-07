@@ -17,6 +17,7 @@ vi.mock('@/lib/api', async (orig) => {
       updateInventory: vi.fn<typeof mod.api.updateInventory>(),
       deleteInventory: vi.fn<typeof mod.api.deleteInventory>(),
       setPortLabel: vi.fn<typeof mod.api.setPortLabel>(),
+      scanNode: vi.fn<typeof mod.api.scanNode>(),
     },
   }
 })
@@ -285,5 +286,42 @@ describe('NodePanel port descriptions', () => {
     expect(api.setPortLabel).toHaveBeenCalledWith(firewall.id, 'ge1', 'TV room')
     const changed = w.emitted('changed')!
     expect(changed[changed.length - 1]).toEqual([{ port_labels: { ge1: 'TV room' } }])
+  })
+})
+
+describe('NodePanel scan', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    vi.mocked(api.scanNode).mockReset()
+  })
+
+  const mountWith = (canScan: boolean, node: TopoNode = firewall) =>
+    mount(NodePanel, {
+      props: { node, nodes: [node], edges: [], expandedParent: false, canScan },
+      global: { plugins: plugins(), stubs: { RouterLink: true } },
+    })
+
+  it('offers a scan only when the nmap integration is added', () => {
+    expect(mountWith(false).find('[data-test=scan]').exists()).toBe(false)
+    expect(mountWith(true).find('[data-test=scan]').exists()).toBe(true)
+    expect(
+      mountWith(true, { ...firewall, kind: 'app' })
+        .find('[data-test=scan]')
+        .exists(),
+    ).toBe(false)
+  })
+
+  it('scans the device and shows what nmap found', async () => {
+    type Host = Awaited<ReturnType<typeof api.scanNode>>
+    let finish: (h: Host) => void = () => {}
+    vi.mocked(api.scanNode).mockReturnValue(new Promise<Host>((r) => (finish = r)))
+    const w = mountWith(true)
+    await w.get('[data-test=scan]').trigger('click')
+    expect(w.get('[data-test=scan]').text()).toContain('Scanning')
+    finish({ ip: '192.168.1.1', open_ports: [22, 443], os: 'freebsd' })
+    await flushPromises()
+    expect(api.scanNode).toHaveBeenCalledWith(firewall.id)
+    expect(w.get('[data-test=scan-result]').text()).toBe('Scanned: 2 open ports · FreeBSD.')
+    expect(w.emitted('scanned')).toHaveLength(1)
   })
 })
