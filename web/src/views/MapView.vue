@@ -30,6 +30,7 @@ import {
   membersOf,
   rectFrom,
   regroup,
+  withDescendants,
 } from '@/lib/areas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
@@ -261,21 +262,30 @@ const areaBusy = ref(false) // dragging or resizing
 /** Rectangles held still while something is being dragged or resized. */
 const frozen = ref<Record<number, { x: number; y: number; width: number; height: number }>>({})
 
-/** Boxes of the nodes laid out on the map. */
+/** Boxes of the nodes (and group bubbles) laid out on the map. */
 const nodeBoxes = computed(
   () =>
     new Map(
-      view.value.nodes
-        .filter((n) => positions.value[n.id])
-        .map((n) => [n.id, { id: n.id, ...positions.value[n.id]!, ...SIZES[n.kind]! }]),
+      [
+        ...view.value.nodes.map((n) => ({ id: n.id, kind: n.kind })),
+        ...view.value.groups.map((g) => ({ id: g.id, kind: 'group' })),
+      ]
+        .filter((b) => positions.value[b.id])
+        .map((b) => [b.id, { id: b.id, ...positions.value[b.id]!, ...SIZES[b.kind]! }]),
     ),
 )
 
-/** Areas of the current orientation, drawn around their members. */
+/** A node in an area brings everything below it (apps, clients, VMs). */
+const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
+
+/** Areas of the current orientation, drawn around their nodes. */
 const visibleAreas = computed(() =>
   areas.value
     .filter((a) => a.direction === prefs.layoutDirection)
-    .map((a) => ({ ...a, ...(frozen.value[a.id] ?? fitArea(a, nodeBoxes.value)) })),
+    .map((a) => ({
+      ...a,
+      ...(frozen.value[a.id] ?? fitArea({ ...a, members: areaNodes(a) }, nodeBoxes.value)),
+    })),
 )
 
 function freezeAreas() {
@@ -315,7 +325,7 @@ function onDragStart(e: NodeDragEvent) {
     return
   }
   const members: Record<string, Point> = {}
-  for (const m of area.members) if (positions.value[m]) members[m] = { ...positions.value[m]! }
+  for (const m of areaNodes(area)) if (positions.value[m]) members[m] = { ...positions.value[m]! }
   areaDrag = { id: area.id, start: { x: area.x, y: area.y }, members }
   frozen.value = { [area.id]: { x: area.x, y: area.y, width: area.width, height: area.height } }
 }
@@ -439,21 +449,22 @@ function onDrawMove(e: PointerEvent) {
 async function onDrawEnd() {
   const d = draft.value
   draft.value = undefined
-  drawing.value = false
   if (!d) return
-  const a = screenToFlowCoordinate(d.start)
-  const b = screenToFlowCoordinate(d.end)
-  const r = rectFrom(a, b)
-  if (r.width < MIN_AREA_SIZE || r.height < MIN_AREA_SIZE) return
+  const r = rectFrom(screenToFlowCoordinate(d.start), screenToFlowCoordinate(d.end))
+  const members = membersOf(r, [...nodeBoxes.value.values()])
+  // A small rectangle is fine around a device (the area fits around it);
+  // an empty one is probably a stray click: keep drawing.
+  if (!members.length && (r.width < MIN_AREA_SIZE || r.height < MIN_AREA_SIZE)) return
+  drawing.value = false
   const created = await api.createArea({
     name: t('map.areas.defaultName'),
     color: 'blue',
     direction: prefs.layoutDirection,
     x: Math.round(r.x),
     y: Math.round(r.y),
-    width: Math.round(r.width),
-    height: Math.round(r.height),
-    members: membersOf(r, [...nodeBoxes.value.values()]),
+    width: Math.max(MIN_AREA_SIZE, Math.round(r.width)),
+    height: Math.max(MIN_AREA_SIZE, Math.round(r.height)),
+    members,
   })
   areas.value = [...areas.value, created]
   editingArea.value = created.id // name it right away

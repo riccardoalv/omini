@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { areaIdOf, areaNodeId, fitArea, membersOf, rectFrom, regroup } from '../areas'
+import {
+  areaIdOf,
+  areaNodeId,
+  fitArea,
+  membersOf,
+  rectFrom,
+  regroup,
+  withDescendants,
+} from '../areas'
 
 describe('map areas', () => {
   it('maps area ids to flow node ids and back', () => {
@@ -62,5 +70,20 @@ describe('area membership', () => {
     const rect = { x: 0, y: 0, width: 400, height: 300 }
     const dropped = [box('a', 900, 900), box('new', 50, 50)]
     expect(regroup(['a', 'b'], rect, dropped)).toEqual(['b', 'new'])
+  })
+})
+
+describe('withDescendants', () => {
+  it('adds every node below the members, once, even with cycles', () => {
+    const edges = [
+      { source: 'gw', target: 'pve' },
+      { source: 'pve', target: 'vm' },
+      { source: 'vm', target: 'app' },
+      { source: 'vm', target: 'group:vm' },
+      { source: 'gw', target: 'phone' },
+      { source: 'app', target: 'vm' }, // never expected, but must not loop
+    ]
+    expect(withDescendants(['pve'], edges).sort()).toEqual(['app', 'group:vm', 'pve', 'vm'])
+    expect(withDescendants([], edges)).toEqual([])
   })
 })

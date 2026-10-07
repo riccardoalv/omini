@@ -77,3 +77,18 @@ export function regroup(members: string[], rect: Rect, dropped: Box[]): string[]
   for (const id of inside) if (!kept.includes(id)) kept.push(id)
   return kept
 }
+
+/** The given nodes plus everything below them (apps, clients, VMs, group bubbles). */
+export function withDescendants(ids: string[], edges: { source: string; target: string }[]) {
+  const children = new Map<string, string[]>()
+  for (const e of edges) children.set(e.source, [...(children.get(e.source) ?? []), e.target])
+  const out = new Set<string>()
+  const stack = [...ids]
+  while (stack.length) {
+    const id = stack.pop()!
+    if (out.has(id)) continue
+    out.add(id)
+    stack.push(...(children.get(id) ?? []))
+  }
+  return [...out]
+}
