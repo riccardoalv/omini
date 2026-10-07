@@ -252,3 +252,37 @@ describe('withWifiNetworks', () => {
     expect(parentOf(pc.id)).toBe(ap.id) // wired: unchanged
   })
 })
+
+describe('collapsing an access point with Wi-Fi networks', () => {
+  it('gathers its networks and their clients in one bubble', () => {
+    const ap: TopoNode = { id: 'dev:ap', kind: 'device', label: 'Bedroom', online: true }
+    const clients: TopoNode[] = ['a', 'b', 'c'].map((x) => ({
+      id: `mac:${x}`,
+      kind: 'client',
+      label: x,
+      online: true,
+      band: x === 'c' ? '2.4ghz' : '5ghz',
+    }))
+    const wifi = (c: TopoNode, net: string): TopoEdge => ({
+      id: `e:${c.id}`,
+      source: ap.id,
+      target: c.id,
+      kind: 'wifi',
+      source_port: net,
+    })
+    const g = withWifiNetworks(
+      [ap, ...clients],
+      [
+        wifi(clients[0]!, 'Home · 5 GHz'),
+        wifi(clients[1]!, 'Home · 5 GHz'),
+        wifi(clients[2]!, 'IOT · 2.4 GHz'),
+      ],
+    )
+    expect(clientCount(ap.id, g.nodes, g.edges)).toBe(3)
+    const view = collapseClients(g.nodes, g.edges, 8, new Set(), new Set([ap.id]))
+    expect(view.groups).toHaveLength(1)
+    expect(view.groups[0]!.clients.map((c) => c.id).sort()).toEqual(['mac:a', 'mac:b', 'mac:c'])
+    // The networks are gone with their clients; the AP stays.
+    expect(view.nodes.map((n) => n.id)).toEqual([ap.id])
+  })
+})

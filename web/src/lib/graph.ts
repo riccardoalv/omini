@@ -49,11 +49,24 @@ export function collapseClients(
 ): GraphView {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const children = new Map<string, TopoNode[]>()
+  // A Wi-Fi network (mini node) counts as the clients on it: collapsing an
+  // access point gathers its networks and their clients in one bubble.
+  const viaNetwork = new Map<string, TopoNode[]>()
   for (const e of edges) {
     const target = byId.get(e.target)
-    if (target?.kind !== 'client' && target?.kind !== 'app') continue
+    if (target?.kind === 'ssid') continue
+    const source = byId.get(e.source)
+    if (source?.kind === 'ssid' && (target?.kind === 'client' || target?.kind === 'app')) {
+      viaNetwork.set(source.id, [...(viaNetwork.get(source.id) ?? []), target])
+    }
+  }
+  for (const e of edges) {
+    const target = byId.get(e.target)
+    const isClient = target?.kind === 'client' || target?.kind === 'app'
     const list = children.get(e.source) ?? []
-    list.push(target)
+    if (isClient) list.push(target!)
+    else if (target?.kind === 'ssid') list.push(...(viaNetwork.get(target.id) ?? []))
+    else continue
     children.set(e.source, list)
   }
 
@@ -74,6 +87,12 @@ export function collapseClients(
     })
   }
 
+  // The Wi-Fi networks of a collapsed node go with their clients.
+  for (const g of groups) {
+    for (const e of edges) {
+      if (e.source === g.parentId && byId.get(e.target)?.kind === 'ssid') hidden.add(e.target)
+    }
+  }
   // A hidden node takes everything below it (a collapsed Proxmox hides its
   // VMs and their apps), including the groups those had.
   const below = new Map<string, string[]>()
@@ -154,7 +173,16 @@ export function linkOnPort(
 
 /** Number of children of a node that can be grouped (clients and apps). */
 export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): number {
-  return childrenOf(id, nodes, edges).filter((n) => n.kind === 'client' || n.kind === 'app').length
+  return childrenOf(id, nodes, edges).reduce(
+    (sum, n) =>
+      sum +
+      (n.kind === 'client' || n.kind === 'app'
+        ? 1
+        : n.kind === 'ssid'
+          ? clientCount(n.id, nodes, edges)
+          : 0),
+    0,
+  )
 }
 
 /** Removes offline nodes and the links that lead to them. */

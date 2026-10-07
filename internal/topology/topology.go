@@ -570,13 +570,20 @@ func (b *builder) placeUnlinkedDevices(managed []string) {
 	}
 }
 
-// portOf is the port of a device's own MAC table where any of macs is learned.
+// portOf is the port of a device's own MAC table where any of macs is learned
+// — now, or last time when the table forgot them for a while (else the uplink
+// would come and go, and what is behind it would look like a segment).
 func (b *builder) portOf(id string, macs []model.MACAddress) string {
 	for _, m := range macs {
 		for _, k := range b.fdbPorts[m] {
 			if k.node == id {
 				return k.port
 			}
+		}
+	}
+	for _, m := range macs {
+		if k, ok := b.lastPort[m]; ok && k.node == id {
+			return k.port
 		}
 	}
 	return ""

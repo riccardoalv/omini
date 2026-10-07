@@ -2,6 +2,7 @@ package topology_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -547,5 +548,37 @@ func TestUnmanagedSwitchBesideAnAccessPoint(t *testing.T) {
 	nodes = build(nil, nil)
 	if _, ok := nodes[segID]; ok || nodes["mac:"+wired].ParentID != apID {
 		t.Fatalf("without a client list the laptop is behind the AP: %q", nodes["mac:"+wired].ParentID)
+	}
+}
+
+// The switch's MAC table forgets the router for a while: its uplink stays
+// where the router was last learned, so what is behind the router does not
+// turn into an unmanaged segment on that port.
+func TestUplinkKeptWhileTheRouterIsForgotten(t *testing.T) {
+	const (
+		fwMAC = "58:9c:fc:00:00:01"
+		swMAC = "1c:2a:a3:00:00:01"
+		swID  = "dev:" + swMAC
+	)
+	vms := []string{"bc:24:11:00:00:01", "bc:24:11:00:00:02", "bc:24:11:00:00:03"}
+	arp := []model.ArpEntry{{IP: "192.168.1.2", MAC: swMAC, Interface: model.Ptr("bridge0")}}
+	fdb := []model.FdbEntry{} // the router itself is not in the table right now
+	for i, m := range vms {
+		arp = append(arp, model.ArpEntry{IP: fmt.Sprintf("192.168.1.%d", 10+i), MAC: model.MACAddress(m), Interface: model.Ptr("bridge0")})
+		fdb = append(fdb, model.FdbEntry{MAC: model.MACAddress(m), Port: "Port 9"})
+	}
+	sources := []topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{{
+			Key: fwMAC, Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{fwMAC}, Arp: arp,
+		}}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{{
+			Key: swMAC, Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{swMAC}, Fdb: fdb,
+		}}},
+	}
+	opts := topology.Options{LastSeen: map[model.MACAddress]topology.PortRef{fwMAC: {Node: swID, Port: "Port 9"}}}
+	for _, n := range topology.BuildWith(sources, opts).Nodes {
+		if n.ID == "seg:"+swID+":Port 9" {
+			t.Fatal("the uplink became an unmanaged segment")
+		}
 	}
 }
