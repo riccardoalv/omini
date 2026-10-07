@@ -31,6 +31,37 @@ export function exportFrame(nodes: GraphNode[]): {
   return { width, height, transform: `translate(${x}px, ${y}px) scale(${scale})` }
 }
 
+/** SVG properties that come from style sheets: copied inline while exporting,
+ * since an exported SVG does not carry the page's CSS (a wire's path would be
+ * filled black, drawing triangles). */
+const SVG_STYLE = [
+  'fill',
+  'stroke',
+  'stroke-width',
+  'stroke-dasharray',
+  'stroke-linecap',
+  'opacity',
+]
+
+/** Inlines the computed SVG styles under `root`; returns a function that undoes it. */
+export function inlineSvgStyles(root: Element): () => void {
+  const saved: [SVGElement, string | null][] = []
+  for (const el of root.querySelectorAll<SVGElement>('svg *')) {
+    saved.push([el, el.getAttribute('style')])
+    const computed = getComputedStyle(el)
+    for (const prop of SVG_STYLE) {
+      const value = computed.getPropertyValue(prop)
+      if (value) el.style.setProperty(prop, value)
+    }
+  }
+  return () => {
+    for (const [el, style] of saved) {
+      if (style === null) el.removeAttribute('style')
+      else el.setAttribute('style', style)
+    }
+  }
+}
+
 /** The map as an image (data URL): `viewport` is Vue Flow's viewport element. */
 export async function mapImage(
   format: 'png' | 'svg',
@@ -46,7 +77,12 @@ export async function mapImage(
     pixelRatio: format === 'png' ? 2 : 1, // sharp on high-density screens
     style: { width: `${width}px`, height: `${height}px`, transform },
   }
-  return format === 'png' ? toPng(viewport, options) : toSvg(viewport, options)
+  const restore = inlineSvgStyles(viewport)
+  try {
+    return await (format === 'png' ? toPng(viewport, options) : toSvg(viewport, options))
+  } finally {
+    restore()
+  }
 }
 
 /** The topology as JSON: nodes, links, areas and layout, as the API gives them. */

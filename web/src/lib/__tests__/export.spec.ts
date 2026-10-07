@@ -1,7 +1,7 @@
 import type { GraphNode } from '@vue-flow/core'
 import { describe, expect, it, vi } from 'vitest'
 
-import { exportFrame, exportName, mapJSON } from '../export'
+import { exportFrame, exportName, inlineSvgStyles, mapJSON } from '../export'
 import type { TopologyResponse } from '../types'
 
 const node = (x: number, y: number, width = 200, height = 40) =>
@@ -40,5 +40,20 @@ describe('map export', () => {
     expect(Object.keys(json).sort()).toEqual(['areas', 'generated_at', 'layout', 'topology'])
     expect(json.topology.nodes[0].id).toBe('a')
     vi.restoreAllMocks()
+  })
+})
+
+describe('SVG styles while exporting', () => {
+  it('inlines the computed fill and stroke of the wires, then restores them', () => {
+    document.body.innerHTML = `
+      <style>.wire { fill: none; stroke: rgb(1, 2, 3); }</style>
+      <div id="vp"><svg><path class="wire" d="M0 0L10 10"/><path style="opacity: 0.5" d="M0 0"/></svg></div>`
+    const [wire, other] = [...document.querySelectorAll('path')]
+    const restore = inlineSvgStyles(document.getElementById('vp')!)
+    expect(['none', 'rgba(0, 0, 0, 0)']).toContain(wire!.style.fill) // jsdom says transparent
+    expect(wire!.style.stroke).toBe('rgb(1, 2, 3)')
+    restore()
+    expect(wire!.getAttribute('style')).toBeNull()
+    expect(other!.getAttribute('style')).toBe('opacity: 0.5')
   })
 })
