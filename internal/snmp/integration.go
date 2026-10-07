@@ -17,9 +17,12 @@ import (
 )
 
 // Integration is the generic SNMP v2c integration.
-type Integration struct{}
+type Integration struct {
+	// Timeout per SNMP request (one retry is made). Defaults to 3s.
+	Timeout time.Duration
+}
 
-func New() *Integration { return &Integration{} }
+func New() *Integration { return &Integration{Timeout: 3 * time.Second} }
 
 func (*Integration) Info() integration.Info {
 	return integration.Info{
@@ -90,10 +93,15 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		log.Debug("host resources unavailable", "err", err)
 	}
 	d.Role = model.Ptr(guessRole(c, &d))
+	// Stable identity: the chassis MAC (LLDP) or first interface MAC, else the host.
+	d.Key = host
+	if len(d.MACs) > 0 {
+		d.Key = string(d.MACs[0])
+	}
 	return []model.Device{d}, nil
 }
 
-func (*Integration) connect(ctx context.Context, cfg integration.Config) (*client, error) {
+func (s *Integration) connect(ctx context.Context, cfg integration.Config) (*client, error) {
 	host := cfg.String("host")
 	if host == "" {
 		return nil, fmt.Errorf("host is required")
@@ -102,7 +110,11 @@ func (*Integration) connect(ctx context.Context, cfg integration.Config) (*clien
 	if community == "" {
 		community = "public"
 	}
-	return dial(ctx, host, cfg.Int("port", 161), community, 3*time.Second)
+	timeout := s.Timeout
+	if timeout == 0 {
+		timeout = 3 * time.Second
+	}
+	return dial(ctx, host, cfg.Int("port", 161), community, timeout)
 }
 
 func collectSystem(c *client, host string) (model.Device, error) {
