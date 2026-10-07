@@ -4,17 +4,18 @@ import (
 	"strings"
 )
 
-// NormMAC normalizes any common MAC notation (aa-bb-cc-dd-ee-ff, aabb.ccdd.eeff,
-// AABBCCDDEEFF, raw 6 bytes) to aa:bb:cc:dd:ee:ff. It returns "" if s is not a MAC.
+// NormMAC normalizes a textual MAC (aa-bb-cc-dd-ee-ff, aabb.ccdd.eeff,
+// AABBCCDDEEFF...) to aa:bb:cc:dd:ee:ff. It returns "" if s is not a MAC.
+// Use MACFromBytes for raw 6-byte values.
 func NormMAC(s string) MACAddress {
-	if len(s) == 6 {
-		// Raw bytes, as returned by SNMP OCTET STRINGs.
-		return MACFromBytes([]byte(s))
-	}
 	var hex strings.Builder
 	for _, c := range strings.ToLower(s) {
-		if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') {
+		switch {
+		case (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'):
 			hex.WriteRune(c)
+		case c == ':' || c == '-' || c == '.' || c == ' ':
+		default:
+			return "" // not a MAC (e.g. a hostname)
 		}
 	}
 	h := hex.String()
@@ -46,6 +47,18 @@ func MACFromBytes(b []byte) MACAddress {
 		return ""
 	}
 	return MACAddress(out)
+}
+
+// IsGroup reports whether the MAC is a multicast/broadcast address.
+func (m MACAddress) IsGroup() bool {
+	if len(m) < 2 {
+		return false
+	}
+	switch m[1] {
+	case '1', '3', '5', '7', '9', 'b', 'd', 'f':
+		return true
+	}
+	return false
 }
 
 // IsRandomized reports whether the MAC has the locally administered bit set,
