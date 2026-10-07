@@ -87,3 +87,43 @@ describe('layout with areas', () => {
     expect(plain.b!.y > top! && plain.b!.y < bottom!).toBe(true)
   })
 })
+
+describe('top-down layout', () => {
+  const overlap = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    a.x < b.x + 200 && a.x + 200 > b.x && a.y < b.y + 40 && a.y + 40 > b.y
+
+  it('packs many leaf children into a grid instead of one wide row', async () => {
+    // gw → 16 phones and a VM; the VM → 17 apps.
+    const ids = ['gw', 'vm', ...Array.from({ length: 16 }, (_, i) => `p${i}`)]
+    const apps = Array.from({ length: 17 }, (_, i) => `a${i}`)
+    const nodes = [...ids, ...apps].map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      ...ids.slice(1).map((id) => ({ id: `e:${id}`, source: 'gw', target: id })),
+      ...apps.map((id) => ({ id: `e:${id}`, source: 'vm', target: id })),
+    ]
+    const pos = await layout(nodes, edges, {}, 'DOWN')
+
+    const xs = Object.values(pos).map((p) => p.x)
+    const width = Math.max(...xs) + 200 - Math.min(...xs)
+    expect(width).toBeLessThan(2200) // a single row of 17 would be ~3800
+    const all = Object.entries(pos)
+    for (const [a, pa] of all) {
+      for (const [b, pb] of all) {
+        if (a < b) expect(overlap(pa, pb), `${a} overlaps ${b}`).toBe(false)
+      }
+    }
+    // The VM keeps its place in the tree; its apps are below it.
+    expect(pos.a0!.y).toBeGreaterThan(pos.vm!.y)
+  })
+
+  it('leaves a few children in the row and keeps saved positions', async () => {
+    const nodes = ['gw', 'a', 'b'].map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      { id: 'e:a', source: 'gw', target: 'a' },
+      { id: 'e:b', source: 'gw', target: 'b' },
+    ]
+    const pos = await layout(nodes, edges, { b: { x: 999, y: 999 } }, 'DOWN')
+    expect(pos.a!.y).toBe(pos.gw!.y + 40 + 80)
+    expect(pos.b).toEqual({ x: 999, y: 999 })
+  })
+})

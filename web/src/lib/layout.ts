@@ -32,23 +32,128 @@ export interface LayoutGroup {
   padding: [number, number, number, number]
 }
 
+/** A parent's leaf children laid out as a grid, standing in for them in ELK as one node. */
+interface Pack {
+  id: string
+  leaves: LayoutNode[]
+  cols: number
+  cell: { width: number; height: number }
+}
+
+const PACK_MIN = 4 // fewer leaves stay in the row
+const PACK_GAP = { x: 14, y: 10 }
+
+/**
+ * Top-down maps of homelabs are very wide: a router with 15 clients or a VM
+ * with 17 apps puts them all in one row. Leaf children (nothing below them)
+ * of a parent are packed into a compact grid under it instead. Nodes with
+ * children of their own stay in the tree.
+ */
+export function packLeaves(
+  nodes: LayoutNode[],
+  edges: LayoutEdge[],
+  groupOf: Map<string, LayoutGroup>,
+): { nodes: LayoutNode[]; edges: LayoutEdge[]; packs: Pack[] } {
+  const ids = new Set(nodes.map((n) => n.id))
+  const valid = edges.filter((e) => ids.has(e.source) && ids.has(e.target))
+  const outDegree = new Map<string, number>()
+  const parents = new Map<string, string[]>()
+  for (const e of valid) {
+    outDegree.set(e.source, (outDegree.get(e.source) ?? 0) + 1)
+    parents.set(e.target, [...(parents.get(e.target) ?? []), e.source])
+  }
+  // Leaves with a single parent, by parent and area (a pack never crosses an area border).
+  const byParent = new Map<string, LayoutNode[]>()
+  for (const n of nodes) {
+    const ps = parents.get(n.id)
+    if (outDegree.get(n.id) || ps?.length !== 1) continue
+    const key = `${ps[0]}|${groupOf.get(n.id)?.id ?? ''}`
+    byParent.set(key, [...(byParent.get(key) ?? []), n])
+  }
+  const packs: Pack[] = []
+  const packed = new Map<string, string>() // leaf → pack id
+  for (const [key, leaves] of byParent) {
+    if (leaves.length < PACK_MIN) continue
+    const pack: Pack = {
+      id: `pack:${key}`,
+      leaves,
+      cols: Math.ceil(Math.sqrt(leaves.length * 1.2)),
+      cell: {
+        width: Math.max(...leaves.map((l) => l.width)),
+        height: Math.max(...leaves.map((l) => l.height)),
+      },
+    }
+    packs.push(pack)
+    for (const l of leaves) packed.set(l.id, pack.id)
+    const group = groupOf.get(leaves[0]!.id)
+    if (group) groupOf.set(pack.id, group)
+  }
+  const size = (p: Pack) => {
+    const rows = Math.ceil(p.leaves.length / p.cols)
+    return {
+      width: p.cols * p.cell.width + (p.cols - 1) * PACK_GAP.x,
+      height: rows * p.cell.height + (rows - 1) * PACK_GAP.y,
+    }
+  }
+  const seen = new Set<string>()
+  const outEdges: LayoutEdge[] = []
+  for (const e of valid) {
+    const target = packed.get(e.target) ?? e.target
+    const key = `${e.source}|${target}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    outEdges.push(target === e.target ? e : { id: `e:${key}`, source: e.source, target })
+  }
+  return {
+    nodes: [
+      ...nodes.filter((n) => !packed.has(n.id)),
+      ...packs.map((p) => ({ id: p.id, ...size(p) })),
+    ],
+    edges: outEdges,
+    packs,
+  }
+}
+
+/** Positions of packed leaves: row by row inside their grid, centered in their cell. */
+function unpack(packs: Pack[], out: Record<string, Point>, saved: Record<string, Point>) {
+  for (const p of packs) {
+    const origin = out[p.id]
+    delete out[p.id]
+    if (!origin) continue
+    p.leaves.forEach((l, i) => {
+      const col = i % p.cols
+      const row = Math.floor(i / p.cols)
+      out[l.id] = saved[l.id] ?? {
+        x: origin.x + col * (p.cell.width + PACK_GAP.x) + (p.cell.width - l.width) / 2,
+        y: origin.y + row * (p.cell.height + PACK_GAP.y),
+      }
+    })
+  }
+}
+
 /**
  * Computes a layered layout in the given direction. Saved positions (from the
  * user dragging nodes) take precedence. Groups become boxes laid out with the
  * rest of the graph (edges cross their border); a node belongs to one group.
+ * Top down, leaf children are packed into grids (see packLeaves).
  */
 export async function layout(
-  nodes: LayoutNode[],
-  edges: LayoutEdge[],
+  allNodes: LayoutNode[],
+  allEdges: LayoutEdge[],
   saved: Record<string, Point> = {},
   direction: Direction = 'RIGHT',
   groups: LayoutGroup[] = [],
 ): Promise<Record<string, Point>> {
-  const ids = new Set(nodes.map((n) => n.id))
   const groupOf = new Map<string, LayoutGroup>()
+  const all = new Set(allNodes.map((n) => n.id))
   for (const g of groups) {
-    for (const c of g.children) if (ids.has(c) && !groupOf.has(c)) groupOf.set(c, g)
+    for (const c of g.children) if (all.has(c) && !groupOf.has(c)) groupOf.set(c, g)
   }
+  const { nodes, edges, packs } =
+    direction === 'DOWN'
+      ? packLeaves(allNodes, allEdges, groupOf)
+      : { nodes: allNodes, edges: allEdges, packs: [] }
+  const ids = new Set(nodes.map((n) => n.id))
   const box = (n: LayoutNode) => ({ id: n.id, width: n.width, height: n.height })
   const boxes = groups
     .map((g) => ({
@@ -89,6 +194,7 @@ export async function layout(
       out[c.id] = saved[c.id] ?? { x: c.x ?? 0, y: c.y ?? 0 }
     }
   }
+  unpack(packs, out, saved)
   return out
 }
 
