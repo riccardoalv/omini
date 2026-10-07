@@ -72,18 +72,33 @@ export function collapseClients(
     })
   }
 
+  // A hidden node takes everything below it (a collapsed Proxmox hides its
+  // VMs and their apps), including the groups those had.
+  const below = new Map<string, string[]>()
+  for (const e of edges) below.set(e.source, [...(below.get(e.source) ?? []), e.target])
+  const stack = [...hidden]
+  while (stack.length) {
+    for (const child of below.get(stack.pop()!) ?? []) {
+      if (!hidden.has(child)) {
+        hidden.add(child)
+        stack.push(child)
+      }
+    }
+  }
+  const shown = groups.filter((g) => !hidden.has(g.parentId))
+
   return {
     nodes: nodes.filter((n) => !hidden.has(n.id)),
     edges: [
       ...edges.filter((e) => !hidden.has(e.target) && !hidden.has(e.source)),
-      ...groups.map((g) => ({
+      ...shown.map((g) => ({
         id: `e:${g.parentId}|${g.id}`,
         source: g.parentId,
         target: g.id,
         kind: 'inferred' as const,
       })),
     ],
-    groups,
+    groups: shown,
   }
 }
 

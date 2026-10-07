@@ -45,6 +45,25 @@ function network(clientCount: number) {
 }
 
 describe('collapseClients', () => {
+  it('collapsing a node also hides the children of its children', () => {
+    // Proxmox → 2 VMs → 10 apps each (the VMs' apps are grouped automatically).
+    const nodes = [device('pve'), client('vm1'), client('vm2')]
+    const edges = [edge('pve', 'vm1'), edge('pve', 'vm2')]
+    for (const vm of ['vm1', 'vm2']) {
+      for (let i = 0; i < 10; i++) {
+        nodes.push({ ...client(`${vm}-app${i}`), kind: 'app' })
+        edges.push(edge(vm, `${vm}-app${i}`))
+      }
+    }
+    const open = collapseClients(nodes, edges, 8, new Set())
+    expect(open.groups.map((g) => g.parentId)).toEqual(['vm1', 'vm2'])
+
+    const view = collapseClients(nodes, edges, 8, new Set(), new Set(['pve']))
+    expect(view.nodes.map((n) => n.id)).toEqual(['pve'])
+    expect(view.groups.map((g) => g.parentId)).toEqual(['pve']) // only the Proxmox bubble
+    expect(view.edges.map((e) => e.target)).toEqual([groupId('pve')])
+  })
+
   it('keeps every client visible up to the threshold', () => {
     const { nodes, edges } = network(8)
     const view = collapseClients(nodes, edges, 8, new Set())
