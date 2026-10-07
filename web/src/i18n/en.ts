@@ -48,9 +48,11 @@ export default {
     leftToRight: 'Left to right',
     topDown: 'Top down',
     emptyTitle: 'Your map is empty',
-    emptyHint: 'Connect your first device, or load a demo network to look around.',
+    emptyHint:
+      'Scan your network to find every device automatically, connect a device, or load a demo network.',
     addIntegration: 'Add integration',
     loadDemo: 'Load demo network',
+    scanNetwork: 'Scan my network',
     groupLabel: '{n} clients',
     groupOnline: '{n} online',
     segment: 'Unmanaged segment',

@@ -50,9 +50,11 @@ const ptBR: typeof en = {
     leftToRight: 'Esquerda para direita',
     topDown: 'De cima para baixo',
     emptyTitle: 'Seu mapa está vazio',
-    emptyHint: 'Conecte seu primeiro equipamento ou carregue uma rede de demonstração.',
+    emptyHint:
+      'Varra sua rede para encontrar todos os dispositivos automaticamente, conecte um equipamento ou carregue uma rede demo.',
     addIntegration: 'Adicionar integração',
     loadDemo: 'Carregar rede demo',
+    scanNetwork: 'Varrer minha rede',
     groupLabel: '{n} clientes',
     groupOnline: '{n} online',
     segment: 'Segmento não gerenciado',

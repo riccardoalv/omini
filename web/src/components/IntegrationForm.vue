@@ -8,6 +8,7 @@ import type { Config, Integration, IntegrationType, TestResult } from '@/lib/typ
 
 import ModalDialog from './ModalDialog.vue'
 import SecretInput from './SecretInput.vue'
+import ToggleSwitch from './ToggleSwitch.vue'
 
 const props = defineProps<{
   type: IntegrationType
@@ -76,10 +77,15 @@ async function save() {
       </div>
 
       <div v-for="f in type.fields" :key="f.key" class="field">
-        <label v-if="f.type === 'bool'" class="checkbox">
-          <input v-model="values[f.key]" type="checkbox" :name="f.key" />
-          {{ fieldLabel(f) }}
-        </label>
+        <div v-if="f.type === 'bool'" class="bool-field">
+          <ToggleSwitch
+            :model-value="!!values[f.key]"
+            :label="fieldLabel(f)"
+            :data-field="f.key"
+            @update:model-value="(v: boolean) => (values[f.key] = v)"
+          />
+          <span>{{ fieldLabel(f) }}</span>
+        </div>
         <template v-else>
           <label :for="`f-${f.key}`">{{ fieldLabel(f) }}<span v-if="f.required"> *</span></label>
           <select
@@ -143,6 +149,12 @@ async function save() {
 }
 .spacer {
   flex: 1;
+}
+.bool-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
 }
 .alert {
   margin: 4px 0 0;

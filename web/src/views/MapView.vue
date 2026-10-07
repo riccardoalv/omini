@@ -206,6 +206,16 @@ async function resetLayout() {
   await load()
 }
 
+async function scanNetwork() {
+  await api.createIntegration({
+    name: 'Network scan',
+    type: 'network',
+    config: { subnets: 'auto', port_scan: true },
+  })
+  lastLayout = ''
+  await load()
+}
+
 async function loadDemo() {
   await api.createIntegration({ name: 'Demo network', type: 'demo', config: {} })
   await new Promise((r) => setTimeout(r, 800))
@@ -283,7 +293,8 @@ onBeforeUnmount(() => clearInterval(timer))
       <h2>{{ t('map.emptyTitle') }}</h2>
       <p class="muted">{{ t('map.emptyHint') }}</p>
       <div class="empty-actions">
-        <button class="btn primary" @click="router.push('/integrations?add=1')">
+        <button class="btn primary" @click="scanNetwork">{{ t('map.scanNetwork') }}</button>
+        <button class="btn" @click="router.push('/integrations?add=1')">
           {{ t('map.addIntegration') }}
         </button>
         <button class="btn" @click="loadDemo">{{ t('map.loadDemo') }}</button>
