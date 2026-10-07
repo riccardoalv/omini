@@ -103,6 +103,8 @@ const edges = computed(() => filtered.value.edges)
 const offlineCount = computed(() => allNodes.value.filter((n) => !n.online).length)
 const expanded = computed(() => new Set(prefs.expanded))
 const forced = computed(() => new Set(prefs.collapsed))
+// Map areas: declared before the view, which collapses them.
+const areas = ref<MapArea[]>([])
 const view = computed(() =>
   collapseAreas(
     collapseClients(
@@ -310,7 +312,6 @@ async function onDragStop(e: NodeDragEvent) {
 
 // --- map areas ---
 
-const areas = ref<MapArea[]>([])
 const editingArea = ref<number>()
 const areaBusy = ref(false) // dragging or resizing
 /** Rectangles held still while something is being dragged or resized. */
