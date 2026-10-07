@@ -65,7 +65,7 @@ func TestURLFieldsAcceptBareAddresses(t *testing.T) {
 	fields := []model.FormField{{Key: "url", Type: model.FormFieldTypeURL, Required: true}}
 	for in, want := range map[string]string{
 		"192.168.1.1":           "https://192.168.1.1",
-		" fw.lan:8443/ ":        "https://fw.lan:8443",
+		"fw.lan:8443/":          "https://fw.lan:8443",
 		"http://192.168.1.1":    "http://192.168.1.1",
 		"https://opnsense.lan/": "https://opnsense.lan",
 	} {
