@@ -177,6 +177,8 @@ export async function layout(
       'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED', // parents centered over children
       'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+      // Siblings keep their order (grouped by port or Wi-Fi network, see modelOrder).
+      'elk.layered.crossingMinimization.forceNodeModelOrder': 'true',
     },
     children: [...nodes.filter((n) => !groupOf.has(n.id)).map(box), ...boxes],
     edges: edges

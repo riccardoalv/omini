@@ -176,3 +176,23 @@ describe('modelOrder', () => {
     ])
   })
 })
+
+describe('sibling order in the layout', () => {
+  it('keeps the model order of children, so groups do not interleave', async () => {
+    // ap → net A (a1, a2) and net B (b1, b2): given in that order.
+    const ids = ['ap', 'netA', 'netB', 'a1', 'a2', 'b1', 'b2']
+    const nodes = ids.map((id) => ({ id, width: 150, height: 30 }))
+    const edges = [
+      { id: 'e1', source: 'ap', target: 'netA' },
+      { id: 'e2', source: 'ap', target: 'netB' },
+      { id: 'e3', source: 'netA', target: 'a1' },
+      { id: 'e4', source: 'netA', target: 'a2' },
+      { id: 'e5', source: 'netB', target: 'b1' },
+      { id: 'e6', source: 'netB', target: 'b2' },
+    ]
+    const pos = await layout(nodes, edges, {}, 'RIGHT')
+    const order = ['a1', 'a2', 'b1', 'b2'].sort((x, y) => pos[x]!.y - pos[y]!.y)
+    expect(order).toEqual(['a1', 'a2', 'b1', 'b2'])
+    expect(pos.netA!.y).toBeLessThan(pos.netB!.y)
+  })
+})
