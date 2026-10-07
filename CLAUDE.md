@@ -8,7 +8,9 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**Design phase — no code yet.** Decisions are being made by consensus with the maintainer. Do not start implementation, and do not make product or architecture decisions unilaterally: raise questions and trade-offs, then record agreed decisions here and in the README.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, SNMP discovery, demo network, SQLite store, secret encryption, topology engine, collector, auth and HTTP API. Next: Vue UI, Python plugin runtime + SDK, OPNsense plugin, Docker image.
+
+Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
 ## Decisions log
 

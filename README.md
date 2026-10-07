@@ -4,7 +4,7 @@
 
 Omini connects to your routers, switches, access points and network software — from different vendors — reads what each one knows about the network, and automatically builds a **live topology map** showing **where traffic is flowing**, **which devices are connected** and **how healthy the network is**. All in a clean web UI running on your own hardware.
 
-> ⚠️ **Status:** design phase. This document describes the planned MVP; there is no code yet. Items marked **(open)** are still being discussed.
+> ⚠️ **Status:** v0.1 in progress — the core (SNMP, topology, collector, API) works; the web UI and the OPNsense plugin are being built. Not ready for production use yet.
 
 ---
 
@@ -172,17 +172,32 @@ services:
 
 ```bash
 docker compose up -d
-# open http://<your-server>:8080
+# open http://<your-server>:8080 — the first visit asks you to create the admin user
 ```
 
-## Development (planned)
+### Configuration
 
-Requirements: Docker and `make` (an optional Nix flake is also provided).
+| Variable | Default | Description |
+|---|---|---|
+| `OMINI_ADDR` | `:8080` | Address the web server listens on |
+| `OMINI_DATA_DIR` | `./data` | Where the SQLite database and the secret key live |
+| `OMINI_POLL_INTERVAL` | `60` | Collection interval, in seconds or as a duration (`1m30s`); minimum 10s |
+| `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
+| `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `OMINI_DEMO` | `false` | Add the demo network on first start |
+
+## Development
+
+Requirements: Go (see `go.mod`), [uv](https://docs.astral.sh/uv/) and `make` — or just `nix develop`.
 
 ```bash
-make dev    # Go core with live reload + Vue dev server + SNMP simulator with sample data
-make test
+OMINI_DEMO=1 go run ./cmd/omini   # http://localhost:8080 with the demo network
+make test                         # all tests (Go + Python SDK)
+make cover                        # tests with a coverage report
+make lint
 ```
+
+Planned: `make dev` with Docker Compose (live reload + Vue dev server + SNMP simulator).
 
 The data contract between the Go core and plugins is a JSON Schema in `schema/`; Go types and the Python SDK models are generated from it (`make generate`).
 
