@@ -93,9 +93,9 @@ const ptBR: typeof en = {
   },
   panel: {
     scan: 'Escanear (nmap)',
-    scanning: 'Escaneando… (alguns minutos)',
+    scanning: 'Escaneando…',
     scanHint:
-      'Varredura profunda deste dispositivo com o nmap: as 1024 portas mais comuns, versões dos serviços, scripts padrão e, com permissão, o sistema operacional (como nmap -A).',
+      'Escaneia este dispositivo com o nmap agora: portas abertas, versões dos serviços e sistema. A profundidade é definida na integração nmap (Escanear um dispositivo).',
     scanned: 'Escaneado: {result}.',
     scanPorts: 'nenhuma porta aberta | 1 porta aberta | {n} portas abertas',
     portLabel: 'Descrever esta porta',
@@ -285,6 +285,7 @@ const ptBR: typeof en = {
   fieldGroups: {
     Methods: 'Métodos',
     Advanced: 'Avançado',
+    'Scan one device': 'Escanear um dispositivo',
   },
   fields: {
     nmap: {
@@ -303,6 +304,23 @@ const ptBR: typeof en = {
       every_hours: {
         label: 'Varrer de novo a cada (horas)',
         help: 'Uma varredura completa leva minutos e gera carga na rede: uma vez por dia basta.',
+      },
+      device_ports: {
+        label: 'Portas',
+        help: 'Quantas das portas mais comuns escanear (nmap --top-ports). 100 é rápido; mais portas, e versões em cada uma, demoram mais. 65535 são todas.',
+      },
+      device_versions: {
+        label: 'Versões dos serviços',
+        help: 'nmap -sV. Leve tenta só as sondas prováveis (segundos); completa tenta todas, mais precisa, mas pode levar minutos.',
+        options: { off: 'Desligado', light: 'Leve', full: 'Completa' },
+      },
+      device_scripts: {
+        label: 'Scripts padrão',
+        help: 'nmap -sC: títulos de páginas, certificados, chaves SSH e mais sobre cada serviço. Soma uns 20 s.',
+      },
+      device_os: {
+        label: 'Sistema operacional e rota',
+        help: 'nmap -O --traceroute, com a mesma permissão da detecção de sistemas operacionais acima.',
       },
     },
     network: {

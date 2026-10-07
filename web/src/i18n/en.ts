@@ -90,9 +90,9 @@ export default {
   },
   panel: {
     scan: 'Scan (nmap)',
-    scanning: 'Scanning… (a few minutes)',
+    scanning: 'Scanning…',
     scanHint:
-      'Deep nmap scan of this device: the 1024 most common ports, service versions, default scripts and, with permission, the operating system (like nmap -A).',
+      'Scans this device with nmap now: open ports, service versions and system. How deep is set in the nmap integration (Scan one device).',
     scanned: 'Scanned: {result}.',
     scanPorts: 'no open ports | 1 open port | {n} open ports',
     portLabel: 'Describe this port',
@@ -281,7 +281,14 @@ export default {
   // Field labels default to the integration's own (English) texts; other
   // languages translate them as fields.<integration type>.<field key>.label/help.
   fieldGroups: {} as Record<string, string>,
-  fields: {} as Record<string, Record<string, { label?: string; help?: string }>>,
+  fields: {
+    nmap: {
+      device_versions: { options: { off: 'Off', light: 'Light', full: 'Full' } },
+    },
+  } as Record<
+    string,
+    Record<string, { label?: string; help?: string; options?: Record<string, string> }>
+  >,
   store: {
     builtin: 'Built in',
     includedInOmini: 'Included in Omini',

@@ -46,6 +46,10 @@ function help(f: FormField): string | undefined {
   const key = `fields.${props.type}.${f.key}.help`
   return te(key) ? t(key) : f.help
 }
+function option(f: FormField, o: string): string {
+  const key = `fields.${props.type}.${f.key}.options.${o}`
+  return te(key) ? t(key) : o
+}
 function groupName(name: string): string {
   const key = `fieldGroups.${name}`
   return te(key) ? t(key) : name
@@ -83,7 +87,7 @@ function groupName(name: string): string {
             class="select"
             :name="f.key"
           >
-            <option v-for="o in f.options" :key="o" :value="o">{{ o }}</option>
+            <option v-for="o in f.options" :key="o" :value="o">{{ option(f, o) }}</option>
           </select>
           <SecretInput
             v-else-if="f.type === 'secret'"

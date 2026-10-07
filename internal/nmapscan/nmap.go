@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +94,23 @@ func (*Integration) Info() integration.Info {
 			{
 				Key: "every_hours", Type: model.FormFieldTypeInt, Label: model.Ptr("Scan again every (hours)"), Default: 24,
 				Help: model.Ptr("A full scan takes minutes and some load on the network: once a day is plenty."),
+			},
+			{
+				Key: "device_ports", Type: model.FormFieldTypeInt, Label: model.Ptr("Ports"), Default: 100, Group: model.Ptr(deviceGroup),
+				Help: model.Ptr("How many of the most common ports to scan (nmap --top-ports). 100 is quick; more ports, and versions on each of them, take longer. 65535 is every port."),
+			},
+			{
+				Key: "device_versions", Type: model.FormFieldTypeSelect, Label: model.Ptr("Service versions"), Default: "light",
+				Options: []string{"off", "light", "full"}, Group: model.Ptr(deviceGroup),
+				Help: model.Ptr("nmap -sV. Light tries the likely probes only (seconds); full tries them all, more precise but it can take minutes."),
+			},
+			{
+				Key: "device_scripts", Type: model.FormFieldTypeBool, Label: model.Ptr("Default scripts"), Default: false, Group: model.Ptr(deviceGroup),
+				Help: model.Ptr("nmap -sC: page titles, certificates, SSH keys and more about each service. Adds about 20 s."),
+			},
+			{
+				Key: "device_os", Type: model.FormFieldTypeBool, Label: model.Ptr("Operating system and route"), Default: true, Group: model.Ptr(deviceGroup),
+				Help: model.Ptr("nmap -O --traceroute, with the same permission as operating system detection above."),
 			},
 		},
 	}
@@ -294,9 +312,25 @@ func (s *Integration) args(cfg integration.Config, prefixes []netip.Prefix) []st
 // deviceArgs scan one device in depth (the user asked for it): the 1024 most
 // common ports, full version detection and the default scripts, plus the
 // operating system and the route when nmap may use raw sockets — what -A does.
+// deviceGroup holds the settings of "Scan (nmap)" in the device panel.
+const deviceGroup = "Scan one device"
+
+// deviceArgs: the scan of one device from its panel, as set in the
+// integration (light by default: the 100 top ports with light versions).
 func (s *Integration) deviceArgs(cfg integration.Config) []string {
-	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "300s", "--top-ports", "1024", "-sV", "-sC"}
-	if cfg.Bool("os_detection", true) && s.privileged() {
+	ports := min(max(cfg.Int("device_ports", 100), 1), 65535)
+	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "300s", "--top-ports", strconv.Itoa(ports)}
+	switch cfg.String("device_versions") {
+	case "off":
+	case "full":
+		args = append(args, "-sV")
+	default:
+		args = append(args, "-sV", "--version-light")
+	}
+	if cfg.Bool("device_scripts", false) {
+		args = append(args, "-sC")
+	}
+	if cfg.Bool("device_os", true) && cfg.Bool("os_detection", true) && s.privileged() {
 		args = append(args, "-O", "--traceroute")
 		if !*s.Root {
 			args = append(args, "--privileged")

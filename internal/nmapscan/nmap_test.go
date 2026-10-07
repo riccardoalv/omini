@@ -192,14 +192,13 @@ func TestScanOneDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := strings.Join(f.calls[0], " ")
-	// One device in depth: the 1024 top ports, full versions, default scripts,
-	// OS and route (root here) — like -A.
-	for _, want := range []string{"--top-ports 1024", "-sV", "-sC", "-O", "--traceroute"} {
+	// Light by default: the 100 top ports, light versions, OS (root here).
+	for _, want := range []string{"--top-ports 100 ", "-sV --version-light", "-O", "--traceroute"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args %q lack %q", args, want)
 		}
 	}
-	if !strings.HasSuffix(args, " 192.168.1.1") || strings.Contains(args, "/24") || strings.Contains(args, "--version-light") {
+	if !strings.HasSuffix(args, " 192.168.1.1") || strings.Contains(args, "/24") || strings.Contains(args, "-sC") {
 		t.Fatalf("args: %q", args)
 	}
 	if host.IP != "192.168.1.1" || len(host.OpenPorts) != 1 {
@@ -214,6 +213,47 @@ func TestScanOneDevice(t *testing.T) {
 
 	if _, err := s.ScanHost(ctx, integration.Config{}, "not an ip"); err == nil {
 		t.Fatal("invalid addresses are refused")
+	}
+}
+
+func TestScanOneDeviceSettings(t *testing.T) {
+	cases := []struct {
+		cfg        integration.Config
+		want, lack []string
+	}{
+		{ // In depth, like -A.
+			integration.Config{"device_ports": 1024, "device_versions": "full", "device_scripts": true},
+			[]string{"--top-ports 1024 ", "-sV", "-sC", "-O --traceroute"},
+			[]string{"--version-light"},
+		},
+		{ // Ports only.
+			integration.Config{"device_ports": 70000, "device_versions": "off", "device_os": false},
+			[]string{"--top-ports 65535 "},
+			[]string{"-sV", "-sC", "-O"},
+		},
+		{ // OS detection off for the whole integration.
+			integration.Config{"os_detection": false},
+			[]string{"--top-ports 100 "},
+			[]string{"-O"},
+		},
+	}
+	for _, c := range cases {
+		s, f := newTest(true)
+		if _, err := s.ScanHost(context.Background(), c.cfg, "192.168.1.1"); err != nil {
+			t.Fatal(err)
+		}
+		args := strings.Join(f.calls[0], " ")
+		for _, w := range c.want {
+			if !strings.Contains(args, w) {
+				t.Errorf("%v: args %q lack %q", c.cfg, args, w)
+			}
+		}
+		for _, l := range c.lack {
+			if strings.Contains(args, l) {
+				t.Errorf("%v: args %q have %q", c.cfg, args, l)
+			}
+		}
+		s.wait()
 	}
 }
 

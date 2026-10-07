@@ -253,7 +253,7 @@ OMINI_NMAP_PRIVILEGED=true ./omini
 
 On NixOS, the store is read-only: use a wrapper instead (`security.wrappers.nmap = { source = "${pkgs.nmap}/bin/nmap"; capabilities = "cap_net_raw,cap_net_admin,cap_net_bind_service+eip"; owner = "root"; group = "root"; };`), which puts it in `/run/wrappers/bin`.
 
-Each device can also be scanned in depth from its panel ("Scan (nmap)"): the 1024 most common ports, service versions and default scripts, plus the operating system and route with that permission — like `nmap -A`.
+Each device can also be scanned from its panel ("Scan (nmap)"). How is set in the integration, under "Scan one device": how many of the most common ports (default 100), service versions (off, light — the default — or full), default scripts (`-sC`, off by default) and the operating system and route (with that permission). The defaults take seconds; 1024 ports with full versions and scripts — like `nmap -A` — can take a couple of minutes.
 
 ## Security
 
