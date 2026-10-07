@@ -232,7 +232,21 @@ class WirelessClient(BaseModel):
     band: Literal["2.4ghz", "5ghz", "6ghz"] | None = None
     signal_dbm: Annotated[int | None, Field(le=0)] = None
     tx_rate_mbps: Annotated[float | None, Field(ge=0.0)] = None
+    """
+    Link (PHY) rate from the access point to the client.
+    """
     rx_rate_mbps: Annotated[float | None, Field(ge=0.0)] = None
+    """
+    Link (PHY) rate from the client to the access point.
+    """
+    rx_bps: Annotated[int | None, Field(ge=0)] = None
+    """
+    Current traffic the client downloads, in bits per second, as the access point measures it.
+    """
+    tx_bps: Annotated[int | None, Field(ge=0)] = None
+    """
+    Current traffic the client uploads, in bits per second.
+    """
 
 
 class Gateway(BaseModel):

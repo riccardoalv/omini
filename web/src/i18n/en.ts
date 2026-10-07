@@ -89,6 +89,9 @@ export default {
     },
   },
   panel: {
+    trafficNow: 'Traffic now',
+    band: 'Wi-Fi band',
+    linkRate: '{rate} Mbps link',
     deviceName: "Device's name",
     portClickHint: 'Click for options',
     openLinked: 'Open {name}',

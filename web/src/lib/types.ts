@@ -116,6 +116,10 @@ export interface TopoNode {
   port?: string
   ssid?: string
   signal_dbm?: number
+  /** Wi-Fi clients: band, link rate and current traffic (rx = download) from their AP. */
+  band?: '2.4ghz' | '5ghz' | '6ghz'
+  link_mbps?: number
+  flow?: { rx_bps: number; tx_bps: number }
   mac_count?: number
   device?: Device
   wan?: WANLink

@@ -168,3 +168,12 @@ describe('port names on links', () => {
     })
   })
 })
+
+describe('Wi-Fi clients', () => {
+  const phone: TopoNode = { ...client('phone'), flow: { rx_bps: 2e6, tx_bps: 1e5 } }
+
+  it('show the traffic their access point measures, nothing while idle', () => {
+    expect(nodeFlow(phone, new Map())).toEqual({ down: 2e6, up: 1e5 })
+    expect(nodeFlow({ ...phone, flow: { rx_bps: 0, tx_bps: 0 } }, new Map())).toBeUndefined()
+  })
+})

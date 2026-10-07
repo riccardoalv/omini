@@ -92,6 +92,9 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    trafficNow: 'Tráfego agora',
+    band: 'Banda Wi-Fi',
+    linkRate: 'link de {rate} Mbps',
     deviceName: 'Nome no aparelho',
     portClickHint: 'Clique para opções',
     openLinked: 'Abrir {name}',

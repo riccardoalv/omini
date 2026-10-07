@@ -264,7 +264,15 @@ const summary = computed(() => {
     out.push({ key: 'leases', label: t('panel.leases'), value: String(d.dhcp_leases.length) })
   return out
 })
-/** Internet traffic right now (routers, firewalls and WAN nodes). */
+const bandNames: Record<string, string> = { '2.4ghz': '2.4 GHz', '5ghz': '5 GHz', '6ghz': '6 GHz' }
+/** "5 GHz · 867 Mbps link" */
+const bandText = computed(() => {
+  const node = n.value
+  if (!node?.band) return ''
+  const rate = node.link_mbps ? t('panel.linkRate', { rate: Math.round(node.link_mbps) }) : ''
+  return [bandNames[node.band] ?? node.band, rate].filter(Boolean).join(' · ')
+})
+/** Traffic right now: internet (routers, firewalls, WAN nodes) or a Wi-Fi client's. */
 const flow = computed(() => (n.value ? nodeFlow(n.value, byId.value) : undefined))
 // Long client lists show the first few; the rest on demand.
 const CLIENTS_SHOWN = 8
@@ -564,7 +572,9 @@ async function save(patch: {
 
         <div v-if="summary.length || flow" class="tiles" data-test="summary">
           <div v-if="flow" class="tile traffic" data-test="flow">
-            <span class="tile-label">{{ t('panel.internetNow') }}</span>
+            <span class="tile-label">{{
+              n.flow ? t('panel.trafficNow') : t('panel.internetNow')
+            }}</span>
             <span class="tile-value">
               <span class="down"><ArrowDown :size="13" />{{ formatRate(flow.down) }}</span>
               <span class="up"><ArrowUp :size="13" />{{ formatRate(flow.up) }}</span>
@@ -694,6 +704,10 @@ async function save(patch: {
             <template v-if="n.ssid">
               <dt>{{ t('panel.ssid') }}</dt>
               <dd>{{ n.ssid }}</dd>
+            </template>
+            <template v-if="n.band">
+              <dt>{{ t('panel.band') }}</dt>
+              <dd data-test="band">{{ bandText }}</dd>
             </template>
             <template v-if="n.signal_dbm !== undefined">
               <dt>{{ t('panel.signal') }}</dt>

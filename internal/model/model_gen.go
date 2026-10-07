@@ -1158,7 +1158,11 @@ type WirelessClient struct {
 	// MAC corresponds to the JSON schema field "mac".
 	MAC MACAddress `json:"mac" yaml:"mac"`
 
-	// RxRateMbps corresponds to the JSON schema field "rx_rate_mbps".
+	// Current traffic the client downloads, in bits per second, as the access point
+	// measures it.
+	RxBps *uint64 `json:"rx_bps,omitempty,omitzero" yaml:"rx_bps,omitempty"`
+
+	// Link (PHY) rate from the client to the access point.
 	RxRateMbps *float64 `json:"rx_rate_mbps,omitempty,omitzero" yaml:"rx_rate_mbps,omitempty"`
 
 	// SignalDBM corresponds to the JSON schema field "signal_dbm".
@@ -1167,7 +1171,10 @@ type WirelessClient struct {
 	// SSID corresponds to the JSON schema field "ssid".
 	SSID *string `json:"ssid,omitempty,omitzero" yaml:"ssid,omitempty"`
 
-	// TxRateMbps corresponds to the JSON schema field "tx_rate_mbps".
+	// Current traffic the client uploads, in bits per second.
+	TxBps *uint64 `json:"tx_bps,omitempty,omitzero" yaml:"tx_bps,omitempty"`
+
+	// Link (PHY) rate from the access point to the client.
 	TxRateMbps *float64 `json:"tx_rate_mbps,omitempty,omitzero" yaml:"tx_rate_mbps,omitempty"`
 }
 

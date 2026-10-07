@@ -463,3 +463,23 @@ describe('NodePanel system health', () => {
     expect(never.get('[data-test=tile-updates]').attributes('title')).toContain('Check for updates')
   })
 })
+
+describe('NodePanel Wi-Fi client', () => {
+  it('shows the band, link rate and current traffic', () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    const w = mountPanel({
+      id: 'mac:02',
+      kind: 'client',
+      label: 'moto-g86-5G',
+      online: true,
+      ip: '192.168.1.185',
+      band: '5ghz',
+      link_mbps: 866.7,
+      flow: { rx_bps: 12_000_000, tx_bps: 300_000 },
+    })
+    expect(w.get('[data-test=band]').text()).toBe('5 GHz · 867 Mbps link')
+    const flow = w.get('[data-test=flow]').text()
+    expect(flow).toContain('Traffic now')
+    expect(flow).toContain('12.0 Mbps')
+  })
+})

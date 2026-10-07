@@ -30,9 +30,13 @@ const rate = (n: TopoNode | undefined, port?: string) => (port ? n?.traffic?.[po
 
 /**
  * The traffic of a node: a router's or firewall's internet traffic (its WAN
- * interfaces), or a WAN node's own uplink. Undefined when unknown.
+ * interfaces), a WAN node's own uplink, or a Wi-Fi client's as its access
+ * point measures it. Undefined when unknown.
  */
 export function nodeFlow(n: TopoNode, byId: Map<string, TopoNode>): Flow | undefined {
+  // A Wi-Fi client: what its access point measures (nothing while idle).
+  if (n.flow)
+    return n.flow.rx_bps || n.flow.tx_bps ? { down: n.flow.rx_bps, up: n.flow.tx_bps } : undefined
   if (n.kind === 'wan' && n.wan) {
     const owner = byId.get(n.id.slice(4, n.id.length - n.wan.interface.length - 1))
     const r = rate(owner, n.wan.interface)

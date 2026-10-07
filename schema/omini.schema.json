@@ -393,11 +393,23 @@
         },
         "tx_rate_mbps": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Link (PHY) rate from the access point to the client."
         },
         "rx_rate_mbps": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Link (PHY) rate from the client to the access point."
+        },
+        "rx_bps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current traffic the client downloads, in bits per second, as the access point measures it."
+        },
+        "tx_bps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current traffic the client uploads, in bits per second."
         }
       }
     },

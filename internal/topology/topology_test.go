@@ -447,3 +447,27 @@ func TestClientKeepsItsLastSwitchPort(t *testing.T) {
 		t.Fatalf("a memory of a device that is gone is ignored, got %q", p)
 	}
 }
+
+// A Wi-Fi client carries its band, link rate and current traffic from its AP.
+func TestWifiClientBandAndTraffic(t *testing.T) {
+	const apMAC, phone = "30:16:9d:00:00:01", "02:23:ab:00:00:01"
+	band := model.WifiBand("5ghz")
+	ap := model.Device{
+		Key: apMAC, Name: "Bedroom", Role: model.Ptr(model.DeviceRoleAp), MACs: []model.MACAddress{apMAC},
+		WirelessClients: []model.WirelessClient{{
+			MAC: phone, Interface: model.Ptr("5 GHz"), Band: &band,
+			RxBps: model.Ptr(uint64(2_000_000)), TxBps: model.Ptr(uint64(100_000)), TxRateMbps: model.Ptr(866.7),
+		}},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{ap}}})
+	for _, n := range topo.Nodes {
+		if n.ID != "mac:"+phone {
+			continue
+		}
+		if n.Band != "5ghz" || n.LinkMbps != 866.7 || n.Flow == nil || n.Flow.RxBps != 2_000_000 || n.Flow.TxBps != 100_000 {
+			t.Fatalf("phone: band %q link %v flow %+v", n.Band, n.LinkMbps, n.Flow)
+		}
+		return
+	}
+	t.Fatal("phone not on the map")
+}

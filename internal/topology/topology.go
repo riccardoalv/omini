@@ -83,6 +83,9 @@ type Node struct {
 	Port          string            `json:"port,omitempty"`      // port (or radio) on the parent
 	SSID          string            `json:"ssid,omitempty"`
 	SignalDBM     *int64            `json:"signal_dbm,omitempty"`
+	Band          string            `json:"band,omitempty"`        // Wi-Fi clients: 2.4ghz, 5ghz, 6ghz
+	LinkMbps      float64           `json:"link_mbps,omitempty"`   // Wi-Fi clients: link rate, when the AP reports it
+	Flow          *Rate             `json:"flow,omitempty"`        // Wi-Fi clients: current traffic (rx = download), as the AP measures it
 	MACCount      int               `json:"mac_count,omitempty"`   // segments: MACs seen behind the port
 	Device        *model.Device     `json:"device,omitempty"`      // managed devices: full collected data
 	WAN           *WANLink          `json:"wan,omitempty"`         // WAN nodes: the uplink
@@ -763,6 +766,13 @@ func (b *builder) placeCollected(
 		if w, ok := wifi[m]; ok {
 			n.ParentID, n.Port, kind = w.node, model.Deref(w.c.Interface), EdgeWifi
 			n.SSID, n.SignalDBM = model.Deref(w.c.SSID), w.c.SignalDBM
+			if w.c.Band != nil {
+				n.Band = string(*w.c.Band)
+			}
+			n.LinkMbps = max(model.Deref(w.c.TxRateMbps), model.Deref(w.c.RxRateMbps))
+			if w.c.RxBps != nil || w.c.TxBps != nil {
+				n.Flow = &Rate{RxBps: model.Deref(w.c.RxBps), TxBps: model.Deref(w.c.TxBps)}
+			}
 		} else if port, ok, uplink := b.bestPort(b.fdbOrLast(m), ""); ok {
 			n.ParentID, n.Port, kind = port.node, port.port, EdgeFDB
 			if uplink {
