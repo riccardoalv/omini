@@ -76,7 +76,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
   client: { width: 200, height: 38 },
   app: { width: 180, height: 34 },
   wan: { width: 180, height: 56 },
-  ssid: { width: 150, height: 26 },
+  ssid: { width: 190, height: 26 },
   group: { width: 150, height: 44 },
 }
 
