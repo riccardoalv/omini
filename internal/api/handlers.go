@@ -323,10 +323,16 @@ func (s *Server) topology(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	areas, err := s.Store.ListAreas(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, struct {
 		collector.State
 		Layout map[string]store.Point `json:"layout"`
-	}{s.Collector.State(), layout})
+		Areas  []store.Area           `json:"areas"`
+	}{s.Collector.State(), layout, areas})
 }
 
 func (s *Server) refresh(w http.ResponseWriter, _ *http.Request) {
@@ -354,6 +360,62 @@ func (s *Server) resetLayout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- map areas ---
+
+func (s *Server) createArea(w http.ResponseWriter, r *http.Request) {
+	var in store.Area
+	if !readJSON(w, r, &in) {
+		return
+	}
+	a, err := s.Store.CreateArea(r.Context(), in)
+	if errors.Is(err, store.ErrInvalidArea) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	} else if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, a)
+}
+
+func (s *Server) updateArea(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in store.AreaUpdate
+	if !readJSON(w, r, &in) {
+		return
+	}
+	a, err := s.Store.UpdateArea(r.Context(), id, in)
+	switch {
+	case isNotFound(err):
+		writeError(w, http.StatusNotFound, "area not found")
+	case errors.Is(err, store.ErrInvalidArea):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, a)
+	}
+}
+
+func (s *Server) deleteArea(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	err := s.Store.DeleteArea(r.Context(), id)
+	switch {
+	case isNotFound(err):
+		writeError(w, http.StatusNotFound, "area not found")
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // --- inventory ---

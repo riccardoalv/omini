@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, zero-config network scan, device identification (types, OS, brands, products) and app nodes with icons, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: map areas, nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, zero-config network scan, device identification (types, OS, brands, products) and app nodes with icons, map areas, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -46,6 +46,8 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Data contract | **JSON Schema** in `schema/` is the single source of truth; Go types and Python (pydantic) models are generated from it; CI fails if generated code is stale |
 | Plugin format | `plugin.yaml` manifest (id, name, version, protocol version, entrypoint, form fields) + `requirements.txt`; Python SDK `omini-sdk` handles stdin/stdout, validation and errors so authors only write `collect()` and `test()` |
 | Dev environment | `make dev` runs the Go backend and the Vite dev server together; `make run` builds and runs the production-like binary. Optional Nix flake. (Docker Compose + SNMP simulator: later) |
+| Map areas | Named rectangles drawn on the map ("New area" button, then drag). Membership is geometric: nodes whose center is inside move with the area; dragging a node out removes it. Name, 6 preset colors, resize from the bottom-right corner, right-click menu on the title (rename, color, delete). Stored in the `areas` table, per orientation. "Reset layout" keeps areas. Collapsing an area into a bubble: later |
+| Expand/collapse | The expanded/collapsed node stays still on screen; the map is laid out again around it (no overlaps). The viewport only refits on first load, orientation change, layout reset and sidebar toggle |
 | Map orientation | Left-to-right by default, toggle to top-down in the map toolbar (per browser). Saved node positions are kept per orientation (`DOWN:` prefix in the layout table) |
 | Device web UI | Side panel offers "Open web interface" (new tab) when one is detected: `internal/webui` checks common admin ports (443, 80, 8443, 8080, 8006, 5000/5001, 8123, 8096, 9443) over HTTP/HTTPS and reads the page `<title>`. Only IPs of nodes on the map; cached 10 min; no credentials sent |
 | Sidebar | Compact (icons) or expanded (icons + labels), remembered per browser |

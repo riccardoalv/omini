@@ -98,6 +98,22 @@ export interface TopologyResponse {
   statuses: CollectionStatus[]
   generated_at: string
   layout: Record<string, Point>
+  areas?: MapArea[]
+}
+
+export const AREA_COLORS = ['gray', 'blue', 'green', 'yellow', 'red', 'purple'] as const
+export type AreaColor = (typeof AREA_COLORS)[number]
+
+/** A named rectangle drawn on the map; the nodes inside it move with it. */
+export interface MapArea {
+  id: number
+  name: string
+  color: AreaColor
+  direction: 'RIGHT' | 'DOWN'
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export type FieldType = 'string' | 'secret' | 'host' | 'url' | 'int' | 'bool' | 'select'

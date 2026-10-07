@@ -10,20 +10,31 @@ import {
   EyeOff,
   LayoutGrid,
   RefreshCw,
+  SquareDashed,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import AreaMenu from '@/components/map/AreaMenu.vue'
+import AreaNode from '@/components/map/AreaNode.vue'
 import NodeMenu from '@/components/map/NodeMenu.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
+import { areaIdOf, areaNodeId, MIN_AREA_SIZE, membersOf, rectFrom } from '@/lib/areas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
-import { anchorNewNodes, layout, layoutKey, positionsFor } from '@/lib/layout'
+import { alignOn, layout, layoutKey, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
-import type { Integration, Point, TopoNode, TopologyResponse } from '@/lib/types'
+import type {
+  AreaColor,
+  Integration,
+  MapArea,
+  Point,
+  TopoNode,
+  TopologyResponse,
+} from '@/lib/types'
 
 const POLL_MS = 10_000
 const SIZES: Record<string, { width: number; height: number }> = {
@@ -37,7 +48,8 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const { fitView, onNodesInitialized, updateNodeInternals } = useVueFlow('omini-map')
+const { fitView, onNodesInitialized, updateNodeInternals, viewport, screenToFlowCoordinate } =
+  useVueFlow('omini-map')
 
 const data = shallowRef<TopologyResponse>()
 const integrations = ref<Integration[]>([])
@@ -47,6 +59,7 @@ const selectedId = ref<string>()
 const refreshing = ref(false)
 const now = ref(Date.now())
 let lastLayout = '' // signature of the last laid out graph
+let layoutAnchor: string | undefined // node the user expanded or collapsed
 let timer: ReturnType<typeof setInterval> | undefined
 
 const allNodes = computed(() => data.value?.topology.nodes ?? [])
@@ -78,8 +91,20 @@ const summary = computed(() => {
 })
 const empty = computed(() => loaded.value && nodes.value.length === 0)
 
-const flowNodes = computed<Node<NodeData>[]>(() => {
-  const out: Node<NodeData>[] = view.value.nodes.map((n) => ({
+const flowNodes = computed<Node[]>(() => {
+  const out: Node[] = visibleAreas.value.map((a) => ({
+    id: areaNodeId(a.id),
+    type: 'area',
+    position: { x: a.x, y: a.y },
+    data: { area: a },
+    width: a.width,
+    height: a.height,
+    style: { width: `${a.width}px`, height: `${a.height}px` },
+    zIndex: -1,
+    dragHandle: '.area-title',
+    class: 'area-node',
+  }))
+  const devices: Node<NodeData>[] = view.value.nodes.map((n) => ({
     id: n.id,
     type: 'omini',
     position: positions.value[n.id] ?? { x: 0, y: 0 },
@@ -91,6 +116,7 @@ const flowNodes = computed<Node<NodeData>[]>(() => {
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
   }))
+  out.push(...devices)
   for (const g of view.value.groups) {
     out.push({
       id: g.id,
@@ -137,6 +163,8 @@ async function load() {
     const [topo, ints] = await Promise.all([api.topology(), api.integrations()])
     data.value = topo
     integrations.value = ints
+    // Never overwrite an area while the user is moving, resizing or renaming it.
+    if (!areaBusy.value && editingArea.value === undefined) areas.value = topo.areas ?? []
   } finally {
     loaded.value = true
     now.value = Date.now()
@@ -160,10 +188,16 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
     saved,
     direction,
   )
-  // Expanding or collapsing must not move what is already on screen: keep the
-  // current positions and place only the new nodes next to their parent.
-  const parents = new Map(v.edges.map((e) => [e.target, e.source]))
-  positions.value = refit ? fresh : anchorNewNodes(positions.value, fresh, (id) => parents.get(id))
+  // Expanding or collapsing keeps the clicked node where it is; the map is laid
+  // out again around it (no overlaps). Other changes keep the first node still.
+  const anchor =
+    layoutAnchor && positions.value[layoutAnchor]
+      ? layoutAnchor
+      : ids.find((id) => positions.value[id])
+  layoutAnchor = undefined
+  positions.value = refit
+    ? fresh
+    : alignOn(positions.value, fresh, anchor, new Set(Object.keys(saved)))
   if (refit) {
     // Handles moved (left/right vs top/bottom): Vue Flow must re-measure them.
     await nextTick()
@@ -195,6 +229,10 @@ onNodesInitialized(() => {
 const draggedPositions: Record<string, Point> = {}
 
 async function onDragStop(e: NodeDragEvent) {
+  if (areaDrag) {
+    await finishAreaDrag(e)
+    return
+  }
   const moved: Record<string, Point> = {}
   const saved: Record<string, Point> = {}
   for (const n of e.nodes) {
@@ -207,11 +245,181 @@ async function onDragStop(e: NodeDragEvent) {
   await api.saveLayout(saved)
 }
 
+// --- map areas ---
+
+const areas = ref<MapArea[]>([])
+const visibleAreas = computed(() =>
+  areas.value.filter((a) => a.direction === prefs.layoutDirection),
+)
+const editingArea = ref<number>()
+const areaBusy = ref(false) // dragging or resizing
+
+/** Boxes of everything laid out on the map, to find the members of an area. */
+function boxes() {
+  return [
+    ...view.value.nodes.map((n) => ({ id: n.id, kind: n.kind })),
+    ...view.value.groups.map((g) => ({ id: g.id, kind: 'group' })),
+  ]
+    .filter((b) => positions.value[b.id])
+    .map((b) => ({ id: b.id, ...positions.value[b.id]!, ...SIZES[b.kind]! }))
+}
+
+// Moving an area moves the nodes inside it.
+let areaDrag: { id: number; start: Point; members: Record<string, Point> } | undefined
+
+function onDragStart(e: NodeDragEvent) {
+  const id = areaIdOf(e.node.id)
+  const area = areas.value.find((a) => a.id === id)
+  if (!area) return
+  areaBusy.value = true
+  const members: Record<string, Point> = {}
+  for (const m of membersOf(area, boxes())) members[m] = { ...positions.value[m]! }
+  areaDrag = { id: area.id, start: { x: area.x, y: area.y }, members }
+}
+
+function onDrag(e: NodeDragEvent) {
+  if (!areaDrag) return
+  const dx = e.node.position.x - areaDrag.start.x
+  const dy = e.node.position.y - areaDrag.start.y
+  const next = { ...positions.value }
+  for (const [m, p] of Object.entries(areaDrag.members)) next[m] = { x: p.x + dx, y: p.y + dy }
+  positions.value = next
+  // The node list is rebuilt from the areas: move the area there too, or it snaps back.
+  patchArea(areaDrag.id, { x: e.node.position.x, y: e.node.position.y })
+}
+
+async function finishAreaDrag(e: NodeDragEvent) {
+  const drag = areaDrag!
+  areaDrag = undefined
+  const x = Math.round(e.node.position.x)
+  const y = Math.round(e.node.position.y)
+  patchArea(drag.id, { x, y })
+  const moved: Record<string, Point> = {}
+  const saved: Record<string, Point> = {}
+  for (const m of Object.keys(drag.members)) {
+    const p = positions.value[m]!
+    moved[m] = { x: Math.round(p.x), y: Math.round(p.y) }
+    saved[layoutKey(prefs.layoutDirection, m)] = moved[m]!
+  }
+  Object.assign(draggedPositions, saved)
+  positions.value = { ...positions.value, ...moved }
+  try {
+    await Promise.all([
+      api.updateArea(drag.id, { x, y }),
+      Object.keys(saved).length ? api.saveLayout(saved) : undefined,
+    ])
+  } finally {
+    areaBusy.value = false
+  }
+}
+
+function patchArea(id: number, patch: Partial<MapArea>) {
+  areas.value = areas.value.map((a) => (a.id === id ? { ...a, ...patch } : a))
+}
+
+function resizeArea(id: number, size: { width: number; height: number }) {
+  areaBusy.value = true
+  patchArea(id, size)
+}
+
+async function finishResize(id: number) {
+  const a = areas.value.find((x) => x.id === id)
+  try {
+    if (a) await api.updateArea(id, { width: a.width, height: a.height })
+  } finally {
+    areaBusy.value = false
+  }
+}
+
+async function renameArea(id: number, name: string) {
+  editingArea.value = undefined
+  patchArea(id, { name })
+  await api.updateArea(id, { name })
+}
+
+async function colorArea(id: number, color: AreaColor) {
+  patchArea(id, { color })
+  await api.updateArea(id, { color })
+}
+
+async function deleteArea(id: number) {
+  areas.value = areas.value.filter((a) => a.id !== id)
+  await api.deleteArea(id)
+}
+
+// Drawing a new area: click "New area", then drag a rectangle on the map.
+const drawing = ref(false)
+const draft = ref<{ start: Point; end: Point }>()
+const draftStyle = computed(() => {
+  if (!draft.value) return undefined
+  const box = mapEl.value?.getBoundingClientRect()
+  const r = rectFrom(draft.value.start, draft.value.end)
+  return {
+    left: `${r.x - (box?.left ?? 0)}px`,
+    top: `${r.y - (box?.top ?? 0)}px`,
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+  }
+})
+
+function onDrawStart(e: PointerEvent) {
+  const p = { x: e.clientX, y: e.clientY }
+  draft.value = { start: p, end: p }
+  ;(e.target as Element).setPointerCapture?.(e.pointerId)
+}
+
+function onDrawMove(e: PointerEvent) {
+  if (draft.value) draft.value = { ...draft.value, end: { x: e.clientX, y: e.clientY } }
+}
+
+async function onDrawEnd() {
+  const d = draft.value
+  draft.value = undefined
+  drawing.value = false
+  if (!d) return
+  const a = screenToFlowCoordinate(d.start)
+  const b = screenToFlowCoordinate(d.end)
+  const r = rectFrom(a, b)
+  if (r.width < MIN_AREA_SIZE || r.height < MIN_AREA_SIZE) return
+  const created = await api.createArea({
+    name: t('map.areas.defaultName'),
+    color: 'blue',
+    direction: prefs.layoutDirection,
+    x: Math.round(r.x),
+    y: Math.round(r.y),
+    width: Math.round(r.width),
+    height: Math.round(r.height),
+  })
+  areas.value = [...areas.value, created]
+  editingArea.value = created.id // name it right away
+}
+
+function onDrawKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && drawing.value) {
+    drawing.value = false
+    draft.value = undefined
+  }
+}
+
+// Right click on an area title.
+const areaMenu = ref<{ x: number; y: number; id: number }>()
+const areaMenuArea = computed(() => areas.value.find((a) => a.id === areaMenu.value?.id))
+
+function areaMenuAction(action: 'rename' | 'delete' | AreaColor) {
+  const id = areaMenu.value?.id
+  areaMenu.value = undefined
+  if (id === undefined) return
+  if (action === 'rename') editingArea.value = id
+  else if (action === 'delete') deleteArea(id)
+  else colorArea(id, action)
+}
+
 function toggleDirection() {
   prefs.layoutDirection = prefs.layoutDirection === 'RIGHT' ? 'DOWN' : 'RIGHT'
 }
 
 function onNodeClick(e: NodeMouseEvent) {
+  if (areaIdOf(e.node.id) !== undefined) return
   selectedId.value = e.node.id
 }
 
@@ -245,12 +453,14 @@ async function scanNetwork() {
 }
 
 function expand(parentId: string) {
+  layoutAnchor = parentId
   prefs.collapsed = prefs.collapsed.filter((id) => id !== parentId)
   if (!prefs.expanded.includes(parentId)) prefs.expanded.push(parentId)
   selectedId.value = parentId
 }
 
 function collapse(parentId: string) {
+  layoutAnchor = parentId
   prefs.expanded = prefs.expanded.filter((id) => id !== parentId)
   if (!prefs.collapsed.includes(parentId)) prefs.collapsed.push(parentId)
 }
@@ -263,7 +473,16 @@ function onContextMenu(e: NodeMouseEvent) {
   const ev = e.event as MouseEvent
   ev.preventDefault()
   const box = mapEl.value?.getBoundingClientRect()
-  menu.value = { x: ev.clientX - (box?.left ?? 0), y: ev.clientY - (box?.top ?? 0), id: e.node.id }
+  const x = ev.clientX - (box?.left ?? 0)
+  const y = ev.clientY - (box?.top ?? 0)
+  const area = areaIdOf(e.node.id)
+  if (area !== undefined) {
+    menu.value = undefined
+    areaMenu.value = { x, y, id: area }
+    return
+  }
+  areaMenu.value = undefined
+  menu.value = { x, y, id: e.node.id }
 }
 
 /** The parent whose clients a menu action applies to (a group acts for its parent). */
@@ -315,8 +534,12 @@ function patchSelected(patch: Partial<TopoNode>) {
 onMounted(() => {
   load()
   timer = setInterval(load, POLL_MS)
+  window.addEventListener('keydown', onDrawKey)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  window.removeEventListener('keydown', onDrawKey)
+})
 </script>
 
 <template>
@@ -361,6 +584,16 @@ onBeforeUnmount(() => clearInterval(timer))
             {{ prefs.layoutDirection === 'RIGHT' ? t('map.topDown') : t('map.leftToRight') }}
           </span>
         </button>
+        <button
+          class="btn small"
+          :class="{ active: drawing }"
+          data-test="new-area"
+          :aria-pressed="drawing"
+          :title="t('map.areas.drawHint')"
+          @click="drawing = !drawing"
+        >
+          <SquareDashed :size="15" /><span class="label">{{ t('map.areas.new') }}</span>
+        </button>
         <button class="btn small" :title="t('map.resetLayout')" @click="resetLayout">
           <LayoutGrid :size="15" /><span class="label">{{ t('map.resetLayout') }}</span>
         </button>
@@ -395,6 +628,8 @@ onBeforeUnmount(() => clearInterval(timer))
       class="flow"
       @node-click="onNodeClick"
       @node-context-menu="onContextMenu"
+      @node-drag-start="onDragStart"
+      @node-drag="onDrag"
       @node-drag-stop="onDragStop"
       @pane-click="selectedId = undefined"
     >
@@ -405,9 +640,44 @@ onBeforeUnmount(() => clearInterval(timer))
           @toggle="toggleChildren(nodeProps.id)"
         />
       </template>
+      <template #node-area="nodeProps">
+        <AreaNode
+          :area="nodeProps.data.area"
+          :editing="editingArea === nodeProps.data.area.id"
+          :zoom="viewport.zoom"
+          @start-rename="editingArea = nodeProps.data.area.id"
+          @rename="(name) => renameArea(nodeProps.data.area.id, name)"
+          @cancel-rename="editingArea = undefined"
+          @resize="(size) => resizeArea(nodeProps.data.area.id, size)"
+          @resize-end="finishResize(nodeProps.data.area.id)"
+        />
+      </template>
       <Background :gap="22" :size="1.2" pattern-color="var(--border)" />
       <Controls position="bottom-left" :show-interactive="false" />
     </VueFlow>
+
+    <div
+      v-if="drawing && !empty"
+      class="draw-layer"
+      data-test="draw-layer"
+      @pointerdown.prevent="onDrawStart"
+      @pointermove="onDrawMove"
+      @pointerup="onDrawEnd"
+    >
+      <p class="draw-hint chip">{{ t('map.areas.drawHint') }}</p>
+      <div v-if="draftStyle" class="draft" :style="draftStyle" />
+    </div>
+
+    <AreaMenu
+      v-if="areaMenu && areaMenuArea"
+      :x="areaMenu.x"
+      :y="areaMenu.y"
+      :color="areaMenuArea.color"
+      @rename="areaMenuAction('rename')"
+      @color="areaMenuAction"
+      @delete="areaMenuAction('delete')"
+      @close="areaMenu = undefined"
+    />
 
     <NodeMenu
       v-if="menu"
@@ -524,6 +794,27 @@ onBeforeUnmount(() => clearInterval(timer))
   flex-wrap: wrap;
 }
 
+.draw-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  cursor: crosshair;
+}
+.draw-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  pointer-events: none;
+}
+.draft {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
 /* Vue Flow theming */
 .flow :deep(.vue-flow__edge-path) {
   stroke: var(--edge);
@@ -547,6 +838,10 @@ onBeforeUnmount(() => clearInterval(timer))
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+/* Only the title and the resize corner of an area take the mouse. */
+.flow :deep(.vue-flow__node.area-node) {
+  pointer-events: none;
 }
 .flow :deep(.vue-flow__controls) {
   box-shadow: var(--shadow);

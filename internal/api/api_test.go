@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -440,4 +441,52 @@ func TestUI(t *testing.T) {
 func itoa(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func TestMapAreas(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+
+	var a map[string]any
+	in := map[string]any{"name": "Rack", "color": "blue", "direction": "RIGHT", "x": 0, "y": 0, "width": 400, "height": 300}
+	if code := h.do("POST", "/api/areas", in, &a); code != http.StatusCreated {
+		t.Fatalf("create: %d %v", code, a)
+	}
+	id := fmt.Sprint(a["id"])
+
+	var topo struct {
+		Areas []map[string]any `json:"areas"`
+	}
+	h.do("GET", "/api/topology", nil, &topo)
+	if len(topo.Areas) != 1 || topo.Areas[0]["name"] != "Rack" {
+		t.Fatalf("topology areas: %v", topo.Areas)
+	}
+
+	var updated map[string]any
+	if code := h.do("PATCH", "/api/areas/"+id, map[string]any{"name": "Server rack", "x": 30}, &updated); code != http.StatusOK {
+		t.Fatalf("update: %d", code)
+	}
+	if updated["name"] != "Server rack" || updated["x"] != float64(30) || updated["width"] != float64(400) {
+		t.Fatalf("updated: %v", updated)
+	}
+	if code := h.do("PATCH", "/api/areas/"+id, map[string]any{"color": "pink"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("invalid color: %d", code)
+	}
+	if code := h.do("POST", "/api/areas", map[string]any{"name": "x", "color": "blue", "direction": "UP", "width": 100, "height": 100}, nil); code != http.StatusBadRequest {
+		t.Fatalf("invalid direction: %d", code)
+	}
+
+	// Resetting the layout keeps the areas: they are the user's own content.
+	h.do("DELETE", "/api/layout", nil, nil)
+	h.do("GET", "/api/topology", nil, &topo)
+	if len(topo.Areas) != 1 {
+		t.Fatalf("areas after layout reset: %v", topo.Areas)
+	}
+
+	if code := h.do("DELETE", "/api/areas/"+id, nil, nil); code != http.StatusNoContent {
+		t.Fatalf("delete: %d", code)
+	}
+	if code := h.do("DELETE", "/api/areas/"+id, nil, nil); code != http.StatusNotFound {
+		t.Fatalf("delete again: %d", code)
+	}
 }

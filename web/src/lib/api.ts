@@ -5,6 +5,7 @@ import type {
   Integration,
   IntegrationType,
   InventoryEntry,
+  MapArea,
   Point,
   TestResult,
   TopologyResponse,
@@ -92,6 +93,10 @@ export const api = {
   saveLayout: (positions: Record<string, Point>) =>
     request<void>('PUT', '/api/layout', { positions }),
   resetLayout: () => request<void>('DELETE', '/api/layout'),
+  createArea: (area: Omit<MapArea, 'id'>) => request<MapArea>('POST', '/api/areas', area),
+  updateArea: (id: number, patch: Partial<Omit<MapArea, 'id' | 'direction'>>) =>
+    request<MapArea>('PATCH', `/api/areas/${id}`, patch),
+  deleteArea: (id: number) => request<void>('DELETE', `/api/areas/${id}`),
 
   inventory: () => request<InventoryEntry[]>('GET', '/api/inventory'),
   updateInventory: (

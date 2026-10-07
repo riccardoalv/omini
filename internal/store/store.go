@@ -84,6 +84,20 @@ var migrations = []string{
 	ALTER TABLE inventory ADD COLUMN device_type TEXT; -- e.g. "phone"; overrides the detected type
 	ALTER TABLE inventory ADD COLUMN icon TEXT;        -- logo slug, e.g. "android"; overrides the detected one
 	`,
+	// 3: named areas drawn on the map, kept per orientation like node positions.
+	`
+	CREATE TABLE areas (
+		id         INTEGER PRIMARY KEY,
+		name       TEXT    NOT NULL,
+		color      TEXT    NOT NULL,
+		direction  TEXT    NOT NULL, -- RIGHT | DOWN
+		x          REAL    NOT NULL,
+		y          REAL    NOT NULL,
+		width      REAL    NOT NULL,
+		height     REAL    NOT NULL,
+		created_at INTEGER NOT NULL
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

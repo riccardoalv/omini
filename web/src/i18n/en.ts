@@ -63,6 +63,25 @@ export default {
     segmentHint:
       'Several devices are behind this port, but nothing here is integrated: probably a dumb switch, a consumer access point or a hypervisor.',
     unmanagedHint: 'Seen through LLDP, but not integrated yet.',
+    areas: {
+      new: 'New area',
+      drawHint: 'Drag on the map to draw an area. Esc cancels.',
+      defaultName: 'New area',
+      name: 'Area name',
+      rename: 'Rename',
+      delete: 'Delete area',
+      color: 'Color',
+      resize: 'Drag to resize',
+      dragHint: 'Drag to move the area and everything inside it. Double click to rename.',
+      colors: {
+        gray: 'Gray',
+        blue: 'Blue',
+        green: 'Green',
+        yellow: 'Yellow',
+        red: 'Red',
+        purple: 'Purple',
+      },
+    },
   },
   panel: {
     overview: 'Overview',

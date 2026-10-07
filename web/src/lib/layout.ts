@@ -82,31 +82,25 @@ export function positionsFor(
 }
 
 /**
- * Keeps nodes that are already on screen where they are and places new ones
- * (expanded children, a new group bubble) next to their parent, keeping the
- * offset the fresh layout computed between them. Nothing on screen moves.
+ * Shifts a fresh layout so the anchor (the node the user expanded or
+ * collapsed) stays exactly where it is on screen. The rest of the map is laid
+ * out again around it, so new nodes never overlap old ones. Positions the user
+ * saved (`fixed`) are absolute and never shifted.
  */
-export function anchorNewNodes(
+export function alignOn(
   current: Record<string, Point>,
   fresh: Record<string, Point>,
-  parentOf: (id: string) => string | undefined,
+  anchor: string | undefined,
+  fixed: Set<string> = new Set(),
 ): Record<string, Point> {
+  const a = anchor ? current[anchor] : undefined
+  const f = anchor ? fresh[anchor] : undefined
+  if (!a || !f || fixed.has(anchor!)) return fresh
+  const dx = a.x - f.x
+  const dy = a.y - f.y
   const out: Record<string, Point> = {}
   for (const [id, p] of Object.entries(fresh)) {
-    if (current[id]) {
-      out[id] = current[id]
-      continue
-    }
-    // Climb to the nearest ancestor that is already on screen.
-    let anchor = parentOf(id)
-    const seen = new Set<string>()
-    while (anchor && !current[anchor] && !seen.has(anchor)) {
-      seen.add(anchor)
-      anchor = parentOf(anchor)
-    }
-    const a = anchor ? current[anchor] : undefined
-    const f = anchor ? fresh[anchor] : undefined
-    out[id] = a && f ? { x: a.x + (p.x - f.x), y: a.y + (p.y - f.y) } : p
+    out[id] = fixed.has(id) ? p : { x: p.x + dx, y: p.y + dy }
   }
   return out
 }

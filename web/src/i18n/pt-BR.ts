@@ -66,6 +66,25 @@ const ptBR: typeof en = {
     segmentHint:
       'Há vários dispositivos atrás desta porta, mas nada aqui está integrado: provavelmente um switch burro, um roteador doméstico em modo AP ou um hypervisor.',
     unmanagedHint: 'Visto via LLDP, mas ainda não integrado.',
+    areas: {
+      new: 'Nova área',
+      drawHint: 'Arraste no mapa para desenhar uma área. Esc cancela.',
+      defaultName: 'Nova área',
+      name: 'Nome da área',
+      rename: 'Renomear',
+      delete: 'Excluir área',
+      color: 'Cor',
+      resize: 'Arraste para redimensionar',
+      dragHint: 'Arraste para mover a área e tudo dentro dela. Clique duas vezes para renomear.',
+      colors: {
+        gray: 'Cinza',
+        blue: 'Azul',
+        green: 'Verde',
+        yellow: 'Amarelo',
+        red: 'Vermelho',
+        purple: 'Roxo',
+      },
+    },
   },
   panel: {
     overview: 'Visão geral',
