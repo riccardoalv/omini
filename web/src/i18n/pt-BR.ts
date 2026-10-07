@@ -92,6 +92,18 @@ const ptBR: typeof en = {
     },
   },
   panel: {
+    showAll: 'Mostrar todos ({n})',
+    showLess: 'Mostrar menos',
+    resize: 'Arraste para redimensionar',
+    version: 'Versão',
+    portsUp: 'Portas ativas',
+    portsUpValue: '{up} de {n}',
+    leases: 'Concessões DHCP',
+    internetNow: 'Internet agora',
+    portList: 'Todas as portas ({n})',
+    internet: 'Internet',
+    details: 'Detalhes',
+    serial: 'Número de série',
     scan: 'Escanear (nmap)',
     scanning: 'Escaneando…',
     scanHint:
@@ -311,8 +323,8 @@ const ptBR: typeof en = {
       },
       device_versions: {
         label: 'Versões dos serviços',
-        help: 'nmap -sV. Leve tenta só as sondas prováveis (segundos); completa tenta todas, mais precisa, mas pode levar minutos.',
-        options: { off: 'Desligado', light: 'Leve', full: 'Completa' },
+        help: 'nmap -sV. Rápida (--version-intensity 0) identifica a maioria dos serviços em uns 15 s; leve tenta mais sondas (uns 30 s); completa tenta todas, a mais precisa, mas pode levar minutos.',
+        options: { off: 'Desligado', quick: 'Rápida', light: 'Leve', full: 'Completa' },
       },
       device_scripts: {
         label: 'Scripts padrão',

@@ -192,8 +192,8 @@ func TestScanOneDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := strings.Join(f.calls[0], " ")
-	// Light by default: the 100 top ports, light versions, OS (root here).
-	for _, want := range []string{"--top-ports 100 ", "-sV --version-light", "-O", "--traceroute"} {
+	// Quick by default: the 100 top ports, versions at intensity 0, OS (root here).
+	for _, want := range []string{"--top-ports 100 ", "-sV --version-intensity 0", "-O", "--traceroute"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args %q lack %q", args, want)
 		}
@@ -224,7 +224,12 @@ func TestScanOneDeviceSettings(t *testing.T) {
 		{ // In depth, like -A.
 			integration.Config{"device_ports": 1024, "device_versions": "full", "device_scripts": true},
 			[]string{"--top-ports 1024 ", "-sV", "-sC", "-O --traceroute"},
-			[]string{"--version-light"},
+			[]string{"--version-light", "--version-intensity"},
+		},
+		{ // Light versions.
+			integration.Config{"device_versions": "light"},
+			[]string{"-sV --version-light"},
+			[]string{"--version-intensity"},
 		},
 		{ // Ports only.
 			integration.Config{"device_ports": 70000, "device_versions": "off", "device_os": false},

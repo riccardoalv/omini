@@ -62,6 +62,9 @@ export interface Device {
   interfaces?: Interface[]
   gateways?: Gateway[]
   hosts?: { ip: string; mac?: string; sources?: string[] }[]
+  dhcp_leases?: { ip: string; mac: string; hostname?: string }[]
+  arp?: { ip: string; mac: string; interface?: string }[]
+  serial?: string
 }
 
 export interface TopoNode {

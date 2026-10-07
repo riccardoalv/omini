@@ -11,7 +11,7 @@ const fields: FormField[] = [
     key: 'device_versions',
     type: 'select',
     label: 'Service versions',
-    options: ['off', 'light', 'full'],
+    options: ['off', 'quick', 'light', 'full'],
     group: 'Scan one device',
   },
   { key: 'mode', type: 'select', label: 'Mode', options: ['fast', 'slow'] },
@@ -27,8 +27,8 @@ describe('IntegrationFields select options', () => {
   it('translates option labels and keeps the values', () => {
     const w = mountFields('pt-BR')
     const opts = w.findAll('select[name=device_versions] option')
-    expect(opts.map((o) => o.text())).toEqual(['Desligado', 'Leve', 'Completa'])
-    expect(opts.map((o) => o.attributes('value'))).toEqual(['off', 'light', 'full'])
+    expect(opts.map((o) => o.text())).toEqual(['Desligado', 'Rápida', 'Leve', 'Completa'])
+    expect(opts.map((o) => o.attributes('value'))).toEqual(['off', 'quick', 'light', 'full'])
     expect(w.get('legend').text()).toBe('Escanear um dispositivo')
   })
 
@@ -36,6 +36,7 @@ describe('IntegrationFields select options', () => {
     const w = mountFields('en')
     expect(w.findAll('select[name=device_versions] option').map((o) => o.text())).toEqual([
       'Off',
+      'Quick',
       'Light',
       'Full',
     ])

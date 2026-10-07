@@ -66,7 +66,7 @@ function connectorName(p: Interface) {
 
 /** Short label under a port: "igb0" stays, "GigabitEthernet0/12" → "12". */
 function shortName(name: string) {
-  if (name.length <= 6) return name
+  if (name.length <= 8) return name
   const m = /(\d+)$/.exec(name)
   return m ? m[1] : name.slice(0, 6)
 }
@@ -115,7 +115,8 @@ function shortName(name: string) {
             />
           </svg>
           <span class="led" />
-          <span class="name">{{ shortName(p.name) }}</span>
+          <span class="name" :title="p.name">{{ shortName(p.name) }}</span>
+          <span class="speed">{{ p.up ? formatSpeed(p.speed_mbps) || '·' : '—' }}</span>
         </button>
       </div>
     </div>
@@ -209,6 +210,7 @@ function shortName(name: string) {
 }
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .port {
@@ -217,9 +219,9 @@ function shortName(name: string) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  width: 42px;
-  padding: 4px 3px 3px;
+  gap: 2px;
+  width: 60px;
+  padding: 6px 3px 4px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -237,8 +239,8 @@ function shortName(name: string) {
   outline: none;
 }
 .port svg {
-  width: 34px;
-  height: 28px;
+  width: 44px;
+  height: 36px;
 }
 .jack {
   fill: var(--bg-sunken);
@@ -286,9 +288,18 @@ function shortName(name: string) {
   max-width: 100%;
   overflow: hidden;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
+  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.speed {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--c);
+}
+.port:not(.up) .speed {
+  color: var(--text-muted);
 }
 .legend {
   display: flex;

@@ -100,9 +100,9 @@ func (*Integration) Info() integration.Info {
 				Help: model.Ptr("How many of the most common ports to scan (nmap --top-ports). 100 is quick; more ports, and versions on each of them, take longer. 65535 is every port."),
 			},
 			{
-				Key: "device_versions", Type: model.FormFieldTypeSelect, Label: model.Ptr("Service versions"), Default: "light",
-				Options: []string{"off", "light", "full"}, Group: model.Ptr(deviceGroup),
-				Help: model.Ptr("nmap -sV. Light tries the likely probes only (seconds); full tries them all, more precise but it can take minutes."),
+				Key: "device_versions", Type: model.FormFieldTypeSelect, Label: model.Ptr("Service versions"), Default: "quick",
+				Options: []string{"off", "quick", "light", "full"}, Group: model.Ptr(deviceGroup),
+				Help: model.Ptr("nmap -sV. Quick (--version-intensity 0) names most services in about 15 s; light tries more probes (about 30 s); full tries them all, the most precise, but it can take minutes."),
 			},
 			{
 				Key: "device_scripts", Type: model.FormFieldTypeBool, Label: model.Ptr("Default scripts"), Default: false, Group: model.Ptr(deviceGroup),
@@ -316,7 +316,7 @@ func (s *Integration) args(cfg integration.Config, prefixes []netip.Prefix) []st
 const deviceGroup = "Scan one device"
 
 // deviceArgs: the scan of one device from its panel, as set in the
-// integration (light by default: the 100 top ports with light versions).
+// integration (quick by default: the 100 top ports, versions at intensity 0).
 func (s *Integration) deviceArgs(cfg integration.Config) []string {
 	ports := min(max(cfg.Int("device_ports", 100), 1), 65535)
 	args := []string{"-oX", "-", "-T4", "-n", "--host-timeout", "300s", "--top-ports", strconv.Itoa(ports)}
@@ -324,8 +324,10 @@ func (s *Integration) deviceArgs(cfg integration.Config) []string {
 	case "off":
 	case "full":
 		args = append(args, "-sV")
-	default:
+	case "light":
 		args = append(args, "-sV", "--version-light")
+	default:
+		args = append(args, "-sV", "--version-intensity", "0")
 	}
 	if cfg.Bool("device_scripts", false) {
 		args = append(args, "-sC")

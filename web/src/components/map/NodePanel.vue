@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import {
+  ArrowDown,
+  ArrowUp,
   Check,
+  ChevronRight,
   Eye,
   EyeOff,
   ExternalLink,
@@ -11,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
@@ -25,6 +28,7 @@ import { childrenOf, linkOnPort } from '@/lib/graph'
 import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
 import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
+import { formatRate, nodeFlow } from '@/lib/traffic'
 import type { Integration, TopoEdge, TopoNode, WebService } from '@/lib/types'
 
 const props = defineProps<{
@@ -140,6 +144,93 @@ async function savePort() {
     error.value = e instanceof ApiError ? e.message : t('common.error')
   }
 }
+// Width: dragged from the left edge (or arrow keys on the handle), kept per browser.
+const WIDTH_KEY = 'omini.panelWidth'
+const MIN_WIDTH = 360
+const maxWidth = () => Math.max(MIN_WIDTH, Math.min(960, window.innerWidth * 0.8))
+const clampWidth = (w: number) => Math.round(Math.min(maxWidth(), Math.max(MIN_WIDTH, w)))
+function savedWidth(): number {
+  try {
+    const w = Number(localStorage.getItem(WIDTH_KEY))
+    if (w > 0) return clampWidth(w)
+  } catch {
+    // storage may be blocked
+  }
+  return clampWidth(Math.min(460, window.innerWidth * 0.34))
+}
+const width = ref(savedWidth())
+const resizing = ref(false)
+function keepWidth() {
+  try {
+    localStorage.setItem(WIDTH_KEY, String(width.value))
+  } catch {
+    // storage may be blocked
+  }
+}
+let startX = 0
+let startWidth = 0
+function onResize(e: PointerEvent) {
+  // The panel sits on the right: dragging left widens it.
+  width.value = clampWidth(startWidth + startX - e.clientX)
+}
+function stopResize() {
+  resizing.value = false
+  window.removeEventListener('pointermove', onResize)
+  window.removeEventListener('pointerup', stopResize)
+  keepWidth()
+}
+function startResize(e: PointerEvent) {
+  e.preventDefault()
+  startX = e.clientX
+  startWidth = width.value
+  resizing.value = true
+  window.addEventListener('pointermove', onResize)
+  window.addEventListener('pointerup', stopResize)
+}
+function resizeBy(delta: number) {
+  width.value = clampWidth(width.value + delta)
+  keepWidth()
+}
+onBeforeUnmount(stopResize)
+
+/** Key numbers at the top of the panel, only those known. */
+const summary = computed(() => {
+  const node = n.value
+  if (!node) return []
+  const d = node.device
+  const phys = physicalPorts.value
+  const out: { key: string; label: string; value: string }[] = []
+  if (d?.uptime_s !== undefined)
+    out.push({ key: 'uptime', label: t('panel.uptime'), value: formatUptime(d.uptime_s) })
+  if (d?.os_version) out.push({ key: 'version', label: t('panel.version'), value: d.os_version })
+  const model = node.model ?? d?.model
+  if (model) out.push({ key: 'model', label: t('panel.model'), value: model })
+  if (phys.length)
+    out.push({
+      key: 'ports',
+      label: t('panel.portsUp'),
+      value: t('panel.portsUpValue', { up: phys.filter((p) => p.up).length, n: phys.length }),
+    })
+  if (children.value.length)
+    out.push({ key: 'clients', label: t('panel.clients'), value: String(children.value.length) })
+  if (d?.dhcp_leases?.length)
+    out.push({ key: 'leases', label: t('panel.leases'), value: String(d.dhcp_leases.length) })
+  return out
+})
+/** Internet traffic right now (routers, firewalls and WAN nodes). */
+const flow = computed(() => (n.value ? nodeFlow(n.value, byId.value) : undefined))
+const portListOpen = ref(false)
+// Long client lists show the first few; the rest on demand.
+const CLIENTS_SHOWN = 8
+const allClients = ref(false)
+watch(
+  () => props.node?.id,
+  () => (allClients.value = false),
+)
+const shownChildren = computed(() =>
+  allClients.value ? children.value : children.value.slice(0, CLIENTS_SHOWN),
+)
+
 const gateways = computed(() => n.value?.device?.gateways ?? n.value?.wan?.gateways ?? [])
 const roleLabel = computed(() => (n.value?.type ? t(`types.${n.value.type}`) : ''))
 const reasons = computed(() => parseReasons(n.value?.reasons))
@@ -254,136 +345,452 @@ async function save(patch: {
 </script>
 
 <template>
-  <aside class="panel card" aria-live="polite">
-    <!-- Group of collapsed clients -->
-    <template v-if="group">
-      <header>
-        <span class="icon"><NodeIcon name="users" /></span>
-        <div class="title">
-          <h2>
-            {{
-              group.area
-                ? group.area.name
-                : t(
-                    group.clients.every((c) => c.kind === 'app')
-                      ? 'map.appsLabel'
-                      : 'map.groupLabel',
-                    {
-                      n: group.clients.length,
-                    },
-                  )
-            }}
-          </h2>
-          <span class="muted">{{ t('map.groupOnline', { n: group.online }) }}</span>
-        </div>
-        <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
-          <X :size="18" />
+  <aside
+    class="panel card"
+    :class="{ resizing }"
+    :style="{ '--panel-width': `${width}px` }"
+    aria-live="polite"
+  >
+    <div
+      class="resize"
+      role="separator"
+      aria-orientation="vertical"
+      tabindex="0"
+      data-test="resize"
+      :aria-label="t('panel.resize')"
+      :title="t('panel.resize')"
+      :aria-valuenow="width"
+      @pointerdown="startResize"
+      @keydown.left.prevent="resizeBy(40)"
+      @keydown.right.prevent="resizeBy(-40)"
+    />
+    <div class="scroll">
+      <!-- Group of collapsed clients -->
+      <template v-if="group">
+        <header>
+          <span class="icon"><NodeIcon name="users" /></span>
+          <div class="title">
+            <h2>
+              {{
+                group.area
+                  ? group.area.name
+                  : t(
+                      group.clients.every((c) => c.kind === 'app')
+                        ? 'map.appsLabel'
+                        : 'map.groupLabel',
+                      {
+                        n: group.clients.length,
+                      },
+                    )
+              }}
+            </h2>
+            <span class="muted">{{ t('map.groupOnline', { n: group.online }) }}</span>
+          </div>
+          <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
+            <X :size="18" />
+          </button>
+        </header>
+        <button
+          class="btn primary wide"
+          @click="emit('expand', group.area ? group.id : group.parentId)"
+        >
+          {{ t('panel.expandGroup') }}
         </button>
-      </header>
-      <button
-        class="btn primary wide"
-        @click="emit('expand', group.area ? group.id : group.parentId)"
-      >
-        {{ t('panel.expandGroup') }}
-      </button>
-      <ul class="client-list">
-        <li v-for="c in group.clients" :key="c.id" @click="emit('select', c.id)">
-          <span class="dot" :class="{ online: c.online }" />
-          <DeviceIcon :device="c" :size="15" />
-          <span class="grow">{{ displayName(c, t) }}</span>
-          <span class="muted mono">{{ c.ip }}</span>
-        </li>
-      </ul>
-    </template>
+        <ul class="client-list">
+          <li v-for="c in group.clients" :key="c.id" @click="emit('select', c.id)">
+            <span class="dot" :class="{ online: c.online }" />
+            <DeviceIcon :device="c" :size="15" />
+            <span class="grow">{{ displayName(c, t) }}</span>
+            <span class="muted mono">{{ c.ip }}</span>
+          </li>
+        </ul>
+      </template>
 
-    <template v-else-if="n">
-      <header>
-        <span class="icon"><DeviceIcon :device="n" :size="22" /></span>
-        <div class="title">
-          <form v-if="editing" class="rename" @submit.prevent="save({ alias })">
-            <input v-model="alias" class="input" autofocus :aria-label="t('panel.rename')" />
-            <button class="btn icon" type="submit" :aria-label="t('common.save')">
-              <Check :size="16" />
-            </button>
-          </form>
-          <div v-else class="name-row">
-            <h2>{{ title }}</h2>
-            <!-- Web interface: an icon next to the name (one interface) or a short list. -->
-            <a
-              v-if="web.length === 1"
-              :href="web[0]!.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="btn ghost icon web-link"
-              data-test="open-web"
-              :title="`${t('panel.openWeb')} · ${web[0]!.url}`"
-              :aria-label="t('panel.openWeb')"
-            >
-              <ExternalLink :size="16" />
-            </a>
-            <div v-else-if="web.length > 1" class="web-menu-wrap">
+      <template v-else-if="n">
+        <header class="head">
+          <span class="icon"><DeviceIcon :device="n" :size="24" /></span>
+          <div class="title">
+            <form v-if="editing" class="rename" @submit.prevent="save({ alias })">
+              <input v-model="alias" class="input" autofocus :aria-label="t('panel.rename')" />
+              <button class="btn icon" type="submit" :aria-label="t('common.save')">
+                <Check :size="16" />
+              </button>
+            </form>
+            <div v-else class="name-row">
+              <h2>{{ title }}</h2>
               <button
+                class="btn ghost icon name-action"
                 type="button"
+                data-test="rename"
+                :title="t('panel.rename')"
+                :aria-label="t('panel.rename')"
+                @click="startEdit"
+              >
+                <Pencil :size="14" />
+              </button>
+              <!-- Web interface: an icon next to the name (one interface) or a short list. -->
+              <a
+                v-if="web.length === 1"
+                :href="web[0]!.url"
+                target="_blank"
+                rel="noopener noreferrer"
                 class="btn ghost icon web-link"
-                data-test="open-web-menu"
-                :title="t('panel.openWeb')"
+                data-test="open-web"
+                :title="`${t('panel.openWeb')} · ${web[0]!.url}`"
                 :aria-label="t('panel.openWeb')"
-                :aria-expanded="webMenu"
-                @click="webMenu = !webMenu"
               >
                 <ExternalLink :size="16" />
-              </button>
-              <div v-if="webMenu" class="web-menu card" role="menu">
-                <a
-                  v-for="svc in web"
-                  :key="svc.url"
-                  :href="svc.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  role="menuitem"
-                  data-test="open-web"
-                  @click="webMenu = false"
+              </a>
+              <div v-else-if="web.length > 1" class="web-menu-wrap">
+                <button
+                  type="button"
+                  class="btn ghost icon web-link"
+                  data-test="open-web-menu"
+                  :title="t('panel.openWeb')"
+                  :aria-label="t('panel.openWeb')"
+                  :aria-expanded="webMenu"
+                  @click="webMenu = !webMenu"
                 >
-                  <span class="grow">{{ svc.title || svc.url }}</span>
-                  <span class="web-port">{{ t('panel.webPort', { port: svc.port }) }}</span>
-                </a>
+                  <ExternalLink :size="16" />
+                </button>
+                <div v-if="webMenu" class="web-menu card" role="menu">
+                  <a
+                    v-for="svc in web"
+                    :key="svc.url"
+                    :href="svc.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    role="menuitem"
+                    data-test="open-web"
+                    @click="webMenu = false"
+                  >
+                    <span class="grow">{{ svc.title || svc.url }}</span>
+                    <span class="web-port">{{ t('panel.webPort', { port: svc.port }) }}</span>
+                  </a>
+                </div>
               </div>
             </div>
+            <div class="status">
+              <span class="pill" :class="n.online ? 'on' : 'off'">
+                <span class="dot" :class="{ online: n.online }" />
+                {{ n.online ? t('common.online') : t('common.offline') }}
+              </span>
+              <span v-if="roleLabel">{{ roleLabel }}</span>
+              <span v-if="n.ip" class="mono">{{ n.ip }}</span>
+            </div>
           </div>
-          <span class="muted">
-            <span class="dot" :class="{ online: n.online }" />
-            {{ n.online ? t('common.online') : t('common.offline') }}
-            <template v-if="roleLabel"> · {{ roleLabel }}</template>
-          </span>
-        </div>
-        <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
-          <X :size="18" />
-        </button>
-      </header>
+          <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
+            <X :size="18" />
+          </button>
+        </header>
 
-      <div class="actions">
-        <button class="btn small" @click="startEdit">
-          <Pencil :size="14" />{{ t('panel.rename') }}
-        </button>
-        <button class="btn small" :title="t('panel.pinHint')" @click="save({ pinned: !n.pinned })">
-          <component :is="n.pinned ? PinOff : Pin" :size="14" />
-          {{ n.pinned ? t('panel.unpin') : t('panel.pin') }}
-        </button>
-        <button v-if="expandedParent" class="btn small" @click="emit('collapse', n.id)">
-          {{ t('panel.collapseGroup') }}
-        </button>
-        <button
-          v-if="scannable"
-          class="btn small"
-          data-test="scan"
-          :disabled="scanning"
-          :title="t('panel.scanHint')"
-          @click="scan"
-        >
-          <Radar :size="14" :class="{ spin: scanning }" />
-          {{ scanning ? t('panel.scanning') : t('panel.scan') }}
-        </button>
-        <template v-if="n.kind !== 'app'">
+        <div class="actions">
+          <button
+            v-if="scannable"
+            class="btn small"
+            data-test="scan"
+            :disabled="scanning"
+            :title="t('panel.scanHint')"
+            @click="scan"
+          >
+            <Radar :size="14" :class="{ spin: scanning }" />
+            {{ scanning ? t('panel.scanning') : t('panel.scan') }}
+          </button>
+          <button
+            class="btn small"
+            :title="t('panel.pinHint')"
+            @click="save({ pinned: !n.pinned })"
+          >
+            <component :is="n.pinned ? PinOff : Pin" :size="14" />
+            {{ n.pinned ? t('panel.unpin') : t('panel.pin') }}
+          </button>
+          <button v-if="expandedParent" class="btn small" @click="emit('collapse', n.id)">
+            {{ t('panel.collapseGroup') }}
+          </button>
+        </div>
+        <p v-if="error" class="alert error">{{ error }}</p>
+        <p v-if="scanResult" class="alert ok" role="status" data-test="scan-result">
+          {{ t('panel.scanned', { result: scanResult }) }}
+        </p>
+
+        <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
+        <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
+
+        <div v-if="summary.length || flow" class="tiles" data-test="summary">
+          <div v-if="flow" class="tile traffic" data-test="flow">
+            <span class="tile-label">{{ t('panel.internetNow') }}</span>
+            <span class="tile-value">
+              <span class="down"><ArrowDown :size="13" />{{ formatRate(flow.down) }}</span>
+              <span class="up"><ArrowUp :size="13" />{{ formatRate(flow.up) }}</span>
+            </span>
+          </div>
+          <div v-for="s in summary" :key="s.key" class="tile" :data-test="`tile-${s.key}`">
+            <span class="tile-label">{{ s.label }}</span>
+            <span class="tile-value" :title="s.value">{{ s.value }}</span>
+          </div>
+        </div>
+
+        <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
+
+        <section v-if="n.kind === 'device'" class="block" data-test="ports-section">
+          <h3>{{ t('panel.ports') }}</h3>
+          <p v-if="!ports.length" class="muted">{{ t('panel.noPorts') }}</p>
+          <PortPanel
+            v-if="physicalPorts.length"
+            :ports="physicalPorts"
+            :links="portLinks"
+            @select="(id) => emit('select', id)"
+          />
+          <details
+            v-if="ports.length"
+            class="port-list"
+            :open="portListOpen || !physicalPorts.length"
+            @toggle="portListOpen = ($event.target as HTMLDetailsElement).open"
+          >
+            <summary>
+              <ChevronRight :size="14" class="chev" />
+              {{ t('panel.portList', { n: ports.length }) }}
+            </summary>
+            <table class="table ports">
+              <tbody>
+                <tr v-for="p in ports" :key="p.name">
+                  <td><span class="dot" :class="{ online: p.up }" /></td>
+                  <td class="mono">{{ p.name }}</td>
+                  <td :title="p.media" class="nowrap">
+                    {{ p.up ? formatSpeed(p.speed_mbps) : t('panel.portDown') }}
+                    <span v-if="p.up && p.duplex === 'half'" class="warn">{{
+                      t('panel.halfDuplex')
+                    }}</span>
+                  </td>
+                  <td class="grow">
+                    <form
+                      v-if="editingPort === p.name"
+                      class="port-edit"
+                      @submit.prevent="savePort"
+                    >
+                      <input
+                        v-model="portDraft"
+                        class="input"
+                        maxlength="80"
+                        autofocus
+                        data-test="port-label-input"
+                        :placeholder="t('panel.portLabelHint')"
+                        :aria-label="t('panel.portLabel')"
+                        @keydown.esc.prevent="editingPort = undefined"
+                      />
+                      <button class="btn icon" type="submit" :aria-label="t('common.save')">
+                        <Check :size="14" />
+                      </button>
+                    </form>
+                    <template
+                      v-for="other in [linkOnPort(n.id, p.name, nodes, edges)]"
+                      v-else
+                      :key="other?.id"
+                    >
+                      <a v-if="other" href="#" @click.prevent="emit('select', other.id)">{{
+                        other.label
+                      }}</a>
+                      <span v-else class="muted">{{ p.description }}</span>
+                      <span v-if="other && p.description" class="muted">
+                        · {{ p.description }}</span
+                      >
+                      <button
+                        class="btn ghost icon edit-port"
+                        type="button"
+                        data-test="edit-port"
+                        :aria-label="t('panel.portLabel')"
+                        :title="t('panel.portLabel')"
+                        @click="editPort(p.name, n.port_labels?.[p.name] ?? p.description)"
+                      >
+                        <Pencil :size="12" />
+                      </button>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </details>
+        </section>
+
+        <section v-if="n.wan || gateways.length" class="block">
+          <h3>{{ t('panel.internet') }}</h3>
+          <dl v-if="n.wan" class="facts" data-test="wan">
+            <dt>{{ t('panel.interface') }}</dt>
+            <dd class="mono">
+              {{ n.wan.interface }}<template v-if="n.wan.port"> → {{ n.wan.port }}</template>
+            </dd>
+            <template v-if="n.wan.speed_mbps">
+              <dt>{{ t('panel.speed') }}</dt>
+              <dd>{{ formatSpeed(n.wan.speed_mbps) }}</dd>
+            </template>
+            <template v-if="n.wan.ips?.length">
+              <dt>IP</dt>
+              <dd class="mono">{{ n.wan.ips.join(', ') }}</dd>
+            </template>
+          </dl>
+          <ul v-if="gateways.length" class="gateways" data-test="gateways">
+            <li v-for="g in gateways" :key="g.name" class="gateway" :class="g.status">
+              <span class="dot" :class="g.status" />
+              <span class="grow">
+                <strong>{{ g.name }}</strong>
+                <span class="muted"> · {{ t(`panel.gatewayStatus.${g.status}`) }}</span>
+              </span>
+              <span class="muted mono">
+                <template v-if="g.rtt_ms !== undefined">{{ g.rtt_ms }} ms</template>
+                <template v-if="g.loss_pct"> · {{ g.loss_pct }}% {{ t('panel.loss') }}</template>
+              </span>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="children.length" class="block">
+          <h3>{{ t('panel.clients') }} ({{ children.length }})</h3>
+          <ul class="client-list">
+            <li v-for="c in shownChildren" :key="c.id" @click="emit('select', c.id)">
+              <span class="dot" :class="{ online: c.online }" />
+              <DeviceIcon :device="c" :size="15" />
+              <span class="grow">{{ displayName(c, t) }}</span>
+              <span class="muted mono">{{ c.ip }}</span>
+            </li>
+          </ul>
+          <button
+            v-if="children.length > CLIENTS_SHOWN"
+            class="link more"
+            type="button"
+            data-test="more-clients"
+            @click="allClients = !allClients"
+          >
+            {{ allClients ? t('panel.showLess') : t('panel.showAll', { n: children.length }) }}
+          </button>
+        </section>
+
+        <section class="block">
+          <h3>{{ t('panel.details') }}</h3>
+          <dl class="facts">
+            <template v-if="n.ip"
+              ><dt>{{ t('panel.ip') }}</dt>
+              <dd class="mono">{{ n.ip }}</dd></template
+            >
+            <template v-if="n.mac">
+              <dt>{{ t('panel.mac') }}</dt>
+              <dd class="mono">
+                {{ n.mac }}
+                <span v-if="n.random_mac" class="badge">{{ t('panel.randomMac') }}</span>
+              </dd>
+            </template>
+            <template v-if="n.hostname && n.hostname !== n.label">
+              <dt>{{ t('panel.hostname') }}</dt>
+              <dd>{{ n.hostname }}</dd>
+            </template>
+            <template v-if="n.vendor"
+              ><dt>{{ t('panel.vendor') }}</dt>
+              <dd>{{ n.vendor }}</dd></template
+            >
+            <template v-if="n.device?.serial"
+              ><dt>{{ t('panel.serial') }}</dt>
+              <dd class="mono">{{ n.device.serial }}</dd></template
+            >
+            <template v-if="parent">
+              <dt>{{ t('panel.connectedTo') }}</dt>
+              <dd>
+                <a href="#" @click.prevent="emit('select', parent.id)">{{ parent.label }}</a>
+                <template v-if="n.port"> · {{ t('panel.port', { port: n.port }) }}</template>
+              </dd>
+            </template>
+            <template v-if="n.ssid">
+              <dt>{{ t('panel.ssid') }}</dt>
+              <dd>{{ n.ssid }}</dd>
+            </template>
+            <template v-if="n.signal_dbm !== undefined">
+              <dt>{{ t('panel.signal') }}</dt>
+              <dd>
+                {{ n.signal_dbm }} dBm
+                <span v-if="n.signal_dbm < -75" class="badge warn">{{
+                  t('panel.weakSignal')
+                }}</span>
+              </dd>
+            </template>
+            <template v-if="n.last_seen && !n.online">
+              <dt>{{ t('panel.lastSeen') }}</dt>
+              <dd>{{ formatAgo(n.last_seen, locale) }}</dd>
+            </template>
+            <template v-if="integration">
+              <dt>{{ t('panel.integration') }}</dt>
+              <dd>
+                <RouterLink to="/integrations">{{ integration.name }}</RouterLink>
+                <span v-if="integration.status?.error" class="err">{{
+                  integration.status.error
+                }}</span>
+              </dd>
+            </template>
+          </dl>
+        </section>
+
+        <section v-if="n.kind !== 'segment' && n.kind !== 'app'" class="block classification">
+          <h3>{{ t('panel.classification') }}</h3>
+          <form v-if="classifying" class="classify-form" @submit.prevent="saveClassification">
+            <label class="field">
+              <span>{{ t('panel.changeType') }}</span>
+              <select v-model="typeChoice" class="select" data-test="type-select">
+                <option value="">{{ t('panel.automatic') }}</option>
+                <option v-for="ty in deviceTypes" :key="ty" :value="ty">
+                  {{ t(`types.${ty}`) }}
+                </option>
+              </select>
+            </label>
+            <label class="field">
+              <span>{{ t('panel.changeIcon') }}</span>
+              <select v-model="iconChoiceValue" class="select" data-test="icon-select">
+                <option value="">{{ t('panel.automatic') }}</option>
+                <option v-for="o in iconOptions" :key="o.slug" :value="o.slug">
+                  {{ o.title }}
+                </option>
+              </select>
+            </label>
+            <div class="row-actions">
+              <button class="btn small" type="button" @click="classifying = false">
+                {{ t('common.cancel') }}
+              </button>
+              <button class="btn small primary" type="submit">{{ t('common.save') }}</button>
+            </div>
+          </form>
+          <template v-else>
+            <dl class="facts">
+              <dt>{{ t('panel.role') }}</dt>
+              <dd>
+                {{ roleLabel }}
+                <button
+                  class="link"
+                  type="button"
+                  data-test="edit-classification"
+                  @click="startClassify"
+                >
+                  {{ t('common.edit') }}
+                </button>
+              </dd>
+              <template v-if="n.product"
+                ><dt>{{ t('panel.product') }}</dt>
+                <dd>{{ logoName(n.product) }}</dd></template
+              >
+              <template v-if="n.os"
+                ><dt>{{ t('panel.os') }}</dt>
+                <dd>{{ logoName(n.os) }}</dd></template
+              >
+              <template v-if="n.brand"
+                ><dt>{{ t('panel.brand') }}</dt>
+                <dd>{{ logoName(n.brand) }}</dd></template
+              >
+            </dl>
+            <div v-if="reasons.length" class="reasons">
+              <span class="muted">{{ t('panel.detectedBy') }}:</span>
+              <span v-for="(r, i) in reasons" :key="i" class="badge">
+                {{ t(`panel.${r.key}`) }}<template v-if="r.value">: {{ r.value }}</template>
+              </span>
+            </div>
+          </template>
+        </section>
+
+        <footer v-if="n.kind !== 'app'" class="manage">
           <button
             class="btn small"
             data-test="hide"
@@ -402,249 +809,9 @@ async function save(patch: {
             <Trash2 :size="14" />
             {{ confirmDelete ? t('panel.confirmDelete') : t('panel.delete') }}
           </button>
-        </template>
-      </div>
-      <p v-if="error" class="alert error">{{ error }}</p>
-      <p v-if="scanResult" class="alert ok" role="status" data-test="scan-result">
-        {{ t('panel.scanned', { result: scanResult }) }}
-      </p>
-
-      <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
-
-      <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
-      <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
-
-      <section v-if="n.kind !== 'segment' && n.kind !== 'app'" class="classification">
-        <h3>{{ t('panel.classification') }}</h3>
-        <form v-if="classifying" class="classify-form" @submit.prevent="saveClassification">
-          <label class="field">
-            <span>{{ t('panel.changeType') }}</span>
-            <select v-model="typeChoice" class="select" data-test="type-select">
-              <option value="">{{ t('panel.automatic') }}</option>
-              <option v-for="ty in deviceTypes" :key="ty" :value="ty">
-                {{ t(`types.${ty}`) }}
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            <span>{{ t('panel.changeIcon') }}</span>
-            <select v-model="iconChoiceValue" class="select" data-test="icon-select">
-              <option value="">{{ t('panel.automatic') }}</option>
-              <option v-for="o in iconOptions" :key="o.slug" :value="o.slug">{{ o.title }}</option>
-            </select>
-          </label>
-          <div class="row-actions">
-            <button class="btn small" type="button" @click="classifying = false">
-              {{ t('common.cancel') }}
-            </button>
-            <button class="btn small primary" type="submit">{{ t('common.save') }}</button>
-          </div>
-        </form>
-        <template v-else>
-          <dl class="facts compact">
-            <dt>{{ t('panel.role') }}</dt>
-            <dd>
-              {{ roleLabel }}
-              <button
-                class="link"
-                type="button"
-                data-test="edit-classification"
-                @click="startClassify"
-              >
-                {{ t('common.edit') }}
-              </button>
-            </dd>
-            <template v-if="n.product"
-              ><dt>{{ t('panel.product') }}</dt>
-              <dd>{{ logoName(n.product) }}</dd></template
-            >
-            <template v-if="n.os"
-              ><dt>{{ t('panel.os') }}</dt>
-              <dd>{{ logoName(n.os) }}</dd></template
-            >
-            <template v-if="n.brand"
-              ><dt>{{ t('panel.brand') }}</dt>
-              <dd>{{ logoName(n.brand) }}</dd></template
-            >
-          </dl>
-          <div v-if="reasons.length" class="reasons">
-            <span class="muted">{{ t('panel.detectedBy') }}:</span>
-            <span v-for="(r, i) in reasons" :key="i" class="badge">
-              {{ t(`panel.${r.key}`) }}<template v-if="r.value">: {{ r.value }}</template>
-            </span>
-          </div>
-        </template>
-      </section>
-
-      <dl class="facts">
-        <template v-if="n.ip"
-          ><dt>{{ t('panel.ip') }}</dt>
-          <dd class="mono">{{ n.ip }}</dd></template
-        >
-        <template v-if="n.mac">
-          <dt>{{ t('panel.mac') }}</dt>
-          <dd class="mono">
-            {{ n.mac }}
-            <span v-if="n.random_mac" class="badge">{{ t('panel.randomMac') }}</span>
-          </dd>
-        </template>
-        <template v-if="n.hostname && n.hostname !== n.label">
-          <dt>{{ t('panel.hostname') }}</dt>
-          <dd>{{ n.hostname }}</dd>
-        </template>
-        <template v-if="n.vendor"
-          ><dt>{{ t('panel.vendor') }}</dt>
-          <dd>{{ n.vendor }}</dd></template
-        >
-        <template v-if="n.model"
-          ><dt>{{ t('panel.model') }}</dt>
-          <dd>{{ n.model }}</dd></template
-        >
-        <template v-if="n.device?.uptime_s !== undefined">
-          <dt>{{ t('panel.uptime') }}</dt>
-          <dd>{{ formatUptime(n.device.uptime_s) }}</dd>
-        </template>
-        <template v-if="parent">
-          <dt>{{ t('panel.connectedTo') }}</dt>
-          <dd>
-            <a href="#" @click.prevent="emit('select', parent.id)">{{ parent.label }}</a>
-            <template v-if="n.port"> · {{ t('panel.port', { port: n.port }) }}</template>
-          </dd>
-        </template>
-        <template v-if="n.ssid">
-          <dt>{{ t('panel.ssid') }}</dt>
-          <dd>{{ n.ssid }}</dd>
-        </template>
-        <template v-if="n.signal_dbm !== undefined">
-          <dt>{{ t('panel.signal') }}</dt>
-          <dd>
-            {{ n.signal_dbm }} dBm
-            <span v-if="n.signal_dbm < -75" class="badge warn">{{ t('panel.weakSignal') }}</span>
-          </dd>
-        </template>
-        <template v-if="n.last_seen && !n.online">
-          <dt>{{ t('panel.lastSeen') }}</dt>
-          <dd>{{ formatAgo(n.last_seen, locale) }}</dd>
-        </template>
-        <template v-if="integration">
-          <dt>{{ t('panel.integration') }}</dt>
-          <dd>
-            <RouterLink to="/integrations">{{ integration.name }}</RouterLink>
-            <span v-if="integration.status?.error" class="err">{{ integration.status.error }}</span>
-          </dd>
-        </template>
-      </dl>
-
-      <section v-if="n.kind === 'device'">
-        <h3>{{ t('panel.ports') }}</h3>
-        <p v-if="!ports.length" class="muted">{{ t('panel.noPorts') }}</p>
-        <PortPanel
-          v-if="physicalPorts.length"
-          :ports="physicalPorts"
-          :links="portLinks"
-          @select="(id) => emit('select', id)"
-        />
-        <table v-if="ports.length" class="table ports">
-          <tbody>
-            <tr v-for="p in ports" :key="p.name">
-              <td><span class="dot" :class="{ online: p.up }" /></td>
-              <td class="mono">{{ p.name }}</td>
-              <td :title="p.media">
-                {{ p.up ? formatSpeed(p.speed_mbps) : t('panel.portDown') }}
-                <span v-if="p.up && p.duplex === 'half'" class="warn">{{
-                  t('panel.halfDuplex')
-                }}</span>
-              </td>
-              <td class="grow">
-                <form v-if="editingPort === p.name" class="port-edit" @submit.prevent="savePort">
-                  <input
-                    v-model="portDraft"
-                    class="input"
-                    maxlength="80"
-                    autofocus
-                    data-test="port-label-input"
-                    :placeholder="t('panel.portLabelHint')"
-                    :aria-label="t('panel.portLabel')"
-                    @keydown.esc.prevent="editingPort = undefined"
-                  />
-                  <button class="btn icon" type="submit" :aria-label="t('common.save')">
-                    <Check :size="14" />
-                  </button>
-                </form>
-                <template
-                  v-for="other in [linkOnPort(n.id, p.name, nodes, edges)]"
-                  v-else
-                  :key="other?.id"
-                >
-                  <a v-if="other" href="#" @click.prevent="emit('select', other.id)">{{
-                    other.label
-                  }}</a>
-                  <span v-else class="muted">{{ p.description }}</span>
-                  <span v-if="other && p.description" class="muted"> · {{ p.description }}</span>
-                  <button
-                    class="btn ghost icon edit-port"
-                    type="button"
-                    data-test="edit-port"
-                    :aria-label="t('panel.portLabel')"
-                    :title="t('panel.portLabel')"
-                    @click="editPort(p.name, n.port_labels?.[p.name] ?? p.description)"
-                  >
-                    <Pencil :size="12" />
-                  </button>
-                </template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section v-if="n.wan" data-test="wan">
-        <h3>{{ t('panel.uplink') }}</h3>
-        <dl>
-          <dt>{{ t('panel.interface') }}</dt>
-          <dd class="mono">
-            {{ n.wan.interface }}<template v-if="n.wan.port"> → {{ n.wan.port }}</template>
-          </dd>
-          <template v-if="n.wan.speed_mbps">
-            <dt>{{ t('panel.speed') }}</dt>
-            <dd>{{ formatSpeed(n.wan.speed_mbps) }}</dd>
-          </template>
-          <template v-if="n.wan.ips?.length">
-            <dt>IP</dt>
-            <dd class="mono">{{ n.wan.ips.join(', ') }}</dd>
-          </template>
-        </dl>
-      </section>
-
-      <section v-if="gateways.length" data-test="gateways">
-        <h3>{{ t('panel.gateways') }}</h3>
-        <table class="table ports">
-          <tbody>
-            <tr v-for="g in gateways" :key="g.name">
-              <td><span class="dot" :class="g.status" /></td>
-              <td>{{ g.name }}</td>
-              <td>{{ t(`panel.gatewayStatus.${g.status}`) }}</td>
-              <td class="grow muted mono">
-                <template v-if="g.rtt_ms !== undefined">{{ g.rtt_ms }} ms</template>
-                <template v-if="g.loss_pct"> · {{ g.loss_pct }}% {{ t('panel.loss') }}</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section v-if="children.length">
-        <h3>{{ t('panel.clients') }} ({{ children.length }})</h3>
-        <ul class="client-list">
-          <li v-for="c in children" :key="c.id" @click="emit('select', c.id)">
-            <span class="dot" :class="{ online: c.online }" />
-            <DeviceIcon :device="c" :size="15" />
-            <span class="grow">{{ displayName(c, t) }}</span>
-            <span class="muted mono">{{ c.ip }}</span>
-          </li>
-        </ul>
-      </section>
-    </template>
+        </footer>
+      </template>
+    </div>
   </aside>
 </template>
 
@@ -729,18 +896,192 @@ tr:hover .edit-port,
   top: 12px;
   right: 12px;
   bottom: 12px;
-  width: 360px;
+  width: var(--panel-width, 440px);
   max-width: calc(100% - 24px);
-  padding: 16px;
-  overflow: hidden auto;
+  padding: 0;
+  overflow: hidden;
   box-shadow: var(--shadow);
   z-index: 5;
+  display: flex;
+}
+.panel.resizing {
+  user-select: none;
+}
+.scroll {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 18px 14px;
+  overflow: hidden auto;
+}
+/* Drag the left edge to widen or narrow the panel. */
+.resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+}
+.resize::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 4px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 2px;
+  background: var(--border);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.panel:hover .resize::after,
+.resize:focus-visible::after,
+.resizing .resize::after {
+  opacity: 1;
+}
+.resize:hover::after,
+.resizing .resize::after {
+  background: var(--accent);
 }
 header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.name-action {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  opacity: 0;
+}
+.name-row:hover .name-action,
+.name-action:focus-visible {
+  opacity: 0.8;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+}
+.tile-label {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.tile-value {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.tile.traffic {
+  grid-column: span 2;
+}
+.tile.traffic .tile-value {
+  display: flex;
+  gap: 14px;
+}
+.tile.traffic .down,
+.tile.traffic .up {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.tile.traffic .down {
+  color: var(--ok);
+}
+.tile.traffic .up {
+  color: var(--accent);
+}
+.block {
+  padding-top: 12px;
+  margin: 14px 0 0;
+  border-top: 1px solid var(--border);
+}
+.port-list {
+  margin-top: 10px;
+}
+.port-list summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  list-style: none;
+}
+.port-list summary::-webkit-details-marker {
+  display: none;
+}
+.port-list[open] .chev {
+  transform: rotate(90deg);
+}
+.chev {
+  transition: transform 0.15s;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.gateways {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.gateway {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.gateway.down {
+  border-color: var(--danger);
+}
+.gateway.degraded {
+  border-color: var(--warn);
+}
+.manage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .icon {
   display: grid;
@@ -757,14 +1098,8 @@ header {
   min-width: 0;
 }
 h2 {
-  font-size: 16px;
+  font-size: 17px;
   overflow-wrap: anywhere;
-}
-.title .muted {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
 }
 .rename {
   display: flex;
@@ -788,16 +1123,6 @@ h2 {
 .web-port {
   opacity: 0.7;
   font-size: 12px;
-}
-.small {
-  font-size: 12.5px;
-  margin: 0 0 12px;
-}
-.classification {
-  margin-bottom: 10px;
-}
-.facts.compact {
-  margin-bottom: 8px;
 }
 .reasons {
   display: flex;
@@ -825,6 +1150,9 @@ h2 {
   font-size: 12.5px;
   cursor: pointer;
 }
+.link.more {
+  margin: 6px 0 0 8px;
+}
 .hint {
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -835,9 +1163,10 @@ h2 {
 }
 .facts {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 14px;
-  margin: 0 0 16px;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  gap: 7px 14px;
+  margin: 0;
+  font-size: 13px;
 }
 dt {
   color: var(--text-muted);
@@ -852,15 +1181,12 @@ dd {
   font-size: 12.5px;
 }
 h3 {
-  margin: 8px 0 8px;
+  margin: 0 0 10px;
   font-size: 13px;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-}
-section {
-  margin-bottom: 14px;
 }
 /* Long links and descriptions wrap instead of widening the panel. */
 .ports td.grow {
@@ -911,7 +1237,10 @@ section {
     left: 12px;
     right: 12px;
     width: auto;
-    height: 60%;
+    height: 65%;
+  }
+  .resize {
+    display: none;
   }
 }
 </style>

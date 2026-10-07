@@ -325,3 +325,103 @@ describe('NodePanel scan', () => {
     expect(w.emitted('scanned')).toHaveLength(1)
   })
 })
+
+describe('NodePanel layout', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    localStorage.clear()
+  })
+
+  const opnsense: TopoNode = {
+    ...firewall,
+    traffic: { igb0: { rx_bps: 12_000_000, tx_bps: 3_000_000 } },
+    device: {
+      key: 'fw',
+      name: 'fw',
+      os_version: 'OPNsense 26.1',
+      uptime_s: 3600 * 50,
+      cpu_pct: 12,
+      mem_pct: 40,
+      dhcp_leases: [
+        { ip: '192.168.1.10', mac: 'aa:aa:aa:aa:aa:01' },
+        { ip: '192.168.1.11', mac: 'aa:aa:aa:aa:aa:02' },
+      ],
+      interfaces: [
+        { name: 'igb0', type: 'ethernet', up: true, wan: true, speed_mbps: 1000 },
+        { name: 'ix0', type: 'ethernet', up: true, speed_mbps: 10000, connector: 'sfp' },
+        { name: 'igb1', type: 'ethernet', up: false },
+      ],
+    },
+  }
+
+  it('sums up the device at the top, internet traffic first', () => {
+    const w = mountPanel(opnsense)
+    expect(w.get('[data-test=flow]').text()).toContain('12.0 Mbps')
+    expect(w.get('[data-test=flow]').text()).toContain('3.0 Mbps')
+    expect(w.get('[data-test=tile-version]').text()).toContain('OPNsense 26.1')
+    expect(w.get('[data-test=tile-ports]').text()).toContain('2 of 3')
+    expect(w.get('[data-test=tile-leases]').text()).toContain('2')
+    expect(w.find('[data-test=tile-uptime]').exists()).toBe(true)
+  })
+
+  it('draws the ports right below CPU and memory', () => {
+    const w = mountPanel(opnsense)
+    const html = w.html()
+    const bars = html.indexOf('data-test="bar-memory"')
+    const ports = html.indexOf('data-test="ports-section"')
+    const details = html.indexOf('class="block classification"')
+    expect(bars).toBeGreaterThan(0)
+    expect(ports).toBeGreaterThan(bars)
+    expect(details).toBeGreaterThan(ports)
+  })
+
+  it('is resized by dragging its left edge, and remembers the width', async () => {
+    Object.defineProperty(window, 'innerWidth', { value: 1600, configurable: true })
+    const w = mountPanel(firewall)
+    const panel = w.get('aside').element as HTMLElement
+    const before = parseInt(panel.style.getPropertyValue('--panel-width'))
+    w.get('[data-test=resize]').element.dispatchEvent(
+      new MouseEvent('pointerdown', { clientX: 1000, bubbles: true }),
+    )
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 800 }))
+    window.dispatchEvent(new MouseEvent('pointerup'))
+    await flushPromises()
+    expect(parseInt(panel.style.getPropertyValue('--panel-width'))).toBe(before + 200)
+    expect(localStorage.getItem('omini.panelWidth')).toBe(String(before + 200))
+
+    // Never narrower than the minimum; the keyboard works too.
+    await w.get('[data-test=resize]').trigger('keydown', { key: 'ArrowRight' })
+    expect(parseInt(panel.style.getPropertyValue('--panel-width'))).toBe(before + 160)
+    const again = mountPanel(firewall)
+    expect(
+      parseInt((again.get('aside').element as HTMLElement).style.getPropertyValue('--panel-width')),
+    ).toBe(before + 160)
+  })
+})
+
+describe('NodePanel clients', () => {
+  it('lists the first clients and the rest on demand', async () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    const clients: TopoNode[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `mac:${i}`,
+      kind: 'client',
+      label: `phone-${i}`,
+      online: true,
+      parent_id: firewall.id,
+    }))
+    const edges = clients.map((c) => ({
+      id: `e:${c.id}`,
+      source: firewall.id,
+      target: c.id,
+      kind: 'inferred' as const,
+    }))
+    const w = mount(NodePanel, {
+      props: { node: firewall, nodes: [firewall, ...clients], edges, expandedParent: false },
+      global: { plugins: plugins(), stubs: { RouterLink: true } },
+    })
+    expect(w.findAll('.client-list li')).toHaveLength(8)
+    await w.get('[data-test=more-clients]').trigger('click')
+    expect(w.findAll('.client-list li')).toHaveLength(12)
+    expect(w.get('[data-test=tile-clients]').text()).toContain('12')
+  })
+})

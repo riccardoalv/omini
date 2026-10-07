@@ -89,6 +89,18 @@ export default {
     },
   },
   panel: {
+    showAll: 'Show all ({n})',
+    showLess: 'Show fewer',
+    resize: 'Drag to resize',
+    version: 'Version',
+    portsUp: 'Ports up',
+    portsUpValue: '{up} of {n}',
+    leases: 'DHCP leases',
+    internetNow: 'Internet now',
+    portList: 'All ports ({n})',
+    internet: 'Internet',
+    details: 'Details',
+    serial: 'Serial number',
     scan: 'Scan (nmap)',
     scanning: 'Scanning…',
     scanHint:
@@ -283,7 +295,7 @@ export default {
   fieldGroups: {} as Record<string, string>,
   fields: {
     nmap: {
-      device_versions: { options: { off: 'Off', light: 'Light', full: 'Full' } },
+      device_versions: { options: { off: 'Off', quick: 'Quick', light: 'Light', full: 'Full' } },
     },
   } as Record<
     string,
