@@ -227,6 +227,8 @@ const ptBR: typeof en = {
     renamePrompt: 'Nome para este dispositivo (vazio para voltar ao original)',
   },
   integrations: {
+    moreInStore: 'Encontrar mais na loja',
+    moreInStoreHint: 'Plugins para firewalls, roteadores, controladoras e mais.',
     title: 'Integrações',
     subtitle: 'Equipamentos e softwares de onde o Omini lê dados. Tudo é somente leitura.',
     add: 'Adicionar integração',
@@ -324,6 +326,19 @@ const ptBR: typeof en = {
         help: 'Portas, nomes e banners são verificados uma vez por dispositivo novo e de novo depois dessas horas.',
       },
     },
+  },
+  store: {
+    title: 'Loja de plugins',
+    open: 'Abrir a loja',
+    search: 'Buscar plugins: nome, marca, repositório…',
+    addByUrl: 'Adicionar por endereço do GitHub',
+    addHint:
+      'Qualquer repositório público com um plugin.yaml. Instala a última release, ou o commit mais recente se não houver.',
+    filter: { all: 'Todos', installed: 'Instalados', available: 'Disponíveis' },
+    installed: 'Instalado',
+    addIntegration: 'Adicionar integração',
+    noMatch: 'Nenhum plugin encontrado para “{q}”.',
+    empty: 'Nada por aqui ainda.',
   },
   plugins: {
     available: 'Disponíveis',

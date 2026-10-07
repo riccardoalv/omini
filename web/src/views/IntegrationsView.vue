@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, Plus, Store, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -7,17 +7,11 @@ import { useRoute, useRouter } from 'vue-router'
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import ModalDialog from '@/components/ModalDialog.vue'
-import PluginTrust from '@/components/PluginTrust.vue'
+import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
-import type {
-  CatalogEntry,
-  CollectionStatus,
-  Config,
-  Integration,
-  IntegrationType,
-} from '@/lib/types'
+import type { CollectionStatus, Config, Integration, IntegrationType } from '@/lib/types'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -35,38 +29,24 @@ const form = ref<{
 
 const typeByName = computed(() => new Map(types.value.map((x) => [x.type, x])))
 
-const catalog = ref<CatalogEntry[]>([])
-/** Curated plugins not installed yet: offered next to the integration types. */
-const installable = computed(() => catalog.value.filter((e) => !e.installed))
-
 async function load() {
   try {
     ;[items.value, types.value] = await Promise.all([api.integrations(), api.integrationTypes()])
-    catalog.value = await api.pluginCatalog().catch(() => [])
   } finally {
     loading.value = false
   }
 }
 
-// Picking a plugin that is not installed installs it, then opens its form.
-const installing = ref<string>()
-const installError = ref('')
-const pluginURL = ref('')
-
-async function installAndAdd(e: Pick<CatalogEntry, 'id' | 'url'>) {
-  installing.value = e.id
-  installError.value = ''
-  try {
-    const p = await api.installPlugin(e.url.trim())
-    if (e.id === 'url') pluginURL.value = ''
-    await load()
-    const type = types.value.find((x) => x.type === p.manifest.id)
-    if (type) openAdd(type)
-  } catch (err) {
-    installError.value = err instanceof ApiError ? err.message : t('common.error')
-  } finally {
-    installing.value = undefined
-  }
+// The plugin store; "Add integration" from it opens that plugin's form.
+const storeOpen = ref(false)
+function addFromStore(type: string) {
+  storeOpen.value = false
+  const found = types.value.find((x) => x.type === type)
+  if (found) openAdd(found)
+}
+function openStore() {
+  choosing.value = false
+  storeOpen.value = true
 }
 
 function openAdd(type: IntegrationType) {
@@ -116,10 +96,12 @@ async function onSaved() {
 
 onMounted(async () => {
   await load()
-  if (route.query.add) {
-    choosing.value = true
-    router.replace({ query: {} })
-  }
+  const add = route.query.add
+  const type = typeof add === 'string' ? types.value.find((x) => x.type === add) : undefined
+  if (type) openAdd(type)
+  else if (add) choosing.value = true
+  if (route.query.store) storeOpen.value = true
+  if (add || route.query.store) router.replace({ query: {} })
 })
 </script>
 
@@ -131,6 +113,9 @@ onMounted(async () => {
         <p class="muted">{{ t('integrations.subtitle') }}</p>
       </div>
       <div class="header-actions">
+        <button class="btn" data-test="store" @click="storeOpen = true">
+          <Store :size="16" />{{ t('store.title') }}
+        </button>
         <button class="btn primary" @click="choosing = true">
           <Plus :size="16" />{{ t('integrations.add') }}
         </button>
@@ -225,46 +210,15 @@ onMounted(async () => {
           }}</span>
           <span class="muted">{{ type.description }}</span>
         </button>
-        <button
-          v-for="e in installable"
-          :key="e.id"
-          class="card type"
-          data-test="install-type"
-          :disabled="!!installing"
-          @click="installAndAdd(e)"
-        >
-          <strong>{{ e.name }}</strong>
-          <PluginTrust :publisher="e.publisher" :trust="e.trust" />
-          <span class="muted">{{ e.description }}</span>
-          <span class="install-hint">{{
-            installing === e.id ? t('plugins.installing') : t('plugins.installAndAdd')
-          }}</span>
+        <button class="card type more" data-test="open-store" @click="openStore">
+          <Store :size="20" />
+          <strong>{{ t('integrations.moreInStore') }}</strong>
+          <span class="muted">{{ t('integrations.moreInStoreHint') }}</span>
         </button>
       </div>
-      <form class="from-url" @submit.prevent="installAndAdd({ id: 'url', url: pluginURL })">
-        <label for="add-plugin-url">{{ t('plugins.fromUrl') }}</label>
-        <div class="row">
-          <input
-            id="add-plugin-url"
-            v-model="pluginURL"
-            class="input"
-            type="url"
-            required
-            placeholder="https://github.com/user/omini-plugin-…"
-          />
-          <button
-            class="btn primary"
-            type="submit"
-            data-test="install-url"
-            :disabled="!!installing || !pluginURL"
-          >
-            {{ installing === 'url' ? t('plugins.installing') : t('plugins.install') }}
-          </button>
-        </div>
-        <span class="help">{{ t('plugins.trustHint.unverified') }}</span>
-      </form>
-      <p v-if="installError" class="alert error" role="alert">{{ installError }}</p>
     </ModalDialog>
+
+    <PluginStore v-if="storeOpen" @close="storeOpen = false" @changed="load" @add="addFromStore" />
 
     <IntegrationForm
       v-if="form"
@@ -357,32 +311,11 @@ onMounted(async () => {
 .type .muted {
   font-size: 12.5px;
 }
-.from-url {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+.type.more {
+  border-style: dashed;
+  color: var(--text-muted);
 }
-.from-url label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.from-url .row {
-  display: flex;
-  gap: 8px;
-}
-.from-url .input {
-  flex: 1;
-}
-.from-url .help {
-  display: block;
-  margin-top: 6px;
-}
-.install-hint {
-  margin-top: auto;
-  color: var(--accent);
-  font-size: 12.5px;
-  font-weight: 600;
+.type.more strong {
+  color: var(--text);
 }
 </style>

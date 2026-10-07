@@ -3,7 +3,7 @@ import { X } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ title: string; wide?: boolean }>()
+defineProps<{ title: string; wide?: boolean; xl?: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 
@@ -18,7 +18,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <div class="backdrop" @mousedown.self="emit('close')">
     <section
       class="card modal"
-      :class="{ wide }"
+      :class="{ wide, xl }"
       role="dialog"
       aria-modal="true"
       :aria-label="title"
@@ -64,6 +64,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .modal.wide {
   max-width: 680px;
+}
+.modal.xl {
+  max-width: 960px;
+  height: min(720px, calc(100vh - 32px));
 }
 header {
   display: flex;

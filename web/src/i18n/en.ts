@@ -223,6 +223,8 @@ export default {
     renamePrompt: 'Name for this device (empty to reset)',
   },
   integrations: {
+    moreInStore: 'Find more in the store',
+    moreInStoreHint: 'Plugins for firewalls, routers, controllers and more.',
     title: 'Integrations',
     subtitle: 'Devices and software Omini reads data from. Everything is read-only.',
     add: 'Add integration',
@@ -264,6 +266,19 @@ export default {
   // languages translate them as fields.<integration type>.<field key>.label/help.
   fieldGroups: {} as Record<string, string>,
   fields: {} as Record<string, Record<string, { label?: string; help?: string }>>,
+  store: {
+    title: 'Plugin store',
+    open: 'Open the store',
+    search: 'Search plugins: name, brand, repository…',
+    addByUrl: 'Add from a GitHub address',
+    addHint:
+      'Any public repository with a plugin.yaml. The latest release is installed, or the newest commit when it has none.',
+    filter: { all: 'All', installed: 'Installed', available: 'Available' },
+    installed: 'Installed',
+    addIntegration: 'Add integration',
+    noMatch: 'No plugin matches “{q}”.',
+    empty: 'Nothing here yet.',
+  },
   plugins: {
     available: 'Available',
     official: 'Official',

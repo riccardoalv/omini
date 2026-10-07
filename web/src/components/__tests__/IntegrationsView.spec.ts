@@ -19,6 +19,7 @@ vi.mock('@/lib/api', async (orig) => {
       updateIntegration: vi.fn<typeof mod.api.updateIntegration>(),
       pluginCatalog: vi.fn<typeof mod.api.pluginCatalog>(),
       installPlugin: vi.fn<typeof mod.api.installPlugin>(),
+      plugins: vi.fn<typeof mod.api.plugins>(),
     },
   }
 })
@@ -45,6 +46,7 @@ describe('IntegrationsView', () => {
     vi.mocked(api.integrations).mockResolvedValue([demo])
     vi.mocked(api.integrationTypes).mockResolvedValue([])
     vi.mocked(api.pluginCatalog).mockResolvedValue([])
+    vi.mocked(api.plugins).mockResolvedValue([])
   })
 
   it('enables and disables integrations with a switch', async () => {
@@ -71,13 +73,14 @@ describe('IntegrationsView', () => {
     expect(w.text()).toContain('Disabled')
   })
 
-  it('installs plugins from the catalog or a GitHub address, then opens their form', async () => {
+  it('opens the plugin store, and its "Add integration" opens the form', async () => {
     const opnsense = {
       type: 'opnsense',
       name: 'OPNsense',
       kind: 'plugin' as const,
       fields: [{ key: 'url', type: 'url' as const, label: 'Address', required: true }],
     }
+    vi.mocked(api.integrationTypes).mockResolvedValue([opnsense])
     vi.mocked(api.pluginCatalog).mockResolvedValue([
       {
         id: 'opnsense',
@@ -86,18 +89,17 @@ describe('IntegrationsView', () => {
         url: 'https://github.com/riccardoalv/omini-plugin-opnsense',
         publisher: 'official',
         trust: 'experimental',
-        installed: false,
+        installed: true,
       },
     ])
-    vi.mocked(api.installPlugin).mockImplementation(async () => {
-      vi.mocked(api.integrationTypes).mockResolvedValue([opnsense])
-      return {
+    vi.mocked(api.plugins).mockResolvedValue([
+      {
         manifest: { id: 'opnsense', name: 'OPNsense', version: '0.1.0' },
         dev: false,
         publisher: 'official',
         trust: 'experimental',
-      }
-    })
+      },
+    ])
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/', component: IntegrationsView }],
@@ -107,17 +109,13 @@ describe('IntegrationsView', () => {
       attachTo: document.body,
     })
     await flushPromises()
+
+    // From "Add integration": the last card leads to the store.
     await w.get('.page-header .btn.primary').trigger('click')
-
-    const card = w.get('[data-test=install-type]')
-    expect(card.text()).toContain('OPNsense')
-    expect(card.text()).toContain('Official')
-
-    // From an address: installed, then its form opens.
-    await w.get('#add-plugin-url').setValue('https://github.com/someone/omini-plugin-x ')
-    await w.get('.from-url').trigger('submit')
+    await w.get('[data-test=open-store]').trigger('click')
     await flushPromises()
-    expect(api.installPlugin).toHaveBeenCalledWith('https://github.com/someone/omini-plugin-x')
+    await w.get('[data-test=store-use]').trigger('click')
+    await flushPromises()
     expect(document.body.textContent).toContain('Address')
     w.unmount()
   })
