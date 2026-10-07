@@ -26,6 +26,10 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver
+  // Nor DOMMatrixReadOnly (Vue Flow reads the zoom with it after a new layout).
+  globalThis.DOMMatrixReadOnly ??= class {
+    m22 = 1
+  } as unknown as typeof DOMMatrixReadOnly
 })
 
 // Smoke test: the whole map screen mounts (a setup error leaves it blank).
