@@ -39,6 +39,16 @@ export default {
     signOut: 'Sign out',
   },
   map: {
+    exportDialog: {
+      title: 'Export the map',
+      format: 'Format',
+      theme: 'Theme',
+      orientation: 'Orientation',
+      dark: 'Dark',
+      light: 'Light',
+      hint: 'The image shows the whole map with every group expanded; your screen goes back as it was.',
+      exporting: 'Exporting…',
+    },
     export: 'Export',
     exportAs: { png: 'Image (PNG)', svg: 'Vector image (SVG)', json: 'Data (JSON)' },
     exportFailed: 'Could not export the map.',

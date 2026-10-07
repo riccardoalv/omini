@@ -223,12 +223,8 @@ describe('MapView', () => {
     const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
     await w.get('[data-test=export]').trigger('click')
-    expect(w.findAll('[role=menuitem]').map((b) => b.text())).toEqual([
-      'Image (PNG)',
-      'Vector image (SVG)',
-      'Data (JSON)',
-    ])
-    await w.get('[data-test=export-json]').trigger('click')
+    await w.get('[data-test=format-json]').setValue(true)
+    await w.get('form#export-form').trigger('submit')
     await flushPromises()
     const [content, name] = vi.mocked(download).mock.calls[0]!
     expect(JSON.parse(content).topology.nodes[0].id).toBe('dev:fw')
@@ -282,7 +278,7 @@ describe('MapView', () => {
       w.findAllComponents({ name: 'TopologyNode' }).filter((c) => c.props('data').group).length
     expect(bubbles()).toBe(1)
     await w.get('[data-test=export]').trigger('click')
-    await w.get('[data-test=export-png]').trigger('click')
+    await w.get('form#export-form').trigger('submit') // PNG by default
     await vi.waitFor(() => expect(vi.mocked(mapImage)).toHaveBeenCalled(), { timeout: 3000 })
     expect(drawn.filter((id) => id.startsWith('mac:'))).toHaveLength(10)
     await flushPromises()

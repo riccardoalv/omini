@@ -21,6 +21,7 @@ import AreaMenu from '@/components/map/AreaMenu.vue'
 import AreaNode from '@/components/map/AreaNode.vue'
 import LinkEdge from '@/components/map/LinkEdge.vue'
 import NodeMenu from '@/components/map/NodeMenu.vue'
+import ExportDialog, { type ExportOptions } from '@/components/map/ExportDialog.vue'
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
@@ -57,8 +58,8 @@ import {
   positionsFor,
 } from '@/lib/layout'
 import { displayName } from '@/lib/names'
-import { download, exportName, mapImage, mapJSON, type ExportFormat } from '@/lib/export'
-import { prefs } from '@/lib/prefs'
+import { download, exportName, mapImage, mapJSON } from '@/lib/export'
+import { applyTheme, prefs } from '@/lib/prefs'
 import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
   AreaColor,
@@ -84,8 +85,15 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 const { t, locale } = useI18n()
 const router = useRouter()
-const { fitView, onNodesInitialized, updateNodeInternals, viewport, screenToFlowCoordinate } =
-  useVueFlow('omini-map')
+const {
+  fitView,
+  getViewport,
+  onNodesInitialized,
+  setViewport,
+  updateNodeInternals,
+  viewport,
+  screenToFlowCoordinate,
+} = useVueFlow('omini-map')
 
 const data = shallowRef<TopologyResponse>()
 const integrations = ref<Integration[]>([])
@@ -122,8 +130,11 @@ const areas = ref<MapArea[]>([])
 // The map's graph: each access point's Wi-Fi networks as mini nodes between it
 // and its clients (the panel and lists use the plain graph).
 const mapGraph = computed(() => withWifiNetworks(nodes.value, edges.value))
-// While exporting an image, everything is shown expanded (no bubbles).
+// While exporting an image, everything is shown expanded (no bubbles), in the
+// orientation picked for the image (the user's own preference is untouched).
 const expandAll = ref(false)
+const exportDirection = ref<'RIGHT' | 'DOWN'>()
+const direction = computed(() => exportDirection.value ?? prefs.layoutDirection)
 const view = computed(() =>
   expandAll.value
     ? collapseClients(mapGraph.value.nodes, mapGraph.value.edges, Infinity, new Set())
@@ -189,7 +200,7 @@ const flowNodes = computed<Node[]>(() => {
     data: {
       node: n,
       error: n.integration_id ? failedIntegrations.value.has(n.integration_id) : false,
-      direction: prefs.layoutDirection,
+      direction: direction.value,
       flow: nodeFlow(n, nodeById.value) ?? linkInfo.value.flows.get(n.id),
     },
     width: SIZES[n.kind]!.width,
@@ -203,7 +214,7 @@ const flowNodes = computed<Node[]>(() => {
       id: g.id,
       type: 'omini',
       position: positions.value[g.id] ?? { x: 0, y: 0 },
-      data: { group: g, direction: prefs.layoutDirection },
+      data: { group: g, direction: direction.value },
       width: SIZES.group!.width,
       height: SIZES.group!.height,
     })
@@ -265,7 +276,7 @@ function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
 }
 
 // Re-layout only when the visible graph or the direction changes, not on every poll.
-watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
+watch([view, direction], async ([v, direction]) => {
   const ids = [...v.nodes.map((n) => n.id), ...v.groups.map((g) => g.id)]
   const key = direction + '|' + ids.join(',') + '|' + v.edges.map((e) => e.id).join(',')
   if (key === lastLayout) {
@@ -381,8 +392,7 @@ const visibleAreas = computed(() =>
   areas.value
     .filter((a) => !prefs.collapsedAreas.includes(a.id))
     .filter(
-      (a) =>
-        a.direction === prefs.layoutDirection || areaNodes(a).some((id) => nodeBoxes.value.has(id)),
+      (a) => a.direction === direction.value || areaNodes(a).some((id) => nodeBoxes.value.has(id)),
     )
     .map((a) => ({
       ...a,
@@ -627,10 +637,10 @@ async function refresh() {
 const exportOpen = ref(false)
 const exporting = ref(false)
 const exportError = ref('')
-/** Expands every group and area, and waits for that map to be drawn. */
-async function showEverything() {
+/** Waits for the map to be laid out and drawn after a change. */
+async function untilLaidOut(change: () => void) {
   const before = layoutsApplied.value
-  expandAll.value = true
+  change()
   for (let i = 0; i < 200 && layoutsApplied.value === before; i++) {
     await new Promise((r) => setTimeout(r, 25))
   }
@@ -638,25 +648,50 @@ async function showEverything() {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
 }
 
-async function exportMap(format: ExportFormat) {
-  exportOpen.value = false
+/** The theme the screen shows now ("system" resolved). */
+function screenTheme(): 'dark' | 'light' {
+  if (prefs.theme !== 'system') return prefs.theme
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+/**
+ * Exports the map. An image shows every group and area expanded, in the theme
+ * and orientation picked: the map is laid out that way for the capture, then
+ * put back as it was (theme, orientation, groups, zoom and position).
+ */
+async function exportMap(options: ExportOptions) {
   exportError.value = ''
   if (!data.value) return
+  if (options.format === 'json') {
+    download(mapJSON(data.value), exportName('json'))
+    exportOpen.value = false
+    return
+  }
+  const viewportEl = mapEl.value?.querySelector<HTMLElement>('.vue-flow__viewport')
+  if (!viewportEl) return
   exporting.value = true
+  const screen = getViewport()
+  const turned = options.direction !== prefs.layoutDirection
   try {
-    if (format === 'json') {
-      download(mapJSON(data.value), exportName('json'))
-      return
-    }
-    const viewportEl = mapEl.value?.querySelector<HTMLElement>('.vue-flow__viewport')
-    if (!viewportEl) return
-    await showEverything()
+    document.documentElement.dataset.theme = options.theme
+    await untilLaidOut(() => {
+      expandAll.value = true
+      exportDirection.value = options.direction
+    })
     const background = getComputedStyle(mapEl.value!).backgroundColor
-    download(await mapImage(format, viewportEl, background), exportName(format))
+    download(await mapImage(options.format, viewportEl, background), exportName(options.format))
+    exportOpen.value = false
   } catch {
     exportError.value = t('map.exportFailed')
   } finally {
-    expandAll.value = false
+    applyTheme(prefs.theme)
+    await untilLaidOut(() => {
+      expandAll.value = false
+      exportDirection.value = undefined
+    })
+    // Turning the map refits it: the screen goes back to where it was.
+    if (turned) await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+    setViewport(screen)
     exporting.value = false
   }
 }
@@ -856,32 +891,15 @@ onBeforeUnmount(() => {
         >
           <SquareDashed :size="15" /><span class="label">{{ t('map.areas.new') }}</span>
         </button>
-        <div class="export-wrap" @keydown.esc="exportOpen = false">
-          <button
-            class="btn small"
-            data-test="export"
-            :disabled="exporting"
-            :aria-expanded="exportOpen"
-            aria-haspopup="menu"
-            @click="exportOpen = !exportOpen"
-          >
-            <Download :size="15" /><span class="label">{{ t('map.export') }}</span>
-          </button>
-          <p v-if="exportError" class="export-menu card export-error" role="alert">
-            {{ exportError }}
-          </p>
-          <div v-if="exportOpen" class="export-menu card" role="menu">
-            <button
-              v-for="f in ['png', 'svg', 'json'] as const"
-              :key="f"
-              role="menuitem"
-              :data-test="`export-${f}`"
-              @click="exportMap(f)"
-            >
-              {{ t(`map.exportAs.${f}`) }}
-            </button>
-          </div>
-        </div>
+        <button
+          class="btn small"
+          data-test="export"
+          :disabled="exporting"
+          aria-haspopup="dialog"
+          @click="exportOpen = true"
+        >
+          <Download :size="15" /><span class="label">{{ t('map.export') }}</span>
+        </button>
         <button class="btn small" :title="t('map.resetLayout')" @click="resetLayout">
           <LayoutGrid :size="15" /><span class="label">{{ t('map.resetLayout') }}</span>
         </button>
@@ -984,6 +1002,16 @@ onBeforeUnmount(() => {
       @close="menu = undefined"
     />
 
+    <ExportDialog
+      v-if="exportOpen"
+      :theme="screenTheme()"
+      :direction="prefs.layoutDirection"
+      :busy="exporting"
+      :error="exportError"
+      @close="exportOpen = false"
+      @export="exportMap"
+    />
+
     <NodePanel
       v-if="selectedNode || selectedGroup"
       :node="selectedNode"
@@ -1008,39 +1036,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.export-wrap {
-  position: relative;
-}
-.export-menu {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 4px);
-  right: 0;
-  display: grid;
-  min-width: 170px;
-  padding: 4px;
-  box-shadow: var(--shadow);
-}
-.export-menu button {
-  padding: 7px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.export-error {
-  margin: 0;
-  padding: 8px 10px;
-  color: var(--danger);
-  font-size: 13px;
-}
-.export-menu button:hover {
-  background: var(--surface-hover);
-}
 .map {
   position: relative;
   height: 100%;

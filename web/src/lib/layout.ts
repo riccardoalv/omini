@@ -104,14 +104,20 @@ export function packLeaves(
     seen.add(key)
     outEdges.push(target === e.target ? e : { id: `e:${key}`, source: e.source, target })
   }
-  return {
-    nodes: [
-      ...nodes.filter((n) => !packed.has(n.id)),
-      ...packs.map((p) => ({ id: p.id, ...size(p) })),
-    ],
-    edges: outEdges,
-    packs,
+  // Each grid takes the place of its first leaf: the layout keeps the order it
+  // is given among siblings, so a grid at the end landed far from its parent.
+  const byId = new Map(packs.map((p) => [p.id, p]))
+  const ordered: LayoutNode[] = []
+  const placed = new Set<string>()
+  for (const n of nodes) {
+    const packId = packed.get(n.id)
+    if (!packId) ordered.push(n)
+    else if (!placed.has(packId)) {
+      placed.add(packId)
+      ordered.push({ id: packId, ...size(byId.get(packId)!) })
+    }
   }
+  return { nodes: ordered, edges: outEdges, packs }
 }
 
 /** Positions of packed leaves: row by row inside their grid, centered in their cell. */
@@ -181,7 +187,9 @@ export async function layout(
       // Siblings keep their order (grouped by port or Wi-Fi network, see modelOrder).
       'elk.layered.crossingMinimization.forceNodeModelOrder': 'true',
     },
-    children: [...nodes.filter((n) => !groupOf.has(n.id)).map(box), ...boxes],
+    // Each area box takes the place of its first node: the layout keeps the
+    // order it is given, so a box at the end landed after every other port.
+    children: inOrder(nodes, groupOf, boxes, box),
     edges: edges
       .filter((e) => ids.has(e.source) && ids.has(e.target))
       .map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
@@ -199,6 +207,31 @@ export async function layout(
   }
   unpack(packs, out, saved)
   return clearSaved(out, allNodes, saved, direction)
+}
+
+/** Nodes outside areas in their order, each area's box where its first node was. */
+function inOrder<A extends { id: string }, B extends { id: string }>(
+  nodes: LayoutNode[],
+  groupOf: Map<string, LayoutGroup>,
+  boxes: B[],
+  box: (n: LayoutNode) => A,
+): (A | B)[] {
+  const byGroup = new Map(boxes.map((b) => [b.id, b]))
+  const out: (A | B)[] = []
+  const placed = new Set<string>()
+  for (const n of nodes) {
+    const g = groupOf.get(n.id)
+    if (!g) out.push(box(n))
+    else {
+      const id = `layout-group:${g.id}`
+      const b = byGroup.get(id)
+      if (b && !placed.has(id)) {
+        placed.add(id)
+        out.push(b)
+      }
+    }
+  }
+  return out
 }
 
 const GAP = 12

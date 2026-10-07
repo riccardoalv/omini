@@ -196,3 +196,42 @@ describe('sibling order in the layout', () => {
     expect(pos.netA!.y).toBeLessThan(pos.netB!.y)
   })
 })
+
+describe('top-down grids keep their place', () => {
+  it("puts a parent's grid of leaves under it, before the next subtree's nodes", async () => {
+    // gw → a (5 leaves: a grid) and b → c → d. Layer 2 holds a's grid and c.
+    const leaves = Array.from({ length: 5 }, (_, i) => `a${i}`)
+    const ids = ['gw', 'a', ...leaves, 'b', 'c', 'd']
+    const nodes = ids.map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      { id: 'e:a', source: 'gw', target: 'a' },
+      { id: 'e:b', source: 'gw', target: 'b' },
+      ...leaves.map((k) => ({ id: `e:${k}`, source: 'a', target: k })),
+      { id: 'e:c', source: 'b', target: 'c' },
+      { id: 'e:d', source: 'c', target: 'd' },
+    ]
+    const pos = await layout(nodes, edges, {}, 'DOWN')
+    const right = Math.max(...leaves.map((k) => pos[k]!.x + 200))
+    expect(pos.a!.x).toBeLessThan(pos.b!.x)
+    expect(right).toBeLessThanOrEqual(pos.c!.x) // a's grid stays left of b's subtree
+  })
+})
+
+describe('areas keep their place', () => {
+  it('puts an area where its first node comes, not after every other one', async () => {
+    // sw → p1 (in an area, with a child), p2, p5 — given in this order.
+    const ids = ['sw', 'p1', 'vm', 'p2', 'p5']
+    const nodes = ids.map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      { id: 'e1', source: 'sw', target: 'p1' },
+      { id: 'e2', source: 'p1', target: 'vm' },
+      { id: 'e3', source: 'sw', target: 'p2' },
+      { id: 'e4', source: 'sw', target: 'p5' },
+    ]
+    const pos = await layout(nodes, edges, {}, 'RIGHT', [
+      { id: 'rack', children: ['p1', 'vm'], padding: [24, 24, 24, 24] },
+    ])
+    expect(pos.p1!.y).toBeLessThan(pos.p2!.y)
+    expect(pos.p2!.y).toBeLessThan(pos.p5!.y)
+  })
+})

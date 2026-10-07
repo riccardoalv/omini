@@ -41,6 +41,16 @@ const ptBR: typeof en = {
     signOut: 'Sair',
   },
   map: {
+    exportDialog: {
+      title: 'Exportar o mapa',
+      format: 'Formato',
+      theme: 'Tema',
+      orientation: 'Orientação',
+      dark: 'Escuro',
+      light: 'Claro',
+      hint: 'A imagem mostra o mapa inteiro com todos os grupos expandidos; sua tela volta como estava.',
+      exporting: 'Exportando…',
+    },
     export: 'Exportar',
     exportAs: { png: 'Imagem (PNG)', svg: 'Imagem vetorial (SVG)', json: 'Dados (JSON)' },
     exportFailed: 'Não foi possível exportar o mapa.',
