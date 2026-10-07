@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/riccardoalv/omini/compare/v0.1.1...v0.1.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* nmap no longer adds a second gateway; traffic shown on devices ([036da53](https://github.com/riccardoalv/omini/commit/036da53cf27cc01353356d51452eceaae6f0fc29))
+
 ## [0.1.1](https://github.com/riccardoalv/omini/compare/v0.1.0...v0.1.1) (2026-10-07)
 
 
