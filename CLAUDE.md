@@ -44,6 +44,9 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Data contract | **JSON Schema** in `schema/` is the single source of truth; Go types and Python (pydantic) models are generated from it; CI fails if generated code is stale |
 | Plugin format | `plugin.yaml` manifest (id, name, version, protocol version, entrypoint, form fields) + `requirements.txt`; Python SDK `omini-sdk` handles stdin/stdout, validation and errors so authors only write `collect()` and `test()` |
 | Dev environment | `make dev` runs the Go backend and the Vite dev server together; `make run` builds and runs the production-like binary. Optional Nix flake. (Docker Compose + SNMP simulator: later) |
+| Map orientation | Left-to-right by default, toggle to top-down in the map toolbar (per browser). Saved node positions are kept per orientation (`DOWN:` prefix in the layout table) |
+| Device web UI | Side panel offers "Open web interface" (new tab) when one is detected: `internal/webui` checks common admin ports (443, 80, 8443, 8080, 8006, 5000/5001, 8123, 8096, 9443) over HTTP/HTTPS and reads the page `<title>`. Only IPs of nodes on the map; cached 10 min; no credentials sent |
+| Sidebar | Compact (icons) or expanded (icons + labels), remembered per browser |
 | Visual style | **Dark by default**, light theme available, follows the OS setting. Clean UniFi/Linear-like look; color reserved for status (green/yellow/red) and traffic |
 
 ## Open questions
