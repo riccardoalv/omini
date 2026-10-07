@@ -39,6 +39,7 @@ import { formatAgo } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutHidden, withoutOffline } from '@/lib/graph'
 import { alignOn, layout, layoutKey, type LayoutGroup, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
+import { linkLabels, nodeFlow } from '@/lib/traffic'
 import type {
   AreaColor,
   Integration,
@@ -112,6 +113,8 @@ const summary = computed(() => {
 // "Empty" means no devices at all: hidden or collapsed devices do not count.
 const empty = computed(() => loaded.value && allNodes.value.length === 0)
 
+const nodeById = computed(() => new Map(allNodes.value.map((n) => [n.id, n])))
+
 const flowNodes = computed<Node[]>(() => {
   const out: Node[] = visibleAreas.value.map((a) => ({
     id: areaNodeId(a.id),
@@ -133,6 +136,7 @@ const flowNodes = computed<Node[]>(() => {
       node: n,
       error: n.integration_id ? failedIntegrations.value.has(n.integration_id) : false,
       direction: prefs.layoutDirection,
+      flow: nodeFlow(n, nodeById.value),
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
@@ -153,10 +157,10 @@ const flowNodes = computed<Node[]>(() => {
 
 const flowEdges = computed<Edge[]>(() => {
   const byId = new Map(nodes.value.map((n) => [n.id, n]))
-  // Links ending at the same node (several WANs into a firewall) would stack
-  // their speeds there: those show it at their other end.
-  const incoming = new Map<string, number>()
-  for (const e of view.value.edges) incoming.set(e.target, (incoming.get(e.target) ?? 0) + 1)
+  const badged = new Set(
+    view.value.nodes.filter((n) => nodeFlow(n, nodeById.value)).map((n) => n.id),
+  )
+  const labels = linkLabels(view.value.edges, nodes.value, badged)
   return view.value.edges.map((e) => {
     const source = byId.get(e.source)
     const target = byId.get(e.target)
@@ -166,10 +170,7 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: {
-        speed: e.speed_mbps,
-        labelAt: (incoming.get(e.target) ?? 0) > 1 ? 'source' : 'target',
-      },
+      data: labels.get(e.id),
       class: { slow: look.slow, offline: target ? !target.online : false },
       style: {
         strokeWidth: look.width,

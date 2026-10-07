@@ -39,6 +39,7 @@ export default {
     signOut: 'Sign out',
   },
   map: {
+    trafficHint: 'Internet traffic: average of the last minute',
     devices: '{n} device | {n} devices',
     clients: '{n} client | {n} clients',
     problems: '{n} problem | {n} problems',

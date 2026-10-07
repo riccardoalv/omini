@@ -57,6 +57,8 @@ type Collector struct {
 	snaps map[int64]store.Snapshot
 	state State
 
+	traffic *trafficMeter
+
 	round   sync.Mutex // one collection round at a time
 	trigger chan struct{}
 }
@@ -77,6 +79,7 @@ func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Optio
 	return &Collector{
 		store: st, reg: reg, box: box, opts: opts,
 		snaps:   map[int64]store.Snapshot{},
+		traffic: newTrafficMeter(),
 		trigger: make(chan struct{}, 1),
 		state:   State{Topology: topology.Topology{Nodes: []topology.Node{}, Edges: []topology.Edge{}}, Statuses: []Status{}},
 	}
@@ -172,6 +175,7 @@ func (c *Collector) CollectNow(ctx context.Context) error {
 	snaps := make(map[int64]store.Snapshot, len(results))
 	for _, r := range results {
 		snaps[r.IntegrationID] = r
+		c.traffic.observe(r)
 		if err := c.store.SaveSnapshot(ctx, r); err != nil {
 			slog.Error("save snapshot", "integration", r.IntegrationID, "err", err)
 		}
@@ -198,6 +202,7 @@ func (c *Collector) CollectIntegration(ctx context.Context, id int64) (Status, e
 		return Status{}, ErrDisabled
 	}
 	snap := c.collectOne(integration.WithForce(ctx), in)
+	c.traffic.observe(snap)
 	if err := c.store.SaveSnapshot(ctx, snap); err != nil {
 		slog.Error("save snapshot", "integration", snap.IntegrationID, "err", err)
 	}
@@ -310,6 +315,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	for i := range topo.Nodes {
 		topo.Nodes[i].PortLabels = labels[topo.Nodes[i].ID]
 	}
+	c.traffic.attach(&topo)
 
 	c.mu.Lock()
 	c.state = State{Topology: topo, Statuses: statuses, GeneratedAt: now}

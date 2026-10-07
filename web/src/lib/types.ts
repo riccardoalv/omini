@@ -84,6 +84,8 @@ export interface TopoNode {
   mac_count?: number
   device?: Device
   wan?: WANLink
+  /** Current traffic per interface (bits/s, average of the last polling interval). */
+  traffic?: Record<string, { rx_bps: number; tx_bps: number }>
   /** The user's port descriptions, by port name. */
   port_labels?: Record<string, string>
   pinned?: boolean

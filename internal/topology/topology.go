@@ -49,6 +49,13 @@ const (
 // from which we assume there is an unmanaged switch/AP/host there.
 const SegmentMinMACs = 3
 
+// Rate is the traffic of an interface, in bits per second, averaged over
+// the last polling interval. Rx is what the interface received.
+type Rate struct {
+	RxBps uint64 `json:"rx_bps"`
+	TxBps uint64 `json:"tx_bps"`
+}
+
 // WANLink describes an internet uplink: the router's WAN interface, the
 // physical port carrying it and its gateways.
 type WANLink struct {
@@ -80,6 +87,7 @@ type Node struct {
 	Device        *model.Device     `json:"device,omitempty"`      // managed devices: full collected data
 	WAN           *WANLink          `json:"wan,omitempty"`         // WAN nodes: the uplink
 	PortLabels    map[string]string `json:"port_labels,omitempty"` // the user's port descriptions
+	Traffic       map[string]Rate   `json:"traffic,omitempty"`     // current rate per interface
 	OS            string            `json:"os,omitempty"`
 	ReportedOS    string            `json:"-"`                    // OS reported by an integration (input of the classifier)
 	OpenPorts     []int             `json:"open_ports,omitempty"` // found by the network scan
