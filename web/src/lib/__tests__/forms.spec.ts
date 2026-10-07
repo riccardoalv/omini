@@ -41,6 +41,8 @@ describe('forms', () => {
   it('maps field types to inputs and labels', () => {
     expect(inputType(fields[1]!)).toBe('password')
     expect(inputType(fields[2]!)).toBe('number')
+    // "192.168.1.1" must be accepted: the browser's url type would demand https://.
+    expect(inputType({ key: 'url', type: 'url' })).toBe('text')
     expect(fieldLabel(fields[0]!)).toBe('Host')
     expect(fieldLabel(fields[3]!)).toBe('Verify tls')
   })

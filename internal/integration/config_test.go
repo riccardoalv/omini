@@ -60,3 +60,23 @@ func TestSecretsLifecycle(t *testing.T) {
 		t.Fatalf("secret lost after a masked round trip: %v", opened)
 	}
 }
+
+func TestURLFieldsAcceptBareAddresses(t *testing.T) {
+	fields := []model.FormField{{Key: "url", Type: model.FormFieldTypeURL, Required: true}}
+	for in, want := range map[string]string{
+		"192.168.1.1":           "https://192.168.1.1",
+		" fw.lan:8443/ ":        "https://fw.lan:8443",
+		"http://192.168.1.1":    "http://192.168.1.1",
+		"https://opnsense.lan/": "https://opnsense.lan",
+	} {
+		out, err := Normalize(fields, Config{"url": in})
+		if err != nil || out["url"] != want {
+			t.Errorf("%q: got %v, %v; want %q", in, out["url"], err, want)
+		}
+	}
+	for _, bad := range []string{"ftp://fw", "https://", "://x"} {
+		if _, err := Normalize(fields, Config{"url": bad}); err == nil {
+			t.Errorf("%q should be rejected", bad)
+		}
+	}
+}

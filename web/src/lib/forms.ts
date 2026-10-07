@@ -60,8 +60,8 @@ export function inputType(field: FormField): string {
       return 'password'
     case 'int':
       return 'number'
-    case 'url':
-      return 'url'
+    // Addresses are text: "192.168.1.1" is fine (the server assumes https://),
+    // while the browser's url type would demand the scheme.
     default:
       return 'text'
   }

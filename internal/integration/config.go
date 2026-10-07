@@ -2,6 +2,7 @@ package integration
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -39,6 +40,16 @@ func Normalize(fields []model.FormField, cfg Config) (Config, error) {
 			if _, ok := v.(bool); !ok {
 				return nil, fmt.Errorf("field %q must be true or false", f.Key)
 			}
+		case model.FormFieldTypeURL:
+			s, ok := v.(string)
+			if !ok {
+				return nil, fmt.Errorf("field %q must be text", f.Key)
+			}
+			u, err := normalizeURL(s)
+			if err != nil {
+				return nil, fmt.Errorf("field %q: %w", f.Key, err)
+			}
+			v = u
 		default:
 			s, ok := v.(string)
 			if !ok {
@@ -109,4 +120,18 @@ func mapSecrets(fields []model.FormField, cfg Config, fn func(string) (string, e
 		out[f.Key] = v
 	}
 	return out, nil
+}
+
+// normalizeURL accepts an address with or without scheme: "192.168.1.1" and
+// "fw.lan:8443" become https://...; only http and https are allowed.
+func normalizeURL(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if !strings.Contains(s, "://") {
+		s = "https://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" {
+		return "", fmt.Errorf("enter an address like https://192.168.1.1 or 192.168.1.1")
+	}
+	return strings.TrimRight(u.String(), "/"), nil
 }
