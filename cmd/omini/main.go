@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/api"
+	"github.com/riccardoalv/omini/internal/appicons"
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
-	"github.com/riccardoalv/omini/internal/demo"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/secret"
@@ -37,7 +37,6 @@ type config struct {
 	PollInterval time.Duration
 	SecretKey    string
 	LogLevel     slog.Level
-	Demo         bool
 	AutoScan     bool // create the network scan integration on first start
 }
 
@@ -61,13 +60,6 @@ func loadConfig(getenv func(string) string) (config, error) {
 		if err := cfg.LogLevel.UnmarshalText([]byte(v)); err != nil {
 			return cfg, fmt.Errorf("OMINI_LOG_LEVEL: %w", err)
 		}
-	}
-	if v := getenv("OMINI_DEMO"); v != "" {
-		b, err := strconv.ParseBool(v)
-		if err != nil {
-			return cfg, fmt.Errorf("OMINI_DEMO: %w", err)
-		}
-		cfg.Demo = b
 	}
 	if v := getenv("OMINI_AUTOSCAN"); v != "" {
 		b, err := strconv.ParseBool(v)
@@ -129,7 +121,6 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 
 	reg := integration.NewRegistry()
 	reg.Register(snmp.New())
-	reg.Register(demo.New())
 	reg.Register(netscan.New())
 
 	if err := firstRun(ctx, st, cfg); err != nil {
@@ -140,6 +131,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
 		Discover: snmp.Discover, WebUI: webui.New(), UI: web.FS(), Version: version,
+		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 	}
 	httpServer := &http.Server{
 		Handler:           server.Handler(),
@@ -176,24 +168,31 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	return httpServer.Shutdown(shutdownCtx)
 }
 
-// firstRun sets up integrations when there are none yet: the network scan, so
-// Omini shows the network with zero configuration, and the demo when asked.
+// firstRun sets up the network scan when there are no integrations yet, so
+// Omini shows the network with zero configuration. It also removes
+// integrations of types that no longer exist (the former demo network).
 func firstRun(ctx context.Context, st *store.Store, cfg config) error {
 	existing, err := st.ListIntegrations(ctx)
-	if err != nil || len(existing) > 0 {
+	if err != nil {
 		return err
+	}
+	kept := 0
+	for _, in := range existing {
+		if in.Type == "demo" {
+			if err := st.DeleteIntegration(ctx, in.ID); err != nil {
+				return err
+			}
+			continue
+		}
+		kept++
+	}
+	if kept > 0 {
+		return nil
 	}
 	if cfg.AutoScan {
 		if _, err := st.CreateIntegration(ctx, store.Integration{
 			Name: "Network scan", Type: "network", Enabled: true,
 			Config: integration.Config{"subnets": "auto", "port_scan": true},
-		}); err != nil {
-			return err
-		}
-	}
-	if cfg.Demo {
-		if _, err := st.CreateIntegration(ctx, store.Integration{
-			Name: "Demo network", Type: "demo", Enabled: true, Config: integration.Config{},
 		}); err != nil {
 			return err
 		}

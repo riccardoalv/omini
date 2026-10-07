@@ -1,7 +1,7 @@
 // Types mirroring the Go API (internal/api, internal/topology, schema/).
 
 export type DeviceRole = 'router' | 'switch' | 'ap' | 'firewall' | 'server' | 'unknown'
-export type NodeKind = 'device' | 'unmanaged' | 'segment' | 'client'
+export type NodeKind = 'device' | 'unmanaged' | 'segment' | 'client' | 'app'
 export type EdgeKind = 'lldp' | 'fdb' | 'wifi' | 'inferred'
 
 export interface Interface {
@@ -61,6 +61,7 @@ export interface TopoNode {
   titles?: string[]
   banners?: string[]
   ttl?: number
+  web?: { port: number; url: string; title?: string; app?: string }[]
   type?: string
   brand?: string
   product?: string

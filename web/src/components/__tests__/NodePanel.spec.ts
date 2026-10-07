@@ -113,3 +113,43 @@ describe('NodePanel identification', () => {
     expect(w.emitted('changed')![0]).toEqual([{ type: 'phone', icon: 'android' }])
   })
 })
+
+describe('NodePanel app node', () => {
+  it('links to the app without probing', async () => {
+    vi.mocked(api.webServices).mockReset()
+    const host: TopoNode = {
+      id: 'mac:aa',
+      kind: 'client',
+      label: 'Ubuntu',
+      online: true,
+      ip: '192.168.1.42',
+    }
+    const app: TopoNode = {
+      id: 'app:mac:aa:8080',
+      kind: 'app',
+      label: 'qBittorrent',
+      online: true,
+      parent_id: 'mac:aa',
+      port: '8080',
+      product: 'qbittorrent',
+      ip: '192.168.1.42',
+      web: [
+        {
+          port: 8080,
+          url: 'http://192.168.1.42:8080/',
+          title: 'qBittorrent WebUI',
+          app: 'qbittorrent',
+        },
+      ],
+    }
+    const w = mount(NodePanel, {
+      props: { node: app, nodes: [host, app], edges: [], expandedParent: false },
+      global: { plugins: plugins(), stubs: { RouterLink: true } },
+    })
+    await flushPromises()
+    expect(api.webServices).not.toHaveBeenCalled()
+    expect(w.get('[data-test=open-web]').attributes('href')).toBe('http://192.168.1.42:8080/')
+    expect(w.find('.classification').exists()).toBe(false)
+    expect(w.text()).toContain('Ubuntu')
+  })
+})

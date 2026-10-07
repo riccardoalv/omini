@@ -296,6 +296,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 		return err
 	}
 	classifyNodes(&topo)
+	expandApps(&topo)
 	applyInventory(&topo, inventory, now)
 
 	c.mu.Lock()
@@ -361,7 +362,7 @@ func classifyNodes(topo *topology.Topology) {
 func classifyNode(n *topology.Node) {
 	in := classify.Input{
 		Kind: string(n.Kind), Role: n.Role, Vendor: n.Vendor, Model: n.Model, Hostname: n.Hostname,
-		OS: n.OS, RandomMAC: n.RandomMAC, OpenPorts: n.OpenPorts, Services: n.Services,
+		OS: n.ReportedOS, RandomMAC: n.RandomMAC, OpenPorts: n.OpenPorts, Services: n.Services,
 		Titles: n.Titles, Banners: n.Banners, TTL: n.TTL, Self: slices.Contains(n.Services, "omini"),
 	}
 	if in.Hostname == "" && n.Kind != topology.KindClient {

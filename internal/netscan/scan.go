@@ -48,6 +48,7 @@ type deepInfo struct {
 	netbios string
 	banner  string   // SSH version string
 	titles  []string // web interface titles
+	web     []webui.Service
 	at      time.Time
 }
 
@@ -451,12 +452,13 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	if opts.titles {
 		var web []int
 		for _, p := range d.ports {
-			if webPorts[p] {
+			if !notWeb[p] {
 				web = append(web, p)
 			}
 		}
 		if len(web) > 0 {
-			for _, svc := range webui.Titles(ctx, h.ip.String(), web) {
+			d.web = webui.Titles(ctx, h.ip.String(), web)
+			for _, svc := range d.web {
 				d.titles = appendUnique(d.titles, svc.Title)
 			}
 		}
@@ -585,6 +587,13 @@ func (s *Integration) toHost(h *hostAcc) model.Host {
 		mh.OpenPorts = append(mh.OpenPorts, uint16(p))
 	}
 	mh.Titles = d.titles
+	for _, svc := range d.web {
+		ws := model.WebService{Port: uint16(svc.Port), URL: svc.URL}
+		if svc.Title != "" {
+			ws.Title = model.Ptr(svc.Title)
+		}
+		mh.Web = append(mh.Web, ws)
+	}
 	if d.banner != "" {
 		mh.Banners = []string{d.banner}
 	}
@@ -595,12 +604,6 @@ func (s *Integration) toHost(h *hostAcc) model.Host {
 		mh.OS = model.Ptr(h.os)
 	}
 	return mh
-}
-
-// webPorts are open ports worth fetching a page title from.
-var webPorts = map[int]bool{
-	80: true, 443: true, 5000: true, 5001: true, 8006: true, 8008: true, 8080: true,
-	8096: true, 8123: true, 8443: true, 9443: true, 32400: true,
 }
 
 func containsAny(prefixes []netip.Prefix, ip netip.Addr) bool {

@@ -77,6 +77,8 @@ import {
   type SimpleIcon,
 } from 'simple-icons'
 
+import { catalog } from './catalog'
+
 /** A logo: an SVG path on a 24x24 grid and its brand color. */
 export interface Logo {
   title: string
@@ -227,8 +229,29 @@ export interface IconChoice {
   type?: string
   /** Logo shown alone (product) or as a badge (OS or brand). */
   logo?: string
+  /** App catalog icon (served by /api/icons) when Simple Icons has no logo. */
+  remote?: string
   badge: boolean
 }
+
+/** Classifier slugs whose app catalog name differs. */
+const catalogNames: Record<string, string> = {
+  homeassistant: 'home-assistant',
+  pihole: 'pi-hole',
+  adguard: 'adguard-home',
+  uptimekuma: 'uptime-kuma',
+  paperlessngx: 'paperless-ngx',
+  tplink: 'tp-link',
+  raspberrypi: 'raspberry-pi',
+}
+
+const catalogName = (slug: string) => catalogNames[slug] ?? slug
+
+/** URL of an app catalog icon. */
+export const iconURL = (slug: string) => `/api/icons/${catalogName(slug)}.svg`
+
+/** Whether the app catalog has an icon for a slug. */
+export const inCatalog = (slug: string) => catalog.names.has(catalogName(slug))
 
 /** Display names of brands without a logo in Simple Icons. */
 export const brandNames: Record<string, string> = {
@@ -264,7 +287,7 @@ export const typeIcons: Record<string, string> = {
   server: 'server',
   nas: 'hard-drive',
   hypervisor: 'layers',
-  virtual_machine: 'container',
+  virtual_machine: 'server',
   computer: 'monitor',
   phone: 'smartphone',
   tablet: 'tablet',
@@ -279,6 +302,7 @@ export const typeIcons: Record<string, string> = {
   game_console: 'gamepad-2',
   wearable: 'watch',
   segment: 'network',
+  app: 'app-window',
   unknown: 'circle-question-mark',
 }
 
@@ -293,9 +317,16 @@ export function iconChoice(d: Classified): IconChoice {
     typeIcons[d.type ?? ''] ?? (d.kind === 'segment' ? 'network' : 'circle-question-mark')
   if (custom && productSlugs.has(custom)) return { logo: custom, badge: false }
   if (!custom && product) return { logo: product, badge: false }
+  // Apps and products without a Simple Icons logo: icon from the app catalog.
+  if (!custom && d.product && inCatalog(d.product)) {
+    return { type, remote: d.product, badge: false }
+  }
+  if (d.icon && !custom && inCatalog(d.icon)) return { type, remote: d.icon, badge: true }
   const badge = custom ?? [d.os, d.brand].find((s) => s && logos[s])
-  // Brands without a logo get no badge.
-  return { type, logo: badge, badge: !!badge }
+  if (badge) return { type, logo: badge, badge: true }
+  // Brands without a Simple Icons logo may have one in the app catalog; if not, no badge.
+  if (d.brand && inCatalog(d.brand)) return { type, remote: d.brand, badge: true }
+  return { type, badge: false }
 }
 
 /** Brand color usable on the current background, or undefined to use the text color. */
@@ -311,4 +342,4 @@ export function logoColor(hex: string, dark: boolean): string | undefined {
 }
 
 /** Device types users can choose from, in display order. */
-export const deviceTypes = Object.keys(typeIcons).filter((t) => t !== 'segment')
+export const deviceTypes = Object.keys(typeIcons).filter((t) => t !== 'segment' && t !== 'app')

@@ -53,12 +53,11 @@ export default {
     leftToRight: 'Left to right',
     topDown: 'Top down',
     emptyTitle: 'Your map is empty',
-    emptyHint:
-      'Scan your network to find every device automatically, connect a device, or load a demo network.',
+    emptyHint: 'Scan your network to find every device automatically, or connect a device.',
     addIntegration: 'Add integration',
-    loadDemo: 'Load demo network',
     scanNetwork: 'Scan my network',
     groupLabel: '{n} clients',
+    appsLabel: '{n} apps',
     groupOnline: '{n} online',
     segment: 'Unmanaged segment',
     segmentHint:
@@ -122,6 +121,7 @@ export default {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    app: 'App',
     air_conditioner: 'Air conditioner',
     firewall: 'Firewall',
     router: 'Router',

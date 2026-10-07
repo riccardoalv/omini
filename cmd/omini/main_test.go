@@ -21,7 +21,7 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || cfg.Demo || !cfg.AutoScan {
+	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || !cfg.AutoScan {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }
@@ -29,13 +29,13 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestLoadConfigFromEnv(t *testing.T) {
 	cfg, err := loadConfig(env(map[string]string{
 		"OMINI_ADDR": "127.0.0.1:9000", "OMINI_DATA_DIR": "/data", "OMINI_POLL_INTERVAL": "30",
-		"OMINI_LOG_LEVEL": "debug", "OMINI_DEMO": "true", "OMINI_SECRET_KEY": "k", "OMINI_AUTOSCAN": "false",
+		"OMINI_LOG_LEVEL": "debug", "OMINI_SECRET_KEY": "k", "OMINI_AUTOSCAN": "false",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Addr != "127.0.0.1:9000" || cfg.DataDir != "/data" || cfg.PollInterval != 30*time.Second ||
-		cfg.LogLevel != slog.LevelDebug || !cfg.Demo || cfg.SecretKey != "k" || cfg.AutoScan {
+		cfg.LogLevel != slog.LevelDebug || cfg.SecretKey != "k" || cfg.AutoScan {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }
@@ -45,7 +45,6 @@ func TestLoadConfigErrors(t *testing.T) {
 		{"OMINI_POLL_INTERVAL": "5s"}, // too short
 		{"OMINI_POLL_INTERVAL": "soon"},
 		{"OMINI_LOG_LEVEL": "loud"},
-		{"OMINI_DEMO": "maybe"},
 		{"OMINI_AUTOSCAN": "sometimes"},
 	} {
 		if _, err := loadConfig(env(vars)); err == nil {
@@ -54,11 +53,11 @@ func TestLoadConfigErrors(t *testing.T) {
 	}
 }
 
-// TestRunServesDemo starts the whole server with the demo network and checks
-// the API answers, then shuts it down cleanly.
-func TestRunServesDemo(t *testing.T) {
+// TestRunServes starts the whole server and checks the API answers, then
+// shuts it down cleanly.
+func TestRunServes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cfg := config{Addr: "127.0.0.1:0", DataDir: t.TempDir(), PollInterval: time.Minute, Demo: true}
+	cfg := config{Addr: "127.0.0.1:0", DataDir: t.TempDir(), PollInterval: time.Minute}
 	ready := make(chan string, 1)
 	done := make(chan error, 1)
 	go func() { done <- run(ctx, cfg, ready) }()
@@ -110,10 +109,29 @@ func TestFirstRunCreatesTheNetworkScan(t *testing.T) {
 		t.Fatalf("integrations = %+v", list)
 	}
 	// Only on the very first start: existing setups are never touched.
-	if err := firstRun(ctx, st, config{AutoScan: true, Demo: true}); err != nil {
+	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
 		t.Fatal(err)
 	}
 	if list, _ := st.ListIntegrations(ctx); len(list) != 1 {
 		t.Fatalf("first run must not add integrations again: %+v", list)
+	}
+}
+
+func TestFirstRunRemovesTheFormerDemoNetwork(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.CreateIntegration(ctx, store.Integration{Name: "Demo network", Type: "demo", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := firstRun(ctx, st, config{AutoScan: true}); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := st.ListIntegrations(ctx)
+	if len(list) != 1 || list[0].Type != "network" {
+		t.Fatalf("integrations = %+v (demo removed, network scan created)", list)
 	}
 }

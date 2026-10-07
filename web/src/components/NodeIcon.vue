@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   AirVent,
+  AppWindow,
   Box,
   Cast,
   Cctv,
@@ -32,6 +33,7 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), { siz
 
 const icons: Record<string, Component> = {
   'air-vent': AirVent,
+  'app-window': AppWindow,
   box: Box,
   cast: Cast,
   cctv: Cctv,

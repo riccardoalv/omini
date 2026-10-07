@@ -9,6 +9,7 @@ export interface Nameable {
   brand?: string
   product?: string
   kind?: string
+  os?: string
 }
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
@@ -24,6 +25,10 @@ export function displayName(n: Nameable, t: Translate): string {
   const label = n.label ?? ''
   if (label && !isAddress(n, label)) return label
   if (n.product) return slugName(n.product)
+  // Machines named by their system: "Ubuntu", "Debian"...
+  if (n.os && ['server', 'virtual_machine', 'computer'].includes(n.type ?? '')) {
+    return slugName(n.os)
+  }
   const hasType = n.type && n.type !== 'unknown' && n.type !== 'segment'
   if (hasType && n.brand)
     return t('names.typeBrand', { type: t(`types.${n.type}`), brand: slugName(n.brand) })

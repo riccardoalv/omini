@@ -40,6 +40,12 @@ const detectingWeb = ref(false)
 // Look for a web interface (admin page, NAS, hypervisor...) when a node with an IP is shown.
 async function detectWeb(id: string | undefined, ip: string | undefined) {
   web.value = []
+  // An app node knows its own address.
+  const own = props.node?.kind === 'app' ? props.node.web : undefined
+  if (own?.length) {
+    web.value = own.map((w) => ({ url: w.url, port: w.port, title: w.title }))
+    return
+  }
   if (!id || !ip) return
   detectingWeb.value = true
   try {
@@ -137,7 +143,13 @@ async function save(patch: {
       <header>
         <span class="icon"><NodeIcon name="users" /></span>
         <div class="title">
-          <h2>{{ t('map.groupLabel', { n: group.clients.length }) }}</h2>
+          <h2>
+            {{
+              t(group.clients.every((c) => c.kind === 'app') ? 'map.appsLabel' : 'map.groupLabel', {
+                n: group.clients.length,
+              })
+            }}
+          </h2>
           <span class="muted">{{ t('map.groupOnline', { n: group.online }) }}</span>
         </div>
         <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
@@ -214,7 +226,7 @@ async function save(patch: {
       <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
       <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
 
-      <section v-if="n.kind !== 'segment'" class="classification">
+      <section v-if="n.kind !== 'segment' && n.kind !== 'app'" class="classification">
         <h3>{{ t('panel.classification') }}</h3>
         <form v-if="classifying" class="classify-form" @submit.prevent="saveClassification">
           <label class="field">

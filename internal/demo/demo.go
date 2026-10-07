@@ -1,5 +1,5 @@
-// Package demo provides a fictional homelab network, so Omini can be tried
-// without any hardware. It also serves as a fixture for topology tests.
+// Package demo provides a fictional homelab network used as a test fixture
+// (topology, collector and API tests). It is not available in the product.
 package demo
 
 import (

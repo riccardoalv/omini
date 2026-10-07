@@ -21,7 +21,7 @@ import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { api } from '@/lib/api'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import { clientCount, collapseClients, edgeLook, withoutOffline } from '@/lib/graph'
-import { layout, layoutKey, positionsFor } from '@/lib/layout'
+import { anchorNewNodes, layout, layoutKey, positionsFor } from '@/lib/layout'
 import { prefs } from '@/lib/prefs'
 import type { Integration, Point, TopoNode, TopologyResponse } from '@/lib/types'
 
@@ -31,6 +31,7 @@ const SIZES: Record<string, { width: number; height: number }> = {
   unmanaged: { width: 200, height: 56 },
   segment: { width: 240, height: 56 },
   client: { width: 200, height: 38 },
+  app: { width: 180, height: 34 },
   group: { width: 150, height: 44 },
 }
 
@@ -150,7 +151,7 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
   const refit = lastLayout === '' || !lastLayout.startsWith(direction + '|')
   lastLayout = key
   const saved = positionsFor({ ...data.value?.layout, ...draggedPositions }, direction)
-  positions.value = await layout(
+  const fresh = await layout(
     [
       ...v.nodes.map((n) => ({ id: n.id, ...SIZES[n.kind]! })),
       ...v.groups.map((g) => ({ id: g.id, ...SIZES.group! })),
@@ -159,6 +160,10 @@ watch([view, () => prefs.layoutDirection], async ([v, direction]) => {
     saved,
     direction,
   )
+  // Expanding or collapsing must not move what is already on screen: keep the
+  // current positions and place only the new nodes next to their parent.
+  const parents = new Map(v.edges.map((e) => [e.target, e.source]))
+  positions.value = refit ? fresh : anchorNewNodes(positions.value, fresh, (id) => parents.get(id))
   if (refit) {
     // Handles moved (left/right vs top/bottom): Vue Flow must re-measure them.
     await nextTick()
@@ -177,7 +182,13 @@ watch(
 function fitSoon() {
   nextTick(() => requestAnimationFrame(() => fitView({ padding: 0.12, maxZoom: 1.1 })))
 }
-onNodesInitialized(fitSoon)
+// Fit only the first time: later changes (expand, collapse, new devices) keep the viewport.
+let fitted = false
+onNodesInitialized(() => {
+  if (fitted) return
+  fitted = true
+  fitSoon()
+})
 
 // Positions the user dragged in this session (also saved on the server),
 // keyed per direction like the server layout.
@@ -233,13 +244,6 @@ async function scanNetwork() {
   await load()
 }
 
-async function loadDemo() {
-  await api.createIntegration({ name: 'Demo network', type: 'demo', config: {} })
-  await new Promise((r) => setTimeout(r, 800))
-  lastLayout = ''
-  await load()
-}
-
 function expand(parentId: string) {
   prefs.collapsed = prefs.collapsed.filter((id) => id !== parentId)
   if (!prefs.expanded.includes(parentId)) prefs.expanded.push(parentId)
@@ -278,6 +282,13 @@ const menuCanExpand = computed(() => {
   const id = menuParent.value
   return !!id && view.value.groups.some((g) => g.parentId === id)
 })
+
+/** Expands the children of a node if they are grouped, groups them otherwise. */
+function toggleChildren(id: string) {
+  const parent = view.value.groups.find((g) => g.id === id)?.parentId ?? id
+  if (view.value.groups.some((g) => g.parentId === parent)) expand(parent)
+  else if (clientCount(parent, nodes.value, edges.value) >= 2) collapse(parent)
+}
 
 function menuAction(action: 'collapse' | 'expand' | 'details') {
   const id = menuParent.value
@@ -368,7 +379,6 @@ onBeforeUnmount(() => clearInterval(timer))
         <button class="btn" @click="router.push('/integrations?add=1')">
           {{ t('map.addIntegration') }}
         </button>
-        <button class="btn" @click="loadDemo">{{ t('map.loadDemo') }}</button>
       </div>
     </div>
 
@@ -389,7 +399,11 @@ onBeforeUnmount(() => clearInterval(timer))
       @pane-click="selectedId = undefined"
     >
       <template #node-omini="nodeProps">
-        <TopologyNode :data="nodeProps.data" :selected="nodeProps.id === selectedId" />
+        <TopologyNode
+          :data="nodeProps.data"
+          :selected="nodeProps.id === selectedId"
+          @toggle="toggleChildren(nodeProps.id)"
+        />
       </template>
       <Background :gap="22" :size="1.2" pattern-color="var(--border)" />
       <Controls position="bottom-left" :show-interactive="false" />

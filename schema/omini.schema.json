@@ -568,6 +568,35 @@
             "type": "string"
           },
           "description": "Service banners, e.g. the SSH version string."
+        },
+        "web": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WebService"
+          },
+          "description": "Web interfaces found on the host, one per port."
+        }
+      }
+    },
+    "WebService": {
+      "type": "object",
+      "description": "A web interface found on a host.",
+      "required": [
+        "port",
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "url": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
         }
       }
     }

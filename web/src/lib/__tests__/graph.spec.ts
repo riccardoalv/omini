@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   childrenOf,
+  clientCount,
   collapseClients,
   edgeLook,
   groupId,
@@ -140,6 +141,12 @@ describe('graph helpers', () => {
     edge('sw', 'ap', { source_port: '3', target_port: 'eth0', kind: 'lldp' }),
     edge('sw', 'tv', { source_port: '6' }),
   ]
+
+  it('counts children that can be grouped (clients and apps)', () => {
+    const app: TopoNode = { id: 'jf', kind: 'app', label: 'Jellyfin', online: true }
+    expect(clientCount('sw', [...nodes, app], [...edges, edge('sw', 'jf')])).toBe(2)
+    expect(clientCount('sw', nodes, edges)).toBe(1)
+  })
 
   it('finds children', () => {
     expect(childrenOf('sw', nodes, edges).map((n) => n.id)).toEqual(['ap', 'tv'])

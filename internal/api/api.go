@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/appicons"
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
@@ -43,7 +44,8 @@ type Server struct {
 	Auth      *auth.Service
 	Discover  Discoverer
 	WebUI     WebFinder
-	UI        fs.FS // built web UI; nil serves a placeholder page
+	Icons     http.Handler // app icons (internal/appicons); public, used by <img>
+	UI        fs.FS        // built web UI; nil serves a placeholder page
 	Version   string
 }
 
@@ -57,6 +59,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/setup", s.authSetup)
 	mux.HandleFunc("POST /api/auth/login", s.authLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.authLogout)
+	if s.Icons != nil {
+		mux.Handle("GET /api/icons/{name}", s.Icons)
+		mux.HandleFunc("GET /api/icons", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			writeJSON(w, http.StatusOK, appicons.Names())
+		})
+	}
 
 	// Authenticated endpoints.
 	private := http.NewServeMux()

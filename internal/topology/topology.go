@@ -32,6 +32,7 @@ const (
 	KindUnmanaged NodeKind = "unmanaged" // seen via LLDP but not integrated
 	KindSegment   NodeKind = "segment"   // inferred: several MACs behind one port (dumb switch, AP, hypervisor)
 	KindClient    NodeKind = "client"    // end device (phone, laptop, TV...)
+	KindApp       NodeKind = "app"       // a web application running on a device (Jellyfin, qBittorrent...)
 )
 
 type EdgeKind string
@@ -67,9 +68,11 @@ type Node struct {
 	MACCount      int           `json:"mac_count,omitempty"` // segments: MACs seen behind the port
 	Device        *model.Device `json:"device,omitempty"`    // managed devices: full collected data
 	OS            string        `json:"os,omitempty"`
+	ReportedOS    string        `json:"-"`                    // OS reported by an integration (input of the classifier)
 	OpenPorts     []int         `json:"open_ports,omitempty"` // found by the network scan
 	Services      []string      `json:"services,omitempty"`   // mDNS/UPnP services
 	Titles        []string      `json:"titles,omitempty"`     // web interface titles
+	Web           []WebApp      `json:"web,omitempty"`        // web interfaces, one per port
 	Banners       []string      `json:"banners,omitempty"`    // e.g. SSH version
 	TTL           int           `json:"ttl,omitempty"`        // ICMP reply TTL
 
@@ -82,6 +85,15 @@ type Node struct {
 
 	Pinned   bool       `json:"pinned,omitempty"`    // pinned by the user: never collapsed
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
+}
+
+// WebApp is a web interface on a node; App is the recognized application
+// (an icon name of the app catalog), set by the collector.
+type WebApp struct {
+	Port  int    `json:"port"`
+	URL   string `json:"url"`
+	Title string `json:"title,omitempty"`
+	App   string `json:"app,omitempty"`
 }
 
 type Edge struct {
@@ -697,8 +709,9 @@ func enrich(n *Node, h model.Host) {
 	if n.Model == "" {
 		n.Model = model.Deref(h.Model)
 	}
-	if n.OS == "" {
-		n.OS = model.Deref(h.OS)
+	if n.ReportedOS == "" {
+		n.ReportedOS = model.Deref(h.OS)
+		n.OS = n.ReportedOS
 	}
 	for _, p := range h.OpenPorts {
 		if !slices.Contains(n.OpenPorts, int(p)) {
@@ -708,6 +721,12 @@ func enrich(n *Node, h model.Host) {
 	slices.Sort(n.OpenPorts)
 	n.Services = appendUniqueStr(n.Services, h.Services...)
 	n.Titles = appendUniqueStr(n.Titles, h.Titles...)
+	for _, w := range h.Web {
+		if !slices.ContainsFunc(n.Web, func(x WebApp) bool { return x.Port == int(w.Port) }) {
+			n.Web = append(n.Web, WebApp{Port: int(w.Port), URL: w.URL, Title: model.Deref(w.Title)})
+		}
+	}
+	slices.SortFunc(n.Web, func(a, b WebApp) int { return a.Port - b.Port })
 	n.Banners = appendUniqueStr(n.Banners, h.Banners...)
 	if n.TTL == 0 && h.TTL != nil {
 		n.TTL = int(*h.TTL)

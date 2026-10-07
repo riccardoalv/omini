@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, SNMP discovery, demo network, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: Python plugin runtime + SDK, OPNsense plugin, Docker image.
+**v0.1 in progress.** Done: data contract (JSON Schema + codegen), generic SNMP integration, zero-config network scan, device identification (types, OS, brands, products) and app nodes with icons, SQLite store, secret encryption, topology engine, collector, auth, HTTP API and the web UI (map, devices, integrations, settings; en + pt-BR). Next: map areas, nmap integration, model names, port panel, Python plugin runtime + OPNsense plugin, Docker image.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -16,7 +16,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 
 | Topic | Decision |
 |---|---|
-| Positioning | Own project (not a Scanopy fork). Differentiators: easy integrations + traffic flow map |
+| Positioning | Omini has its own identity: zero-config discovery and identification, easy integrations and a traffic flow map. Docs never compare Omini to other products or define it by them |
 | MVP core | Automatic discovery + integrations screen + topology map with per-link traffic |
 | "Flow" in the MVP | Per-link bandwidth utilization from interface counters. "Who talks to whom" (NetFlow) is post-MVP |
 | Writes to devices | Read-only in the MVP; write actions later, behind explicit permissions |
@@ -33,7 +33,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Plugin distribution | Each plugin is its own Git repository. Built-in **plugin store** with a default curated list (one-click install) + install from any GitHub URL. Reference model: Home Assistant's HACS. Installs pinned to a release |
 | Plugin trust | Publisher badge (`official` / `community`) + trust level assigned by maintainers: `plug-and-play` (fully tested, works out of the box), `stable` (tested, known issues documented), `experimental` (partially tested), `unverified` (not reviewed; always the level for URL imports) |
 | Firewall | **OPNsense** via its official REST API (key/secret, dedicated least-privilege user, HTTPS) as a Python plugin. pfSense is post-MVP |
-| Releases | Incremental: v0.1 core + SNMP + OPNsense + topology map + login + demo; v0.2 traffic flow + 24h traffic history + insights + presence timeline; v0.3 plugin store + trust levels + YAML profiles; v0.4 Mercusys + pt-BR + refined discovery (public launch) |
+| Releases | Incremental: v0.1 core + SNMP + network scan + identification + OPNsense + topology map + login; v0.2 traffic flow + 24h traffic history + insights + presence timeline; v0.3 plugin store + trust levels + YAML profiles; v0.4 Mercusys + pt-BR + refined discovery (public launch) |
 | Test network | OPNsense (router/firewall, DHCP), managed Horaco **HC-SWTGW218AS** switch, Mercusys routers in **AP mode** (clients visible in OPNsense ARP/DHCP) |
 | Horaco HC-SWTGW218AS | Stock firmware very likely has **no SNMP** (community projects read it through its web CGI: `/login.cgi`, `/info.cgi`, `/port.cgi?page=stats`, `/mac.cgi?page=fwd_tbl`). A web-scraping Python plugin is **post-v0.1**; until then it shows as an unmanaged segment |
 | Plugin order | OPNsense plugin first (v0.1); Horaco web plugin later |
@@ -51,12 +51,13 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Sidebar | Compact (icons) or expanded (icons + labels), remembered per browser |
 | Zero-config discovery | Core **network scan** integration (`internal/netscan`), created automatically on first start (`OMINI_AUTOSCAN`). Methods: UDP probe to fill the OS ARP cache + read `/proc/net/arp` (no raw sockets needed), unprivileged ICMP, TCP liveness for routed subnets, common-port scan, reverse DNS (system, then the gateway's DNS), NetBIOS NBSTAT, mDNS (legacy unicast + group listener on 5353) and SSDP/UPnP descriptions. Ports/names once per new host, then every 6h. Results are `Host` records (schema) under the gateway device |
 | MAC vendors | IEEE MA-L registry embedded gzipped (`internal/oui`, refresh with `make oui`) |
-| nmap | Same techniques implemented natively in Go (no dependency, no root). Optional `nmap` OS detection may come later |
 | Device identification | `internal/classify` (rules + evidence) → type, OS, brand, product. Icons: homelab software shows its logo alone; other devices show the type icon with an OS/brand badge. Users can override type and icon |
 | Icon/device lists | IEEE OUI and Simple Icons (in use); **Dashboard Icons** (Apache-2.0, homelab apps, bundled for offline use); Apple/Google model-name lists; **nmap optional** (OS detection when the binary is installed). Not used: Fingerbank (sends data to a third party), nmap databases (NPSL, incompatible with MIT) |
 | Several apps on one IP | One node per app (e.g. Jellyfin + qBittorrent on a VM), attached to the device and collapsed above the threshold like clients |
 | Integration settings | Clicking an integration expands it inline with its settings and status. The network scan exposes each method (ARP, ping, ports, DNS, NetBIOS, mDNS, SSDP, web titles, SSH banners), ports and intervals |
-| Visual style | **Dark by default**, light theme available, follows the OS setting. Clean UniFi/Linear-like look; color reserved for status (green/yellow/red) and traffic |
+| Demo network | Removed from the product; `internal/demo` is only a test fixture. Leftover demo integrations are deleted on start |
+| nmap | Built-in integration that runs the nmap installed on the host (NPSL: Omini must not ship nmap itself to stay MIT). Docker image installs it on first start only when asked (`OMINI_NMAP=install`) |
+| Visual style | **Dark by default**, light theme available, follows the OS setting. Clean, minimal look; color reserved for status (green/yellow/red), traffic and brand icons |
 
 ## Open questions
 
@@ -163,7 +164,8 @@ omini/
 ## Commands
 
 ```bash
-make run         # build the UI and run everything on :8080 (demo network on)
+make run         # build the UI and run everything on :8080 (scans your network)
+make icons       # refresh the app icon catalog and download the icon bundle
 make dev         # backend on :8080 + Vite with hot reload on :5173
 make generate    # regenerate Go types and Python models from schema/
 make test        # Go + SDK + web tests
@@ -195,7 +197,7 @@ Each rule is a function `(devices, topology) -> insights[]` with `severity` (`cr
 - **Never push** to GitHub unless the maintainer asks; verify with `make ci` locally instead.
 - All network I/O is async/concurrent.
 - Structured logging, no ad-hoc prints.
-- Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); the demo integration also serves as a fixture.
+- Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); `internal/demo` (a fictional network, not available in the product) also serves as a fixture.
 
 ## Out of MVP scope
 

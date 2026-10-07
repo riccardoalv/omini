@@ -56,11 +56,11 @@ const ptBR: typeof en = {
     topDown: 'De cima para baixo',
     emptyTitle: 'Seu mapa está vazio',
     emptyHint:
-      'Varra sua rede para encontrar todos os dispositivos automaticamente, conecte um equipamento ou carregue uma rede demo.',
+      'Varra sua rede para encontrar todos os dispositivos automaticamente, ou conecte um equipamento.',
     addIntegration: 'Adicionar integração',
-    loadDemo: 'Carregar rede demo',
     scanNetwork: 'Varrer minha rede',
     groupLabel: '{n} clientes',
+    appsLabel: '{n} aplicativos',
     groupOnline: '{n} online',
     segment: 'Segmento não gerenciado',
     segmentHint:
@@ -124,6 +124,7 @@ const ptBR: typeof en = {
   },
   names: { typeBrand: '{brand} {type}' },
   types: {
+    app: 'Aplicativo',
     air_conditioner: 'Ar-condicionado',
     firewall: 'Firewall',
     router: 'Roteador',

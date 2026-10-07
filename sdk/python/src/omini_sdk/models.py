@@ -65,54 +65,17 @@ class OpenPort(RootModel[int]):
     root: Annotated[int, Field(ge=1, le=65535)]
 
 
-class Host(BaseModel):
+class WebService(BaseModel):
     """
-    An end device observed on the network, with whatever could be learned about it.
+    A web interface found on a host.
     """
 
     model_config = ConfigDict(
         extra="forbid",
     )
-    ip: str
-    mac: Annotated[str | None, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")] = None
-    """
-    Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
-    """
-    hostnames: list[str] | None = None
-    """
-    Names from DNS, mDNS, NetBIOS, DHCP...
-    """
-    vendor: str | None = None
-    """
-    Hardware vendor (e.g. from the MAC prefix).
-    """
-    manufacturer: str | None = None
-    """
-    Manufacturer reported by the device itself (UPnP).
-    """
-    model: str | None = None
-    os: str | None = None
-    open_ports: list[OpenPort] | None = None
-    services: list[str] | None = None
-    """
-    Advertised services, e.g. mDNS types like _airplay._tcp.
-    """
-    sources: list[str] | None = None
-    """
-    How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
-    """
-    titles: list[str] | None = None
-    """
-    Titles of the web interfaces found on the host (e.g. "TrueNAS", "Proxmox Virtual Environment").
-    """
-    ttl: Annotated[int | None, Field(ge=1, le=255)] = None
-    """
-    TTL of ICMP replies: hints the OS family (64 Unix-like, 128 Windows, 255 network gear).
-    """
-    banners: list[str] | None = None
-    """
-    Service banners, e.g. the SSH version string.
-    """
+    port: Annotated[int, Field(ge=1, le=65535)]
+    url: str
+    title: str | None = None
 
 
 class Interface(BaseModel):
@@ -257,6 +220,60 @@ class PluginRequest(BaseModel):
     state_dir: str | None = None
     """
     Writable directory private to this integration, kept between runs (e.g. to cache sessions).
+    """
+
+
+class Host(BaseModel):
+    """
+    An end device observed on the network, with whatever could be learned about it.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ip: str
+    mac: Annotated[str | None, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")] = None
+    """
+    Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
+    """
+    hostnames: list[str] | None = None
+    """
+    Names from DNS, mDNS, NetBIOS, DHCP...
+    """
+    vendor: str | None = None
+    """
+    Hardware vendor (e.g. from the MAC prefix).
+    """
+    manufacturer: str | None = None
+    """
+    Manufacturer reported by the device itself (UPnP).
+    """
+    model: str | None = None
+    os: str | None = None
+    open_ports: list[OpenPort] | None = None
+    services: list[str] | None = None
+    """
+    Advertised services, e.g. mDNS types like _airplay._tcp.
+    """
+    sources: list[str] | None = None
+    """
+    How the host was found: arp, icmp, tcp, dns, mdns, ssdp, netbios.
+    """
+    titles: list[str] | None = None
+    """
+    Titles of the web interfaces found on the host (e.g. "TrueNAS", "Proxmox Virtual Environment").
+    """
+    ttl: Annotated[int | None, Field(ge=1, le=255)] = None
+    """
+    TTL of ICMP replies: hints the OS family (64 Unix-like, 128 Windows, 255 network gear).
+    """
+    banners: list[str] | None = None
+    """
+    Service banners, e.g. the SSH version string.
+    """
+    web: list[WebService] | None = None
+    """
+    Web interfaces found on the host, one per port.
     """
 
 

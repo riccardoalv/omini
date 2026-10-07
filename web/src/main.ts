@@ -7,6 +7,7 @@ import { createApp, watch } from 'vue'
 
 import App from './App.vue'
 import { createAppI18n } from './i18n'
+import { loadCatalog } from './lib/catalog'
 import { applyTheme, prefs } from './lib/prefs'
 import { router } from './router'
 
@@ -21,4 +22,5 @@ watch(
 )
 watch(() => prefs.theme, applyTheme, { immediate: true })
 
+loadCatalog()
 createApp(App).use(i18n).use(router).mount('#app')

@@ -9,15 +9,11 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: generate check-generated test cover lint fmt hooks ci web run dev demo oui
+.PHONY: generate check-generated test cover lint fmt hooks ci web run dev oui icons
 
 ## run: build the web UI and run Omini on http://localhost:8080 (scans your network)
 run: web
 	go run ./cmd/omini
-
-## demo: run with the demo network only, in a separate data directory
-demo: web
-	OMINI_DEMO=1 OMINI_AUTOSCAN=false OMINI_DATA_DIR=./data-demo go run ./cmd/omini
 
 ## dev: backend (:8080) + Vite dev server with hot reload (http://localhost:5173)
 dev: web/node_modules
@@ -49,6 +45,10 @@ generate:
 		--disable-timestamp --formatters ruff-format \
 		--output $(PY_MODEL)
 	cd sdk/python && uv run ruff format src/omini_sdk/models.py
+
+## icons: refresh the app icon catalog and download the icon bundle embedded in release builds
+icons:
+	go run ./internal/appicons/gen -bundle
 
 ## oui: refresh the embedded MAC vendor database from the IEEE registry
 oui:

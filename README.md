@@ -10,23 +10,21 @@ Omini connects to your routers, switches, access points and network software —
 
 ## Why
 
-Homelabs and small networks are usually a zoo of hardware: an OPNsense box, a consumer Mercusys router used as an AP, a cheap 2.5G Horaco switch, a MikroTik, a second-hand Cisco...
+A homelab grows one device at a time: a firewall here, a cheap 2.5G switch there, a couple of Wi-Fi access points, a hypervisor full of VMs, smart plugs, TVs and phones. Each piece speaks a different language, and nothing shows the whole picture.
 
-Closed ecosystems like **UniFi** show all of this in a few clicks — but only if *everything* is from the same vendor. Generic tools (LibreNMS, Zabbix, Netdisco) are powerful but heavy to set up and not friendly for someone who just wants to **see the network**.
+Omini is that picture. Start it, and in a few seconds it finds every device on your network, recognizes what each one is — the firewall, the NAS, the Proxmox host, the Ubuntu VM and the apps running on it, the Android phone, the air conditioner — and draws it all on one map. No agents, no setup on your devices, no vendor lock-in.
 
-Omini aims for the middle ground: **the UniFi experience, with any vendor.**
+What makes Omini, Omini:
 
-### How Omini differs from existing tools
-
-[Scanopy](https://github.com/scanopy/scanopy) already does auto-discovered topology maps via SNMP/LLDP/ARP. Omini treats discovery as the foundation, and focuses on two differentiators:
-
-1. **Integrations first** — an integrations screen where connecting a device or a piece of software (OPNsense, SNMP switches, vendor APIs, community plugins) takes a few clicks, including devices that have no SNMP or API at all.
-2. **Traffic flow map** — every link on the map shows live bandwidth usage (animated, with thickness/color by load), so you can see at a glance where traffic is flowing and where the bottlenecks are.
+1. **Zero configuration** — it discovers the network by itself and identifies devices, operating systems, brands and self-hosted apps, showing each with its own icon.
+2. **Integrations that are easy** — when you want more detail, connecting a device or a piece of software (SNMP switches, firewalls, vendor APIs, community plugins) takes a few clicks, including devices that have no SNMP or API at all.
+3. **Traffic flow map** — every link shows live bandwidth usage (animated, with thickness/color by load), so you see at a glance where traffic flows and where the bottlenecks are.
 
 ## MVP scope
 
 - **Works with zero configuration** — on first start Omini scans the networks it is connected to and finds every device, combining ARP, ping, open ports, reverse DNS (including the router's DNS), NetBIOS, mDNS/Bonjour and SSDP/UPnP. Vendors come from an embedded MAC (OUI) database. Ports and names are checked once per new device and then every few hours, to keep the network quiet.
-- **SNMP discovery** — find SNMP-enabled switches and routers in a subnet and integrate them in one click.
+- **Device identification** — type (firewall, switch, access point, NAS, hypervisor, VM, phone, TV, air conditioner...), operating system, brand and software, with the evidence behind each conclusion. Self-hosted apps (Jellyfin, qBittorrent, Home Assistant and 2,600+ others) appear as their own nodes under the machine that runs them. You can correct anything by hand.
+- **Icons** — product logos for homelab software and appliances; device-type icons with an OS or brand badge for everything else.
 - **Integrations screen** — pick an integration, enter host and credentials, test the connection, save. Forms are generated from each integration's definition.
 - **Automatic topology** — cross-reference LLDP/CDP neighbors, MAC tables (FDB), ARP, DHCP leases and Wi-Fi client tables to work out *what is plugged into what, and on which port*.
 - **Traffic flow map** — per-link utilization computed from interface counters, refreshed periodically and rendered on the map.
@@ -34,7 +32,6 @@ Omini aims for the middle ground: **the UniFi experience, with any vendor.**
 - **Devices without API** — devices that cannot be integrated (e.g. consumer routers in AP mode, unmanaged switches) are **inferred** from what other devices see, and appear as "unmanaged" nodes you can name and position.
 - **Insights** — simple, useful alerts: device offline, duplicate IP, uplink negotiated below 1 Gbps, interface errors, weak Wi-Fi signal, high CPU, likely unmanaged switch, unknown LLDP neighbor, saturated link.
 - **Interactive map** — drag nodes (positions are saved), click a node to see its ports, traffic and clients.
-- **Demo mode** — a fictional network to try the UI without any hardware.
 - **Plugin store** — install integrations with one click from a curated list, or from any GitHub repository URL.
 - **Short traffic history** — click a link to see its traffic over the last ~24h.
 - **Device inventory and timeline** — every device ever seen is kept with first/last seen and a full join/leave timeline; devices offline for more than 1h are hidden from the map but stay in the inventory.
@@ -60,7 +57,6 @@ Integrations are layered so that most contributions require little or no core co
 | OPNsense | Python plugin (official REST API, key/secret) | Interfaces, traffic, ARP, DHCP leases, CPU/memory |
 | Horaco HC-SWTGW218AS | Python plugin (web UI scraping, later — no SNMP on stock firmware) | Ports, traffic, MAC table |
 | Mercusys | Python plugin (web UI scraping, optional) | Wi-Fi clients |
-| Demo | Core (Go) | Fictional network |
 
 Later: MikroTik (REST API), UniFi controller, TP-Link Omada, OpenWrt, Proxmox, pfSense.
 
@@ -190,7 +186,6 @@ docker compose up -d
 | `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
 | `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |
-| `OMINI_DEMO` | `false` | Add the demo network on first start |
 
 ## Development
 
@@ -198,7 +193,6 @@ Requirements: Go (see `go.mod`), Node.js 24, [uv](https://docs.astral.sh/uv/) an
 
 ```bash
 make run    # build the UI and run everything on http://localhost:8080 (scans your network)
-make demo   # same, with only the demo network (separate data directory)
 make dev    # backend + UI with hot reload on http://localhost:5173 (API on :8080)
 make test   # all tests (Go, Python SDK, web)
 make ci     # everything CI runs, locally
@@ -246,7 +240,7 @@ The MVP scope above ships in incremental releases, each one usable on its own:
 
 | Release | Delivers | You can... |
 |---|---|---|
-| **v0.1** | Go core, generic SNMP, OPNsense plugin (manual install), topology engine, map (Vue Flow), login, demo mode | See a map of your real network and its clients |
+| **v0.1** | Go core, generic SNMP, OPNsense plugin (manual install), network scan, device identification, topology engine, map (Vue Flow), login | See a map of your real network and its clients |
 | **v0.2** | Per-link traffic (animated flow), 24h traffic history, insights, device presence timeline | See where traffic flows, what is wrong, and who joined or left |
 | **v0.3** | Plugin store, trust levels, install from URL, YAML SNMP profiles | Install integrations with one click |
 | **v0.4** | Mercusys plugin (scraping), `pt-BR` UI, refined subnet discovery | Cover a full mixed homelab — public launch |
@@ -266,6 +260,13 @@ The MVP scope above ships in incremental releases, each one usable on its own:
 
 Contributions are very welcome — especially **SNMP profiles**, **plugins** and **real device data** (anonymized SNMP walks help a lot with testing).
 See [`CLAUDE.md`](CLAUDE.md) for project conventions.
+
+## Credits
+
+- Device and software logos: [Simple Icons](https://simpleicons.org) (CC0-1.0).
+- App icons and catalog: [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) by homarr-labs (Apache-2.0).
+- MAC vendors: [IEEE registration authority](https://standards-oui.ieee.org/) (MA-L registry).
+- Logos and trademarks belong to their respective owners; Omini is not affiliated with them.
 
 ## License
 

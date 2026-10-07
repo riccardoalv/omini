@@ -67,7 +67,11 @@ func newHarness(t *testing.T, ui *fstest.MapFS) *harness {
 	coll := collector.New(st, reg, box, collector.Options{})
 
 	web := &fakeWeb{}
+	icons := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("icon:" + r.PathValue("name")))
+	})
 	s := &api.Server{
+		Icons: icons,
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0), Version: "test", WebUI: web,
 		Discover: func(_ context.Context, cidr string, opts snmp.ScanOptions) ([]snmp.Found, error) {
 			if cidr != "192.168.1.0/24" || opts.Community != "public" {
@@ -384,6 +388,23 @@ func TestNodeWebInterfaces(t *testing.T) {
 	h.do("GET", "/api/nodes/"+url.PathEscape("mac:de:ad:be:ef:00:01")+"/web", nil, &none)
 	if len(none) != 0 || len(h.web.probed) != 1 || h.web.probed[0] != "192.168.1.1" {
 		t.Fatalf("unexpected probes: %v (result %v)", h.web.probed, none)
+	}
+}
+
+func TestIconsArePublic(t *testing.T) {
+	h := newHarness(t, nil)
+	resp, err := h.client.Get(h.srv.URL + "/api/icons/jellyfin.svg") // not logged in
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || string(body) != "icon:jellyfin.svg" {
+		t.Fatalf("icons: %d %q", resp.StatusCode, body)
+	}
+	var names []string
+	if code := h.do("GET", "/api/icons", nil, &names); code != 200 || len(names) < 2000 {
+		t.Fatalf("catalog: %d, %d names", code, len(names))
 	}
 }
 

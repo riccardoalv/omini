@@ -30,7 +30,7 @@ const infrastructure = new Set([
 
 /** Pinned devices, homelab software and infrastructure always stay on the map. */
 export const alwaysVisible = (n: TopoNode) =>
-  !!n.pinned || !!n.product || infrastructure.has(n.type ?? '')
+  !!n.pinned || (n.kind !== 'app' && (!!n.product || infrastructure.has(n.type ?? '')))
 
 /**
  * Collapses clients into a group bubble when a parent (AP, switch, segment)
@@ -49,7 +49,7 @@ export function collapseClients(
   const children = new Map<string, TopoNode[]>()
   for (const e of edges) {
     const target = byId.get(e.target)
-    if (target?.kind !== 'client') continue
+    if (target?.kind !== 'client' && target?.kind !== 'app') continue
     const list = children.get(e.source) ?? []
     list.push(target)
     children.set(e.source, list)
@@ -135,9 +135,9 @@ export function linkOnPort(
   return undefined
 }
 
-/** Number of client children of a node. */
+/** Number of children of a node that can be grouped (clients and apps). */
 export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): number {
-  return childrenOf(id, nodes, edges).filter((n) => n.kind === 'client').length
+  return childrenOf(id, nodes, edges).filter((n) => n.kind === 'client' || n.kind === 'app').length
 }
 
 /** Removes offline nodes and the links that lead to them. */

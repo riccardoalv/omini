@@ -18,6 +18,12 @@ export interface NodeData {
 }
 
 const props = defineProps<{ data: NodeData; selected?: boolean }>()
+const emit = defineEmits<{ toggle: [] }>()
+
+// Middle click (mouse wheel) expands or groups the node's children.
+function onAuxClick(e: MouseEvent) {
+  if (e.button === 1) emit('toggle')
+}
 const { t } = useI18n()
 
 const n = computed(() => props.data.node)
@@ -37,6 +43,7 @@ const sub = computed(() => {
   const node = n.value
   if (!node) return ''
   if (node.kind === 'segment') return t('map.clients', { n: node.mac_count ?? 0 })
+  if (node.kind === 'app') return node.port ? `:${node.port}` : ''
   if (node.kind === 'client') return label.value !== node.ip ? (node.ip ?? '') : ''
   return [node.ip, node.model ?? node.vendor].filter(Boolean).join(' · ')
 })
@@ -49,20 +56,27 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
     class="topo-node"
     :class="[variant, { offline: n && !n.online, selected, error: data.error }]"
     :title="label"
+    @mousedown.middle.prevent
+    @auxclick.prevent="onAuxClick"
   >
     <Handle type="target" :position="horizontal ? Position.Left : Position.Top" class="handle" />
 
     <template v-if="data.group">
       <NodeIcon name="users" :size="16" />
       <div class="text">
-        <strong>{{ t('map.groupLabel', { n: data.group.clients.length }) }}</strong>
+        <strong>{{
+          t(
+            data.group.clients.every((c) => c.kind === 'app') ? 'map.appsLabel' : 'map.groupLabel',
+            { n: data.group.clients.length },
+          )
+        }}</strong>
         <span class="sub">{{ t('map.groupOnline', { n: data.group.online }) }}</span>
       </div>
     </template>
 
     <template v-else-if="n">
       <span class="icon" :class="{ identified }">
-        <DeviceIcon :device="n" :size="variant === 'client' ? 17 : 20" />
+        <DeviceIcon :device="n" :size="variant === 'client' || variant === 'app' ? 17 : 20" />
       </span>
       <div class="text">
         <strong>{{ label }}</strong>
@@ -150,6 +164,18 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   width: 26px;
   height: 26px;
   border-radius: 50%;
+}
+.topo-node.app {
+  border-radius: 999px;
+  gap: 8px;
+  padding: 0 12px 0 6px;
+  border-style: dashed;
+}
+.app .icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
 }
 .client .icon.identified {
   background: var(--accent-soft);

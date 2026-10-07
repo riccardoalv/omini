@@ -16,13 +16,32 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-// CommonPorts are probed on each new host. They identify typical homelab
-// devices: SSH, DNS, web, SMB/NetBIOS, AFP (Mac), RTSP (cameras), IPP/LPD/
-// JetDirect (printers), MQTT, RDP, Synology, Proxmox, Home Assistant,
-// Jellyfin/Plex, UniFi, iOS lockdown (iPhone/iPad) and Chromecast.
+// CommonPorts are probed on each new host. Besides infrastructure (SSH,
+// DNS, SMB, printers, cameras, iOS lockdown...) they cover the usual ports of
+// self-hosted apps, so the apps running on a server can be recognized.
 var CommonPorts = []int{
-	22, 53, 80, 139, 443, 445, 515, 548, 554, 631, 1883, 3389, 5000, 5001,
-	8006, 8008, 8009, 8080, 8123, 8443, 8096, 9100, 32400, 62078,
+	// Infrastructure and device types.
+	22, 53, 80, 139, 443, 445, 515, 548, 554, 631, 1883, 3389, 8008, 8009, 9100, 62078,
+	// Media: Jellyfin/Emby, Plex, Navidrome, Audiobookshelf, Kavita, Calibre-Web, Tautulli.
+	8096, 8920, 32400, 4533, 13378, 5000, 8083, 8181,
+	// *arr stack and downloaders: Sonarr, Radarr, Lidarr, Readarr, Prowlarr, Bazarr,
+	// Overseerr/Jellyseerr, qBittorrent, Transmission, Deluge, SABnzbd, NZBGet, FlareSolverr.
+	8989, 7878, 8686, 8787, 9696, 6767, 5055, 8080, 9091, 8112, 8085, 6789, 8191,
+	// Home automation: Home Assistant, Node-RED, ESPHome, Zigbee2MQTT.
+	8123, 1880, 6052, 8081,
+	// Management and monitoring: Proxmox, Portainer, Cockpit/Prometheus, Grafana, Uptime Kuma,
+	// Netdata, Glances, Webmin, Synology DSM, UniFi, Speedtest tracker.
+	8006, 9000, 9443, 9090, 3000, 3001, 19999, 61208, 10000, 5001, 8443, 8765,
+	// Files, photos, documents and tools: Nextcloud AIO, Immich, Paperless, Syncthing,
+	// Vaultwarden/Bitwarden, Gitea, code-server, MinIO, InfluxDB, Homarr, Dashy, n8n,
+	// Mealie, Actual, Ollama, Open WebUI, Filebrowser, Dozzle.
+	8000, 2283, 8384, 8001, 3002, 8086, 9001, 7575, 4000, 5678, 9925, 5006, 11434, 8888, 8082, 8090,
+}
+
+// notWeb are open ports that never serve web pages (no title is fetched).
+var notWeb = map[int]bool{
+	22: true, 53: true, 139: true, 445: true, 515: true, 548: true, 554: true, 1883: true,
+	3389: true, 9100: true, 62078: true, 8009: true,
 }
 
 // livenessPorts answer quickly on most devices; a refused connection also proves the host is up.

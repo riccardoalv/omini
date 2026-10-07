@@ -385,6 +385,9 @@ type Host struct {
 
 	// Hardware vendor (e.g. from the MAC prefix).
 	Vendor *string `json:"vendor,omitempty,omitzero" yaml:"vendor,omitempty"`
+
+	// Web interfaces found on the host, one per port.
+	Web []WebService `json:"web,omitempty,omitzero" yaml:"web,omitempty"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -746,6 +749,42 @@ type PluginResponse struct {
 
 	// Message corresponds to the JSON schema field "message".
 	Message *string `json:"message,omitempty,omitzero" yaml:"message,omitempty"`
+}
+
+// A web interface found on a host.
+type WebService struct {
+	// Port corresponds to the JSON schema field "port".
+	Port uint16 `json:"port" yaml:"port"`
+
+	// Title corresponds to the JSON schema field "title".
+	Title *string `json:"title,omitempty,omitzero" yaml:"title,omitempty"`
+
+	// URL corresponds to the JSON schema field "url".
+	URL string `json:"url" yaml:"url"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *WebService) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["port"]; raw != nil && !ok {
+		return fmt.Errorf("field port in WebService: required")
+	}
+	if _, ok := raw["url"]; raw != nil && !ok {
+		return fmt.Errorf("field url in WebService: required")
+	}
+	type Plain WebService
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if 1 > plain.Port {
+		return fmt.Errorf("field %s: must be >= %v", "port", 1)
+	}
+	*j = WebService(plain)
+	return nil
 }
 
 type WifiBand string

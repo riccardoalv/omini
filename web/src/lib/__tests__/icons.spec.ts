@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { catalog } from '../catalog'
 import { iconChoice, logoColor, logos } from '../icons'
 import { displayName } from '../names'
 import { parseReasons } from '../reasons'
@@ -137,5 +138,24 @@ describe('displayName', () => {
     expect(displayName({ label: '192.168.1.9', ip: '192.168.1.9', type: 'unknown' }, t)).toBe(
       '192.168.1.9',
     )
+  })
+})
+
+describe('app catalog icons', () => {
+  it('uses catalog icons for apps and brands without a Simple Icons logo', () => {
+    catalog.names = new Set(['mercusys', 'qbittorrent'])
+    expect(iconChoice({ kind: 'app', type: 'app', product: 'qbittorrent' })).toEqual({
+      type: 'app-window',
+      remote: 'qbittorrent',
+      badge: false,
+    })
+    expect(iconChoice({ type: 'ap', brand: 'mercusys' })).toEqual({
+      type: 'wifi',
+      remote: 'mercusys',
+      badge: true,
+    })
+    // Not in the catalog either: no badge.
+    expect(iconChoice({ type: 'air_conditioner', brand: 'midea' }).badge).toBe(false)
+    catalog.names = new Set()
   })
 })

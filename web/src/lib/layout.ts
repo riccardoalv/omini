@@ -80,3 +80,33 @@ export function positionsFor(
   }
   return out
 }
+
+/**
+ * Keeps nodes that are already on screen where they are and places new ones
+ * (expanded children, a new group bubble) next to their parent, keeping the
+ * offset the fresh layout computed between them. Nothing on screen moves.
+ */
+export function anchorNewNodes(
+  current: Record<string, Point>,
+  fresh: Record<string, Point>,
+  parentOf: (id: string) => string | undefined,
+): Record<string, Point> {
+  const out: Record<string, Point> = {}
+  for (const [id, p] of Object.entries(fresh)) {
+    if (current[id]) {
+      out[id] = current[id]
+      continue
+    }
+    // Climb to the nearest ancestor that is already on screen.
+    let anchor = parentOf(id)
+    const seen = new Set<string>()
+    while (anchor && !current[anchor] && !seen.has(anchor)) {
+      seen.add(anchor)
+      anchor = parentOf(anchor)
+    }
+    const a = anchor ? current[anchor] : undefined
+    const f = anchor ? fresh[anchor] : undefined
+    out[id] = a && f ? { x: a.x + (p.x - f.x), y: a.y + (p.y - f.y) } : p
+  }
+  return out
+}

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { iconChoice, logoColor, logos, type Classified } from '@/lib/icons'
+import { iconChoice, iconURL, logoColor, logos, type Classified } from '@/lib/icons'
 
 import NodeIcon from './NodeIcon.vue'
 
@@ -38,13 +38,34 @@ const typeLabel = computed(() => {
 })
 const title = computed(() => [typeLabel.value, logo.value?.title].filter(Boolean).join(' · '))
 const badgeSize = computed(() => Math.round(props.size * 0.8))
+// Catalog icons that fail to load (unknown name, offline) are simply not shown.
+const remoteFailed = ref(false)
+watch(
+  () => choice.value.remote,
+  () => (remoteFailed.value = false),
+)
 </script>
 
 <template>
   <span class="device-icon" :title="title" :style="{ width: `${size}px`, height: `${size}px` }">
+    <!-- Catalog icon alone (apps, products without a Simple Icons logo) -->
+    <img
+      v-if="choice.remote && !choice.badge && !remoteFailed"
+      class="logo"
+      :src="iconURL(choice.remote)"
+      :width="size"
+      :height="size"
+      :alt="title"
+      @error="remoteFailed = true"
+    />
+    <NodeIcon
+      v-else-if="choice.remote && !choice.badge"
+      :name="choice.type ?? 'app-window'"
+      :size="size"
+    />
     <!-- Product logo alone -->
     <svg
-      v-if="logo && !choice.badge"
+      v-else-if="logo && !choice.badge"
       class="logo"
       viewBox="0 0 24 24"
       :width="size"
@@ -58,7 +79,14 @@ const badgeSize = computed(() => Math.round(props.size * 0.8))
     <template v-else>
       <NodeIcon :name="choice.type ?? 'circle-question-mark'" :size="size" />
       <span
-        v-if="logo"
+        v-if="choice.remote && !remoteFailed"
+        class="badge"
+        :style="{ width: `${badgeSize}px`, height: `${badgeSize}px` }"
+      >
+        <img :src="iconURL(choice.remote)" alt="" @error="remoteFailed = true" />
+      </span>
+      <span
+        v-else-if="logo"
         class="badge"
         :style="{ width: `${badgeSize}px`, height: `${badgeSize}px` }"
       >
@@ -91,6 +119,7 @@ const badgeSize = computed(() => Math.round(props.size * 0.8))
   background: var(--bg-elevated);
   box-shadow: 0 0 0 1.5px var(--border);
 }
+.badge img,
 .badge svg {
   width: 100%;
   height: 100%;
