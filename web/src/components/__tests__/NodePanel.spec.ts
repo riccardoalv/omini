@@ -40,23 +40,37 @@ describe('NodePanel web interface', () => {
     vi.mocked(api.webServices).mockReset()
   })
 
-  it('offers to open the detected web interface in a new tab', async () => {
+  it('offers the web interface as an icon next to the name', async () => {
+    vi.mocked(api.webServices).mockResolvedValue([
+      { url: 'https://192.168.1.1/', port: 443, title: 'OPNsense' },
+    ])
+    const w = mountPanel(firewall)
+    await flushPromises()
+
+    expect(api.webServices).toHaveBeenCalledWith(firewall.id)
+    const link = w.get('header [data-test=open-web]')
+    expect(link.attributes()).toMatchObject({
+      href: 'https://192.168.1.1/',
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      'aria-label': 'Open web interface',
+    })
+  })
+
+  it('lists several web interfaces in a small menu', async () => {
     vi.mocked(api.webServices).mockResolvedValue([
       { url: 'https://192.168.1.1/', port: 443, title: 'OPNsense' },
       { url: 'http://192.168.1.1:8080/', port: 8080, title: 'Status page' },
     ])
     const w = mountPanel(firewall)
     await flushPromises()
-
-    expect(api.webServices).toHaveBeenCalledWith(firewall.id)
+    expect(w.findAll('[data-test=open-web]')).toHaveLength(0)
+    await w.get('[data-test=open-web-menu]').trigger('click')
     const links = w.findAll('[data-test=open-web]')
-    expect(links).toHaveLength(2)
-    expect(links[0]!.attributes()).toMatchObject({
-      href: 'https://192.168.1.1/',
-      target: '_blank',
-      rel: 'noopener noreferrer',
-    })
-    expect(links[0]!.text()).toContain('Open web interface')
+    expect(links.map((l) => l.attributes('href'))).toEqual([
+      'https://192.168.1.1/',
+      'http://192.168.1.1:8080/',
+    ])
     expect(links[1]!.text()).toContain('Status page')
   })
 

@@ -39,10 +39,12 @@ const alias = ref('')
 const error = ref('')
 const web = ref<WebService[]>([])
 const detectingWeb = ref(false)
+const webMenu = ref(false)
 
 // Look for a web interface (admin page, NAS, hypervisor...) when a node with an IP is shown.
 async function detectWeb(id: string | undefined, ip: string | undefined) {
   web.value = []
+  webMenu.value = false
   // An app node knows its own address.
   const own = props.node?.kind === 'app' ? props.node.web : undefined
   if (own?.length) {
@@ -219,7 +221,50 @@ async function save(patch: {
               <Check :size="16" />
             </button>
           </form>
-          <h2 v-else>{{ title }}</h2>
+          <div v-else class="name-row">
+            <h2>{{ title }}</h2>
+            <!-- Web interface: an icon next to the name (one interface) or a short list. -->
+            <a
+              v-if="web.length === 1"
+              :href="web[0]!.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn ghost icon web-link"
+              data-test="open-web"
+              :title="`${t('panel.openWeb')} · ${web[0]!.url}`"
+              :aria-label="t('panel.openWeb')"
+            >
+              <ExternalLink :size="16" />
+            </a>
+            <div v-else-if="web.length > 1" class="web-menu-wrap">
+              <button
+                type="button"
+                class="btn ghost icon web-link"
+                data-test="open-web-menu"
+                :title="t('panel.openWeb')"
+                :aria-label="t('panel.openWeb')"
+                :aria-expanded="webMenu"
+                @click="webMenu = !webMenu"
+              >
+                <ExternalLink :size="16" />
+              </button>
+              <div v-if="webMenu" class="web-menu card" role="menu">
+                <a
+                  v-for="svc in web"
+                  :key="svc.url"
+                  :href="svc.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  role="menuitem"
+                  data-test="open-web"
+                  @click="webMenu = false"
+                >
+                  <span class="grow">{{ svc.title || svc.url }}</span>
+                  <span class="web-port">{{ t('panel.webPort', { port: svc.port }) }}</span>
+                </a>
+              </div>
+            </div>
+          </div>
           <span class="muted">
             <span class="dot" :class="{ online: n.online }" />
             {{ n.online ? t('common.online') : t('common.offline') }}
@@ -266,24 +311,6 @@ async function save(patch: {
       <p v-if="error" class="alert error">{{ error }}</p>
 
       <ResourceBars :cpu="n.device?.cpu_pct" :memory="n.device?.mem_pct" />
-
-      <div v-if="web.length" class="web">
-        <a
-          v-for="(svc, i) in web"
-          :key="svc.url"
-          :href="svc.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn small"
-          :class="{ primary: i === 0 }"
-          data-test="open-web"
-        >
-          <ExternalLink :size="14" />
-          {{ i === 0 ? t('panel.openWeb') : svc.title || svc.url }}
-          <span class="web-port">{{ t('panel.webPort', { port: svc.port }) }}</span>
-        </a>
-      </div>
-      <p v-else-if="detectingWeb" class="muted small">{{ t('panel.detectingWeb') }}</p>
 
       <p v-if="n.kind === 'segment'" class="hint">{{ t('map.segmentHint') }}</p>
       <p v-if="n.kind === 'unmanaged'" class="hint">{{ t('map.unmanagedHint') }}</p>
@@ -479,6 +506,41 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.web-link {
+  flex: none;
+  color: var(--accent);
+}
+.web-menu-wrap {
+  position: relative;
+}
+.web-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  padding: 4px;
+  box-shadow: var(--shadow);
+}
+.web-menu a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 13px;
+}
+.web-menu a:hover {
+  background: var(--surface-hover);
+}
 .dot.up {
   background: var(--ok);
 }
