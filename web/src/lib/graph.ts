@@ -40,6 +40,17 @@ export const alwaysVisible = (n: TopoNode) =>
  * Pinned clients, homelab software and infrastructure always stay visible.
  * Parents in `forced` (collapsed by the user) group all their clients except pinned ones.
  */
+/**
+ * A node that can be folded into its parent's bubble: clients and apps, and
+ * devices that carry no one else's traffic (a hypervisor's VMs, a server) —
+ * not switches, routers or access points.
+ */
+export function groupable(n: TopoNode | undefined): boolean {
+  if (!n) return false
+  if (n.kind === 'client' || n.kind === 'app') return true
+  return n.kind === 'device' && !['switch', 'router', 'firewall', 'ap'].includes(n.role ?? '')
+}
+
 export function collapseClients(
   nodes: TopoNode[],
   edges: TopoEdge[],
@@ -62,7 +73,7 @@ export function collapseClients(
   }
   for (const e of edges) {
     const target = byId.get(e.target)
-    const isClient = target?.kind === 'client' || target?.kind === 'app'
+    const isClient = groupable(target)
     const list = children.get(e.source) ?? []
     if (isClient) list.push(target!)
     else if (target?.kind === 'ssid') list.push(...(viaNetwork.get(target.id) ?? []))
@@ -174,13 +185,7 @@ export function linkOnPort(
 /** Number of children of a node that can be grouped (clients and apps). */
 export function clientCount(id: string, nodes: TopoNode[], edges: TopoEdge[]): number {
   return childrenOf(id, nodes, edges).reduce(
-    (sum, n) =>
-      sum +
-      (n.kind === 'client' || n.kind === 'app'
-        ? 1
-        : n.kind === 'ssid'
-          ? clientCount(n.id, nodes, edges)
-          : 0),
+    (sum, n) => sum + (groupable(n) ? 1 : n.kind === 'ssid' ? clientCount(n.id, nodes, edges) : 0),
     0,
   )
 }

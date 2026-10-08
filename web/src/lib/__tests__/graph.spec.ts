@@ -286,3 +286,46 @@ describe('collapsing an access point with Wi-Fi networks', () => {
     expect(view.nodes.map((n) => n.id)).toEqual([ap.id])
   })
 })
+
+describe('folding the VMs of a host', () => {
+  const host: TopoNode = {
+    id: 'pve',
+    kind: 'device',
+    role: 'server',
+    label: 'proxmox',
+    online: true,
+    product: 'proxmox',
+  }
+  const vm = (id: string, product?: string): TopoNode => ({
+    id,
+    kind: 'device',
+    role: 'server',
+    label: id,
+    online: true,
+    product,
+  })
+  const sw: TopoNode = { id: 'sw', kind: 'device', role: 'switch', label: 'switch', online: true }
+  const app: TopoNode = { id: 'app', kind: 'app', label: 'Grafana', online: true }
+  const nodes = [host, vm('haos', 'homeassistant'), vm('master'), vm('nas', 'truenas'), sw, app]
+  const edges: TopoEdge[] = [
+    { id: '1', source: 'pve', target: 'haos', kind: 'lldp' },
+    { id: '2', source: 'pve', target: 'master', kind: 'lldp' },
+    { id: '3', source: 'pve', target: 'nas', kind: 'lldp' },
+    { id: '4', source: 'pve', target: 'sw', kind: 'lldp' },
+    { id: '5', source: 'master', target: 'app', kind: 'inferred' },
+  ]
+
+  it('groups every VM into a bubble when the user collapses the host, and their apps go too', () => {
+    const v = collapseClients(nodes, edges, 8, new Set(), new Set(['pve']))
+    expect(v.groups).toHaveLength(1)
+    expect(v.groups[0]!.clients.map((c) => c.id).sort()).toEqual(['haos', 'master', 'nas'])
+    expect(v.nodes.map((n) => n.id).sort()).toEqual(['pve', 'sw']) // a switch is never folded
+    expect(clientCount('pve', nodes, edges)).toBe(3)
+  })
+
+  it('leaves them on the map otherwise', () => {
+    const v = collapseClients(nodes, edges, 8, new Set())
+    expect(v.groups).toHaveLength(0)
+    expect(v.nodes).toHaveLength(6)
+  })
+})
