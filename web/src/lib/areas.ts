@@ -170,3 +170,45 @@ export const areaCss = (color: string) =>
   color === 'gray' || !(color in AREA_PRESET_HEX || /^#[0-9a-f]{6}$/i.test(color))
     ? 'var(--text-muted)'
     : areaHex(color)
+
+/**
+ * Frames around a set of nodes on the map: one per group of them linked to
+ * each other (a VLAN spread over two switches gets two), each around its
+ * nodes with a margin — never one box over the whole map.
+ */
+export function clusterFrames(
+  ids: Set<string>,
+  edges: { source: string; target: string }[],
+  boxes: Map<string, Box>,
+  margin = AREA_PADDING / 2,
+): { id: string; x: number; y: number; width: number; height: number }[] {
+  const parent = new Map<string, string>()
+  const find = (x: string): string => {
+    while (parent.get(x) !== x) x = parent.get(x)!
+    return x
+  }
+  for (const id of ids) if (boxes.has(id)) parent.set(id, id)
+  for (const e of edges) {
+    if (parent.has(e.source) && parent.has(e.target)) parent.set(find(e.source), find(e.target))
+  }
+  const groups = new Map<string, Box[]>()
+  for (const id of parent.keys()) {
+    const root = find(id)
+    groups.set(root, [...(groups.get(root) ?? []), boxes.get(id)!])
+  }
+  return [...groups.values()]
+    .map((list) => {
+      const left = Math.min(...list.map((b) => b.x))
+      const top = Math.min(...list.map((b) => b.y))
+      const right = Math.max(...list.map((b) => b.x + b.width))
+      const bottom = Math.max(...list.map((b) => b.y + b.height))
+      return {
+        id: list.map((b) => b.id).sort()[0]!,
+        x: left - margin,
+        y: top - margin,
+        width: right - left + 2 * margin,
+        height: bottom - top + 2 * margin,
+      }
+    })
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+}

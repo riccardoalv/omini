@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   areaIdOf,
   areaNodeId,
+  clusterFrames,
   collapseAreas,
   fitArea,
   membersOf,
@@ -131,5 +132,30 @@ describe('collapseAreas', () => {
   it('leaves the view alone without collapsed areas', () => {
     const view = { nodes: [node('gw')], edges: [], groups: [] }
     expect(collapseAreas(view, [])).toBe(view)
+  })
+})
+
+describe('clusterFrames', () => {
+  it('frames each linked group of nodes apart', () => {
+    const box = (id: string, x: number, y: number) =>
+      [id, { id, x, y, width: 100, height: 40 }] as const
+    const boxes = new Map([
+      box('sw1', 0, 0),
+      box('a', 200, 0),
+      box('sw2', 0, 400),
+      box('b', 200, 400),
+      box('c', 200, 200),
+    ])
+    const edges = [
+      { source: 'sw1', target: 'a' },
+      { source: 'sw2', target: 'b' },
+      { source: 'sw1', target: 'c' },
+    ]
+    // sw1 + a linked, b alone (its switch is not highlighted), c not highlighted.
+    const frames = clusterFrames(new Set(['sw1', 'a', 'b', 'missing']), edges, boxes, 10)
+    expect(frames).toEqual([
+      { id: 'a', x: -10, y: -10, width: 320, height: 60 },
+      { id: 'b', x: 190, y: 390, width: 120, height: 60 },
+    ])
   })
 })

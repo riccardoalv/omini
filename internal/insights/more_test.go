@@ -71,7 +71,7 @@ func TestMoreRules(t *testing.T) {
 		return got[rule]
 	}
 	// The TV at 100 Mbps; the 100 Mbps uplink between network devices is slow_uplink's.
-	if fe := check("fast_ethernet", 1); fe[0].NodeID != "mac:tv" || fe[0].Severity != Info {
+	if fe := check("fast_ethernet", 1); fe[0].NodeID != "mac:tv" || fe[0].Severity != Warning {
 		t.Fatalf("fast ethernet: %+v", fe)
 	}
 	// The Proxmox host (product), not the VM (only its MAC's brand); Mercusys is set up.
@@ -124,5 +124,18 @@ func TestAnLLDPPhoneIsNotInfrastructure(t *testing.T) {
 	}
 	if len(got["fast_ethernet"]) != 1 || got["fast_ethernet"][0].NodeID != "lldp:phone" {
 		t.Fatalf("fast ethernet: %+v", got["fast_ethernet"])
+	}
+}
+
+// A firewall whose page was read on port 80 but that also serves 443 (it
+// redirects to HTTPS): not an HTTP-only admin page.
+func TestHTTPSPortMeansNotHTTPOnly(t *testing.T) {
+	fw := topology.Node{
+		ID: "dev:fw", Kind: topology.KindDevice, Role: "firewall", Label: "OPNsense", Online: true, Device: &model.Device{},
+		Web: []topology.WebApp{{Port: 80, URL: "http://192.168.1.1/"}}, OpenPorts: []int{22, 53, 80, 443},
+	}
+	got := byRule(Evaluate(Input{Topology: topology.Topology{Nodes: []topology.Node{fw}}}))
+	if len(got["insecure_service"]) != 0 {
+		t.Fatalf("flagged: %+v", got["insecure_service"])
 	}
 }

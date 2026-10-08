@@ -37,6 +37,7 @@ import {
   AREA_TITLE,
   areaIdOf,
   areaNodeId,
+  clusterFrames,
   collapseAreas,
   fitArea,
   MIN_AREA_SIZE,
@@ -212,6 +213,13 @@ const linkInfo = computed(() => {
 const alertOf = computed(() => worstByNode(alertsState.list))
 const attention = computed(() => attentionCount(alertsState.list))
 
+/** Temporary frames around what the VLAN/subnet filter highlights (one per linked group). */
+const netFrames = computed(() => {
+  if (!inNet.value) return []
+  const name = networkGroups.value.find((g) => g.key === netFilter.value)?.name ?? ''
+  return clusterFrames(inNet.value, view.value.edges, nodeBoxes.value).map((f) => ({ ...f, name }))
+})
+
 const flowNodes = computed<Node[]>(() => {
   const out: Node[] = visibleAreas.value.map((a) => ({
     id: areaNodeId(a.id),
@@ -242,6 +250,21 @@ const flowNodes = computed<Node[]>(() => {
     // A Wi-Fi network has no panel or menu, but it can be moved like any node.
     ...(n.kind === 'ssid' ? { selectable: false, focusable: false } : {}),
   }))
+  for (const f of netFrames.value)
+    out.push({
+      id: `net-frame:${f.id}`,
+      type: 'netframe',
+      position: { x: f.x, y: f.y },
+      data: { name: f.name },
+      width: f.width,
+      height: f.height,
+      style: { width: `${f.width}px`, height: `${f.height}px` },
+      zIndex: -2,
+      draggable: false,
+      selectable: false,
+      focusable: false,
+      class: 'net-frame-node',
+    })
   out.push(...devices)
   for (const g of view.value.groups) {
     out.push({
@@ -1213,6 +1236,11 @@ onBeforeUnmount(() => {
       <template #edge-link="edgeProps">
         <LinkEdge v-bind="edgeProps" />
       </template>
+      <template #node-netframe="nodeProps">
+        <div class="net-frame" data-test="net-frame">
+          <span>{{ nodeProps.data.name }}</span>
+        </div>
+      </template>
       <template #node-area="nodeProps">
         <AreaNode
           :area="nodeProps.data.area"
@@ -1456,6 +1484,29 @@ onBeforeUnmount(() => {
 .flow :deep(.vue-flow__node.net-dim),
 .flow :deep(.vue-flow__edge.net-dim) {
   opacity: 0.15;
+}
+.net-frame {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  pointer-events: none;
+}
+.net-frame span {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-elevated));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.flow :deep(.vue-flow__node.net-frame-node) {
+  pointer-events: none;
 }
 .net-pick {
   width: auto;

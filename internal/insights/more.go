@@ -66,7 +66,7 @@ func fastEthernet(in Input, idx index) []Insight {
 		if infrastructure(src) && infrastructure(dst) {
 			continue
 		}
-		out = append(out, node("fast_ethernet", Info, dst, e.Source+"|"+e.SourcePort, map[string]any{
+		out = append(out, node("fast_ethernet", Warning, dst, e.Source+"|"+e.SourcePort, map[string]any{
 			"speed_mbps": e.SpeedMbps, "from": src.Label, "port": e.SourcePort,
 		}))
 	}
@@ -93,7 +93,7 @@ func integrationAvailable(in Input, _ index) []Insight {
 			if slices.Contains(d.Products, n.Product) && n.Product != "" ||
 				slices.Contains(d.Brands, n.Brand) && n.Brand != "" ||
 				slices.Contains(d.OS, n.OS) && n.OS != "" {
-				out = append(out, node("integration_available", Info, n, d.Type, map[string]any{
+				out = append(out, node("integration_available", Warning, n, d.Type, map[string]any{
 					"integration": d.Name, "type": d.Type,
 				}))
 				break
@@ -217,7 +217,8 @@ func insecureService(in Input, _ index) []Insight {
 		if !infrastructure(n) || len(n.Web) == 0 {
 			continue
 		}
-		https := slices.ContainsFunc(n.Web, func(w topology.WebApp) bool { return strings.HasPrefix(w.URL, "https://") })
+		https := slices.ContainsFunc(n.Web, func(w topology.WebApp) bool { return strings.HasPrefix(w.URL, "https://") }) ||
+			slices.Contains(n.OpenPorts, 443) || slices.Contains(n.OpenPorts, 8443) // HTTPS there, even if its page was not read
 		if !https {
 			out = append(out, node("insecure_service", Warning, n, "http", map[string]any{
 				"service": "HTTP", "port": n.Web[0].Port,
