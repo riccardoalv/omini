@@ -9,6 +9,7 @@ import { formatAgo, formatDateTime } from '@/lib/format'
 import type { CollectionStatus, Integration, IntegrationType } from '@/lib/types'
 
 import IntegrationFields from './IntegrationFields.vue'
+import ScanCapabilities from './ScanCapabilities.vue'
 
 const props = defineProps<{ integration: Integration; type: IntegrationType }>()
 const emit = defineEmits<{ saved: [integration: Integration]; ran: [status: CollectionStatus] }>()
@@ -120,6 +121,10 @@ const status = computed(() => lastRun.value ?? props.integration.status)
         }}
       </p>
       <p v-if="runError" class="alert error" role="alert">{{ runError }}</p>
+      <ScanCapabilities
+        v-if="integration.type === 'network' || integration.type === 'nmap'"
+        :type="integration.type"
+      />
       <div v-if="methodList.length" class="methods">
         <span class="muted">{{ t('integrations.foundBy') }}:</span>
         <span v-for="[m, n] in methodList" :key="m" class="badge" :data-method="m">

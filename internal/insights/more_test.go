@@ -139,3 +139,13 @@ func TestHTTPSPortMeansNotHTTPOnly(t *testing.T) {
 		t.Fatalf("flagged: %+v", got["insecure_service"])
 	}
 }
+
+func TestDiscoveryLimited(t *testing.T) {
+	if got := byRule(Evaluate(Input{})); len(got["discovery_limited"]) != 0 {
+		t.Fatal("raised with nothing limited")
+	}
+	got := byRule(Evaluate(Input{DiscoveryLimited: []string{"host_network", "multicast"}}))
+	if l := got["discovery_limited"]; len(l) != 1 || l[0].Params["limits"] != "host_network,multicast" || l[0].Severity != Warning {
+		t.Fatalf("limited: %+v", l)
+	}
+}

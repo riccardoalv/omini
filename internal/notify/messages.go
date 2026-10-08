@@ -41,6 +41,7 @@ var texts = map[string]map[string][2]string{
 		"firewall_states_full":  {"Firewall state table almost full on {node}", "{current} of {limit} states ({pct}%)."},
 		"insecure_service":      {"{service} open on {node}", "Port {port}: passwords and data travel unencrypted."},
 		"new_devices_burst":     {"{count} new devices in {minutes} minutes", "{devices}"},
+		"discovery_limited":     {"Network discovery is limited here", "Not available where Omini runs: {limits}. See the README: what the network scan needs."},
 		"_resolved":             {"Resolved: {title}", ""},
 		"_subject":              {"Omini: {title}", "Omini: {n} alerts"},
 		"_test":                 {"Omini test message", "Notifications from Omini reach this channel."},
@@ -73,6 +74,7 @@ var texts = map[string]map[string][2]string{
 		"firewall_states_full":  {"Tabela de states quase cheia em {node}", "{current} de {limit} states ({pct}%)."},
 		"insecure_service":      {"{service} aberto em {node}", "Porta {port}: senhas e dados trafegam sem criptografia."},
 		"new_devices_burst":     {"{count} dispositivos novos em {minutes} minutos", "{devices}"},
+		"discovery_limited":     {"A descoberta da rede está limitada aqui", "Indisponível onde o Omini roda: {limits}. Veja no README o que o scan da rede precisa."},
 		"_resolved":             {"Resolvido: {title}", ""},
 		"_subject":              {"Omini: {title}", "Omini: {n} alertas"},
 		"_test":                 {"Mensagem de teste do Omini", "As notificações do Omini chegam a este canal."},
@@ -171,6 +173,7 @@ var short = map[string]map[string]string{
 		"fast_ethernet": "Fast Ethernet link", "integration_available": "Integration available", "link_flapping": "Link going down",
 		"half_duplex": "Half-duplex link", "device_rebooted": "Restarted", "sfp_low_rx": "Weak optical signal",
 		"dhcp_pool_full": "DHCP pool almost full", "firewall_states_full": "State table almost full", "insecure_service": "Insecure service",
+		"discovery_limited": "Discovery limited",
 	},
 	"pt-BR": {
 		"device_offline": "Offline", "integration_failed": "Integração falhando", "wan_down": "Internet fora",
@@ -182,6 +185,7 @@ var short = map[string]map[string]string{
 		"fast_ethernet": "Link Fast Ethernet", "integration_available": "Integração disponível", "link_flapping": "Link caindo",
 		"half_duplex": "Link half-duplex", "device_rebooted": "Reiniciou", "sfp_low_rx": "Sinal óptico fraco",
 		"dhcp_pool_full": "Pool DHCP quase cheio", "firewall_states_full": "Tabela de states quase cheia", "insecure_service": "Serviço inseguro",
+		"discovery_limited": "Descoberta limitada",
 	},
 }
 

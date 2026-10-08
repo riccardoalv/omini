@@ -428,6 +428,10 @@ const ptBR: typeof en = {
         title: '{count} dispositivos novos em {minutes} minutos',
         detail: '{devices}',
       },
+      discovery_limited: {
+        title: 'A descoberta da rede está limitada aqui',
+        detail: 'Indisponível onde o Omini roda: {what}.',
+      },
     },
     tips: {
       device_offline:
@@ -469,6 +473,8 @@ const ptBR: typeof en = {
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',
       new_devices_burst:
         'Uma visita, um aparelho novo... ou alguém que não deveria estar na sua rede.',
+      discovery_limited:
+        'Veja em Integrações → Network scan o que falta e como resolver (quase sempre network_mode: host).',
     },
   },
   traffic: {
@@ -759,6 +765,29 @@ const ptBR: typeof en = {
     label: 'Alertas abertos',
     close: 'Fechar',
     more: 'mais {n} alerta | mais {n} alertas',
+  },
+  discovery: {
+    title: 'Neste servidor',
+    limits: {
+      host_network: 'Rede do host',
+      multicast: 'Multicast (mDNS, SSDP)',
+      ping: 'Ping (ICMP)',
+      raw_sockets: 'Sockets brutos',
+    },
+    ok: {
+      host_network: 'Vê a LAN: endereços MAC e fabricantes.',
+      multicast: 'Nomes e modelos anunciados pelos aparelhos.',
+      ping: 'Acha aparelhos sem nenhuma porta aberta.',
+      raw_sockets: 'O nmap detecta o sistema e traça rotas.',
+    },
+    fix: {
+      host_network:
+        'O Omini roda numa rede bridge do Docker e só enxerga o Docker: rode com network_mode: host.',
+      multicast:
+        'Sem multicast aqui: nomes e modelos dos aparelhos ficam de fora. Use network_mode: host.',
+      ping: 'Não permitido: aparelhos sem porta aberta ficam de fora. Libere ping sockets (sysctl net.ipv4.ping_group_range="0 2147483647") ou rode como root.',
+      raw_sockets: 'Sem root (ou CAP_NET_RAW no nmap) o nmap não detecta o sistema.',
+    },
   },
   round: {
     title: 'Coleta em rodadas',

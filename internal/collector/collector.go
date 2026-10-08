@@ -50,6 +50,8 @@ type Options struct {
 	Now      func() time.Time // for tests
 	// OnAlerts is told about alerts opened and resolved (notifications).
 	OnAlerts func([]store.AlertChange)
+	// DiscoveryLimited: what the network scan cannot do here (netscan.Capabilities.Limited).
+	DiscoveryLimited []string
 }
 
 type Collector struct {

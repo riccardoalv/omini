@@ -174,12 +174,18 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 		return err
 	}
 
+	// What the network scan can do here (host network, multicast, ping...).
+	caps := netscan.DetectCapabilities()
+	if limited := caps.Limited(); len(limited) > 0 {
+		slog.Warn("network discovery is limited here", "missing", strings.Join(limited, ", "), "container", caps.Container)
+	}
 	notifier := &notify.Dispatcher{Store: st, Box: box}
-	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle})
+	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle, DiscoveryLimited: caps.Limited()})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
 		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, UI: web.FS(), Version: version,
-		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
+		Icons:        appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
+		Capabilities: caps,
 	}
 	httpServer := &http.Server{
 		Handler:           server.Handler(),

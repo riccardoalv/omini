@@ -37,6 +37,11 @@ export function alertText(a: Alert, t: T, locale: string): { title: string; deta
   let detail = `${base}.detail`
   if (a.rule === 'device_offline' && p.error) detail = `${base}.detailError`
   if (a.rule === 'update_pending' && p.reboot) detail = `${base}.detailReboot`
+  if (a.rule === 'discovery_limited' && typeof p.limits === 'string')
+    p.what = p.limits
+      .split(',')
+      .map((k) => t(`discovery.limits.${k}`))
+      .join(', ')
   return { title: t(`${base}.title`, p), detail: t(detail, p) }
 }
 

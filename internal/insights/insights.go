@@ -72,6 +72,8 @@ type Input struct {
 	// integration types already set up.
 	Detectors  []Detector
 	Configured map[string]bool
+	// DiscoveryLimited: what the network scan cannot do where Omini runs.
+	DiscoveryLimited []string
 	// Core are the built-in integrations (network scan, nmap...): a device only
 	// they report is not read by an integration of its own yet.
 	Core map[int64]bool

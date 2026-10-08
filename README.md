@@ -245,6 +245,19 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 - **Plugins:** install them in *Settings → Plugins* from their GitHub URL (Omini installs the latest release). Plugins run in their own Python environment, created with [uv](https://docs.astral.sh/uv/) — the Docker image includes it; when running the binary directly, install uv first.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
 
+### What the network scan needs
+
+Each discovery method needs something different from the system. The official Docker image (root, `network_mode: host`) has all of it. Omini checks what works where it runs and shows it in **Integrations → Network scan → On this server**; a "Network discovery is limited" alert appears when something is missing.
+
+| Method | Needs | Without it |
+|---|---|---|
+| ARP table (MACs, vendors) | being on the LAN: `network_mode: host` in Docker | in a Docker bridge network Omini only sees Docker's own network |
+| Ping (ICMP) | unprivileged ping sockets (`sysctl net.ipv4.ping_group_range="0 2147483647"`) or root | falls back to TCP: devices with no open port are missed |
+| mDNS, SSDP (names, models) | multicast: `network_mode: host`, UDP 5353 and 1900 allowed in | names and models announced by devices are missed |
+| NetBIOS, reverse DNS, ports, web titles, SSH banners | nothing special | — |
+| nmap OS detection, traceroute | root, or `CAP_NET_RAW` on nmap | nmap still finds ports and versions |
+| Flows (NetFlow, IPFIX, sFlow) | UDP 2055 and 6343 reachable from the exporter | the router cannot send them |
+
 ### nmap without root
 
 The nmap integration detects operating systems (`-O`) only with raw sockets. The Docker image runs as root, so it does. Running the binary as a normal user, give nmap the permission and tell Omini:

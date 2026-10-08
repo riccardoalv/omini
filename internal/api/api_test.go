@@ -663,3 +663,18 @@ func TestCollectionRoundInterval(t *testing.T) {
 		t.Fatalf("back to the default: %d %+v", code, info)
 	}
 }
+
+func TestCapabilities(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	var got struct {
+		Capabilities map[string]bool `json:"capabilities"`
+		Limited      []string        `json:"limited"`
+	}
+	if code := h.do("GET", "/api/capabilities", nil, &got); code != http.StatusOK {
+		t.Fatalf("capabilities: %d", code)
+	}
+	if _, ok := got.Capabilities["host_network"]; !ok {
+		t.Fatalf("no host_network: %+v", got)
+	}
+}

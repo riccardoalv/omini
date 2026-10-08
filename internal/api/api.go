@@ -17,6 +17,7 @@ import (
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
@@ -50,6 +51,8 @@ type Server struct {
 	Flows *flows.Service
 	// NotifyClient sends test notifications (nil: a default client).
 	NotifyClient *http.Client
+	// Capabilities: what the network scan can do where Omini runs.
+	Capabilities netscan.Capabilities
 	Version      string
 }
 
@@ -81,6 +84,9 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("DELETE /api/integrations/{id}", s.deleteIntegration)
 	private.HandleFunc("POST /api/integrations/test", s.testIntegration)
 	private.HandleFunc("GET /api/collection", s.getCollection)
+	private.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.Capabilities, "limited": s.Capabilities.Limited()})
+	})
 	private.HandleFunc("PUT /api/collection", s.setCollection)
 	private.HandleFunc("POST /api/integrations/{id}/run", s.runIntegration)
 	private.HandleFunc("GET /api/topology", s.topology)

@@ -50,6 +50,7 @@ func init() {
 	Rules["firewall_states_full"] = firewallStatesFull
 	Rules["insecure_service"] = insecureService
 	Rules["new_devices_burst"] = newDevicesBurst
+	Rules["discovery_limited"] = discoveryLimited
 }
 
 // fastEthernet: a wired link to a device that runs at 100 Mbps or less (a
@@ -248,5 +249,17 @@ func newDevicesBurst(in Input, idx index) []Insight {
 	return []Insight{{
 		Key: "new_devices_burst", Rule: "new_devices_burst", Severity: Warning,
 		Params: map[string]any{"count": len(recent), "minutes": int(BurstWindow / time.Minute), "devices": strings.Join(names, ", ")},
+	}}
+}
+
+// discoveryLimited: the network scan cannot do everything where Omini runs
+// (a Docker bridge network, no multicast, no ping): fewer devices, fewer names.
+func discoveryLimited(in Input, _ index) []Insight {
+	if len(in.DiscoveryLimited) == 0 {
+		return nil
+	}
+	return []Insight{{
+		Key: "discovery_limited", Rule: "discovery_limited", Severity: Warning,
+		Params: map[string]any{"limits": strings.Join(in.DiscoveryLimited, ",")},
 	}}
 }

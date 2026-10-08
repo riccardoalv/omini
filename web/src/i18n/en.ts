@@ -425,6 +425,10 @@ export default {
         title: '{count} new devices in {minutes} minutes',
         detail: '{devices}',
       },
+      discovery_limited: {
+        title: 'Network discovery is limited here',
+        detail: 'Not available where Omini runs: {what}.',
+      },
     },
     tips: {
       device_offline:
@@ -464,6 +468,8 @@ export default {
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',
       new_devices_burst:
         'A visitor, a new appliance... or someone who should not be on your network.',
+      discovery_limited:
+        'See Integrations → Network scan: what is missing and how to fix it (usually network_mode: host).',
     },
   },
   traffic: {
@@ -628,6 +634,28 @@ export default {
     label: 'Open alerts',
     close: 'Close',
     more: '{n} more alert | {n} more alerts',
+  },
+  discovery: {
+    title: 'On this server',
+    limits: {
+      host_network: 'Host network',
+      multicast: 'Multicast (mDNS, SSDP)',
+      ping: 'Ping (ICMP)',
+      raw_sockets: 'Raw sockets',
+    },
+    ok: {
+      host_network: 'Sees the LAN: MAC addresses and vendors.',
+      multicast: 'Names and models announced by devices.',
+      ping: 'Finds devices with no open port.',
+      raw_sockets: 'nmap can detect the OS and trace routes.',
+    },
+    fix: {
+      host_network:
+        'Omini runs in a Docker bridge network and only sees Docker: run it with network_mode: host.',
+      multicast: 'No multicast here: device names and models are missed. Use network_mode: host.',
+      ping: 'Not allowed: devices with no open port are missed. Allow ping sockets (sysctl net.ipv4.ping_group_range="0 2147483647") or run as root.',
+      raw_sockets: 'Without root (or CAP_NET_RAW on nmap) nmap does not detect the OS.',
+    },
   },
   round: {
     title: 'Collection in rounds',

@@ -55,6 +55,9 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		}
 	}
 	in.Detectors = detectors()
+	if in.Configured["network"] {
+		in.DiscoveryLimited = c.opts.DiscoveryLimited
+	}
 	for _, s := range statuses {
 		in.Integrations = append(in.Integrations, insights.Integration{
 			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error,

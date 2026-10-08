@@ -212,6 +212,15 @@ export interface TopoEdge {
   speed_mbps?: number
 }
 
+/** What the network scan can do where Omini runs (see the README). */
+export interface Capabilities {
+  container: boolean
+  host_network: boolean
+  unprivileged_ping: boolean
+  raw_sockets: boolean
+  multicast: boolean
+}
+
 /** The last collection round: every integration, one at a time, from the edge to the center. */
 export interface CollectionRound {
   started_at: string
