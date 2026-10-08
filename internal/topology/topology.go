@@ -141,16 +141,32 @@ type Edge struct {
 type Topology struct {
 	Nodes []Node `json:"nodes"`
 	Edges []Edge `json:"edges"`
+	// Attached: where clients were seen for sure this time (on an access
+	// point's client list, alone on a switch port), by MAC — to remember
+	// (Options.Attached).
+	Attached map[model.MACAddress]Attachment `json:"-"`
+}
+
+// Attachment is where a client was last seen for sure: the access point it
+// was associated with, or the switch port (or desk phone) it was plugged into.
+type Attachment struct {
+	Node string `json:"node"`
+	Port string `json:"port"`
+	WiFi bool   `json:"wifi"`
+	SSID string `json:"ssid,omitempty"`
+	Band string `json:"band,omitempty"`
 }
 
 type portKey struct{ node, port string }
 
 type builder struct {
-	nodes  map[string]*Node
-	edges  map[string]*Edge
-	byMAC  map[model.MACAddress]string
-	byIP   map[string]string
-	byName map[string]string
+	// before: where clients were last seen for sure; attached: this time.
+	before, attached map[model.MACAddress]Attachment
+	nodes            map[string]*Node
+	edges            map[string]*Edge
+	byMAC            map[model.MACAddress]string
+	byIP             map[string]string
+	byName           map[string]string
 	// uplinks are ports connected to infrastructure; value is the node on the other end.
 	uplinks map[portKey]string
 	// lastPort: where MACs missing from the MAC tables right now were last learned.
@@ -200,6 +216,11 @@ type Options struct {
 	// Switches forget idle MACs after a few minutes (a phone asleep): such a
 	// MAC keeps its port instead of jumping to wherever ARP sees it.
 	LastSeen map[model.MACAddress]PortRef
+	// Attached holds, per MAC, where the client was last seen for sure. A
+	// client stays there until something says for sure that it moved (another
+	// access point's list, a switch port of its own): a phone missing from its
+	// access point's list for a round is not taken for one on a cable.
+	Attached map[model.MACAddress]Attachment
 }
 
 func Build(sources []Source) Topology { return BuildWith(sources, Options{}) }
@@ -207,6 +228,8 @@ func Build(sources []Source) Topology { return BuildWith(sources, Options{}) }
 // BuildWith builds the topology with options.
 func BuildWith(sources []Source, opts Options) Topology {
 	b := &builder{
+		before:   opts.Attached,
+		attached: map[model.MACAddress]Attachment{},
 		nodes:    map[string]*Node{},
 		edges:    map[string]*Edge{},
 		byMAC:    map[model.MACAddress]string{},
@@ -683,6 +706,27 @@ func (b *builder) claimWANVLAN(v uint16, wanID string) {
 	}
 }
 
+// cabled: the MAC is plugged into this switch port for sure — learned there
+// now, alone on an access port (or behind the desk phone on it): not seen
+// through other gear, nor only remembered.
+func (b *builder) cabled(m model.MACAddress, port portKey, uplink bool) bool {
+	if uplink || !slices.Contains(b.fdbPorts[m], port) {
+		return false
+	}
+	_, phone := b.phones[port]
+	return b.portMACs[port] == 1 || phone
+}
+
+// attachedBefore: where the client was last seen for sure, while that access
+// point, switch or phone is on the map.
+func (b *builder) attachedBefore(m model.MACAddress) (Attachment, bool) {
+	a, ok := b.before[m]
+	if !ok || b.nodes[a.Node] == nil {
+		return Attachment{}, false
+	}
+	return a, true
+}
+
 // wanOf: the WAN node whose VLAN a MAC was learned in ("" for none).
 func (b *builder) wanOf(m model.MACAddress) string {
 	for _, v := range b.macVLANs[m] {
@@ -1036,6 +1080,9 @@ func (b *builder) placeCollected(
 		n.Label = firstNonEmpty(shortName(n.Hostname), n.IP, n.MAC)
 
 		var kind EdgeKind
+		port, onPort, uplink := b.bestPort(b.fdbOrLast(m), "")
+		cabled := onPort && b.cabled(m, port, uplink)
+		before, known := b.attachedBefore(m)
 		if w, ok := wifi[m]; ok {
 			n.ParentID, n.Port, kind = w.node, model.Deref(w.c.Interface), EdgeWifi
 			n.SSID, n.SignalDBM = model.Deref(w.c.SSID), w.c.SignalDBM
@@ -1046,10 +1093,21 @@ func (b *builder) placeCollected(
 			if w.c.RxBps != nil || w.c.TxBps != nil {
 				n.Flow = &Rate{RxBps: model.Deref(w.c.RxBps), TxBps: model.Deref(w.c.TxBps)}
 			}
+			b.attached[m] = Attachment{Node: n.ParentID, Port: n.Port, WiFi: true, SSID: n.SSID, Band: n.Band}
 		} else if wan := b.wanOf(m); wan != "" {
 			// Learned in a router's WAN VLAN: the modem of that uplink.
 			n.ParentID, n.Port, kind = wan, "", EdgeInferred
-		} else if port, ok, uplink := b.bestPort(b.fdbOrLast(m), ""); ok {
+		} else if known && !cabled {
+			// Nothing says for sure where it is now (it left its access
+			// point's list for a while, a switch sees it behind other gear):
+			// it stays where it was last seen for sure.
+			n.ParentID, n.Port, kind = before.Node, before.Port, EdgeFDB
+			if before.WiFi {
+				n.SSID, n.Band, kind = before.SSID, before.Band, EdgeWifi
+			} else if b.nodes[before.Node].Kind != KindDevice {
+				kind = EdgeInferred // behind a desk phone
+			}
+		} else if onPort {
 			n.ParentID, n.Port, kind = port.node, port.port, EdgeFDB
 			if phone, ok := b.phones[port]; ok {
 				// Plugged into the desk phone's PC port.
@@ -1079,6 +1137,9 @@ func (b *builder) placeCollected(
 			}
 		} else if scanned {
 			n.ParentID, kind = hs.node, EdgeInferred
+		}
+		if cabled && kind != EdgeWifi && n.ParentID != "" && (n.ParentID == port.node || n.ParentID == b.phones[port]) {
+			b.attached[m] = Attachment{Node: n.ParentID, Port: n.Port}
 		}
 		b.nodes[n.ID] = n
 		placed[n.IP] = true
@@ -1454,7 +1515,7 @@ func (b *builder) result() Topology {
 		}
 	}
 
-	t := Topology{Nodes: make([]Node, 0, len(b.nodes)), Edges: make([]Edge, 0, len(b.edges))}
+	t := Topology{Nodes: make([]Node, 0, len(b.nodes)), Edges: make([]Edge, 0, len(b.edges)), Attached: b.attached}
 	for _, e := range b.edges {
 		// WAN nodes are parents of their router, whatever the BFS found.
 		toWAN := b.nodes[e.Target] != nil && b.nodes[e.Target].Kind == KindWAN &&

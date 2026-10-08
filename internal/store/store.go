@@ -227,6 +227,19 @@ var migrations = []string{
 	`
 	DELETE FROM areas WHERE auto IS NOT NULL;
 	`,
+	// 16: where each client was last seen for sure (an access point's list, a
+	// switch port of its own): it stays there until that changes for sure.
+	`
+	CREATE TABLE attachments (
+		mac     TEXT PRIMARY KEY,
+		node_id TEXT NOT NULL,
+		port    TEXT NOT NULL DEFAULT '',
+		wifi    INTEGER NOT NULL DEFAULT 0,
+		ssid    TEXT NOT NULL DEFAULT '',
+		band    TEXT NOT NULL DEFAULT '',
+		seen_at INTEGER NOT NULL -- unix seconds
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

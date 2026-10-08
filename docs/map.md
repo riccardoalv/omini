@@ -94,6 +94,21 @@ Marks on a node:
 | Dashed | Inferred (ARP, a MAC seen behind an uplink), or a site-to-site VPN tunnel between two routers |
 | Dotted | Wi-Fi |
 
+### Where a device stays
+
+A device stays where Omini last saw it **for sure** until it is seen
+somewhere else for sure:
+
+- **For sure:** on an access point's list of Wi-Fi clients (it moves when it
+  roams to another), alone on a switch port (a cable), or behind a desk phone.
+- **Not for sure:** a MAC seen on a port shared with other devices, on a port
+  towards other network gear, or only in a router's ARP table.
+
+So a phone that drops out of its access point's list for a while stays on its
+Wi-Fi, instead of being drawn on a cable behind a switch. The place is kept in
+the database (it survives restarts) for a year, or until that access point or
+switch leaves the map.
+
 Thicker lines are faster links (1G, 2.5G, 10G and up). A link between two
 network devices that runs below 1 Gbps is marked as slow.
 

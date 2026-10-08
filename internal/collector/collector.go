@@ -70,6 +70,8 @@ type Collector struct {
 
 	// Where each MAC was last learned by a switch (see topology.Options).
 	lastSeen map[model.MACAddress]seenAt
+	// Where each client was last seen for sure (see topology.Options.Attached).
+	attached map[model.MACAddress]topology.Attachment
 	// Whether each device is present (presence timeline); loaded once.
 	presence map[string]bool
 	// What changed between rounds, for the alerts (see observeChanges).
@@ -372,9 +374,13 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	}
 	now := c.opts.Now()
 	c.loadPorts(ctx, now)
-	topo := topology.BuildWith(sources, topology.Options{LastSeen: c.rememberedPorts(now)})
+	c.loadAttachments(ctx)
+	topo := topology.BuildWith(sources, topology.Options{LastSeen: c.rememberedPorts(now), Attached: c.rememberedAttachments()})
 	if err := c.store.SaveMACPorts(ctx, c.rememberPorts(topo, now), now.Add(-LastSeenTTL)); err != nil {
 		slog.Warn("could not save where MACs were learned", "err", err)
+	}
+	if err := c.store.SaveAttachments(ctx, c.rememberAttachments(topo, now), now.Add(-AttachedTTL)); err != nil {
+		slog.Warn("could not save where clients were seen", "err", err)
 	}
 
 	// Where each node hangs: clients carry it; devices only have their link.
@@ -656,4 +662,56 @@ func (c *Collector) rememberPorts(topo topology.Topology, now time.Time) []store
 		}
 	}
 	return seen
+}
+
+// AttachedTTL is how long a client keeps the place it was last seen for sure
+// (an access point, a switch port) without being seen there again.
+const AttachedTTL = 365 * 24 * time.Hour
+
+// loadAttachments reads where clients were last seen for sure, once, so it
+// survives a restart.
+func (c *Collector) loadAttachments(ctx context.Context) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.attached != nil {
+		return
+	}
+	c.attached = map[model.MACAddress]topology.Attachment{}
+	saved, err := c.store.Attachments(ctx)
+	if err != nil {
+		slog.Warn("could not read where clients were seen", "err", err)
+		return
+	}
+	for _, a := range saved {
+		c.attached[model.MACAddress(a.MAC)] = topology.Attachment{Node: a.NodeID, Port: a.Port, WiFi: a.WiFi, SSID: a.SSID, Band: a.Band}
+	}
+}
+
+func (c *Collector) rememberedAttachments() map[model.MACAddress]topology.Attachment {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[model.MACAddress]topology.Attachment, len(c.attached))
+	for m, a := range c.attached {
+		out[m] = a
+	}
+	return out
+}
+
+// rememberAttachments notes where clients were seen for sure this round and
+// returns them, to be saved.
+func (c *Collector) rememberAttachments(topo topology.Topology, now time.Time) []store.Attachment {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.attached == nil {
+		c.attached = map[model.MACAddress]topology.Attachment{}
+	}
+	out := make([]store.Attachment, 0, len(topo.Attached))
+	for m, a := range topo.Attached {
+		c.attached[m] = a
+		out = append(out, store.Attachment{
+			MAC: string(m), NodeID: a.Node, Port: a.Port, WiFi: a.WiFi, SSID: a.SSID, Band: a.Band, SeenAt: now,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MAC < out[j].MAC })
+	return out
 }

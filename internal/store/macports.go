@@ -60,3 +60,70 @@ func (s *Store) SaveMACPorts(ctx context.Context, ports []MACPort, forgetBefore 
 	}
 	return tx.Commit()
 }
+
+// Attachment is where a client was last seen for sure: the access point it
+// was associated with (WiFi, with the network and band), or the switch port
+// it was plugged into.
+type Attachment struct {
+	MAC    string
+	NodeID string
+	Port   string
+	WiFi   bool
+	SSID   string
+	Band   string
+	SeenAt time.Time
+}
+
+// Attachments returns where clients were last seen for sure.
+func (s *Store) Attachments(ctx context.Context) ([]Attachment, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT mac, node_id, port, wifi, ssid, band, seen_at FROM attachments ORDER BY mac`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Attachment
+	for rows.Next() {
+		var (
+			a        Attachment
+			wifi, at int64
+		)
+		if err := rows.Scan(&a.MAC, &a.NodeID, &a.Port, &wifi, &a.SSID, &a.Band, &at); err != nil {
+			return nil, err
+		}
+		a.WiFi, a.SeenAt = wifi == 1, fromUnix(at)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// SaveAttachments records where clients were seen for sure now, and forgets
+// those not confirmed since the given time.
+func (s *Store) SaveAttachments(ctx context.Context, list []Attachment, forgetBefore time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO attachments (mac, node_id, port, wifi, ssid, band, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (mac) DO UPDATE SET node_id = excluded.node_id, port = excluded.port, wifi = excluded.wifi,
+			ssid = excluded.ssid, band = excluded.band, seen_at = excluded.seen_at`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, a := range list {
+		wifi := 0
+		if a.WiFi {
+			wifi = 1
+		}
+		if _, err := stmt.ExecContext(ctx, a.MAC, a.NodeID, a.Port, wifi, a.SSID, a.Band, a.SeenAt.Unix()); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM attachments WHERE seen_at < ?`, forgetBefore.Unix()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

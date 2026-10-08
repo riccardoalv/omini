@@ -479,10 +479,13 @@ func TestClientKeepsItsSwitchPortWhileTheSwitchForgetsIt(t *testing.T) {
 		t.Fatalf("the phone stays on Port 2: %+v", n)
 	}
 
+	// Past the MAC table memory, it still stays where it was last seen for
+	// sure (alone on Port 2), not wherever ARP sees it: only seeing it
+	// somewhere else for sure moves it.
 	e.clock = e.clock.Add(collector.LastSeenTTL)
 	n, _ = node(e.collect(t), "mac:"+string(phone))
-	if n.ParentID != "dev:58:9c:fc:00:00:01" {
-		t.Fatalf("after %v the memory is forgotten: %+v", collector.LastSeenTTL, n)
+	if n.ParentID != "dev:1c:2a:a3:00:00:01" || n.Port != "Port 2" {
+		t.Fatalf("after %v the phone moved: %+v", collector.LastSeenTTL, n)
 	}
 }
 
@@ -706,5 +709,34 @@ func TestRoundAskedByTheUserSkipsCaches(t *testing.T) {
 	<-done
 	if got[0] || !got[1] || got[2] {
 		t.Fatalf("forced per round: %v (want the user's round only)", got)
+	}
+}
+
+// Where a client was last seen for sure survives a restart (a new collector
+// on the same database).
+func TestAttachmentsSurviveARestart(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	phone := model.MACAddress("da:a1:19:00:00:09")
+	ap := model.Device{
+		Key: "30:16:9d:00:00:0a", Name: "ap", Role: model.Ptr(model.DeviceRoleAp), MACs: []model.MACAddress{"30:16:9d:00:00:0a"},
+		WirelessClients: []model.WirelessClient{{MAC: phone, SSID: model.Ptr("Casa")}},
+	}
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{"58:9c:fc:00:00:01"},
+		Arp: []model.ArpEntry{{IP: "192.168.1.50", MAC: phone}},
+	}
+	e.fake.set([]model.Device{fw, ap}, nil)
+	e.collect(t)
+
+	// Restart: the access point's list misses the phone this time.
+	ap.WirelessClients = nil
+	e.fake.set([]model.Device{fw, ap}, nil)
+	reg := integration.NewRegistry()
+	reg.Register(e.fake)
+	e.coll = collector.New(e.st, reg, e.box, collector.Options{Now: func() time.Time { return e.clock }})
+	n, _ := node(e.collect(t), "mac:"+string(phone))
+	if n.ParentID != "dev:30:16:9d:00:00:0a" || n.SSID != "Casa" {
+		t.Fatalf("after a restart the phone hangs from %q (%+v)", n.ParentID, n)
 	}
 }
