@@ -286,6 +286,7 @@ const flowEdges = computed<Edge[]>(() => {
       data: { ...labels.get(e.id), inset: insetOf(e.source, e.target) },
       class: {
         slow: look.slow,
+        vpn: look.vpn,
         offline: target ? !target.online : false,
       },
       style: {
@@ -361,7 +362,9 @@ watch([view, direction, autoAreaKey], async ([v, direction, autoKey]) => {
   const rank = new Map(order.map((id, i) => [id, i]))
   const boxes = order.map((id) => sized.get(id)!)
   const edgesInOrder = [...v.edges].sort((a, b) => rank.get(a.target)! - rank.get(b.target)!)
-  const fresh = await layout(boxes, edgesInOrder, saved, direction, layoutGroups(v.edges))
+  // A VPN tunnel joins two sites; it does not make one hang from the other.
+  const treeEdges = edgesInOrder.filter((e) => e.kind !== 'vpn')
+  const fresh = await layout(boxes, treeEdges, saved, direction, layoutGroups(v.edges))
   // Expanding or collapsing keeps the clicked node where it is; the map is laid
   // out again around it (no overlaps). Other changes keep the first node still.
   const anchor =
@@ -1436,6 +1439,10 @@ onBeforeUnmount(() => {
 /* Vue Flow theming */
 .flow :deep(.vue-flow__edge-path) {
   stroke: var(--edge);
+}
+.flow :deep(.vue-flow__edge.vpn .vue-flow__edge-path) {
+  stroke: #a371f7;
+  stroke-dasharray: 8 5;
 }
 .flow :deep(.vue-flow__edge.slow .vue-flow__edge-path) {
   stroke: var(--warn);

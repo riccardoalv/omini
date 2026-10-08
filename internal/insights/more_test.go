@@ -104,3 +104,25 @@ func TestMoreRules(t *testing.T) {
 		t.Fatalf("burst: %+v", b)
 	}
 }
+
+// An IP phone announces itself by LLDP: a 100 Mbps link to it is not a slow
+// uplink between network devices (it is fast_ethernet's).
+func TestAnLLDPPhoneIsNotInfrastructure(t *testing.T) {
+	sw := topology.Node{ID: "dev:sw", Kind: topology.KindDevice, Role: "switch", Label: "sw", Online: true, Device: &model.Device{}}
+	phone := topology.Node{ID: "lldp:phone", Kind: topology.KindUnmanaged, Label: "SEPF87B20A1B2C3", Model: "Cisco IP Phone 8845", Online: true}
+	ap := topology.Node{ID: "lldp:ap", Kind: topology.KindUnmanaged, Label: "U6-Lite", Model: "U6-Lite", Online: true}
+	in := Input{Topology: topology.Topology{
+		Nodes: []topology.Node{sw, phone, ap},
+		Edges: []topology.Edge{
+			{ID: "1", Source: "dev:sw", SourcePort: "Port 20", Target: "lldp:phone", Kind: topology.EdgeLLDP, SpeedMbps: 100},
+			{ID: "2", Source: "dev:sw", SourcePort: "Port 21", Target: "lldp:ap", Kind: topology.EdgeLLDP, SpeedMbps: 100},
+		},
+	}}
+	got := byRule(Evaluate(in))
+	if len(got["slow_uplink"]) != 1 || got["slow_uplink"][0].NodeID != "lldp:ap" {
+		t.Fatalf("slow uplinks: %+v", got["slow_uplink"])
+	}
+	if len(got["fast_ethernet"]) != 1 || got["fast_ethernet"][0].NodeID != "lldp:phone" {
+		t.Fatalf("fast ethernet: %+v", got["fast_ethernet"])
+	}
+}

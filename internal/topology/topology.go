@@ -44,6 +44,7 @@ const (
 	EdgeFDB      EdgeKind = "fdb"      // from a switch MAC table
 	EdgeWifi     EdgeKind = "wifi"     // from an AP registration table
 	EdgeInferred EdgeKind = "inferred" // best guess (ARP, MAC seen behind an uplink...)
+	EdgeVPN      EdgeKind = "vpn"      // a site-to-site tunnel between two routers
 )
 
 // SegmentMinMACs is the number of client MACs behind a single non-uplink port
@@ -219,10 +220,12 @@ func BuildWith(sources []Source, opts Options) Topology {
 	for _, id := range managed {
 		b.addNeighborEdges(id)
 	}
+	b.lagUplinks()
 	b.indexFDB(managed)
 	b.rememberFDB(opts.LastSeen)
 	b.placeUnlinkedDevices(managed)
 	b.addWANs(managed)
+	b.addVPNLinks(managed)
 	b.placeClients(managed)
 	b.groupSegments()
 	b.sharedPorts()
@@ -922,6 +925,14 @@ func (b *builder) placeCollected(
 		n.IP = firstNonEmpty(arp[m].ip, hs.h.IP, leaseIPs[m])
 		if scanned {
 			enrich(n, hs.h)
+		}
+		// A scan of a routed network sees hosts by address only (no MAC): what it
+		// found is this client's when the address is its own.
+		if byIP, ok := hostsByIP[n.IP]; ok && n.IP != "" {
+			enrich(n, byIP.h)
+			if n.Hostname == "" {
+				n.Hostname = bestHostname(byIP.h.Hostnames)
+			}
 		}
 		if n.Vendor == "" {
 			n.Vendor = oui.Lookup(string(m))

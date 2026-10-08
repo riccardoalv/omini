@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -978,4 +979,92 @@ func TestFirewallReportedAsAVMByItsHost(t *testing.T) {
 			t.Fatalf("the firewall links to its host: %+v", e)
 		}
 	}
+}
+
+// The access switch learns MACs on its port-channel Trk1 while LLDP names its
+// member ports 49 and 50 towards the core: Trk1 is the uplink, and a PC the
+// access switch sees there sits behind the core, not in a fake segment.
+func TestPortChannelIsAnUplink(t *testing.T) {
+	const pc = "aa:00:00:00:00:77"
+	core := model.Device{
+		Key: "1c:00:00:00:00:01", Name: "core", MACs: []model.MACAddress{"1c:00:00:00:00:01"}, Role: model.Ptr(model.DeviceRoleSwitch),
+		Neighbors: []model.Neighbor{{LocalPort: "Te1/1/3", Protocol: model.Ptr(model.NeighborProtocolLldp), RemoteName: model.Ptr("acc"), RemotePort: model.Ptr("49")}},
+		Fdb:       []model.FdbEntry{{MAC: pc, Port: "Te1/1/9"}},
+	}
+	acc := model.Device{
+		Key: "1c:00:00:00:00:02", Name: "acc", MACs: []model.MACAddress{"1c:00:00:00:00:02"}, Role: model.Ptr(model.DeviceRoleSwitch),
+		Interfaces: []model.Interface{{Name: "49"}, {Name: "50"}, {Name: "Trk1", Members: []string{"49", "50"}}},
+		Neighbors:  []model.Neighbor{{LocalPort: "49", Protocol: model.Ptr(model.NeighborProtocolLldp), RemoteName: model.Ptr("core"), RemotePort: model.Ptr("Te1/1/3")}},
+		Fdb:        []model.FdbEntry{{MAC: pc, Port: "Trk1"}},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{core, acc}}})
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindSegment {
+			t.Fatalf("a fake segment: %+v", n)
+		}
+		if n.MAC == pc && n.ParentID != "dev:1c:00:00:00:00:01" {
+			t.Fatalf("the PC hangs from %q, want the core", n.ParentID)
+		}
+	}
+}
+
+// A branch router reached over an IPsec tunnel: the firewall's peer names the
+// branch network. A VPN link joins the two sites; the branch keeps its own WAN.
+func TestSiteToSiteVPNJoinsTheBranch(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{{Name: "wan", Wan: model.Ptr(true), IPs: []string{"198.51.100.2/24"}}, {Name: "lan", IPs: []string{"192.168.1.1/24"}}},
+		VpnPeers: []model.VpnPeer{
+			{Name: "branch", Protocol: model.VpnPeerProtocolIpsec, Endpoint: model.Ptr("203.0.113.200"), Address: model.Ptr("10.20.0.0/24")},
+			{Name: "phone", Protocol: model.VpnPeerProtocolWireguard, Endpoint: model.Ptr("100.70.1.2"), Address: model.Ptr("10.200.0.2/32")},
+		},
+	}
+	br := model.Device{
+		Key: "48:8f:5a:00:00:01", Name: "br-gw", Host: model.Ptr("10.20.0.1"), MACs: []model.MACAddress{"48:8f:5a:00:00:01"}, Role: model.Ptr(model.DeviceRoleRouter),
+		Interfaces: []model.Interface{{Name: "ether1", Wan: model.Ptr(true), IPs: []string{"203.0.113.200/24"}}, {Name: "bridge", IPs: []string{"10.20.0.1/24"}}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{br}},
+	})
+	vpn, brWAN := 0, false
+	for _, e := range topo.Edges {
+		if e.Kind == topology.EdgeVPN {
+			vpn++
+		}
+		if e.Target == "dev:48:8f:5a:00:00:01" && strings.HasPrefix(e.Source, "wan:") {
+			brWAN = true
+		}
+	}
+	if vpn != 1 || !brWAN {
+		t.Fatalf("vpn links %d (want 1), branch WAN %v: %+v", vpn, brWAN, topo.Edges)
+	}
+}
+
+// A printer in another VLAN: the firewall's ARP knows its MAC, the scan of
+// that routed network only its address — with its name, ports and page title.
+// The client takes them.
+func TestRoutedScanEnrichesTheClientOfThatAddress(t *testing.T) {
+	const printer = "3c:52:82:00:00:90"
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Arp: []model.ArpEntry{{IP: "10.10.20.90", MAC: printer, Interface: model.Ptr("vlan20")}},
+	}
+	scan := model.Device{
+		Key: "net:10.10.20.0/24", Name: "Network 10.10.20.0/24", Role: model.Ptr(model.DeviceRoleUnknown),
+		Hosts: []model.Host{{IP: "10.10.20.90", Hostnames: []string{"HP-LaserJet-M404"}, OpenPorts: []uint16{631, 9100}, Titles: []string{"HP LaserJet Pro M404dn"}}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{scan}},
+	})
+	for _, n := range topo.Nodes {
+		if n.MAC == printer {
+			if n.Hostname != "HP-LaserJet-M404" || len(n.OpenPorts) != 2 || len(n.Titles) != 1 {
+				t.Fatalf("the printer did not take the scan's findings: %+v", n)
+			}
+			return
+		}
+	}
+	t.Fatal("no printer node")
 }

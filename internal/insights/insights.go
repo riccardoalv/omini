@@ -350,8 +350,16 @@ func highMemory(in Input, _ index) []Insight {
 // infrastructure reports whether a node carries other devices' traffic.
 func infrastructure(n *topology.Node) bool {
 	switch n.Kind {
-	case topology.KindUnmanaged, topology.KindSegment:
+	case topology.KindSegment:
 		return true
+	case topology.KindUnmanaged:
+		// An LLDP neighbor nobody manages: network gear unless it says it is
+		// something else (an IP phone announces itself by LLDP too).
+		switch n.Type {
+		case "", "unknown", "switch", "router", "firewall", "ap":
+			return !strings.Contains(strings.ToLower(n.Model), "phone")
+		}
+		return false
 	case topology.KindDevice:
 		return n.Role == "switch" || n.Role == "ap" || n.Role == "router" || n.Role == "firewall"
 	}

@@ -138,6 +138,8 @@ export interface EdgeLook {
   width: number
   dashed: boolean
   dotted: boolean
+  /** A site-to-site VPN tunnel between two routers (another site). */
+  vpn: boolean
   /** An infrastructure link negotiated below 1 Gbps: likely a bad cable or port. */
   slow: boolean
 }
@@ -152,9 +154,10 @@ export function edgeLook(edge: TopoEdge, source?: TopoNode, target?: TopoNode): 
   else if (speed >= 1000) width = 2
   return {
     width,
-    dashed: edge.kind === 'inferred',
+    dashed: edge.kind === 'inferred' || edge.kind === 'vpn',
     dotted: edge.kind === 'wifi',
-    slow: infra && speed > 0 && speed < 1000,
+    vpn: edge.kind === 'vpn',
+    slow: infra && speed > 0 && speed < 1000 && edge.kind !== 'vpn',
   }
 }
 
