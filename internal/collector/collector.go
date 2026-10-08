@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/classify"
@@ -78,6 +79,9 @@ type Collector struct {
 	trigger    chan struct{}
 	reschedule chan struct{} // the round interval changed
 	lastRound  *Round
+	// The next round was asked for by the user: integrations skip their
+	// caches (a deep scan, an nmap scan now).
+	forceNext atomic.Bool
 }
 
 func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Options) *Collector {
@@ -140,7 +144,11 @@ func (c *Collector) CollectOne(ctx context.Context, id int64) error {
 }
 
 func (c *Collector) collectLogged(ctx context.Context) {
-	if err := c.CollectNow(ctx); err != nil && ctx.Err() == nil {
+	round := ctx
+	if c.forceNext.Swap(false) {
+		round = integration.WithForce(ctx)
+	}
+	if err := c.CollectNow(round); err != nil && ctx.Err() == nil {
 		slog.Error("collection round failed", "err", err)
 	}
 }
@@ -151,6 +159,13 @@ func (c *Collector) Refresh() {
 	case c.trigger <- struct{}{}:
 	default: // a round is already pending
 	}
+}
+
+// RunRound asks Run for a round now, requested by the user: every
+// integration skips its caches, as "run now" did for one.
+func (c *Collector) RunRound() {
+	c.forceNext.Store(true)
+	c.Refresh()
 }
 
 // State returns the current map state.

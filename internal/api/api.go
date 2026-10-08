@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.Capabilities, "limited": s.Capabilities.Limited()})
 	})
 	private.HandleFunc("PUT /api/collection", s.setCollection)
+	private.HandleFunc("POST /api/collection/run", s.runRound)
 	private.HandleFunc("POST /api/integrations/{id}/run", s.runIntegration)
 	private.HandleFunc("GET /api/topology", s.topology)
 	private.HandleFunc("POST /api/refresh", s.refresh)

@@ -427,6 +427,13 @@ func (s *Server) topology(w http.ResponseWriter, r *http.Request) {
 	}{s.Collector.State(), layout, areas})
 }
 
+// runRound starts a collection round now, skipping the integrations' caches
+// (the Integrations screen's "Run a round now").
+func (s *Server) runRound(w http.ResponseWriter, _ *http.Request) {
+	s.Collector.RunRound()
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "round scheduled"})
+}
+
 func (s *Server) refresh(w http.ResponseWriter, _ *http.Request) {
 	s.Collector.Refresh()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "refresh scheduled"})

@@ -80,9 +80,11 @@ now.
   offline, and raises an alert. The others are not affected.
 - **Time limit.** Each integration gets 45 seconds per round; plugins get the
   limit declared in their manifest (60 seconds by default, up to 300).
-- **Run now.** "Run now" in an integration's details collects only that
-  integration, at once, skipping its caches. "Refresh now" on the map starts a
-  whole round. Saving an integration's settings also starts a round.
+- **Run a round now.** The button in the "Collection in rounds" card on the
+  Integrations screen starts a whole round at once, with every integration
+  skipping its caches (the network scan's deep scan and nmap run now). "Refresh
+  now" on the map starts an ordinary round. Saving an integration's settings
+  also starts a round.
 - **Traffic** is the average between two collections of the same interface,
   so a shorter interval gives finer traffic numbers and history.
 
@@ -116,7 +118,7 @@ changed from the UI yet; see
 
 Click an integration on the **Integrations** screen to expand its settings
 and status inline: last collection, duration, devices found, what found them,
-**Test connection**, **Run now**, the enable switch and delete.
+**Test connection**, the enable switch and delete.
 
 - Forms are generated from each integration's fields, so plugins need no UI
   code. Secret fields (passwords, keys, communities) are encrypted in the

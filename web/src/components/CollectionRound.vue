@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight, ListOrdered } from 'lucide-vue-next'
+import { ArrowRight, ListOrdered, RefreshCw } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -14,6 +14,7 @@ import type { CollectionInfo, Integration } from '@/lib/types'
  * order of the last round and when it ran.
  */
 const props = defineProps<{ integrations: Integration[] }>()
+const emit = defineEmits<{ ran: [] }>()
 const { t, locale } = useI18n()
 
 const info = ref<CollectionInfo>()
@@ -32,7 +33,40 @@ onMounted(() => {
   void load()
   timer = setInterval(load, 15_000)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  clearTimeout(watching)
+})
+
+// "Run a round now": the whole round, edge to center; followed until the
+// server reports a round other than the one shown when it was asked.
+const running = ref(false)
+let watching: ReturnType<typeof setTimeout> | undefined
+const WATCH_EVERY_MS = 2000
+const WATCH_FOR_MS = 15 * 60_000
+async function runRound() {
+  error.value = ''
+  running.value = true
+  const before = info.value?.round?.started_at
+  const until = Date.now() + WATCH_FOR_MS
+  try {
+    await api.runRound()
+  } catch (e) {
+    running.value = false
+    error.value = e instanceof ApiError ? e.message : t('common.error')
+    return
+  }
+  const check = async () => {
+    await load()
+    if (info.value?.round?.started_at !== before || Date.now() > until) {
+      running.value = false
+      emit('ran')
+      return
+    }
+    watching = setTimeout(check, WATCH_EVERY_MS)
+  }
+  watching = setTimeout(check, WATCH_EVERY_MS)
+}
 
 async function setInterval_(s: number) {
   error.value = ''
@@ -83,6 +117,16 @@ const order = computed(() =>
           </option>
         </select>
       </label>
+      <button
+        class="btn primary"
+        type="button"
+        data-test="run-round"
+        :disabled="running || !info"
+        @click="runRound"
+      >
+        <RefreshCw :size="15" :class="{ spin: running }" />
+        {{ running ? t('round.running') : t('round.run') }}
+      </button>
     </div>
     <div v-if="order.length" class="order" data-test="round-order">
       <span class="muted edge">{{ t('round.edge') }}</span>
@@ -166,5 +210,13 @@ const order = computed(() =>
 }
 .last {
   margin: 0;
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

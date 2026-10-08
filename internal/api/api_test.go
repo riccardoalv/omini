@@ -699,3 +699,11 @@ func TestChangePassword(t *testing.T) {
 		t.Fatalf("login with the new password: %d", code)
 	}
 }
+
+func TestRunRound(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	if code := h.do("POST", "/api/collection/run", nil, nil); code != http.StatusAccepted {
+		t.Fatalf("run a round: %d, want 202", code)
+	}
+}

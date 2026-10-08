@@ -527,9 +527,6 @@ export default {
     testing: 'Testing…',
     secretSaved: 'Saved — leave blank to keep',
     core: 'Built-in',
-    runNow: 'Run now',
-    running: 'Running…',
-    ranOk: 'Done: {n} devices in {s} s.',
     lastCollection: 'Last collection',
     duration: 'Duration',
     devicesFound: 'Devices found',
@@ -665,6 +662,8 @@ export default {
     edge: 'Edge',
     center: 'center',
     last: 'Last round {ago}, took {s} s',
+    run: 'Run a round now',
+    running: 'Collecting…',
   },
   notifications: {
     title: 'Notifications',

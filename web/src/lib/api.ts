@@ -10,7 +10,6 @@ import type {
   Config,
   Capabilities,
   CollectionInfo,
-  CollectionStatus,
   Integration,
   IntegrationType,
   InventoryEntry,
@@ -131,6 +130,7 @@ export const api = {
 
   topology: () => request<TopologyResponse>('GET', '/api/topology'),
   refresh: () => request<{ status: string }>('POST', '/api/refresh'),
+  runRound: () => request<{ status: string }>('POST', '/api/collection/run'),
   saveLayout: (positions: Record<string, Point>) =>
     request<void>('PUT', '/api/layout', { positions }),
   resetLayout: () => request<void>('DELETE', '/api/layout'),
@@ -204,5 +204,4 @@ export const api = {
       'GET',
       `/api/history?${new URLSearchParams({ node, iface, hours: String(hours) })}`,
     ),
-  runIntegration: (id: number) => request<CollectionStatus>('POST', `/api/integrations/${id}/run`),
 }

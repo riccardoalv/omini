@@ -669,3 +669,42 @@ func TestInventoryRecordsWhereDevicesHang(t *testing.T) {
 	}
 	t.Fatal("no switch in the inventory")
 }
+
+func TestRoundAskedByTheUserSkipsCaches(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{"host": "x"})
+	var mu sync.Mutex
+	var forced []bool
+	e.fake.onCollect = func(ctx context.Context) {
+		mu.Lock()
+		forced = append(forced, integration.Forced(ctx))
+		mu.Unlock()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- e.coll.Run(ctx) }()
+	seen := func(n int) []bool {
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			mu.Lock()
+			got := append([]bool(nil), forced...)
+			mu.Unlock()
+			if len(got) >= n {
+				return got
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("only %d collections", len(forced))
+		return nil
+	}
+	seen(1) // the first round, on start
+	e.coll.RunRound()
+	seen(2)
+	e.coll.Refresh()
+	got := seen(3)
+	cancel()
+	<-done
+	if got[0] || !got[1] || got[2] {
+		t.Fatalf("forced per round: %v (want the user's round only)", got)
+	}
+}

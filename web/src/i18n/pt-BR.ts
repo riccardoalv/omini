@@ -533,9 +533,6 @@ const ptBR: typeof en = {
     testing: 'Testando…',
     secretSaved: 'Salva — deixe em branco para manter',
     core: 'Nativa',
-    runNow: 'Executar agora',
-    running: 'Executando…',
-    ranOk: 'Concluído: {n} dispositivos em {s} s.',
     lastCollection: 'Última coleta',
     duration: 'Duração',
     devicesFound: 'Dispositivos encontrados',
@@ -797,6 +794,8 @@ const ptBR: typeof en = {
     edge: 'Ponta',
     center: 'centro',
     last: 'Última rodada {ago}, levou {s} s',
+    run: 'Rodar uma rodada agora',
+    running: 'Coletando…',
   },
   notifications: {
     title: 'Notificações',

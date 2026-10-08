@@ -15,6 +15,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...mod.api,
       collection: vi.fn<typeof mod.api.collection>(),
       setCollection: vi.fn<typeof mod.api.setCollection>(),
+      runRound: vi.fn<typeof mod.api.runRound>(),
     },
   }
 })
@@ -70,5 +71,36 @@ describe('CollectionRound', () => {
     // Picking the default stores "no setting".
     await select.setValue('60')
     expect(api.setCollection).toHaveBeenLastCalledWith(0)
+  })
+  it('runs a whole round and says when it is done', async () => {
+    vi.useFakeTimers()
+    const round = (started_at: string) => ({
+      interval_s: 60,
+      default_s: 60,
+      round: { started_at, duration_ms: 9_000, order: [2], interval_s: 60 },
+    })
+    vi.mocked(api.collection).mockResolvedValue(round('2026-10-08T08:00:00Z'))
+    vi.mocked(api.runRound).mockResolvedValue({ status: 'round scheduled' })
+    const w = mount(CollectionRound, {
+      props: { integrations: [integration(2, 'Network scan')] },
+      global: { plugins: plugins() },
+    })
+    await flushPromises()
+    const button = w.get('[data-test=run-round]')
+    await button.trigger('click')
+    await flushPromises()
+    expect(api.runRound).toHaveBeenCalled()
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.text()).toContain('Collecting')
+
+    // Still the old round: keeps waiting.
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(button.attributes('disabled')).toBeDefined()
+
+    vi.mocked(api.collection).mockResolvedValue(round('2026-10-08T08:01:00Z'))
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(w.emitted('ran')).toHaveLength(1)
+    vi.useRealTimers()
   })
 })

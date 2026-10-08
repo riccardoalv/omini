@@ -1,18 +1,17 @@
 <script setup lang="ts">
-import { RefreshCw } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useIntegrationForm } from '@/composables/useIntegrationForm'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { formatAgo, formatDateTime } from '@/lib/format'
-import type { CollectionStatus, Integration, IntegrationType } from '@/lib/types'
+import type { Integration, IntegrationType } from '@/lib/types'
 
 import IntegrationFields from './IntegrationFields.vue'
 import ScanCapabilities from './ScanCapabilities.vue'
 
 const props = defineProps<{ integration: Integration; type: IntegrationType }>()
-const emit = defineEmits<{ saved: [integration: Integration]; ran: [status: CollectionStatus] }>()
+const emit = defineEmits<{ saved: [integration: Integration] }>()
 const { t, locale } = useI18n()
 
 const { editing, values, busy, testing, error, result, missing, test, save } = useIntegrationForm(
@@ -27,27 +26,6 @@ async function submit() {
   if (updated) {
     saved.value = true
     emit('saved', updated)
-  }
-}
-
-// "Run now": collect this integration immediately (caches skipped).
-const running = ref(false)
-const runError = ref('')
-const lastRun = ref<CollectionStatus>()
-
-async function runNow() {
-  running.value = true
-  runError.value = ''
-  lastRun.value = undefined
-  try {
-    const st = await api.runIntegration(props.integration.id)
-    lastRun.value = st
-    emit('ran', st)
-    await loadMethods()
-  } catch (e) {
-    runError.value = e instanceof ApiError ? e.message : t('common.error')
-  } finally {
-    running.value = false
   }
 }
 
@@ -79,7 +57,7 @@ const methodList = computed(() =>
     .filter(([m]) => m !== 'self')
     .sort((a, b) => b[1] - a[1]),
 )
-const status = computed(() => lastRun.value ?? props.integration.status)
+const status = computed(() => props.integration.status)
 </script>
 
 <template>
@@ -102,25 +80,6 @@ const status = computed(() => lastRun.value ?? props.integration.status)
         </template>
       </dl>
       <p v-if="status?.error" class="alert error">{{ status.error }}</p>
-      <button
-        class="btn primary run"
-        type="button"
-        data-test="run-now"
-        :disabled="running || !integration.enabled"
-        @click="runNow"
-      >
-        <RefreshCw :size="15" :class="{ spin: running }" />
-        {{ running ? t('integrations.running') : t('integrations.runNow') }}
-      </button>
-      <p v-if="lastRun?.ok" class="alert ok" role="status">
-        {{
-          t('integrations.ranOk', {
-            n: lastRun.devices,
-            s: (lastRun.duration_ms / 1000).toFixed(1),
-          })
-        }}
-      </p>
-      <p v-if="runError" class="alert error" role="alert">{{ runError }}</p>
       <ScanCapabilities
         v-if="integration.type === 'network' || integration.type === 'nmap'"
         :type="integration.type"
@@ -178,17 +137,6 @@ dt {
 }
 dd {
   margin: 0;
-}
-.run {
-  margin: 4px 0 12px;
-}
-.spin {
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 .methods {
   display: flex;

@@ -12,7 +12,7 @@ import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
-import type { CollectionStatus, Config, Integration, IntegrationType } from '@/lib/types'
+import type { Config, Integration, IntegrationType } from '@/lib/types'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -61,10 +61,6 @@ const expanded = ref<number>()
 
 function toggleExpand(item: Integration) {
   expanded.value = expanded.value === item.id ? undefined : item.id
-}
-
-function onRan(item: Integration, status: CollectionStatus) {
-  items.value = items.value.map((i) => (i.id === item.id ? { ...i, status } : i))
 }
 
 function onDetailsSaved(updated: Integration) {
@@ -122,7 +118,7 @@ onMounted(async () => {
       </div>
     </header>
 
-    <CollectionRound v-if="items.length" :integrations="items" />
+    <CollectionRound v-if="items.length" :integrations="items" @ran="load" />
 
     <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
     <p v-else-if="!items.length" class="card empty muted">{{ t('integrations.empty') }}</p>
@@ -195,7 +191,6 @@ onMounted(async () => {
           :integration="item"
           :type="typeByName.get(item.type)!"
           @saved="onDetailsSaved"
-          @ran="(st) => onRan(item, st)"
         />
       </li>
     </ul>

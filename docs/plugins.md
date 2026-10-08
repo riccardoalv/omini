@@ -371,7 +371,8 @@ OMINI_PLUGIN_DIRS=../omini-plugin-example make run
 
 `OMINI_PLUGIN_DIRS` takes a comma-separated list of folders. Each is loaded
 as a plugin (marked "development" in the store), and every collection runs
-the current code: edit, then press **Run now** in the integration. Omini
+the current code: edit, then press **Run a round now** on the Integrations
+screen. Omini
 still builds an environment for it with uv, rebuilt when `requirements.txt`
 changes. Set `OMINI_LOG_LEVEL=debug` to see what the plugin writes to stderr.
 

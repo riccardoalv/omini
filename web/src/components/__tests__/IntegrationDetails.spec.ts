@@ -1,7 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/lib/api'
 import type { Integration, IntegrationType } from '@/lib/types'
 
 import IntegrationDetails from '../IntegrationDetails.vue'
@@ -13,7 +12,6 @@ vi.mock('@/lib/api', async (orig) => {
     ...mod,
     api: {
       ...mod.api,
-      runIntegration: vi.fn<typeof mod.api.runIntegration>(),
       updateIntegration: vi.fn<typeof mod.api.updateIntegration>(),
       topology: vi.fn<typeof mod.api.topology>(),
     },
@@ -35,40 +33,8 @@ const mountDetails = (integration = demo) =>
   mount(IntegrationDetails, { props: { integration, type }, global: { plugins: plugins() } })
 
 describe('IntegrationDetails run now', () => {
-  beforeEach(() => {
-    vi.mocked(api.runIntegration).mockReset()
-  })
-
-  it('runs the integration and shows the result', async () => {
-    const status = {
-      integration_id: 4,
-      ok: true,
-      collected_at: '2026-10-06T00:00:00Z',
-      duration_ms: 6800,
-      devices: 18,
-    }
-    vi.mocked(api.runIntegration).mockResolvedValue(status)
-    const w = mountDetails()
-    await w.get('[data-test=run-now]').trigger('click')
-    await flushPromises()
-
-    expect(api.runIntegration).toHaveBeenCalledWith(4)
-    expect(w.get('[role=status]').text()).toBe('Done: 18 devices in 6.8 s.')
-    expect(w.emitted('ran')![0]).toEqual([status])
-  })
-
-  it('shows the error when the run fails', async () => {
-    const { ApiError } = await import('@/lib/api')
-    vi.mocked(api.runIntegration).mockRejectedValue(new ApiError(409, 'integration is disabled'))
-    const w = mountDetails()
-    await w.get('[data-test=run-now]').trigger('click')
-    await flushPromises()
-    expect(w.get('[role=alert]').text()).toBe('integration is disabled')
-  })
-
-  it('cannot run a disabled integration', () => {
-    const w = mountDetails({ ...demo, enabled: false })
-    expect(w.get('[data-test=run-now]').attributes('disabled')).toBeDefined()
+  it('has no button of its own: a whole round runs from the Integrations screen', () => {
+    expect(mountDetails().find('[data-test=run-now]').exists()).toBe(false)
   })
 })
 

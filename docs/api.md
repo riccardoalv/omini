@@ -70,6 +70,7 @@ curl -b omini.cookie -X POST -H 'X-Omini-Request: 1' http://omini.lan:8080/api/r
 |---|---|---|
 | `GET` | `/api/topology` | The map: `topology` (`nodes`, `edges`), `statuses` (last collection of each integration), `alerts` (open), `generated_at`, `round` (last collection round), `layout` (saved positions) and `areas` |
 | `POST` | `/api/refresh` | Start a collection round as soon as possible (202) |
+| `POST` | `/api/collection/run` | Start a round now in which every integration skips its caches (deep scan, nmap scan): the Integrations screen's "Run a round now" (202) |
 | `PUT` | `/api/layout` | Body `{positions: {"<node id>": {x, y}}}`. Saves dragged positions; top-down positions use ids prefixed `DOWN:` |
 | `DELETE` | `/api/layout` | Forget every saved position ("Reset layout") |
 | `POST` | `/api/areas` | Create an area: `{name, color, direction, x, y, width, height, members}`. `color` is a preset (`gray`, `blue`, `green`, `yellow`, `red`, `purple`) or `#rrggbb`; `direction` is `RIGHT` or `DOWN` |
