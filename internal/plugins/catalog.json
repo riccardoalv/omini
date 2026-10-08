@@ -6,7 +6,11 @@
     "url": "https://github.com/riccardoalv/omini-plugin-opnsense",
     "icon": "opnsense",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "firewall",
+      "router"
+    ]
   },
   {
     "id": "horaco",
@@ -15,7 +19,10 @@
     "url": "https://github.com/riccardoalv/omini-plugin-horaco",
     "icon": "switch",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "switch"
+    ]
   },
   {
     "id": "mercusys",
@@ -24,7 +31,10 @@
     "url": "https://github.com/riccardoalv/omini-plugin-mercusys",
     "icon": "mercusys",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "wifi"
+    ]
   },
   {
     "id": "mikrotik",
@@ -33,7 +43,12 @@
     "url": "https://github.com/riccardoalv/omini-plugin-mikrotik",
     "icon": "mikrotik",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "router",
+      "switch",
+      "wifi"
+    ]
   },
   {
     "id": "unifi",
@@ -42,7 +57,12 @@
     "url": "https://github.com/riccardoalv/omini-plugin-unifi",
     "icon": "ubiquiti",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "router",
+      "switch",
+      "wifi"
+    ]
   },
   {
     "id": "openwrt",
@@ -51,7 +71,11 @@
     "url": "https://github.com/riccardoalv/omini-plugin-openwrt",
     "icon": "openwrt",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "router",
+      "wifi"
+    ]
   },
   {
     "id": "proxmox",
@@ -60,7 +84,10 @@
     "url": "https://github.com/riccardoalv/omini-plugin-proxmox",
     "icon": "proxmox",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "hypervisor"
+    ]
   },
   {
     "id": "omada",
@@ -69,7 +96,12 @@
     "url": "https://github.com/riccardoalv/omini-plugin-omada",
     "icon": "tplink",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "router",
+      "switch",
+      "wifi"
+    ]
   },
   {
     "id": "pfsense",
@@ -78,6 +110,10 @@
     "url": "https://github.com/riccardoalv/omini-plugin-pfsense",
     "icon": "pfsense",
     "publisher": "official",
-    "trust": "experimental"
+    "trust": "experimental",
+    "categories": [
+      "firewall",
+      "router"
+    ]
   }
 ]

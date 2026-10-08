@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 )
@@ -23,7 +24,8 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || !cfg.AutoScan {
+	if cfg.Addr != ":8080" || cfg.DataDir != "./data" || cfg.PollInterval != time.Minute || cfg.LogLevel != slog.LevelInfo || !cfg.AutoScan ||
+		cfg.PluginIndex != plugins.DefaultIndex {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }
@@ -31,13 +33,13 @@ func TestLoadConfigDefaults(t *testing.T) {
 func TestLoadConfigFromEnv(t *testing.T) {
 	cfg, err := loadConfig(env(map[string]string{
 		"OMINI_ADDR": "127.0.0.1:9000", "OMINI_DATA_DIR": "/data", "OMINI_POLL_INTERVAL": "30",
-		"OMINI_LOG_LEVEL": "debug", "OMINI_SECRET_KEY": "k", "OMINI_AUTOSCAN": "false",
+		"OMINI_LOG_LEVEL": "debug", "OMINI_SECRET_KEY": "k", "OMINI_AUTOSCAN": "false", "OMINI_PLUGIN_INDEX": "off",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Addr != "127.0.0.1:9000" || cfg.DataDir != "/data" || cfg.PollInterval != 30*time.Second ||
-		cfg.LogLevel != slog.LevelDebug || cfg.SecretKey != "k" || cfg.AutoScan {
+		cfg.LogLevel != slog.LevelDebug || cfg.SecretKey != "k" || cfg.AutoScan || cfg.PluginIndex != "" {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }

@@ -20,6 +20,8 @@ vi.mock('@/lib/api', async (orig) => {
       removePlugin: vi.fn<typeof mod.api.removePlugin>(),
       integrationTypes: vi.fn<typeof mod.api.integrationTypes>(),
       integrations: vi.fn<typeof mod.api.integrations>(),
+      pluginIndex: vi.fn<typeof mod.api.pluginIndex>(),
+      refreshPluginIndex: vi.fn<typeof mod.api.refreshPluginIndex>(),
     },
   }
 })
@@ -190,5 +192,54 @@ describe('PluginStore', () => {
     const use = again.findAll('[data-test=store-card]')[0]!.get('[data-test=store-use]')
     expect(use.text()).toBe('Already added')
     expect(use.attributes('disabled')).toBeDefined()
+  })
+
+  it('filters by category and trust, and tells an unreviewed release', async () => {
+    vi.mocked(api.pluginCatalog).mockResolvedValue([
+      {
+        ...opnsenseEntry,
+        categories: ['firewall'],
+        trust: 'stable',
+        reviewed_version: '0.2.0',
+        installed: true,
+      },
+      { ...mikrotikEntry, categories: ['router', 'switch'] },
+    ])
+    vi.mocked(api.plugins).mockResolvedValue([
+      { ...installed('opnsense', URL), source: { url: URL, version: '0.3.0', installed_at: '' } },
+    ])
+    const w = await mountStore()
+    const card = () =>
+      w.findAll('[data-test=store-card]').find((c) => c.text().includes('OPNsense'))!
+    expect(card().get('[data-test=store-reviewed]').text()).toContain('Reviewed at version 0.2.0')
+    expect(card().find('[data-test=store-unreviewed]').exists()).toBe(true)
+
+    await w.get('[data-test=store-category-switch]').trigger('click')
+    expect(w.findAll('[data-test=store-card]').map((c) => c.text())).toEqual([
+      expect.stringContaining('MikroTik'),
+    ])
+    await w.get('[data-test=store-category-all]').trigger('click')
+    await w.get('[data-test=store-trust]').setValue('stable')
+    expect(w.findAll('[data-test=store-card]').map((c) => c.text())).toEqual([
+      expect.stringContaining('OPNsense'),
+    ])
+  })
+
+  it('as a page, shows where the index comes from and refreshes it', async () => {
+    vi.mocked(api.pluginIndex).mockResolvedValue({ url: 'https://x/index.json', plugins: 9 })
+    vi.mocked(api.refreshPluginIndex).mockResolvedValue({
+      url: 'https://x/index.json',
+      fetched_at: new Date().toISOString(),
+      plugins: 10,
+    })
+    const w = mount(PluginStore, { props: { page: true }, global: { plugins: plugins() } })
+    await flushPromises()
+    expect(w.find('.modal').exists()).toBe(false)
+    expect(w.get('[data-test=store-index]').text()).toContain(
+      'Index shipped with Omini (9 plugins)',
+    )
+    await w.get('[data-test=store-index] button').trigger('click')
+    await flushPromises()
+    expect(w.get('[data-test=store-index]').text()).toContain('10 plugins')
   })
 })

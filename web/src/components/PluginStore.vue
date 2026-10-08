@@ -14,8 +14,10 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
+import { formatAgo } from '@/lib/format'
 import type {
   CatalogEntry,
+  PluginIndexStatus,
   Integration,
   IntegrationType,
   PluginInfo,
@@ -30,6 +32,10 @@ import PluginTrustBadges from './PluginTrust.vue'
  * The plugin store: the curated catalog plus whatever was installed from a
  * GitHub address, with search, filters and "+" to add a repository by URL.
  */
+const props = defineProps<{
+  /** Shown as a full page (the Store screen) instead of a modal. */
+  page?: boolean
+}>()
 const emit = defineEmits<{
   close: []
   /** Open the "add integration" form of this plugin. */
@@ -37,7 +43,7 @@ const emit = defineEmits<{
   /** Plugins were installed, updated or removed: integration types changed. */
   changed: []
 }>()
-const { t } = useI18n()
+const { t, te, locale } = useI18n()
 
 interface Item {
   id: string
@@ -53,6 +59,10 @@ interface Item {
   builtin?: boolean
   /** Single type already added: it cannot be added again. */
   added?: boolean
+  categories: string[]
+  reviewedVersion?: string
+  reviewedAt?: string
+  knownIssues?: string
 }
 
 const catalog = ref<CatalogEntry[]>([])
@@ -62,6 +72,10 @@ const integrations = ref<Integration[]>([])
 const loading = ref(true)
 const query = ref('')
 const filter = ref<'all' | 'installed' | 'available'>('all')
+const category = ref<string>()
+const trustFilter = ref<PluginTrust | ''>('')
+const index = ref<PluginIndexStatus>()
+const refreshingIndex = ref(false)
 const busy = ref<string>()
 const errors = ref<Record<string, string>>({})
 const confirmRemove = ref<string>()
@@ -76,6 +90,7 @@ async function load() {
       api.integrationTypes(),
       api.integrations(),
     ])
+    if (props.page) index.value = await api.pluginIndex().catch(() => undefined)
   } finally {
     loading.value = false
   }
@@ -99,6 +114,7 @@ const items = computed<Item[]>(() => {
       dev: false,
       builtin: true,
       added: added(t.type),
+      categories: ['discovery'],
     }))
   const out: Item[] = catalog.value.map((e) => ({
     id: e.id,
@@ -111,6 +127,10 @@ const items = computed<Item[]>(() => {
     installed: byId.get(e.id),
     dev: !!byId.get(e.id)?.dev,
     added: added(e.id),
+    categories: e.categories ?? [],
+    reviewedVersion: e.reviewed_version,
+    reviewedAt: e.reviewed_at,
+    knownIssues: e.known_issues,
   }))
   // Installed from a GitHub address or a development folder.
   for (const p of installed.value) {
@@ -125,6 +145,7 @@ const items = computed<Item[]>(() => {
       installed: p,
       dev: p.dev,
       added: added(p.manifest.id),
+      categories: [],
     })
   }
   return [...builtins, ...out]
@@ -133,6 +154,8 @@ const items = computed<Item[]>(() => {
 const shown = computed(() => {
   const q = query.value.trim().toLowerCase()
   return items.value.filter((i) => {
+    if (category.value && !i.categories.includes(category.value)) return false
+    if (trustFilter.value && (i.builtin || i.trust !== trustFilter.value)) return false
     const has = i.builtin || !!i.installed
     if (filter.value === 'installed' && !has) return false
     if (filter.value === 'available' && has) return false
@@ -204,13 +227,51 @@ async function addFromURL() {
   }
 }
 
+/** Categories present in the store, in a fixed order. */
+const CATEGORY_ORDER = ['discovery', 'firewall', 'router', 'switch', 'wifi', 'hypervisor', 'nas']
+const categories = computed(() => {
+  const present = new Set(items.value.flatMap((i) => i.categories))
+  return [
+    ...CATEGORY_ORDER.filter((c) => present.has(c)),
+    ...[...present].filter((c) => !CATEGORY_ORDER.includes(c)).sort(),
+  ]
+})
+const categoryName = (c: string) => {
+  const key = `store.categories.${c}`
+  return te(key) ? t(key) : c
+}
+
+/** The installed release is newer than the one the trust level was given to. */
+function unreviewed(item: Item): boolean {
+  const v = item.installed?.source?.version ?? item.installed?.manifest.version
+  return (
+    !!item.reviewedVersion && !!v && v.replace(/^v/, '') !== item.reviewedVersion.replace(/^v/, '')
+  )
+}
+
+async function refreshIndex() {
+  refreshingIndex.value = true
+  try {
+    index.value = await api.refreshPluginIndex()
+    catalog.value = await api.pluginCatalog()
+  } catch (e) {
+    errors.value = { ...errors.value, _index: message(e) }
+  } finally {
+    refreshingIndex.value = false
+  }
+}
+
 const repoName = (url?: string) => url?.replace(/^https:\/\/(www\.)?github\.com\//, '') ?? ''
 
 onMounted(load)
 </script>
 
 <template>
-  <ModalDialog :title="t('store.title')" xl @close="emit('close')">
+  <component
+    :is="page ? 'div' : ModalDialog"
+    v-bind="page ? { class: 'store-page' } : { title: t('store.title'), xl: true }"
+    @close="emit('close')"
+  >
     <div class="store">
       <div class="toolbar">
         <label class="search">
@@ -288,6 +349,44 @@ onMounted(load)
         </button>
       </div>
 
+      <div class="chips" role="group" :aria-label="t('store.category')">
+        <button
+          class="chip-btn"
+          :class="{ on: category === undefined }"
+          type="button"
+          data-test="store-category-all"
+          @click="category = undefined"
+        >
+          {{ t('store.filter.all') }}
+        </button>
+        <button
+          v-for="c in categories"
+          :key="c"
+          class="chip-btn"
+          :class="{ on: category === c }"
+          type="button"
+          :data-test="`store-category-${c}`"
+          @click="category = category === c ? undefined : c"
+        >
+          {{ categoryName(c) }}
+        </button>
+        <select
+          v-model="trustFilter"
+          class="select trust-pick"
+          data-test="store-trust"
+          :aria-label="t('store.trust')"
+        >
+          <option value="">{{ t('store.anyTrust') }}</option>
+          <option
+            v-for="tr in ['plug-and-play', 'stable', 'experimental', 'unverified'] as const"
+            :key="tr"
+            :value="tr"
+          >
+            {{ t(`plugins.trust.${tr}`) }}
+          </option>
+        </select>
+      </div>
+
       <p v-if="loading" class="muted center">{{ t('common.loading') }}</p>
       <div v-else-if="shown.length" class="grid">
         <article v-for="item in shown" :key="item.id" class="plugin card" data-test="store-card">
@@ -312,6 +411,21 @@ onMounted(load)
           >
             <ExternalLink :size="12" /> {{ repoName(item.url) }}
           </a>
+          <p v-if="item.reviewedVersion" class="review muted small" data-test="store-reviewed">
+            {{ t('store.reviewed', { version: item.reviewedVersion }) }}
+            <template v-if="item.reviewedAt"> · {{ item.reviewedAt }}</template>
+            <a
+              v-if="item.knownIssues"
+              :href="item.knownIssues"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="issues"
+              >{{ t('store.knownIssues') }}</a
+            >
+          </p>
+          <p v-if="unreviewed(item)" class="warn-text small" data-test="store-unreviewed">
+            {{ t('store.unreviewed') }}
+          </p>
           <p v-if="errors[item.id]" class="alert error" role="alert">{{ errors[item.id] }}</p>
           <div class="actions">
             <template v-if="item.builtin">
@@ -393,11 +507,83 @@ onMounted(load)
           <Plus :size="15" /> {{ t('store.addByUrl') }}
         </button>
       </div>
+
+      <p v-if="page && index" class="index muted small" data-test="store-index">
+        <template v-if="index.url">
+          {{
+            index.fetched_at
+              ? t('store.indexUpdated', {
+                  ago: formatAgo(index.fetched_at, locale),
+                  n: index.plugins,
+                })
+              : t('store.indexShipped', { n: index.plugins })
+          }}
+          <button class="link" type="button" :disabled="refreshingIndex" @click="refreshIndex">
+            <RefreshCw :size="12" :class="{ spin: refreshingIndex }" />
+            {{ t('store.refreshIndex') }}
+          </button>
+        </template>
+        <template v-else>{{ t('store.indexOff', { n: index.plugins }) }}</template>
+        <span v-if="index.error || errors._index" class="err">
+          · {{ errors._index || index.error }}</span
+        >
+        ·
+        <a
+          href="https://github.com/riccardoalv/omini/blob/main/docs/plugin-review.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          >{{ t('store.howReviewed') }}</a
+        >
+      </p>
     </div>
-  </ModalDialog>
+  </component>
 </template>
 
 <style scoped>
+.store-page .store {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.chip-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.chip-btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.trust-pick {
+  width: auto;
+  margin-left: auto;
+}
+.review .issues {
+  margin-left: 6px;
+}
+.index {
+  margin-top: 8px;
+  text-align: center;
+}
+.index .err {
+  color: var(--danger);
+}
+.index .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+}
 .store {
   display: flex;
   flex-direction: column;

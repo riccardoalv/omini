@@ -6,6 +6,7 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
+  Puzzle,
   Settings,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
@@ -23,6 +24,7 @@ const items = [
   { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
   { to: '/insights', icon: Bell, label: 'nav.insights' },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
+  { to: '/store', icon: Puzzle, label: 'nav.store' },
   { to: '/settings', icon: Settings, label: 'nav.settings' },
 ]
 

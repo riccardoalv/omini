@@ -336,3 +336,68 @@ func TestRelativeDataDir(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseIndex(t *testing.T) {
+	ok := `[{"id":"x","name":"X","url":"https://github.com/a/b","publisher":"official","trust":"stable","reviewed_version":"1.2.0"}]`
+	if list, err := ParseIndex([]byte(ok)); err != nil || list[0].ReviewedVersion != "1.2.0" {
+		t.Fatalf("valid index: %+v %v", list, err)
+	}
+	for raw, want := range map[string]string{
+		`{}`: "invalid plugin index",
+		`[]`: "empty",
+		`[{"id":"x","name":"X","url":"https://evil.example/a","publisher":"official","trust":"stable"}]`:                                                                                              "GitHub",
+		`[{"id":"x","name":"X","url":"https://github.com/a/b","publisher":"official","trust":"perfect"}]`:                                                                                             "trust",
+		`[{"id":"x","name":"X","url":"https://github.com/a/b","publisher":"me","trust":"stable"}]`:                                                                                                    "publisher",
+		`[{"id":"x","name":"X","url":"https://github.com/a/b","publisher":"official","trust":"stable"},{"id":"x","name":"X","url":"https://github.com/a/b","publisher":"official","trust":"stable"}]`: "twice",
+	} {
+		if _, err := ParseIndex([]byte(raw)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: err = %v, want %q", raw, err, want)
+		}
+	}
+}
+
+func TestRemoteIndex(t *testing.T) {
+	defer setRemote(nil)
+	shipped := len(Catalog())
+	var served string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if served == "" {
+			http.Error(w, "gone", http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(served))
+	}))
+	defer srv.Close()
+	cache := filepath.Join(t.TempDir(), "index.json")
+	x := &Index{URL: srv.URL, Cache: cache}
+
+	// Unreachable index: the shipped list stays.
+	if err := x.Refresh(context.Background()); err == nil || len(Catalog()) != shipped || x.Status().Error == "" {
+		t.Fatalf("failed refresh: %v %d %+v", err, len(Catalog()), x.Status())
+	}
+	// A new plugin and a promoted one.
+	served = `[{"id":"opnsense","name":"OPNsense","url":"https://github.com/riccardoalv/omini-plugin-opnsense","publisher":"official","trust":"stable","reviewed_version":"0.3.0"},
+	{"id":"newone","name":"New","url":"https://github.com/someone/omini-plugin-new","publisher":"community","trust":"experimental"}]`
+	if err := x.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]CatalogEntry{}
+	for _, e := range Catalog() {
+		byID[e.ID] = e
+	}
+	if len(byID) != shipped+1 || byID["opnsense"].Trust != "stable" || byID["newone"].Publisher != "community" || byID["horaco"].ID == "" {
+		t.Fatalf("merged catalog: %+v", byID)
+	}
+	if e, ok := CatalogFor("https://github.com/someone/omini-plugin-new.git"); !ok || e.ID != "newone" {
+		t.Fatalf("catalog entry by URL: %+v %v", e, ok)
+	}
+	if st := x.Status(); st.Error != "" || st.FetchedAt == nil {
+		t.Fatalf("status: %+v", st)
+	}
+	// A restart offline: the cached index is used.
+	setRemote(nil)
+	(&Index{Cache: cache}).Load()
+	if e, ok := CatalogFor("https://github.com/someone/omini-plugin-new"); !ok || e.ID != "newone" {
+		t.Fatal("cached index not loaded")
+	}
+}

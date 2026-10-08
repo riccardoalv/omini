@@ -497,6 +497,30 @@ func (s *Server) pluginCatalog(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// pluginIndex tells where the store's index comes from and when it was fetched.
+func (s *Server) pluginIndex(w http.ResponseWriter, _ *http.Request) {
+	if s.PluginIndex == nil {
+		writeJSON(w, http.StatusOK, plugins.IndexStatus{Plugins: len(plugins.Catalog())})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.PluginIndex.Status())
+}
+
+// refreshPluginIndex fetches the remote index now.
+func (s *Server) refreshPluginIndex(w http.ResponseWriter, r *http.Request) {
+	if s.PluginIndex == nil || s.PluginIndex.URL == "" {
+		writeError(w, http.StatusConflict, "no remote plugin index is configured (OMINI_PLUGIN_INDEX)")
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, 30*time.Second)
+	defer cancel()
+	if err := s.PluginIndex.Refresh(ctx); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, s.PluginIndex.Status())
+}
+
 // installPlugin installs (or updates) a plugin from its GitHub repository and
 // makes it available as an integration type right away.
 func (s *Server) installPlugin(w http.ResponseWriter, r *http.Request) {

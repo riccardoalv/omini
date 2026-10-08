@@ -12,6 +12,7 @@ import type {
   InventoryEntry,
   MapArea,
   CatalogEntry,
+  PluginIndexStatus,
   PluginInfo,
   Point,
   TestResult,
@@ -146,6 +147,8 @@ export const api = {
 
   plugins: () => request<PluginInfo[]>('GET', '/api/plugins'),
   pluginCatalog: () => request<CatalogEntry[]>('GET', '/api/plugins/catalog'),
+  pluginIndex: () => request<PluginIndexStatus>('GET', '/api/plugins/index'),
+  refreshPluginIndex: () => request<PluginIndexStatus>('POST', '/api/plugins/index/refresh'),
   installPlugin: (url: string, version?: string) =>
     request<PluginInfo>('POST', '/api/plugins', { url, version }),
   removePlugin: (id: string) => request<void>('DELETE', `/api/plugins/${encodeURIComponent(id)}`),

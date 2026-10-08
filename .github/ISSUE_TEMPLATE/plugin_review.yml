@@ -1,0 +1,55 @@
+name: Plugin review
+description: Ask to add a plugin to the store, or to promote one to a higher trust level.
+labels: [plugin-review]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The review process is in [docs/plugin-review.md](https://github.com/riccardoalv/omini/blob/main/docs/plugin-review.md).
+        **Anonymize everything** (passwords, keys, public IPs, serial numbers) before attaching files.
+  - type: input
+    id: repo
+    attributes:
+      label: Plugin repository
+      placeholder: https://github.com/you/omini-plugin-something
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Release to review
+      placeholder: v0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Trust level asked for
+      options: [experimental (add to the store), stable, plug-and-play]
+    validations:
+      required: true
+  - type: textarea
+    id: tested
+    attributes:
+      label: Tested on
+      description: Devices, models and firmware versions it ran on, and for how long.
+    validations:
+      required: true
+  - type: textarea
+    id: issues
+    attributes:
+      label: Known issues
+      description: What does not work or is not read (required for stable).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: Read-only — the plugin never changes the device's configuration
+          required: true
+        - label: Secrets are `secret` fields and never logged or shown in errors
+          required: true
+        - label: The README lists the least-privilege account it needs
+          required: true
+        - label: CI runs lint and tests with fixtures from real (anonymized) answers
+          required: true

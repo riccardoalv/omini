@@ -46,6 +46,7 @@ type config struct {
 	AutoScan     bool     // create the network scan integration on first start
 	PluginDirs   []string // plugins loaded in place (development)
 	UV           string   // uv binary used to build plugin environments
+	PluginIndex  string   // the store's remote index; "" = only the shipped list
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -75,6 +76,14 @@ func loadConfig(getenv func(string) string) (config, error) {
 		}
 	}
 	cfg.UV = getenv("OMINI_UV")
+	// The store's index: OMINI_PLUGIN_INDEX=<url>, or "off" for the shipped list only.
+	switch v := strings.TrimSpace(getenv("OMINI_PLUGIN_INDEX")); v {
+	case "":
+		cfg.PluginIndex = plugins.DefaultIndex
+	case "off":
+	default:
+		cfg.PluginIndex = v
+	}
 	if v := getenv("OMINI_AUTOSCAN"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
@@ -153,6 +162,10 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 		slog.Info("plugin loaded", "plugin", p.Manifest.ID, "version", p.Manifest.Version, "dev", p.Dev)
 	}
 
+	index := &plugins.Index{URL: cfg.PluginIndex, Cache: filepath.Join(cfg.DataDir, "plugins", "index.json")}
+	index.Load()
+	go index.Run(ctx)
+
 	if err := firstRun(ctx, st, box, cfg); err != nil {
 		return err
 	}
@@ -161,7 +174,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
-		WebUI: webui.New(), Plugins: plugs, UI: web.FS(), Version: version,
+		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, UI: web.FS(), Version: version,
 		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 	}
 	httpServer := &http.Server{

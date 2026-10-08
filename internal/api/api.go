@@ -41,8 +41,10 @@ type Server struct {
 	Auth      *auth.Service
 	WebUI     WebFinder
 	Plugins   *plugins.Manager
-	Icons     http.Handler // app icons (internal/appicons); public, used by <img>
-	UI        fs.FS        // built web UI; nil serves a placeholder page
+	// PluginIndex keeps the store's remote index fresh (nil: shipped list only).
+	PluginIndex *plugins.Index
+	Icons       http.Handler // app icons (internal/appicons); public, used by <img>
+	UI          fs.FS        // built web UI; nil serves a placeholder page
 	// NotifyClient sends test notifications (nil: a default client).
 	NotifyClient *http.Client
 	Version      string
@@ -83,6 +85,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/inventory/delete", s.deleteInventory)
 	private.HandleFunc("GET /api/plugins", s.listPlugins)
 	private.HandleFunc("GET /api/plugins/catalog", s.pluginCatalog)
+	private.HandleFunc("GET /api/plugins/index", s.pluginIndex)
+	private.HandleFunc("POST /api/plugins/index/refresh", s.refreshPluginIndex)
 	private.HandleFunc("POST /api/plugins", s.installPlugin)
 	private.HandleFunc("DELETE /api/plugins/{id}", s.removePlugin)
 	private.HandleFunc("PUT /api/layout", s.saveLayout)

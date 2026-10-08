@@ -200,6 +200,7 @@ Without Docker: `make run` builds and starts Omini (needs Go and Node.js; plugin
 | `OMINI_NMAP` | — | Docker image only: `install` installs nmap on start, for the nmap integration (Omini does not ship nmap) |
 | `OMINI_NMAP_PRIVILEGED` | `false` | `true` when nmap has raw-socket permission without Omini running as root, so it detects operating systems (see below) |
 | `OMINI_PLUGIN_DIRS` | — | Comma-separated plugin folders loaded in place (plugin development) |
+| `OMINI_PLUGIN_INDEX` | this repository's `internal/plugins/catalog.json` | The plugin store's index (fetched daily); `off` keeps the list shipped with Omini |
 | `OMINI_UV` | `uv` | The uv binary used to build plugin environments |
 
 ## Development
@@ -295,8 +296,8 @@ Omini ships in incremental releases, each one usable on its own.
 
 ### v0.3 — find integrations
 
-- Remote store index and a full store screen
-- Review process to promote a plugin between trust levels
+- ✅ Remote store index and a full store screen
+- ✅ Review process to promote a plugin between trust levels ([docs/plugin-review.md](docs/plugin-review.md))
 - ✅ YAML SNMP profiles
 
 ### v0.4 — public launch
@@ -325,7 +326,6 @@ Omini ships in incremental releases, each one usable on its own.
 
 ### Open questions
 
-- Where the store index lives and how plugins are reviewed
 - Discovery methods and the privileges they need (ICMP/ARP without root)
 
 ## Contributing

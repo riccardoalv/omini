@@ -332,6 +332,12 @@ export interface CatalogEntry {
   icon?: string
   publisher: 'official' | 'community'
   trust: PluginTrust
+  /** firewall, router, switch, wifi, hypervisor... */
+  categories?: string[]
+  /** Release the trust level was given to (newer ones are not reviewed yet). */
+  reviewed_version?: string
+  reviewed_at?: string
+  known_issues?: string
   installed: boolean
   version?: string
 }
@@ -420,4 +426,12 @@ export interface Notifier {
   enabled: boolean
   last_sent_at?: string
   last_error?: string
+}
+
+/** Where the store's index comes from. */
+export interface PluginIndexStatus {
+  url?: string
+  fetched_at?: string
+  error?: string
+  plugins: number
 }
