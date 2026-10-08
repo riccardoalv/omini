@@ -147,6 +147,37 @@
             "$ref": "#/$defs/Host"
           },
           "description": "End devices observed by this integration with extra details (network scans, controllers)."
+        },
+        "vlans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Vlan"
+          },
+          "description": "VLANs defined on the device."
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Service"
+          },
+          "description": "Services running (or stopped) on the device."
+        },
+        "vpn_peers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VpnPeer"
+          },
+          "description": "VPN tunnels and peers."
+        },
+        "dhcp_pools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DhcpPool"
+          },
+          "description": "Usage of each DHCP range."
+        },
+        "firewall_states": {
+          "$ref": "#/$defs/FirewallStates"
         }
       }
     },
@@ -247,6 +278,18 @@
         "tx_errors": {
           "type": "integer",
           "minimum": 0
+        },
+        "vlan": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4094,
+          "description": "VLAN id of a VLAN interface (e.g. igc1.20 → 20)."
+        },
+        "vlans": {
+          "$ref": "#/$defs/PortVlans"
+        },
+        "transceiver": {
+          "$ref": "#/$defs/Transceiver"
         }
       }
     },
@@ -827,6 +870,211 @@
           "type": "string",
           "format": "date-time",
           "description": "When the device last checked for updates; absent if it never did."
+        }
+      }
+    },
+    "PortVlans": {
+      "type": "object",
+      "description": "VLAN membership of a switch port.",
+      "additionalProperties": false,
+      "properties": {
+        "untagged": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4094,
+          "description": "VLAN of untagged frames (PVID / access VLAN)."
+        },
+        "tagged": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          },
+          "description": "VLANs carried tagged (trunk)."
+        }
+      }
+    },
+    "Transceiver": {
+      "type": "object",
+      "description": "A pluggable optic or DAC (SFP, SFP+, QSFP...) and its diagnostics (DOM / DDM), when the device reads them.",
+      "additionalProperties": false,
+      "properties": {
+        "vendor": {
+          "type": "string"
+        },
+        "part": {
+          "type": "string",
+          "description": "Part number."
+        },
+        "serial": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "e.g. \"10GBASE-SR\", \"1000BASE-LX\", \"DAC\"."
+        },
+        "wavelength_nm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "temperature_c": {
+          "type": "number",
+          "description": "Module temperature."
+        },
+        "voltage_v": {
+          "type": "number",
+          "description": "Supply voltage."
+        },
+        "bias_ma": {
+          "type": "number",
+          "description": "Laser bias current."
+        },
+        "tx_power_dbm": {
+          "type": "number",
+          "description": "Transmitted optical power."
+        },
+        "rx_power_dbm": {
+          "type": "number",
+          "description": "Received optical power."
+        },
+        "rx_power_low_dbm": {
+          "type": "number",
+          "description": "Receive power alarm threshold (low), when the module reports it."
+        }
+      }
+    },
+    "Vlan": {
+      "type": "object",
+      "description": "A VLAN defined on the device.",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4094
+        },
+        "name": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string",
+          "description": "The device's interface for this VLAN, if any (router/firewall)."
+        },
+        "subnet": {
+          "type": "string",
+          "description": "e.g. \"192.168.20.0/24\"."
+        }
+      }
+    },
+    "Service": {
+      "type": "object",
+      "description": "A service (daemon) running on the device.",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Configured to run (a stopped enabled service is a problem)."
+        }
+      }
+    },
+    "VpnPeer": {
+      "type": "object",
+      "description": "A VPN tunnel or peer (WireGuard peer, OpenVPN client, IPsec tunnel).",
+      "required": [
+        "name",
+        "protocol"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "wireguard",
+            "openvpn",
+            "ipsec",
+            "other"
+          ]
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Remote address (host:port)."
+        },
+        "address": {
+          "type": "string",
+          "description": "Tunnel address(es) of the peer."
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "last_handshake": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rx_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tx_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "DhcpPool": {
+      "type": "object",
+      "description": "Usage of a DHCP range.",
+      "required": [
+        "network"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "type": "string",
+          "description": "Interface or subnet the range serves, e.g. \"LAN\", \"192.168.1.0/24\"."
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Addresses in the range."
+        },
+        "used": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Active leases."
+        }
+      }
+    },
+    "FirewallStates": {
+      "type": "object",
+      "description": "Connection tracking table of a firewall.",
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     }

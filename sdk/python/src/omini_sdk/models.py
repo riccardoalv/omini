@@ -140,6 +140,168 @@ class Firmware(BaseModel):
     """
 
 
+class TaggedItem(RootModel[int]):
+    root: Annotated[int, Field(ge=1, le=4094)]
+
+
+class PortVlans(BaseModel):
+    """
+    VLAN membership of a switch port.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    untagged: Annotated[int | None, Field(ge=1, le=4094)] = None
+    """
+    VLAN of untagged frames (PVID / access VLAN).
+    """
+    tagged: list[TaggedItem] | None = None
+    """
+    VLANs carried tagged (trunk).
+    """
+
+
+class Transceiver(BaseModel):
+    """
+    A pluggable optic or DAC (SFP, SFP+, QSFP...) and its diagnostics (DOM / DDM), when the device reads them.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    vendor: str | None = None
+    part: str | None = None
+    """
+    Part number.
+    """
+    serial: str | None = None
+    type: str | None = None
+    """
+    e.g. "10GBASE-SR", "1000BASE-LX", "DAC".
+    """
+    wavelength_nm: Annotated[float | None, Field(ge=0.0)] = None
+    temperature_c: float | None = None
+    """
+    Module temperature.
+    """
+    voltage_v: float | None = None
+    """
+    Supply voltage.
+    """
+    bias_ma: float | None = None
+    """
+    Laser bias current.
+    """
+    tx_power_dbm: float | None = None
+    """
+    Transmitted optical power.
+    """
+    rx_power_dbm: float | None = None
+    """
+    Received optical power.
+    """
+    rx_power_low_dbm: float | None = None
+    """
+    Receive power alarm threshold (low), when the module reports it.
+    """
+
+
+class Vlan(BaseModel):
+    """
+    A VLAN defined on the device.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[int, Field(ge=1, le=4094)]
+    name: str | None = None
+    interface: str | None = None
+    """
+    The device's interface for this VLAN, if any (router/firewall).
+    """
+    subnet: str | None = None
+    """
+    e.g. "192.168.20.0/24".
+    """
+
+
+class Service(BaseModel):
+    """
+    A service (daemon) running on the device.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    description: str | None = None
+    running: bool | None = None
+    enabled: bool | None = None
+    """
+    Configured to run (a stopped enabled service is a problem).
+    """
+
+
+class VpnPeer(BaseModel):
+    """
+    A VPN tunnel or peer (WireGuard peer, OpenVPN client, IPsec tunnel).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    protocol: Literal["wireguard", "openvpn", "ipsec", "other"]
+    endpoint: str | None = None
+    """
+    Remote address (host:port).
+    """
+    address: str | None = None
+    """
+    Tunnel address(es) of the peer.
+    """
+    connected: bool | None = None
+    last_handshake: AwareDatetime | None = None
+    rx_bytes: Annotated[int | None, Field(ge=0)] = None
+    tx_bytes: Annotated[int | None, Field(ge=0)] = None
+
+
+class DhcpPool(BaseModel):
+    """
+    Usage of a DHCP range.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    network: str
+    """
+    Interface or subnet the range serves, e.g. "LAN", "192.168.1.0/24".
+    """
+    total: Annotated[int | None, Field(ge=0)] = None
+    """
+    Addresses in the range.
+    """
+    used: Annotated[int | None, Field(ge=0)] = None
+    """
+    Active leases.
+    """
+
+
+class FirewallStates(BaseModel):
+    """
+    Connection tracking table of a firewall.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    current: Annotated[int | None, Field(ge=0)] = None
+    limit: Annotated[int | None, Field(ge=0)] = None
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -197,6 +359,12 @@ class Interface(BaseModel):
     """
     rx_errors: Annotated[int | None, Field(ge=0)] = None
     tx_errors: Annotated[int | None, Field(ge=0)] = None
+    vlan: Annotated[int | None, Field(ge=1, le=4094)] = None
+    """
+    VLAN id of a VLAN interface (e.g. igc1.20 → 20).
+    """
+    vlans: PortVlans | None = None
+    transceiver: Transceiver | None = None
 
 
 class Neighbor(BaseModel):
@@ -468,6 +636,23 @@ class Device(BaseModel):
     """
     End devices observed by this integration with extra details (network scans, controllers).
     """
+    vlans: list[Vlan] | None = None
+    """
+    VLANs defined on the device.
+    """
+    services: list[Service] | None = None
+    """
+    Services running (or stopped) on the device.
+    """
+    vpn_peers: list[VpnPeer] | None = None
+    """
+    VPN tunnels and peers.
+    """
+    dhcp_pools: list[DhcpPool] | None = None
+    """
+    Usage of each DHCP range.
+    """
+    firewall_states: FirewallStates | None = None
 
 
 class PluginResponse(BaseModel):

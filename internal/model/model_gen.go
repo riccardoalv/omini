@@ -51,8 +51,14 @@ type Device struct {
 	// DhcpLeases corresponds to the JSON schema field "dhcp_leases".
 	DhcpLeases []DhcpLease `json:"dhcp_leases,omitempty,omitzero" yaml:"dhcp_leases,omitempty"`
 
+	// Usage of each DHCP range.
+	DhcpPools []DhcpPool `json:"dhcp_pools,omitempty,omitzero" yaml:"dhcp_pools,omitempty"`
+
 	// Fdb corresponds to the JSON schema field "fdb".
 	Fdb []FdbEntry `json:"fdb,omitempty,omitzero" yaml:"fdb,omitempty"`
+
+	// FirewallStates corresponds to the JSON schema field "firewall_states".
+	FirewallStates *FirewallStates `json:"firewall_states,omitempty,omitzero" yaml:"firewall_states,omitempty"`
 
 	// Firmware corresponds to the JSON schema field "firmware".
 	Firmware *Firmware `json:"firmware,omitempty,omitzero" yaml:"firmware,omitempty"`
@@ -104,6 +110,9 @@ type Device struct {
 	// Serial corresponds to the JSON schema field "serial".
 	Serial *string `json:"serial,omitempty,omitzero" yaml:"serial,omitempty"`
 
+	// Services running (or stopped) on the device.
+	Services []Service `json:"services,omitempty,omitzero" yaml:"services,omitempty"`
+
 	// Mounted file systems / volumes.
 	Storage []Storage `json:"storage,omitempty,omitzero" yaml:"storage,omitempty"`
 
@@ -118,6 +127,12 @@ type Device struct {
 
 	// Vendor corresponds to the JSON schema field "vendor".
 	Vendor *string `json:"vendor,omitempty,omitzero" yaml:"vendor,omitempty"`
+
+	// VLANs defined on the device.
+	Vlans []Vlan `json:"vlans,omitempty,omitzero" yaml:"vlans,omitempty"`
+
+	// VPN tunnels and peers.
+	VpnPeers []VpnPeer `json:"vpn_peers,omitempty,omitzero" yaml:"vpn_peers,omitempty"`
 
 	// WirelessClients corresponds to the JSON schema field "wireless_clients".
 	WirelessClients []WirelessClient `json:"wireless_clients,omitempty,omitzero" yaml:"wireless_clients,omitempty"`
@@ -238,6 +253,36 @@ func (j *DhcpLease) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// Usage of a DHCP range.
+type DhcpPool struct {
+	// Interface or subnet the range serves, e.g. "LAN", "192.168.1.0/24".
+	Network string `json:"network" yaml:"network"`
+
+	// Addresses in the range.
+	Total *uint64 `json:"total,omitempty,omitzero" yaml:"total,omitempty"`
+
+	// Active leases.
+	Used *uint64 `json:"used,omitempty,omitzero" yaml:"used,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *DhcpPool) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["network"]; raw != nil && !ok {
+		return fmt.Errorf("field network in DhcpPool: required")
+	}
+	type Plain DhcpPool
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = DhcpPool(plain)
+	return nil
+}
+
 // Switch forwarding table entry: this MAC was learned on this port.
 type FdbEntry struct {
 	// MAC corresponds to the JSON schema field "mac".
@@ -272,6 +317,15 @@ func (j *FdbEntry) UnmarshalJSON(value []byte) error {
 	}
 	*j = FdbEntry(plain)
 	return nil
+}
+
+// Connection tracking table of a firewall.
+type FirewallStates struct {
+	// Current corresponds to the JSON schema field "current".
+	Current *uint64 `json:"current,omitempty,omitzero" yaml:"current,omitempty"`
+
+	// Limit corresponds to the JSON schema field "limit".
+	Limit *uint64 `json:"limit,omitempty,omitzero" yaml:"limit,omitempty"`
 }
 
 // Installed software/firmware version and available updates, as last checked by
@@ -582,6 +636,9 @@ type Interface struct {
 	// SpeedMbps corresponds to the JSON schema field "speed_mbps".
 	SpeedMbps *uint64 `json:"speed_mbps,omitempty,omitzero" yaml:"speed_mbps,omitempty"`
 
+	// Transceiver corresponds to the JSON schema field "transceiver".
+	Transceiver *Transceiver `json:"transceiver,omitempty,omitzero" yaml:"transceiver,omitempty"`
+
 	// Cumulative counter.
 	TxBytes *uint64 `json:"tx_bytes,omitempty,omitzero" yaml:"tx_bytes,omitempty"`
 
@@ -593,6 +650,12 @@ type Interface struct {
 
 	// Operational status.
 	Up *bool `json:"up,omitempty,omitzero" yaml:"up,omitempty"`
+
+	// VLAN id of a VLAN interface (e.g. igc1.20 → 20).
+	Vlan *uint16 `json:"vlan,omitempty,omitzero" yaml:"vlan,omitempty"`
+
+	// Vlans corresponds to the JSON schema field "vlans".
+	Vlans *PortVlans `json:"vlans,omitempty,omitzero" yaml:"vlans,omitempty"`
 
 	// Uplink to the internet (a WAN of a router or firewall).
 	Wan *bool `json:"wan,omitempty,omitzero" yaml:"wan,omitempty"`
@@ -715,6 +778,12 @@ func (j *Interface) UnmarshalJSON(value []byte) error {
 	var plain Plain
 	if err := json.Unmarshal(value, &plain); err != nil {
 		return err
+	}
+	if plain.Vlan != nil && 4094 < *plain.Vlan {
+		return fmt.Errorf("field %s: must be <= %v", "vlan", 4094)
+	}
+	if plain.Vlan != nil && 1 > *plain.Vlan {
+		return fmt.Errorf("field %s: must be >= %v", "vlan", 1)
 	}
 	*j = Interface(plain)
 	return nil
@@ -977,6 +1046,65 @@ type PluginResponse struct {
 	Message *string `json:"message,omitempty,omitzero" yaml:"message,omitempty"`
 }
 
+// VLAN membership of a switch port.
+type PortVlans struct {
+	// VLANs carried tagged (trunk).
+	Tagged []uint16 `json:"tagged,omitempty,omitzero" yaml:"tagged,omitempty"`
+
+	// VLAN of untagged frames (PVID / access VLAN).
+	Untagged *uint16 `json:"untagged,omitempty,omitzero" yaml:"untagged,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PortVlans) UnmarshalJSON(value []byte) error {
+	type Plain PortVlans
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if plain.Untagged != nil && 4094 < *plain.Untagged {
+		return fmt.Errorf("field %s: must be <= %v", "untagged", 4094)
+	}
+	if plain.Untagged != nil && 1 > *plain.Untagged {
+		return fmt.Errorf("field %s: must be >= %v", "untagged", 1)
+	}
+	*j = PortVlans(plain)
+	return nil
+}
+
+// A service (daemon) running on the device.
+type Service struct {
+	// Description corresponds to the JSON schema field "description".
+	Description *string `json:"description,omitempty,omitzero" yaml:"description,omitempty"`
+
+	// Configured to run (a stopped enabled service is a problem).
+	Enabled *bool `json:"enabled,omitempty,omitzero" yaml:"enabled,omitempty"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name" yaml:"name"`
+
+	// Running corresponds to the JSON schema field "running".
+	Running *bool `json:"running,omitempty,omitzero" yaml:"running,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Service) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["name"]; raw != nil && !ok {
+		return fmt.Errorf("field name in Service: required")
+	}
+	type Plain Service
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = Service(plain)
+	return nil
+}
+
 // A mounted file system or volume.
 type Storage struct {
 	// Device corresponds to the JSON schema field "device".
@@ -1077,6 +1205,178 @@ func (j *Temperature) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = Temperature(plain)
+	return nil
+}
+
+// A pluggable optic or DAC (SFP, SFP+, QSFP...) and its diagnostics (DOM / DDM),
+// when the device reads them.
+type Transceiver struct {
+	// Laser bias current.
+	BiasMa *float64 `json:"bias_ma,omitempty,omitzero" yaml:"bias_ma,omitempty"`
+
+	// Part number.
+	Part *string `json:"part,omitempty,omitzero" yaml:"part,omitempty"`
+
+	// Received optical power.
+	RxPowerDBM *float64 `json:"rx_power_dbm,omitempty,omitzero" yaml:"rx_power_dbm,omitempty"`
+
+	// Receive power alarm threshold (low), when the module reports it.
+	RxPowerLowDBM *float64 `json:"rx_power_low_dbm,omitempty,omitzero" yaml:"rx_power_low_dbm,omitempty"`
+
+	// Serial corresponds to the JSON schema field "serial".
+	Serial *string `json:"serial,omitempty,omitzero" yaml:"serial,omitempty"`
+
+	// Module temperature.
+	TemperatureC *float64 `json:"temperature_c,omitempty,omitzero" yaml:"temperature_c,omitempty"`
+
+	// Transmitted optical power.
+	TxPowerDBM *float64 `json:"tx_power_dbm,omitempty,omitzero" yaml:"tx_power_dbm,omitempty"`
+
+	// e.g. "10GBASE-SR", "1000BASE-LX", "DAC".
+	Type *string `json:"type,omitempty,omitzero" yaml:"type,omitempty"`
+
+	// Vendor corresponds to the JSON schema field "vendor".
+	Vendor *string `json:"vendor,omitempty,omitzero" yaml:"vendor,omitempty"`
+
+	// Supply voltage.
+	VoltageV *float64 `json:"voltage_v,omitempty,omitzero" yaml:"voltage_v,omitempty"`
+
+	// WavelengthNm corresponds to the JSON schema field "wavelength_nm".
+	WavelengthNm *float64 `json:"wavelength_nm,omitempty,omitzero" yaml:"wavelength_nm,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Transceiver) UnmarshalJSON(value []byte) error {
+	type Plain Transceiver
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if plain.WavelengthNm != nil && 0 > *plain.WavelengthNm {
+		return fmt.Errorf("field %s: must be >= %v", "wavelength_nm", 0)
+	}
+	*j = Transceiver(plain)
+	return nil
+}
+
+// A VLAN defined on the device.
+type Vlan struct {
+	// ID corresponds to the JSON schema field "id".
+	ID uint16 `json:"id" yaml:"id"`
+
+	// The device's interface for this VLAN, if any (router/firewall).
+	Interface *string `json:"interface,omitempty,omitzero" yaml:"interface,omitempty"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name *string `json:"name,omitempty,omitzero" yaml:"name,omitempty"`
+
+	// e.g. "192.168.20.0/24".
+	Subnet *string `json:"subnet,omitempty,omitzero" yaml:"subnet,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Vlan) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["id"]; raw != nil && !ok {
+		return fmt.Errorf("field id in Vlan: required")
+	}
+	type Plain Vlan
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if 4094 < plain.ID {
+		return fmt.Errorf("field %s: must be <= %v", "id", 4094)
+	}
+	if 1 > plain.ID {
+		return fmt.Errorf("field %s: must be >= %v", "id", 1)
+	}
+	*j = Vlan(plain)
+	return nil
+}
+
+// A VPN tunnel or peer (WireGuard peer, OpenVPN client, IPsec tunnel).
+type VpnPeer struct {
+	// Tunnel address(es) of the peer.
+	Address *string `json:"address,omitempty,omitzero" yaml:"address,omitempty"`
+
+	// Connected corresponds to the JSON schema field "connected".
+	Connected *bool `json:"connected,omitempty,omitzero" yaml:"connected,omitempty"`
+
+	// Remote address (host:port).
+	Endpoint *string `json:"endpoint,omitempty,omitzero" yaml:"endpoint,omitempty"`
+
+	// LastHandshake corresponds to the JSON schema field "last_handshake".
+	LastHandshake *time.Time `json:"last_handshake,omitempty,omitzero" yaml:"last_handshake,omitempty"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name string `json:"name" yaml:"name"`
+
+	// Protocol corresponds to the JSON schema field "protocol".
+	Protocol VpnPeerProtocol `json:"protocol" yaml:"protocol"`
+
+	// RxBytes corresponds to the JSON schema field "rx_bytes".
+	RxBytes *uint64 `json:"rx_bytes,omitempty,omitzero" yaml:"rx_bytes,omitempty"`
+
+	// TxBytes corresponds to the JSON schema field "tx_bytes".
+	TxBytes *uint64 `json:"tx_bytes,omitempty,omitzero" yaml:"tx_bytes,omitempty"`
+}
+
+type VpnPeerProtocol string
+
+const VpnPeerProtocolIpsec VpnPeerProtocol = "ipsec"
+const VpnPeerProtocolOpenvpn VpnPeerProtocol = "openvpn"
+const VpnPeerProtocolOther VpnPeerProtocol = "other"
+const VpnPeerProtocolWireguard VpnPeerProtocol = "wireguard"
+
+var enumValues_VpnPeerProtocol = []interface{}{
+	"wireguard",
+	"openvpn",
+	"ipsec",
+	"other",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *VpnPeerProtocol) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_VpnPeerProtocol {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_VpnPeerProtocol, v)
+	}
+	*j = VpnPeerProtocol(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *VpnPeer) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["name"]; raw != nil && !ok {
+		return fmt.Errorf("field name in VpnPeer: required")
+	}
+	if _, ok := raw["protocol"]; raw != nil && !ok {
+		return fmt.Errorf("field protocol in VpnPeer: required")
+	}
+	type Plain VpnPeer
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = VpnPeer(plain)
 	return nil
 }
 
