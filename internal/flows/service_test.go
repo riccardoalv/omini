@@ -131,3 +131,18 @@ func TestAddKeepsDirectionAndTheServicePort(t *testing.T) {
 func itoa(n int) string {
 	return netip.AddrPortFrom(netip.IPv4Unspecified(), uint16(n)).String()[len("0.0.0.0:"):]
 }
+
+func TestListenersOutliveLongRounds(t *testing.T) {
+	s := &Service{}
+	if got := s.idleAfter(); got != Idle {
+		t.Fatalf("without rounds: %v", got)
+	}
+	s.Round = func() time.Duration { return time.Minute }
+	if got := s.idleAfter(); got != Idle {
+		t.Fatalf("short rounds: %v", got)
+	}
+	s.Round = func() time.Duration { return time.Hour }
+	if got := s.idleAfter(); got != 3*time.Hour {
+		t.Fatalf("hourly rounds: %v", got)
+	}
+}

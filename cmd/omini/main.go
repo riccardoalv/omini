@@ -181,6 +181,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	}
 	notifier := &notify.Dispatcher{Store: st, Box: box}
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle, DiscoveryLimited: caps.Limited()})
+	flowSvc.Round = func() time.Duration { return coll.RoundInterval(ctx) }
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
 		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, UI: web.FS(), Version: version,

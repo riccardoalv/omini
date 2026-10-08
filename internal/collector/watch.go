@@ -20,9 +20,9 @@ const presenceSince = "presence_since"
 const NewDeviceGrace = 15 * time.Minute
 
 // offlineAfter is how long a device must be missing before it is marked as
-// gone: several polls, so a phone that skips one does not flap.
-func (c *Collector) offlineAfter() time.Duration {
-	return max(3*c.opts.Interval, 5*time.Minute)
+// gone: several rounds, so a phone that skips one does not flap.
+func (c *Collector) offlineAfter(ctx context.Context) time.Duration {
+	return max(3*c.RoundInterval(ctx), 5*time.Minute)
 }
 
 // tracked reports whether a node is a device whose presence is followed.
@@ -169,6 +169,7 @@ func (c *Collector) trackPresence(ctx context.Context, topo topology.Topology, i
 		events = append(events, store.PresenceEvent{NodeID: n.ID, Kind: "join", At: now, First: first})
 		c.presence[n.ID] = true
 	}
+	away := c.offlineAfter(ctx)
 	for id, here := range c.presence {
 		if !here || present[id] {
 			continue
@@ -178,7 +179,7 @@ func (c *Collector) trackPresence(ctx context.Context, topo topology.Topology, i
 			delete(c.presence, id)
 			continue
 		}
-		if now.Sub(last.LastSeen) < c.offlineAfter() {
+		if now.Sub(last.LastSeen) < away {
 			continue
 		}
 		events = append(events, store.PresenceEvent{NodeID: id, Kind: "leave", At: last.LastSeen})

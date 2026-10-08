@@ -19,7 +19,8 @@ import (
 const TopPerMinute = 300
 
 // Idle: listeners close when the integration has not asked for them for this
-// long (it was disabled or deleted).
+// long (it was disabled or deleted) — or for three rounds, when rounds are
+// further apart (see Service.Round).
 const Idle = 10 * time.Minute
 
 // Service receives flow exports and stores a minute of conversations at a
@@ -27,6 +28,9 @@ const Idle = 10 * time.Minute
 type Service struct {
 	Store *store.Store
 	Now   func() time.Time
+	// Round is the time between collection rounds (nil: Idle alone), so
+	// listeners stay open between rounds set further apart than Idle.
+	Round func() time.Duration
 
 	mu        sync.Mutex
 	ports     [2]int // netflow, sflow
@@ -57,6 +61,15 @@ type exporterStat struct {
 type Exporter struct {
 	IP string `json:"ip"`
 	exporterStat
+}
+
+// idleAfter is how long the integration may go without asking before the
+// listeners close.
+func (s *Service) idleAfter() time.Duration {
+	if s.Round == nil {
+		return Idle
+	}
+	return max(Idle, 3*s.Round())
 }
 
 func (s *Service) now() time.Time {
@@ -219,7 +232,7 @@ func (s *Service) tick(ctx context.Context) {
 		case <-t.C:
 			s.flush(false)
 			s.mu.Lock()
-			idle := s.now().Sub(s.lastAsked) > Idle
+			idle := s.now().Sub(s.lastAsked) > s.idleAfter()
 			if idle {
 				slog.Info("flow collector stopped: the flows integration is off")
 				s.closeLocked()
