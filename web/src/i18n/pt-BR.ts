@@ -7,7 +7,6 @@ const ptBR: typeof en = {
     devices: 'Dispositivos',
     alerts: 'Alertas',
     flows: 'Fluxos',
-    store: 'Loja',
     integrations: 'Integrações',
     settings: 'Configurações',
     expand: 'Expandir menu',
@@ -601,7 +600,6 @@ const ptBR: typeof en = {
     },
   },
   store: {
-    screenTitle: 'Loja de plugins',
     subtitle: 'Integrações para seus equipamentos e softwares, revisadas pelos mantenedores.',
     category: 'Categoria',
     categories: {

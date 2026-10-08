@@ -102,7 +102,7 @@ Omini opens straight into a **full-screen map** with a summary bar on top (devic
 └────┴───────────────────────────────────┴────────────────────┘
 ```
 
-- **Screens:** Map, Devices (inventory), Integrations, Settings — plus Alerts (v0.2, called Insights before) and Store (v0.3).
+- **Screens:** Map, Devices (inventory), Integrations, Settings — plus Alerts (v0.2, called Insights before) and Flows (shown while the flows integration is on). The plugin store opens as a window from Integrations.
 - **Clients on the map:** every client is shown; when an AP or switch port has more than 8 clients, they collapse into a "N clients" bubble that expands on click (threshold configurable).
 - **Details:** clicking a node opens a side panel with its ports, traffic, clients and alerts — without leaving the map.
 - **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.

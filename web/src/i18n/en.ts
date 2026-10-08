@@ -5,7 +5,6 @@ export default {
     devices: 'Devices',
     alerts: 'Alerts',
     flows: 'Flows',
-    store: 'Store',
     integrations: 'Integrations',
     settings: 'Settings',
     expand: 'Expand menu',
@@ -472,7 +471,6 @@ export default {
     Record<string, { label?: string; help?: string; options?: Record<string, string> }>
   >,
   store: {
-    screenTitle: 'Plugin store',
     subtitle: 'Integrations for your devices and software, reviewed by the maintainers.',
     category: 'Category',
     categories: {

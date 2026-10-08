@@ -32,10 +32,6 @@ import PluginTrustBadges from './PluginTrust.vue'
  * The plugin store: the curated catalog plus whatever was installed from a
  * GitHub address, with search, filters and "+" to add a repository by URL.
  */
-const props = defineProps<{
-  /** Shown as a full page (the Store screen) instead of a modal. */
-  page?: boolean
-}>()
 const emit = defineEmits<{
   close: []
   /** Open the "add integration" form of this plugin. */
@@ -90,7 +86,7 @@ async function load() {
       api.integrationTypes(),
       api.integrations(),
     ])
-    if (props.page) index.value = await api.pluginIndex().catch(() => undefined)
+    index.value = await api.pluginIndex().catch(() => undefined)
   } finally {
     loading.value = false
   }
@@ -267,11 +263,7 @@ onMounted(load)
 </script>
 
 <template>
-  <component
-    :is="page ? 'div' : ModalDialog"
-    v-bind="page ? { class: 'store-page' } : { title: t('store.title'), xl: true }"
-    @close="emit('close')"
-  >
+  <ModalDialog :title="t('store.title')" xl @close="emit('close')">
     <div class="store">
       <div class="toolbar">
         <label class="search">
@@ -508,7 +500,7 @@ onMounted(load)
         </button>
       </div>
 
-      <p v-if="page && index" class="index muted small" data-test="store-index">
+      <p v-if="index" class="index muted small" data-test="store-index">
         <template v-if="index.url">
           {{
             index.fetched_at
@@ -536,14 +528,10 @@ onMounted(load)
         >
       </p>
     </div>
-  </component>
+  </ModalDialog>
 </template>
 
 <style scoped>
-.store-page .store {
-  max-width: 1200px;
-  margin: 0 auto;
-}
 .chips {
   display: flex;
   flex-wrap: wrap;

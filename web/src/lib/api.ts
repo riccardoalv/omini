@@ -1,3 +1,4 @@
+import { noteIntegrations } from './features'
 import type {
   Alert,
   FlowsResponse,
@@ -78,6 +79,12 @@ export interface IntegrationInput {
   interval_s?: number
 }
 
+/** After an integration changes, the menu learns which screens to show. */
+function afterIntegrationChange<T>(result: T): T {
+  void api.integrations().catch(() => undefined)
+  return result
+}
+
 export const api = {
   authStatus: () => request<AuthStatus>('GET', '/api/auth/status'),
   setup: (username: string, password: string, locale?: string) =>
@@ -90,12 +97,17 @@ export const api = {
   health: () => request<{ status: string; version: string }>('GET', '/api/health'),
 
   integrationTypes: () => request<IntegrationType[]>('GET', '/api/integration-types'),
-  integrations: () => request<Integration[]>('GET', '/api/integrations'),
+  integrations: () =>
+    request<Integration[]>('GET', '/api/integrations').then((list) => {
+      noteIntegrations(list)
+      return list
+    }),
   createIntegration: (input: IntegrationInput) =>
-    request<Integration>('POST', '/api/integrations', input),
+    request<Integration>('POST', '/api/integrations', input).then(afterIntegrationChange),
   updateIntegration: (id: number, input: IntegrationInput) =>
-    request<Integration>('PUT', `/api/integrations/${id}`, input),
-  deleteIntegration: (id: number) => request<void>('DELETE', `/api/integrations/${id}`),
+    request<Integration>('PUT', `/api/integrations/${id}`, input).then(afterIntegrationChange),
+  deleteIntegration: (id: number) =>
+    request<void>('DELETE', `/api/integrations/${id}`).then(afterIntegrationChange),
   notifierTypes: () => request<NotifierType[]>('GET', '/api/notifier-types'),
   notifiers: () => request<Notifier[]>('GET', '/api/notifiers'),
   createNotifier: (input: Partial<Omit<Notifier, 'id'>>) =>

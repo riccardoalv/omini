@@ -7,35 +7,41 @@ import {
   Network,
   PanelLeftClose,
   PanelLeftOpen,
-  Puzzle,
   Settings,
 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { alertsState, attentionCount, refreshAlerts } from '@/lib/alerts'
+import { api } from '@/lib/api'
+import { features, noteIntegrations } from '@/lib/features'
 import { prefs } from '@/lib/prefs'
 
 import Logo from './LogoMark.vue'
 
 const { t } = useI18n()
 
-const items = [
+const allItems = [
   { to: '/', icon: Network, label: 'nav.map' },
   { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
   { to: '/alerts', icon: Bell, label: 'nav.alerts' },
-  { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows' },
+  { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows', when: () => features.flows },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
-  { to: '/store', icon: Puzzle, label: 'nav.store' },
   { to: '/settings', icon: Settings, label: 'nav.settings' },
 ]
+// Flows only while the flows integration is on.
+const items = computed(() => allItems.filter((i) => !i.when || i.when()))
 
 // The menu shows how many alerts ask for attention.
 const attention = computed(() => attentionCount(alertsState.list))
 let timer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
-  void refreshAlerts()
-  timer = setInterval(refreshAlerts, 30_000)
+  const refresh = () => {
+    void refreshAlerts()
+    void api.integrations().then(noteIntegrations, () => undefined)
+  }
+  refresh()
+  timer = setInterval(refresh, 30_000)
 })
 onBeforeUnmount(() => clearInterval(timer))
 </script>

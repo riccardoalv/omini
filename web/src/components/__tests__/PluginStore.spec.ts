@@ -62,6 +62,7 @@ describe('PluginStore', () => {
   beforeEach(() => {
     vi.mocked(api.pluginCatalog).mockReset().mockResolvedValue([opnsenseEntry, mikrotikEntry])
     vi.mocked(api.plugins).mockReset().mockResolvedValue([])
+    vi.mocked(api.pluginIndex).mockReset().mockResolvedValue({ url: '', plugins: 2 })
     vi.mocked(api.installPlugin).mockReset().mockResolvedValue(installed('opnsense', URL))
     vi.mocked(api.removePlugin).mockReset().mockResolvedValue()
     vi.mocked(api.integrationTypes).mockReset().mockResolvedValue([])
@@ -225,16 +226,15 @@ describe('PluginStore', () => {
     ])
   })
 
-  it('as a page, shows where the index comes from and refreshes it', async () => {
+  it('shows where the index comes from and refreshes it', async () => {
     vi.mocked(api.pluginIndex).mockResolvedValue({ url: 'https://x/index.json', plugins: 9 })
     vi.mocked(api.refreshPluginIndex).mockResolvedValue({
       url: 'https://x/index.json',
       fetched_at: new Date().toISOString(),
       plugins: 10,
     })
-    const w = mount(PluginStore, { props: { page: true }, global: { plugins: plugins() } })
+    const w = mount(PluginStore, { global: { plugins: plugins() } })
     await flushPromises()
-    expect(w.find('.modal').exists()).toBe(false)
     expect(w.get('[data-test=store-index]').text()).toContain(
       'Index shipped with Omini (9 plugins)',
     )

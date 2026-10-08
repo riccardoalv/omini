@@ -28,6 +28,16 @@ describe('api client', () => {
   beforeEach(() => setUnauthorizedHandler(() => {}))
   afterEach(() => vi.unstubAllGlobals())
 
+  it('tells the menu whether the flows integration is on', async () => {
+    const { features } = await import('../features')
+    mockFetch(200, [{ id: 1, type: 'flows', enabled: true }])
+    await api.integrations()
+    expect(features.flows).toBe(true)
+    mockFetch(200, [{ id: 1, type: 'flows', enabled: false }])
+    await api.integrations()
+    expect(features.flows).toBe(false)
+  })
+
   it('sends the CSRF header and JSON body on state-changing requests', async () => {
     const fetch = mockFetch(201, { id: 1 })
     await api.createIntegration({ type: 'demo', config: {} })

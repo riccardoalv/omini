@@ -11,7 +11,7 @@ export const router = createRouter({
       component: () => import('./views/IntegrationsView.vue'),
     },
     { path: '/flows', name: 'flows', component: () => import('./views/FlowsView.vue') },
-    { path: '/store', name: 'store', component: () => import('./views/StoreView.vue') },
+    { path: '/store', redirect: { path: '/integrations', query: { store: '1' } } }, // the store is a modal there
     { path: '/alerts', name: 'alerts', component: () => import('./views/AlertsView.vue') },
     { path: '/insights', redirect: (to) => ({ path: '/alerts', query: to.query }) }, // old address
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },

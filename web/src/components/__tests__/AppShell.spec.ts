@@ -6,14 +6,22 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { alertsState } from '@/lib/alerts'
 import { api } from '@/lib/api'
 import { prefs } from '@/lib/prefs'
-import type { Alert } from '@/lib/types'
+import { features, noteIntegrations } from '@/lib/features'
+import type { Alert, Integration } from '@/lib/types'
 
 import AppShell from '../AppShell.vue'
 import { plugins } from './helpers'
 
 vi.mock('@/lib/api', async (orig) => {
   const mod = await orig<typeof import('@/lib/api')>()
-  return { ...mod, api: { ...mod.api, alerts: vi.fn<typeof mod.api.alerts>() } }
+  return {
+    ...mod,
+    api: {
+      ...mod.api,
+      alerts: vi.fn<typeof mod.api.alerts>(),
+      integrations: vi.fn<typeof mod.api.integrations>(),
+    },
+  }
 })
 
 const alert = (id: number, severity: Alert['severity'], dismissed = false): Alert => ({
@@ -27,14 +35,22 @@ const alert = (id: number, severity: Alert['severity'], dismissed = false): Aler
   dismissed,
 })
 
+const flows = (enabled: boolean): Integration => ({
+  id: 7,
+  name: 'Traffic flows',
+  type: 'flows',
+  config: {},
+  enabled,
+  created_at: '2026-10-07T10:00:00Z',
+  updated_at: '2026-10-07T10:00:00Z',
+})
+
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: ['/', '/devices', '/alerts', '/flows', '/integrations', '/store', '/settings'].map(
-    (path) => ({
-      path,
-      component: { template: '<div />' },
-    }),
-  ),
+  routes: ['/', '/devices', '/alerts', '/flows', '/integrations', '/settings'].map((path) => ({
+    path,
+    component: { template: '<div />' },
+  })),
 })
 
 describe('AppShell', () => {
@@ -42,6 +58,8 @@ describe('AppShell', () => {
     prefs.sidebarExpanded = false
     alertsState.list = []
     vi.mocked(api.alerts).mockResolvedValue([])
+    vi.mocked(api.integrations).mockResolvedValue([])
+    features.flows = false
   })
 
   it('expands and collapses the sidebar, remembering the choice', async () => {
@@ -60,17 +78,23 @@ describe('AppShell', () => {
     expect(nav.classes()).not.toContain('expanded')
   })
 
-  it('links to every screen', () => {
-    const w = mount(AppShell, { global: { plugins: [...plugins(), router] } })
-    expect(w.findAll('a').map((a) => a.attributes('href'))).toEqual([
-      '/',
-      '/devices',
-      '/alerts',
-      '/flows',
-      '/integrations',
-      '/store',
-      '/settings',
-    ])
+  it('links to every screen; Flows only while the flows integration is on', async () => {
+    const links = () => w.findAll('a').map((a) => a.attributes('href'))
+    let w = mount(AppShell, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    expect(links()).toEqual(['/', '/devices', '/alerts', '/integrations', '/settings'])
+    w.unmount()
+
+    vi.mocked(api.integrations).mockResolvedValue([flows(true)])
+    w = mount(AppShell, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    expect(links()).toEqual(['/', '/devices', '/alerts', '/flows', '/integrations', '/settings'])
+
+    // Turned off: the entry goes away.
+    noteIntegrations([flows(false)])
+    await flushPromises()
+    expect(links()).not.toContain('/flows')
+    w.unmount()
   })
 
   it('counts the alerts that ask for attention on the Alerts entry', async () => {
