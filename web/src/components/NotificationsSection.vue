@@ -51,6 +51,33 @@ async function load() {
 }
 onMounted(load)
 
+// Omini's address, for the "Open in Omini" links of the messages. Picked up
+// from the browser when a channel is added or tested; editable here.
+const address = ref('')
+const addressSaved = ref('')
+const addressError = ref('')
+const addressOk = ref(false)
+const here = window.location.origin
+onMounted(async () => {
+  try {
+    addressSaved.value = address.value = (await api.notifierSettings()).public_url
+  } catch {
+    // shown empty
+  }
+})
+async function saveAddress(value = address.value) {
+  addressError.value = ''
+  addressOk.value = false
+  try {
+    addressSaved.value = address.value = (
+      await api.setNotifierSettings({ public_url: value })
+    ).public_url
+    addressOk.value = true
+  } catch (e) {
+    addressError.value = e instanceof ApiError ? e.message : t('common.error')
+  }
+}
+
 /** Kinds the server offers (a type it does not know is not shown). */
 const kinds = computed(() => KINDS.filter((k) => types.value.some((x) => x.type === k.type)))
 
@@ -199,6 +226,37 @@ function status(k: Kind): string {
 <template>
   <div class="notifications" data-test="notifications">
     <p class="muted intro">{{ t('notifications.hint') }}</p>
+
+    <form class="address card" data-test="public-url" @submit.prevent="saveAddress()">
+      <div class="address-text">
+        <label for="n-address">{{ t('notifications.address') }}</label>
+        <small class="muted">{{ t('notifications.addressHint') }}</small>
+      </div>
+      <div class="address-input">
+        <input
+          id="n-address"
+          v-model="address"
+          class="input"
+          type="url"
+          :placeholder="here"
+          @input="addressOk = false"
+        />
+        <button
+          v-if="!address && !addressSaved"
+          class="btn"
+          type="button"
+          data-test="use-here"
+          @click="saveAddress(here)"
+        >
+          {{ t('notifications.useHere') }}
+        </button>
+        <button v-else class="btn" type="submit" :disabled="address === addressSaved">
+          {{ t('common.save') }}
+        </button>
+      </div>
+      <small v-if="addressOk" class="ok">{{ t('notifications.addressSaved') }}</small>
+      <small v-if="addressError" class="error" role="alert">{{ addressError }}</small>
+    </form>
 
     <div class="kinds">
       <section
@@ -354,6 +412,40 @@ function status(k: Kind): string {
 <style scoped>
 .intro {
   margin: 0 0 16px;
+}
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+}
+.address-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 220px;
+}
+.address-text small {
+  font-size: 13px;
+}
+.address-input {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 260px;
+}
+.address-input .input {
+  flex: 1;
+}
+.address .ok {
+  flex-basis: 100%;
+  color: var(--ok);
+}
+.address .error {
+  flex-basis: 100%;
+  color: var(--danger);
 }
 .kinds {
   display: grid;

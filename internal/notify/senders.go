@@ -77,7 +77,7 @@ func (w *webhook) Send(ctx context.Context, m Message) error {
 	case "discord":
 		body, err = json.Marshal(discordPayload(m))
 	case "ntfy":
-		body, contentType = []byte(m.Text), "text/plain; charset=utf-8"
+		body, contentType = []byte(ntfyText(m)), "text/markdown; charset=utf-8"
 	default:
 		body, err = json.Marshal(m)
 	}
@@ -95,6 +95,10 @@ func (w *webhook) Send(ctx context.Context, m Message) error {
 		sev := worst(m)
 		req.Header.Set("Tags", ntfyTag[sev]+",omini")
 		req.Header.Set("Priority", ntfyPriority[sev])
+		req.Header.Set("Markdown", "yes")
+		if u := ntfyClick(m); u != "" {
+			req.Header.Set("Click", u)
+		}
 	}
 	if w.secret != "" {
 		mac := hmac.New(sha256.New, []byte(w.secret))
@@ -139,11 +143,10 @@ func newTelegram(cfg integration.Config, client *http.Client) (Sender, error) {
 }
 
 func (t *telegram) Send(ctx context.Context, m Message) error {
-	text := m.Subject + "\n\n" + m.Text
-	if len(text) > 4000 { // Telegram's limit is 4096
-		text = text[:3997] + "..."
+	form := url.Values{
+		"chat_id": {t.chat}, "text": {telegramText(m)},
+		"parse_mode": {"HTML"}, "disable_web_page_preview": {"true"},
 	}
-	form := url.Values{"chat_id": {t.chat}, "text": {text}, "disable_web_page_preview": {"true"}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, TelegramAPI+"/bot"+t.token+"/sendMessage",
 		strings.NewReader(form.Encode()))
 	if err != nil {
@@ -255,9 +258,14 @@ func (e *email) message(m Message) []byte {
 	fmt.Fprintf(&b, "To: %s\r\n", strings.Join(to, ", "))
 	fmt.Fprintf(&b, "Subject: %s\r\n", mimeHeader(m.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
+	// The text for any reader, the cards in HTML for those that show it.
+	const boundary = "omini-alternative-7c1f"
+	b.WriteString("MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=\"" + boundary + "\"\r\n\r\n")
+	b.WriteString("--" + boundary + "\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
 	b.WriteString(strings.ReplaceAll(m.Text, "\n", "\r\n"))
-	b.WriteString("\r\n")
+	b.WriteString("\r\n--" + boundary + "\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
+	b.WriteString(emailHTML(m))
+	b.WriteString("\r\n--" + boundary + "--\r\n")
 	return []byte(b.String())
 }
 
@@ -314,53 +322,4 @@ func cut(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s
-}
-
-// discordPayload: the summary as the message, a colored card per group (at
-// most 10, Discord's limit; the rest summed up in the last one).
-func discordPayload(m Message) map[string]any {
-	type embed struct {
-		Title       string `json:"title"`
-		Description string `json:"description,omitempty"`
-		Color       int    `json:"color"`
-	}
-	out := map[string]any{"username": "Omini", "content": cut("**"+m.Subject+"**", 2000)}
-	if len(m.Groups) == 0 {
-		out["content"] = cut("**"+m.Subject+"**\n"+m.Text, 2000)
-		return out
-	}
-	var embeds []embed
-	for i, g := range m.Groups {
-		if i == 9 && len(m.Groups) > 10 {
-			var rest []string
-			for _, h := range m.Groups[9:] {
-				rest = append(rest, h.Title)
-			}
-			embeds = append(embeds, embed{Title: fmt.Sprintf("+%d", len(m.Groups)-9), Description: cut(strings.Join(rest, "\n"), 4000), Color: 0x8b949e})
-			break
-		}
-		embeds = append(embeds, embed{
-			Title:       cut(g.Title, 256),
-			Description: cut(strings.Join(g.Lines, "\n"), 4000),
-			Color:       cardColor[g.Severity],
-		})
-	}
-	out["embeds"] = embeds
-	return out
-}
-
-// slackPayload: the summary as the message, a colored attachment per group.
-func slackPayload(m Message) map[string]any {
-	if len(m.Groups) == 0 {
-		return map[string]any{"text": "*" + m.Subject + "*\n" + m.Text}
-	}
-	var atts []map[string]any
-	for _, g := range m.Groups {
-		atts = append(atts, map[string]any{
-			"color": fmt.Sprintf("#%06x", cardColor[g.Severity]),
-			"title": g.Title,
-			"text":  strings.Join(g.Lines, "\n"),
-		})
-	}
-	return map[string]any{"text": "*" + m.Subject + "*", "attachments": atts}
 }

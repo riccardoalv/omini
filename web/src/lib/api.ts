@@ -118,6 +118,9 @@ export const api = {
     request<void>('DELETE', `/api/integrations/${id}`).then(afterIntegrationChange),
   notifierTypes: () => request<NotifierType[]>('GET', '/api/notifier-types'),
   notifiers: () => request<Notifier[]>('GET', '/api/notifiers'),
+  notifierSettings: () => request<{ public_url: string }>('GET', '/api/notifier-settings'),
+  setNotifierSettings: (input: { public_url: string }) =>
+    request<{ public_url: string }>('PUT', '/api/notifier-settings', input),
   createNotifier: (input: Partial<Omit<Notifier, 'id'>>) =>
     request<Notifier>('POST', '/api/notifiers', input),
   updateNotifier: (id: number, input: Partial<Omit<Notifier, 'id' | 'type'>>) =>

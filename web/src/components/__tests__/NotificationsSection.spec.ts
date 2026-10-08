@@ -18,6 +18,8 @@ vi.mock('@/lib/api', async (orig) => {
       createNotifier: vi.fn<typeof mod.api.createNotifier>(),
       updateNotifier: vi.fn<typeof mod.api.updateNotifier>(),
       testNotifier: vi.fn<typeof mod.api.testNotifier>(),
+      notifierSettings: vi.fn<typeof mod.api.notifierSettings>(),
+      setNotifierSettings: vi.fn<typeof mod.api.setNotifierSettings>(),
     },
   }
 })
@@ -63,6 +65,25 @@ describe('NotificationsSection', () => {
     vi.mocked(api.createNotifier).mockResolvedValue({ ...saved, id: 8 })
     vi.mocked(api.updateNotifier).mockResolvedValue(saved)
     vi.mocked(api.testNotifier).mockResolvedValue({ ok: true })
+    vi.mocked(api.notifierSettings).mockResolvedValue({ public_url: '' })
+    vi.mocked(api.setNotifierSettings).mockImplementation(async (v) => v)
+  })
+
+  it("sets Omini's address for the links, offering this browser's", async () => {
+    const w = mount(NotificationsSection, { global: { plugins: plugins() } })
+    await flushPromises()
+    await w.get('[data-test=use-here]').trigger('click')
+    await flushPromises()
+    expect(api.setNotifierSettings).toHaveBeenCalledWith({ public_url: window.location.origin })
+    expect(w.find('[data-test=use-here]').exists()).toBe(false)
+
+    await w.get('#n-address').setValue('https://omini.home.lan')
+    await w.get('[data-test=public-url]').trigger('submit')
+    await flushPromises()
+    expect(api.setNotifierSettings).toHaveBeenLastCalledWith({
+      public_url: 'https://omini.home.lan',
+    })
+    expect(w.get('[data-test=public-url]').text()).toContain('Saved')
   })
 
   it('lists channels with their last error', async () => {

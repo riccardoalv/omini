@@ -121,6 +121,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PUT /api/notifiers/{id}", s.updateNotifier)
 	private.HandleFunc("DELETE /api/notifiers/{id}", s.deleteNotifier)
 	private.HandleFunc("POST /api/notifiers/test", s.testNotifier)
+	private.HandleFunc("GET /api/notifier-settings", s.notifierSettings)
+	private.HandleFunc("PUT /api/notifier-settings", s.setNotifierSettings)
 	mux.Handle("/api/", s.requireAuth(private))
 
 	mux.Handle("/", s.ui())

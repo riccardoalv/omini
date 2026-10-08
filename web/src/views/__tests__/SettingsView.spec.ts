@@ -16,6 +16,9 @@ vi.mock('@/lib/api', async (orig) => {
       health: vi.fn<typeof mod.api.health>().mockResolvedValue({ status: 'ok', version: '0.4.0' }),
       notifierTypes: vi.fn<typeof mod.api.notifierTypes>().mockResolvedValue([]),
       notifiers: vi.fn<typeof mod.api.notifiers>().mockResolvedValue([]),
+      notifierSettings: vi
+        .fn<typeof mod.api.notifierSettings>()
+        .mockResolvedValue({ public_url: '' }),
       plugins: vi.fn<typeof mod.api.plugins>().mockResolvedValue([]),
       changePassword: vi.fn<typeof mod.api.changePassword>(),
     },

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 // Texts of the alerts sent by the server, in the languages of the UI (which
@@ -232,6 +233,13 @@ func count(locale, key string, n int) string {
 // a group per device with what happened to it (most severe first), the new
 // devices together, and what was resolved; the subject sums it up.
 func Compose(changes []store.AlertChange, locale string) Message {
+	return ComposeWith(changes, locale, Context{})
+}
+
+// ComposeWith is Compose with the map and Omini's address: each card then
+// describes its device (type, make, address, where it is connected) and
+// links to it.
+func ComposeWith(changes []store.AlertChange, locale string, ctx Context) Message {
 	rank := map[string]int{"critical": 0, "warning": 1, "info": 2}
 	sorted := append([]store.AlertChange(nil), changes...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -243,7 +251,12 @@ func Compose(changes []store.AlertChange, locale string) Message {
 	})
 	t := catalog(locale)
 	names := localeOf(short, locale)
-	m := Message{}
+	advice := localeOf(tips, locale)
+	k := newCards(ctx, locale)
+	m := Message{URL: strings.TrimRight(ctx.BaseURL, "/"), At: ctx.Now, Locale: locale}
+	if m.At.IsZero() {
+		m.At = time.Now()
+	}
 
 	var (
 		groups   []*Group
@@ -265,10 +278,13 @@ func Compose(changes []store.AlertChange, locale string) Message {
 		if c.Alert.Rule == "new_device" {
 			p := params(c.Alert)
 			line := p["node"]
-			if detail != "" {
+			if d := k.card(c.Alert.NodeID); d != nil {
+				line = strings.Join(nonEmpty(d.Name, strings.TrimSpace(d.Vendor+" "+d.Model), d.IP, d.ConnectedTo), " · ")
+			} else if detail != "" {
 				line += " · " + detail
 			}
 			newDevs.Lines = append(newDevs.Lines, line)
+			newDevs.Tip = advice["new_device"]
 			tally["new"]++
 			continue
 		}
@@ -282,7 +298,15 @@ func Compose(changes []store.AlertChange, locale string) Message {
 		}
 		g := byKey[key]
 		if g == nil {
-			g = &Group{Severity: c.Alert.Severity, Title: label}
+			g = &Group{Severity: c.Alert.Severity, Title: label, Tip: advice[c.Alert.Rule]}
+			if label != title {
+				g.Device = k.card(c.Alert.NodeID)
+			}
+			if g.Device != nil {
+				g.URL = g.Device.URL
+			} else {
+				g.URL = nodeURL(ctx.BaseURL, c.Alert.NodeID)
+			}
 			byKey[key] = g
 			groups = append(groups, g)
 		}
@@ -290,6 +314,7 @@ func Compose(changes []store.AlertChange, locale string) Message {
 		if label != title {
 			line = names[c.Alert.Rule]
 		}
+		g.Items = append(g.Items, Item{Severity: c.Alert.Severity, Label: line, Detail: detail})
 		if detail != "" {
 			line += ": " + strings.TrimSuffix(detail, ".")
 		}
@@ -302,15 +327,10 @@ func Compose(changes []store.AlertChange, locale string) Message {
 	if len(resolved.Lines) > 0 {
 		groups = append(groups, resolved)
 	}
-	var text []string
 	for _, g := range groups {
 		m.Groups = append(m.Groups, *g)
-		text = append(text, g.Title)
-		for _, l := range g.Lines {
-			text = append(text, "   "+l)
-		}
 	}
-	m.Text = strings.Join(text, "\n")
+	m.Text = textOf(m)
 
 	if len(m.Events) == 1 {
 		title := m.Events[0].Title
@@ -330,10 +350,55 @@ func Compose(changes []store.AlertChange, locale string) Message {
 	return m
 }
 
-// TestMessage is sent by the "Send a test" button.
-func TestMessage(locale string, now time.Time) Message {
-	t := catalog(locale)["_test"]
-	return Message{Subject: t[0], Text: t[1] + " (" + now.Format("2006-01-02 15:04") + ")"}
+// TestMessage is sent by the "Send a test" button: an example of what the
+// alerts look like on the channel (a device with two problems, a new device),
+// marked as a test; it carries no events, so nothing acts on it.
+func TestMessage(locale string, now time.Time, base string) Message {
+	l := localeOf(labels, locale)
+	seen := now.Add(-3 * time.Minute)
+	sample := topology.Topology{
+		Nodes: []topology.Node{
+			{ID: "example:switch", Kind: topology.KindDevice, Label: "core-switch", Online: true, Type: "switch"},
+			{ID: "example:ap", Kind: topology.KindDevice, Label: "ap-living-room", Online: true, Type: "ap"},
+			{
+				ID: "example:nas", Kind: topology.KindClient, Label: "nas-01", Online: false, LastSeen: &seen,
+				Type: "nas", Brand: "Synology", Model: "DS920+", OS: "DSM 7.2",
+				IP: "192.168.1.20", MAC: "00:11:32:a4:5b:c6", ParentID: "example:switch", Port: "Port 4",
+			},
+			{
+				ID: "example:phone", Kind: topology.KindClient, Label: "iPhone", Online: true,
+				Type: "phone", Brand: "Apple", Model: "iPhone 15", IP: "192.168.1.57", MAC: "6a:3e:91:0c:22:7d",
+				ParentID: "example:ap", SSID: "Home 5 GHz",
+			},
+		},
+	}
+	changes := []store.AlertChange{
+		{Opened: true, Alert: store.Alert{
+			Key: "example:offline", Rule: "device_offline", Severity: "critical", NodeID: "example:nas",
+			Params: map[string]any{"node": "nas-01"},
+		}},
+		{Opened: true, Alert: store.Alert{
+			Key: "example:disk", Rule: "disk_full", Severity: "warning", NodeID: "example:nas",
+			Params: map[string]any{"node": "nas-01", "mount": "/volume1", "pct": 91.0},
+		}},
+		{Opened: true, Alert: store.Alert{
+			Key: "example:new", Rule: "new_device", Severity: "info", NodeID: "example:phone",
+			Params: map[string]any{"node": "iPhone"},
+		}},
+	}
+	m := ComposeWith(changes, locale, Context{Topology: &sample, Now: now})
+	// The example's links would lead nowhere: only the map's.
+	for i := range m.Groups {
+		m.Groups[i].URL = ""
+		if d := m.Groups[i].Device; d != nil {
+			d.URL = ""
+		}
+	}
+	m.URL = strings.TrimRight(base, "/")
+	m.Subject = catalog(locale)["_test"][0] + " · " + l["example"]
+	m.Events, m.Test = nil, true
+	m.Text = textOf(m)
+	return m
 }
 
 // number reads a numeric parameter: float64 once stored (JSON), the rule's own

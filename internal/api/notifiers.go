@@ -2,6 +2,8 @@ package api
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
@@ -63,6 +65,56 @@ func (s *Server) prepareNotifier(typ string, cfg, stored integration.Config) (se
 	return sealed, opened, err
 }
 
+// rememberAddress keeps the address the admin opens Omini with, for the
+// links in messages, unless one was set already.
+func (s *Server) rememberAddress(r *http.Request) {
+	if cur := notify.BaseURL(r.Context(), s.Store); cur != "" {
+		return
+	}
+	if u := originOf(r); u != "" {
+		_ = s.Store.SetSetting(r.Context(), notify.URLSetting, u)
+	}
+}
+
+// originOf is the browser's address of Omini: the Origin header (sent with
+// every POST and PUT), else the Referer's scheme and host.
+func originOf(r *http.Request) string {
+	for _, h := range []string{r.Header.Get("Origin"), r.Header.Get("Referer")} {
+		u, err := url.Parse(h)
+		if err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" {
+			return u.Scheme + "://" + u.Host
+		}
+	}
+	return ""
+}
+
+// notifierSettings: Omini's address for the links in messages.
+func (s *Server) notifierSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"public_url": notify.BaseURL(r.Context(), s.Store)})
+}
+
+func (s *Server) setNotifierSettings(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		PublicURL string `json:"public_url"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	v := strings.TrimRight(strings.TrimSpace(in.PublicURL), "/")
+	if v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			writeError(w, http.StatusBadRequest, "the address must start with http:// or https://")
+			return
+		}
+	}
+	if err := s.Store.SetSetting(r.Context(), notify.URLSetting, v); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"public_url": v})
+}
+
 func validSeverity(v string) bool { return v == "critical" || v == "warning" || v == "info" }
 
 func (s *Server) createNotifier(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +122,7 @@ func (s *Server) createNotifier(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
+	s.rememberAddress(r)
 	if in.MinSeverity == "" {
 		in.MinSeverity = "warning"
 	}
@@ -158,6 +211,7 @@ func (s *Server) deleteNotifier(w http.ResponseWriter, r *http.Request) {
 // testNotifier sends a test message with the given settings (a saved
 // channel's when id is set; masked secrets keep their saved value).
 func (s *Server) testNotifier(w http.ResponseWriter, r *http.Request) {
+	s.rememberAddress(r)
 	var in struct {
 		ID     int64              `json:"id"`
 		Type   string             `json:"type"`
@@ -183,7 +237,7 @@ func (s *Server) testNotifier(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
-	msg := notify.TestMessage(s.Store.AdminLocale(r.Context()), time.Now())
+	msg := notify.TestMessage(s.Store.AdminLocale(r.Context()), time.Now(), notify.BaseURL(r.Context(), s.Store))
 	if err := notify.SendWith(r.Context(), in.Type, opened, s.NotifyClient, msg); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return

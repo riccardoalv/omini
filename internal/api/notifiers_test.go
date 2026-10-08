@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/riccardoalv/omini/internal/api"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/store"
 )
@@ -58,7 +59,7 @@ func TestNotifiers(t *testing.T) {
 	}
 	var msg struct{ Subject string }
 	_ = json.Unmarshal([]byte(got[0]), &msg)
-	if msg.Subject != "Omini test message" {
+	if msg.Subject != "Omini test message · example" {
 		t.Fatalf("test message: %s", got[0])
 	}
 	if h.do("POST", "/api/notifiers/test", map[string]any{"type": "telegram", "config": map[string]any{}}, &res); res["ok"] != false {
@@ -74,5 +75,33 @@ func TestNotifiers(t *testing.T) {
 	}
 	if code := h.do("DELETE", "/api/notifiers/"+itoa(n.ID), nil, nil); code != http.StatusNotFound {
 		t.Fatalf("delete again: %d", code)
+	}
+}
+
+func TestOminiAddressForTheLinks(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	var got map[string]string
+	if h.do("GET", "/api/notifier-settings", nil, &got); got["public_url"] != "" {
+		t.Fatalf("unknown at first: %v", got)
+	}
+	// Testing a channel from the browser keeps the address it uses.
+	req, _ := http.NewRequest(http.MethodPost, h.srv.URL+"/api/notifiers/test", strings.NewReader(`{"type":"telegram","config":{}}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(api.CSRFHeader, "1")
+	req.Header.Set("Origin", "http://omini.lan:8080")
+	resp, err := h.client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if h.do("GET", "/api/notifier-settings", nil, &got); got["public_url"] != "http://omini.lan:8080" {
+		t.Fatalf("picked up: %v", got)
+	}
+	if code := h.do("PUT", "/api/notifier-settings", map[string]string{"public_url": "ftp://x"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("not a web address: %d", code)
+	}
+	if h.do("PUT", "/api/notifier-settings", map[string]string{"public_url": "https://omini.home.lan/"}, &got); got["public_url"] != "https://omini.home.lan" {
+		t.Fatalf("set: %v", got)
 	}
 }

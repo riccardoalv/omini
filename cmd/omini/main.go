@@ -30,6 +30,7 @@ import (
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/topology"
 	"github.com/riccardoalv/omini/internal/webui"
 	"github.com/riccardoalv/omini/sdk"
 	"github.com/riccardoalv/omini/web"
@@ -189,6 +190,10 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	notifier := &notify.Dispatcher{Store: st, Box: box}
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle, DiscoveryLimited: caps.Limited()})
 	flowSvc.Round = func() time.Duration { return coll.RoundInterval(ctx) }
+	notifier.Topology = func() *topology.Topology {
+		t := coll.State().Topology
+		return &t
+	}
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
 		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, UI: web.FS(), Version: version,

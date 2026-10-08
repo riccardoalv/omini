@@ -31,6 +31,14 @@ type Message struct {
 	// Groups is the message as cards: a device and what happened to it, the
 	// new devices together, what was resolved (Discord embeds, Slack attachments).
 	Groups []Group `json:"groups,omitempty"`
+	// URL is Omini's map (empty when Omini's address is not known).
+	URL string `json:"url,omitempty"`
+	// At is when the round that found the changes ended.
+	At time.Time `json:"at"`
+	// Locale is the language of the texts (labels of the cards).
+	Locale string `json:"locale,omitempty"`
+	// Test marks the example sent by "Send a test" (it has no events).
+	Test bool `json:"test,omitempty"`
 }
 
 // Group is one card of a message.
@@ -38,6 +46,15 @@ type Group struct {
 	Severity string   `json:"severity"` // critical | warning | info | resolved
 	Title    string   `json:"title"`
 	Lines    []string `json:"lines"`
+	// Items are the card's alerts, one per line of Lines (none for the new
+	// devices and resolved cards, whose lines are names).
+	Items []Item `json:"items,omitempty"`
+	// Device is the device the card is about, as Omini knows it.
+	Device *DeviceCard `json:"device,omitempty"`
+	// Tip says what to do (the most severe alert's).
+	Tip string `json:"tip,omitempty"`
+	// URL opens the card's device on Omini's map.
+	URL string `json:"url,omitempty"`
 }
 
 // Sender delivers messages to one channel.

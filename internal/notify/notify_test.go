@@ -35,9 +35,11 @@ func TestCompose(t *testing.T) {
 	if m.Subject != "Omini: 1 critical, 1 warning, 1 resolved" {
 		t.Fatalf("subject: %q", m.Subject)
 	}
-	want := "Switch\n   Offline: Its integration could not reach it. timeout\n" +
-		"AP\n   Slow uplink: The link from sw (Port 3) runs at 100M: below 1 Gbps\n" +
-		"Resolved\n   High CPU on fw"
+	want := "CRITICAL · Switch\n  - Offline: Its integration could not reach it. timeout\n" +
+		"  What to do: Check that it is powered and connected; if it is, check the integration's address and credentials.\n\n" +
+		"WARNING · AP\n  - Slow uplink: The link from sw (Port 3) runs at 100M: below 1 Gbps\n" +
+		"  What to do: Check the cable (all 8 wires) and both ports: they should reach 1 Gbps.\n\n" +
+		"Resolved\n  - High CPU on fw"
 	if m.Text != want {
 		t.Fatalf("text:\n%s\nwant:\n%s", m.Text, want)
 	}
@@ -131,7 +133,7 @@ func TestTelegramHidesTheToken(t *testing.T) {
 	if err := SendWith(context.Background(), "telegram", cfg, nil, Message{Subject: "S", Text: "T"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(form, "/bot123:SECRET/sendMessage?") || !strings.Contains(form, "chat_id=42") || !strings.Contains(form, "text=S%0A%0AT") {
+	if !strings.HasPrefix(form, "/bot123:SECRET/sendMessage?") || !strings.Contains(form, "chat_id=42") || !strings.Contains(form, "text=%3Cb%3ES%3C%2Fb%3E%0A%0AT") || !strings.Contains(form, "parse_mode=HTML") {
 		t.Fatalf("request: %s", form)
 	}
 	cfg["chat_id"] = "bad"

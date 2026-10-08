@@ -670,6 +670,11 @@ export default {
     hint: 'Omini sends its alerts (a device offline, a WAN down, a disk almost full...) wherever you want to read them. Pick one or more ways below; each can be tested before saving.',
     add: 'Add channel',
     none: 'No channels yet: alerts are only shown in Omini.',
+    address: "Omini's address",
+    addressHint:
+      'Messages link each device to it ("Open in Omini"). Taken from this browser when you add or test a channel.',
+    useHere: 'Use this address',
+    addressSaved: 'Saved: the next messages link here.',
     types: { webhook: 'Webhook', telegram: 'Telegram', email: 'E-mail' },
     minSeverity: 'Send alerts from',
     severity: { critical: 'Critical only', warning: 'Warning and critical', info: 'Everything' },

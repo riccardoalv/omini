@@ -4,13 +4,24 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/topology"
 )
+
+// URLSetting is Omini's address as its users open it (links in messages).
+const URLSetting = "public_url"
+
+// BaseURL is Omini's address for links ("" when unknown).
+func BaseURL(ctx context.Context, st *store.Store) string {
+	v, _, _ := st.GetSetting(ctx, URLSetting)
+	return strings.TrimRight(v, "/")
+}
 
 // Cooldown: an alert that opens again within this time after it was last
 // notified is not notified again (a flapping link sends one message, not
@@ -23,6 +34,8 @@ type Dispatcher struct {
 	Box    *secret.Box
 	Client *http.Client     // nil: a client with Timeout
 	Now    func() time.Time // for tests
+	// Topology is the current map, for the devices' details (nil: none).
+	Topology func() *topology.Topology
 
 	mu       sync.Mutex
 	notified map[string]time.Time // alert key → when its opening was last sent
@@ -91,6 +104,10 @@ func (d *Dispatcher) deliver(ctx context.Context, changes []store.AlertChange) {
 		return
 	}
 	locale := d.Store.AdminLocale(ctx)
+	info := Context{BaseURL: BaseURL(ctx, d.Store), Now: d.now()}
+	if d.Topology != nil {
+		info.Topology = d.Topology()
+	}
 	for _, n := range channels {
 		if !n.Enabled {
 			continue
@@ -104,7 +121,7 @@ func (d *Dispatcher) deliver(ctx context.Context, changes []store.AlertChange) {
 		if len(mine) == 0 {
 			continue
 		}
-		err := d.Send(ctx, n, Compose(mine, locale))
+		err := d.Send(ctx, n, ComposeWith(mine, locale, info))
 		if err != nil {
 			slog.Warn("notification not delivered", "channel", n.ID, "type", n.Type, "err", err)
 		}

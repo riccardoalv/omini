@@ -444,7 +444,7 @@ const ptBR: typeof en = {
       duplicate_ip:
         'Dois dispositivos usam o mesmo endereço: dê a um deles uma reserva de DHCP ou outro IP fixo.',
       update_pending:
-        'Instale a atualização pela interface do próprio equipamento quando for conveniente.',
+        'Instale a atualização pela interface do próprio equipamento quando for oportuno.',
       disk_full: 'Apague arquivos, logs ou snapshots antigos, ou aumente o disco.',
       hot_cpu: 'Confira os ventiladores e a circulação de ar em volta.',
       high_cpu:
@@ -802,6 +802,11 @@ const ptBR: typeof en = {
     hint: 'O Omini envia os alertas (um dispositivo offline, a WAN fora, um disco quase cheio...) para onde você quiser lê-los. Escolha uma ou mais formas abaixo; cada uma pode ser testada antes de salvar.',
     add: 'Adicionar canal',
     none: 'Nenhum canal ainda: os alertas só aparecem no Omini.',
+    address: 'Endereço do Omini',
+    addressHint:
+      'As mensagens ligam cada dispositivo a ele ("Abrir no Omini"). Pego deste navegador quando você adiciona ou testa um canal.',
+    useHere: 'Usar este endereço',
+    addressSaved: 'Salvo: as próximas mensagens apontam para cá.',
     types: { webhook: 'Webhook', telegram: 'Telegram', email: 'E-mail' },
     minSeverity: 'Enviar alertas a partir de',
     severity: { critical: 'Só críticos', warning: 'Atenção e críticos', info: 'Tudo' },

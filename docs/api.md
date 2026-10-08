@@ -153,6 +153,8 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | `PUT` | `/api/notifiers/{id}` | Change any of those fields |
 | `DELETE` | `/api/notifiers/{id}` | Delete a channel |
 | `POST` | `/api/notifiers/test` | Body `{type, config}` or `{id}`: send a test message. Answers `{ok}` or `{ok: false, error}` |
+| `GET` | `/api/notifier-settings` | `{public_url}`: Omini's address for the links in messages ("" when unknown) |
+| `PUT` | `/api/notifier-settings` | Body `{public_url}` (`http://` or `https://`, "" to remove). Adding or testing a channel sets it from the browser's `Origin` when empty |
 
 Channel `config` keys: webhook `url`, `format` (`json`, `slack`, `discord`,
 `ntfy`), `secret`; Telegram `token`, `chat_id`; e-mail `host`, `port`,

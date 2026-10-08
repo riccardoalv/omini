@@ -151,13 +151,35 @@ database and never shown again.
 
 - **One message per channel per round.** All the alerts a round opened and
   resolved go together, most severe first.
-- **Grouped.** A group per device with one line per alert ("Memory almost
-  full: Memory at 98.3%"), the new devices together, and what was resolved.
-  The subject sums it up: `Omini: 1 critical, 3 warnings, 2 new devices`, or
-  `Omini: <the alert>` when there is only one.
-- **Formats.** Discord gets colored embeds and Slack colored attachments (at
-  most 10 cards on Discord), ntfy a title, a priority and a tag by the worst
-  severity, Telegram and e-mail the grouped text.
+- **A card per device.** Each card names the device and lists what
+  happened to it, one line per alert ("Memory almost full: Memory at 98.3%").
+  Under the alerts come the device's details as Omini knows them: type, make
+  and model, IP and MAC address, where it is connected (switch and port, or
+  access point and Wi-Fi network), its system, and since when it is offline.
+  The card ends with **What to do** (the same tip as on the Alerts screen) and
+  an **Open in Omini** link to the device on the map. The new devices go
+  together on one card (name, make, address, where), and so do the resolved
+  alerts. The subject sums it up: `Omini: 1 critical, 3 warnings, 2 new
+  devices`, or `Omini: <the alert>` when there is only one.
+- **Formats.** Each service shows the cards its own way, colored by severity,
+  without emoji:
+  - **Discord**: an embed per card (at most 10), with the details as fields,
+    "Offline since" in the reader's time zone, and the title linking to the
+    device;
+  - **Slack**: an attachment per card, with the details as fields;
+  - **Telegram**: formatted text (bold names, addresses in monospace, a link
+    per device);
+  - **E-mail**: an HTML message with a card per device and a button to open
+    it, plus a plain-text version;
+  - **ntfy**: Markdown, a priority and a tag by the worst severity; tapping
+    the notification opens the device (or the map when there are several).
+- **Links.** The links go to **Omini's address** (Settings → Notifications).
+  Omini takes it from your browser the first time you add or test a channel.
+  Set it yourself when you open Omini by another name (a domain, a reverse
+  proxy). Without it, messages have no links.
+- **Send a test** sends an example: a device with two alerts and a new
+  device, so you see what the alerts will look like. It is marked as a test
+  and carries no events.
 - **Language.** Messages are written in the admin's language.
 - **Cooldown.** An alert that opens again within 30 minutes of its last
   notification is not sent again, nor is its resolution: a flapping link sends
@@ -174,7 +196,7 @@ With the `json` format, Omini sends a `POST` with
 ```json
 {
   "subject": "Omini: 1 warning, 1 new device",
-  "text": "nas-01\n   Memory almost full: Memory at 94.2%\n1 new device\n   Galaxy-S23 · Samsung aa:bb:cc:dd:ee:ff 192.168.1.57",
+  "text": "WARNING · nas-01\n  - Memory almost full: Memory at 94.2%\n  Type: NAS / storage\n  ...",
   "events": [
     {
       "opened": true,
@@ -216,9 +238,36 @@ With the `json` format, Omini sends a `POST` with
     }
   ],
   "groups": [
-    { "severity": "warning", "title": "nas-01", "lines": ["Memory almost full: Memory at 94.2%"] },
-    { "severity": "info", "title": "1 new device", "lines": ["Galaxy-S23 · Samsung aa:bb:cc:dd:ee:ff 192.168.1.57"] }
-  ]
+    {
+      "severity": "warning",
+      "title": "nas-01",
+      "lines": ["Memory almost full: Memory at 94.2%"],
+      "items": [{ "severity": "warning", "label": "Memory almost full", "detail": "Memory at 94.2%." }],
+      "device": {
+        "id": "dev:00:11:32:4a:5b:6c",
+        "name": "nas-01",
+        "type": "NAS / storage",
+        "vendor": "Synology",
+        "model": "DS920+",
+        "ip": "192.168.1.20",
+        "mac": "00:11:32:4a:5b:6c",
+        "connected_to": "core-sw1 · Port 4",
+        "online": true,
+        "url": "http://omini.lan:8080/?node=dev%3A00%3A11%3A32%3A4a%3A5b%3A6c"
+      },
+      "tip": "See what uses the memory; a cache that frees itself is not a problem.",
+      "url": "http://omini.lan:8080/?node=dev%3A00%3A11%3A32%3A4a%3A5b%3A6c"
+    },
+    {
+      "severity": "info",
+      "title": "1 new device",
+      "lines": ["Galaxy-S23 · Samsung · 192.168.1.57 · ap-lobby · Home 5 GHz"],
+      "tip": "If you do not know it, look at its vendor and where it is connected."
+    }
+  ],
+  "url": "http://omini.lan:8080",
+  "at": "2026-10-08T14:02:11Z",
+  "locale": "en"
 }
 ```
 
@@ -230,10 +279,14 @@ With the `json` format, Omini sends a `POST` with
 | `events[].alert.key` | Stable across rounds: the same problem keeps the same key |
 | `events[].alert.resolved_at` | Set on resolved alerts |
 | `groups[]` | The message as cards; `severity` is `critical`, `warning`, `info` or `resolved` |
+| `groups[].items[]` | The card's alerts: what happened (`label`) and the numbers (`detail`) |
+| `groups[].device` | The device as Omini knows it (type, make, model, addresses, `connected_to`, `last_seen` when offline); absent when the map does not have it |
+| `groups[].tip`, `groups[].url` | What to do, and the device on Omini's map (with Omini's address set) |
+| `url`, `at` | Omini's map, and when the round ended |
+| `test` | `true` on the example sent by "Send a test" (which has no `events`) |
 
 Node ids (`node_id`) are Omini's internal ids; use them with
-`/?node=<id>` to link to the device on the map. The test message ("Send a
-test") has only `subject` and `text`.
+`/?node=<id>` to link to the device on the map.
 
 ### Checking the signature
 
