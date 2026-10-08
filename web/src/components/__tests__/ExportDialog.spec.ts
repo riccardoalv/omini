@@ -37,4 +37,18 @@ describe('ExportDialog', () => {
     expect(sets[2]!.attributes('disabled')).toBeDefined()
     w.unmount()
   })
+
+  it('lays a draw.io diagram out in the orientation picked, with its own colors', async () => {
+    const w = mountDialog()
+    await w.get('[data-test=format-drawio]').setValue(true)
+    const sets = w.findAll('fieldset')
+    expect(sets[1]!.attributes('disabled')).toBeDefined()
+    expect(sets[2]!.attributes('disabled')).toBeUndefined()
+    await w.get('[data-test=direction-DOWN]').setValue(true)
+    await w.get('form').trigger('submit')
+    expect(w.emitted('export')![0]).toEqual([
+      { format: 'drawio', theme: 'dark', direction: 'DOWN' },
+    ])
+    w.unmount()
+  })
 })

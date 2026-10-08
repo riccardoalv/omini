@@ -2,7 +2,7 @@ import { toPng, toSvg } from 'html-to-image'
 
 import type { TopologyResponse } from './types'
 
-export type ExportFormat = 'png' | 'svg' | 'json'
+export type ExportFormat = 'png' | 'svg' | 'json' | 'drawio'
 
 /** Margin around the map in an exported image. */
 const PADDING = 48

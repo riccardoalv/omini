@@ -29,6 +29,7 @@ import ExportDialog, { type ExportOptions } from '@/components/map/ExportDialog.
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { alertsState, attentionCount, worstByNode } from '@/lib/alerts'
+import { networkVlans, vlanMembers } from '@/lib/vlans'
 import { api } from '@/lib/api'
 import {
   AREA_PADDING,
@@ -43,7 +44,7 @@ import {
   regroup,
   withDescendants,
 } from '@/lib/areas'
-import { formatAgo } from '@/lib/format'
+import { formatAgo, formatSpeed } from '@/lib/format'
 import {
   clientCount,
   collapseClients,
@@ -63,6 +64,7 @@ import {
   positionsFor,
 } from '@/lib/layout'
 import { displayName } from '@/lib/names'
+import { mapDrawio } from '@/lib/drawio'
 import { download, exportName, mapImage, mapJSON } from '@/lib/export'
 import { applyTheme, prefs } from '@/lib/prefs'
 import {
@@ -124,6 +126,8 @@ const allNodes = computed(() => data.value?.topology.nodes ?? [])
 const allEdges = computed(() => data.value?.topology.edges ?? [])
 /** Shows the devices the user hid (to bring one back); not remembered. */
 const showHidden = ref(false)
+/** A VLAN picked in the toolbar: its devices and links stand out, the rest is dimmed. */
+const vlan = ref<number>()
 const unhidden = computed(() =>
   showHidden.value
     ? { nodes: allNodes.value, edges: allEdges.value, hidden: 0 }
@@ -196,6 +200,12 @@ const linkInfo = computed(() => {
     motion: edgeMotion(view.value.edges, nodes.value, labels),
   }
 })
+const vlans = computed(() => networkVlans(allNodes.value))
+const inVlan = computed(() =>
+  vlan.value === undefined
+    ? undefined
+    : vlanMembers(vlan.value, view.value.nodes, view.value.edges),
+)
 /** The most severe open alert of each node: a mark on the node. */
 const alertOf = computed(() => worstByNode(alertsState.list))
 const attention = computed(() => attentionCount(alertsState.list))
@@ -226,6 +236,7 @@ const flowNodes = computed<Node[]>(() => {
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
+    class: inVlan.value && !inVlan.value.nodes.has(n.id) ? 'vlan-dim' : undefined,
     // A Wi-Fi network has no panel or menu, but it can be moved like any node.
     ...(n.kind === 'ssid' ? { selectable: false, focusable: false } : {}),
   }))
@@ -260,7 +271,11 @@ const flowEdges = computed<Edge[]>(() => {
         motion: linkInfo.value.motion.get(e.id),
         animate: prefs.animateFlow,
       },
-      class: { slow: look.slow, offline: target ? !target.online : false },
+      class: {
+        slow: look.slow,
+        offline: target ? !target.online : false,
+        'vlan-dim': !!inVlan.value && !inVlan.value.edges.has(e.id),
+      },
       style: {
         strokeWidth: look.width,
         strokeDasharray: look.dotted ? '2 4' : look.dashed ? '6 4' : undefined,
@@ -740,8 +755,12 @@ async function exportMap(options: ExportOptions) {
       expandAll.value = true
       exportDirection.value = options.direction
     })
-    const background = getComputedStyle(mapEl.value!).backgroundColor
-    download(await mapImage(options.format, viewportEl, background), exportName(options.format))
+    if (options.format === 'drawio')
+      download(drawioFile(), exportName('drawio'), 'application/vnd.jgraph.mxfile')
+    else {
+      const background = getComputedStyle(mapEl.value!).backgroundColor
+      download(await mapImage(options.format, viewportEl, background), exportName(options.format))
+    }
     exportOpen.value = false
   } catch {
     exportError.value = t('map.exportFailed')
@@ -757,6 +776,51 @@ async function exportMap(options: ExportOptions) {
     setViewport(screen)
     exporting.value = false
   }
+}
+
+/** The map as laid out now (expanded for the export) as a draw.io diagram. */
+function drawioFile(): string {
+  const v = view.value
+  const labels = linkInfo.value.labels
+  const nodes = [
+    ...v.nodes.map((n) => ({
+      id: n.id,
+      label: displayName(n, t),
+      sub: n.kind === 'ssid' ? undefined : n.ip,
+      kind: n.kind,
+      online: n.online,
+      ...(positions.value[n.id] ?? { x: 0, y: 0 }),
+      ...SIZES[n.kind]!,
+    })),
+    ...v.groups.map((g) => ({
+      id: g.id,
+      label: g.area?.name ?? t('map.groupLabel', { n: g.clients.length }),
+      kind: 'group',
+      ...(positions.value[g.id] ?? { x: 0, y: 0 }),
+      ...SIZES.group!,
+    })),
+  ]
+  const edges = v.edges.map((e) => {
+    const l = labels.get(e.id)
+    const label = l && !l.hidden ? [l.name, formatSpeed(l.speed)].filter(Boolean).join(' | ') : ''
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      label,
+      dashed: e.kind !== 'lldp' && e.kind !== 'fdb',
+    }
+  })
+  const areaBoxes = visibleAreas.value.map((a) => ({
+    id: String(a.id),
+    name: a.name,
+    color: a.color,
+    x: a.x,
+    y: a.y,
+    width: a.width,
+    height: a.height,
+  }))
+  return mapDrawio(nodes, edges, areaBoxes, 'Omini')
 }
 
 async function resetLayout() {
@@ -921,6 +985,19 @@ onBeforeUnmount(() => {
             <template v-if="offlineCount"> ({{ offlineCount }})</template>
           </span>
         </button>
+        <select
+          v-if="vlans.length"
+          v-model="vlan"
+          class="select small vlan-pick"
+          data-test="vlan"
+          :class="{ active: vlan !== undefined }"
+          :aria-label="t('map.vlan')"
+        >
+          <option :value="undefined">{{ t('map.allVlans') }}</option>
+          <option v-for="v in vlans" :key="v.id" :value="v.id">
+            VLAN {{ v.id }}<template v-if="v.name"> · {{ v.name }}</template>
+          </option>
+        </select>
         <button
           class="btn small"
           :class="{ active: prefs.animateFlow }"
@@ -1233,6 +1310,18 @@ onBeforeUnmount(() => {
 /* Vue Flow theming */
 .flow :deep(.vue-flow__edge-path) {
   stroke: var(--edge);
+}
+.flow :deep(.vue-flow__node.vlan-dim),
+.flow :deep(.vue-flow__edge.vlan-dim) {
+  opacity: 0.15;
+}
+.vlan-pick {
+  width: auto;
+  pointer-events: auto;
+}
+.vlan-pick.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .flow :deep(.vue-flow__edge.slow .vue-flow__edge-path) {
   stroke: var(--warn);

@@ -312,16 +312,16 @@ Omini ships in incremental releases, each one usable on its own.
 - "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
 - SNMP v3
-- More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense
-- VLAN view
+- ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)
+- ✅ VLAN view
 - ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
-- Topology export to draw.io (PNG, SVG and JSON: done)
+- ✅ Topology export to draw.io (and PNG, SVG, JSON)
 - ✅ Collapsing an area into a bubble
 
 ### Ideas under discussion
 
-- More OPNsense data: services running/stopped, VPN peers (WireGuard, OpenVPN), firewall states, DHCP pool usage per network
-- SFP transceiver diagnostics (optical levels)
+- ✅ More OPNsense data: services running/stopped, VPN peers (WireGuard, OpenVPN), firewall states, DHCP pool usage per network
+- ✅ SFP transceiver diagnostics (optical levels)
 
 ### Open questions
 

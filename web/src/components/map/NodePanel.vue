@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
+import DeviceExtras from '@/components/map/DeviceExtras.vue'
 import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
 import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
@@ -682,6 +683,8 @@ async function save(patch: {
             @label="savePort"
           />
         </section>
+
+        <DeviceExtras v-if="n.device" :device="n.device" />
 
         <section v-if="n.wan || gateways.length" class="block">
           <h3>{{ t('panel.internet') }}</h3>

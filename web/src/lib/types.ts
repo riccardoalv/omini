@@ -27,6 +27,51 @@ export interface Interface {
   tx_bytes?: number
   rx_errors?: number
   tx_errors?: number
+  /** VLAN id of a VLAN interface. */
+  vlan?: number
+  /** VLAN membership of a switch port. */
+  vlans?: { untagged?: number; tagged?: number[] }
+  /** Pluggable module (SFP...) and its readings. */
+  transceiver?: Transceiver
+}
+
+export interface Transceiver {
+  vendor?: string
+  part?: string
+  serial?: string
+  type?: string
+  wavelength_nm?: number
+  temperature_c?: number
+  voltage_v?: number
+  bias_ma?: number
+  tx_power_dbm?: number
+  rx_power_dbm?: number
+  rx_power_low_dbm?: number
+}
+
+export interface Vlan {
+  id: number
+  name?: string
+  interface?: string
+  subnet?: string
+}
+
+export interface Service {
+  name: string
+  description?: string
+  running?: boolean
+  enabled?: boolean
+}
+
+export interface VpnPeer {
+  name: string
+  protocol: 'wireguard' | 'openvpn' | 'ipsec' | 'other'
+  endpoint?: string
+  address?: string
+  connected?: boolean
+  last_handshake?: string
+  rx_bytes?: number
+  tx_bytes?: number
 }
 
 export interface Gateway {
@@ -96,7 +141,13 @@ export interface Device {
   firmware?: Firmware
   dhcp_leases?: { ip: string; mac: string; hostname?: string }[]
   arp?: { ip: string; mac: string; interface?: string }[]
+  fdb?: { mac: string; port: string; vlan?: number }[]
   serial?: string
+  vlans?: Vlan[]
+  services?: Service[]
+  vpn_peers?: VpnPeer[]
+  dhcp_pools?: { network: string; total?: number; used?: number }[]
+  firewall_states?: { current?: number; limit?: number }
 }
 
 export interface TopoNode {

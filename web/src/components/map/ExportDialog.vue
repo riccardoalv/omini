@@ -6,6 +6,7 @@ import {
   Image,
   Moon,
   PenTool,
+  Workflow,
   Sun,
 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
@@ -34,11 +35,14 @@ const { t } = useI18n()
 const format = ref<ExportFormat>('png')
 const theme = ref(props.theme)
 const direction = ref(props.direction)
-const image = computed(() => format.value !== 'json')
+const image = computed(() => format.value === 'png' || format.value === 'svg')
+/** draw.io files are laid out too (orientation), but have their own colors. */
+const laidOut = computed(() => format.value !== 'json')
 
 const formats = [
   { value: 'png', icon: Image },
   { value: 'svg', icon: PenTool },
+  { value: 'drawio', icon: Workflow },
   { value: 'json', icon: Braces },
 ] as const
 const themes = [
@@ -102,7 +106,7 @@ function submit() {
         </div>
       </fieldset>
 
-      <fieldset :disabled="!image">
+      <fieldset :disabled="!laidOut">
         <legend>{{ t('map.exportDialog.orientation') }}</legend>
         <div class="choices">
           <label

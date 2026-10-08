@@ -18,6 +18,30 @@ const mountPanel = (ports: Interface[], links: Record<string, TopoNode | undefin
   })
 
 describe('PortPanel', () => {
+  it("shows a port's VLANs and its module's optics, flagging weak light", async () => {
+    const w = mountPanel([
+      port('sfp1', {
+        up: true,
+        speed_mbps: 10000,
+        connector: 'sfp',
+        vlans: { untagged: 1, tagged: [20, 30] },
+        transceiver: {
+          vendor: 'FS',
+          part: 'SFP-10GSR-85',
+          rx_power_dbm: -22.4,
+          tx_power_dbm: -2.1,
+        },
+      }),
+    ])
+    await w.get('.port').trigger('click')
+    const card = w.get('[data-test=port-card]').text()
+    expect(card).toContain('untagged 1 · tagged 20, 30')
+    expect(card).toContain('FS SFP-10GSR-85')
+    expect(card).toContain('Rx -22.4 dBm · Tx -2.1 dBm')
+    expect(w.find('[data-test=port-card] dd.err').text()).toContain('Rx -22.4')
+    w.unmount()
+  })
+
   it('draws one port per interface, colored by speed, empty when down', () => {
     const w = mountPanel([
       port('igb0', { up: true, speed_mbps: 2500 }),

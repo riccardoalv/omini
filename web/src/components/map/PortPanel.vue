@@ -96,6 +96,38 @@ function details(p: Interface) {
       label: t('panel.traffic'),
       value: `↓ ${formatBytes(p.rx_bytes)} · ↑ ${formatBytes(p.tx_bytes)}`,
     })
+  if (p.vlan) out.push({ key: 'vlan', label: 'VLAN', value: String(p.vlan), mono: true })
+  if (p.vlans?.untagged || p.vlans?.tagged?.length)
+    out.push({
+      key: 'vlans',
+      label: 'VLANs',
+      value: [
+        p.vlans.untagged ? t('panel.untagged', { id: p.vlans.untagged }) : '',
+        p.vlans.tagged?.length ? t('panel.tagged', { ids: p.vlans.tagged.join(', ') }) : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    })
+  const m = p.transceiver
+  if (m) {
+    const ident = [m.vendor, m.part, m.type].filter(Boolean).join(' ')
+    if (ident) out.push({ key: 'module', label: t('panel.module'), value: ident })
+    const optics = [
+      m.rx_power_dbm !== undefined ? `Rx ${m.rx_power_dbm.toFixed(1)} dBm` : '',
+      m.tx_power_dbm !== undefined ? `Tx ${m.tx_power_dbm.toFixed(1)} dBm` : '',
+      m.temperature_c !== undefined ? `${m.temperature_c.toFixed(0)} °C` : '',
+      m.wavelength_nm ? `${m.wavelength_nm} nm` : '',
+    ].filter(Boolean)
+    if (optics.length)
+      out.push({
+        key: 'optics',
+        label: t('panel.optics'),
+        value: optics.join(' · '),
+        mono: true,
+        // Below the module's alarm threshold, or under -20 dBm without one: weak light.
+        err: m.rx_power_dbm !== undefined && m.rx_power_dbm < (m.rx_power_low_dbm ?? -20),
+      })
+  }
   if (p.rx_errors || p.tx_errors)
     out.push({
       key: 'errors',
