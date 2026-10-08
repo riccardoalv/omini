@@ -8,6 +8,8 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
+# The devnet emulator (testdata/devnet) is a uv project of its own.
+DEVNET := uv run --project testdata/devnet
 
 .PHONY: image models generate check-generated test cover lint fmt hooks ci web run dev oui icons devnet
 
@@ -23,7 +25,7 @@ dev: web/node_modules
 		(cd web && npm run dev) & \
 		wait
 
-## devnet: run Omini on http://localhost:8093 against a large simulated network (testdata/devnet)
+## devnet: run Omini on http://localhost:8093 with its real integrations against Acme's emulated network (testdata/devnet)
 devnet: web
 	go build -o bin/omini ./cmd/omini
 	testdata/devnet/run.sh
@@ -81,6 +83,7 @@ check-generated:
 test: web/node_modules
 	go test ./...
 	cd sdk/python && uv run pytest
+	cd testdata/devnet && uv run pytest
 	cd web && npm test
 
 ## cover: run tests with a coverage report per package
@@ -95,16 +98,14 @@ cover:
 lint: web/node_modules
 	golangci-lint run ./...
 	cd sdk/python && uv run ruff check . && uv run ruff format --check .
-	$(SDK) ruff check --config sdk/python/pyproject.toml testdata/devnet
-	$(SDK) ruff format --check --config sdk/python/pyproject.toml testdata/devnet
+	$(DEVNET) ruff check testdata/devnet && $(DEVNET) ruff format --check testdata/devnet
 	cd web && npm run lint && npm run format:check && npm run type-check
 
 ## fmt: format all code (Go + Python SDK + web)
 fmt: web/node_modules
 	golangci-lint fmt ./...
 	cd sdk/python && uv run ruff format . && uv run ruff check --fix .
-	$(SDK) ruff format --config sdk/python/pyproject.toml testdata/devnet
-	$(SDK) ruff check --fix --config sdk/python/pyproject.toml testdata/devnet
+	$(DEVNET) ruff format testdata/devnet && $(DEVNET) ruff check --fix testdata/devnet
 	cd web && npm run format && npm run lint:fix
 
 ## hooks: install git hooks (format, lint, conventional commit check)
@@ -119,5 +120,6 @@ ci: check-generated
 	go test -race ./...
 	$(MAKE) lint
 	cd sdk/python && uv run pytest -q
+	cd testdata/devnet && uv run pytest -q
 	cd web && npm test && npm run build-only
 	@echo "✔ all CI checks passed locally"

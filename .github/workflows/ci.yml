@@ -21,8 +21,44 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # The devnet test (internal/collector) runs the simulated network's Python.
+      # The devnet test (internal/collector) runs the real plugins against the emulated network.
       - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-opnsense
+          path: plugins/omini-plugin-opnsense
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-proxmox
+          path: plugins/omini-plugin-proxmox
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-unifi
+          path: plugins/omini-plugin-unifi
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-mikrotik
+          path: plugins/omini-plugin-mikrotik
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-omada
+          path: plugins/omini-plugin-omada
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-openwrt
+          path: plugins/omini-plugin-openwrt
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-pfsense
+          path: plugins/omini-plugin-pfsense
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-horaco
+          path: plugins/omini-plugin-horaco
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-mercusys
+          path: plugins/omini-plugin-mercusys
       - name: Build
         run: go build ./...
       - name: Build for Raspberry Pi (arm64, armv7)
@@ -30,6 +66,8 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build ./...
       - name: Test
+        env:
+          OMINI_DEVNET_PLUGINS: ${{ github.workspace }}/plugins
         run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
       - name: Coverage summary
         run: |
@@ -73,11 +111,63 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
-          uv run ruff check --config pyproject.toml ../../testdata/devnet
-          uv run ruff format --check --config pyproject.toml ../../testdata/devnet
       - name: Test
         run: |
           uv run pytest --cov=omini_sdk --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+
+  devnet:
+    name: Devnet emulator (lint, test with the real plugins)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: testdata/devnet
+    env:
+      OMINI_DEVNET_PLUGINS: ${{ github.workspace }}/plugins
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-opnsense
+          path: plugins/omini-plugin-opnsense
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-proxmox
+          path: plugins/omini-plugin-proxmox
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-unifi
+          path: plugins/omini-plugin-unifi
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-mikrotik
+          path: plugins/omini-plugin-mikrotik
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-omada
+          path: plugins/omini-plugin-omada
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-openwrt
+          path: plugins/omini-plugin-openwrt
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-pfsense
+          path: plugins/omini-plugin-pfsense
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-horaco
+          path: plugins/omini-plugin-horaco
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-mercusys
+          path: plugins/omini-plugin-mercusys
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test
+        run: uv run pytest -q
 
   web:
     name: Web UI (lint, type-check, test, build)

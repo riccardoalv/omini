@@ -67,19 +67,26 @@ OMINI_PLUGIN_INDEX=off                     # do not fetch the store index
 
 ## The simulated network
 
-`make devnet` runs Omini against a large, deliberately messy network served
-by ten fake plugins in `testdata/devnet/`: a firewall with two WANs and eight
-VLANs, an MLAG core pair, access switches, UniFi access points with about 60
-Wi-Fi clients, three Proxmox hosts with guests, a branch office behind a
-tunnel, storage, and about 130 scanned hosts. Devices reboot, roam, fill up
-and fail on a schedule, so alerts, history and the presence timeline move.
-
-It uses its own data folder (`data-devnet/`), no network scan, no remote
-index and a 30-second round. On the first run, `bootstrap.py` creates the
-admin user with generated credentials (saved in `data-devnet/devnet-admin.json`)
-and adds one integration per fake plugin. It only reads simulated data and
-never touches a real device. Details and the schedule of events are in
+`make devnet` runs Omini against **Acme**, a mid-size company's network whose
+devices' APIs are emulated in `testdata/devnet/`: an OPNsense HA pair with
+fiber (PPPoE) and 5G uplinks, a Cisco core with per-VLAN MAC tables, Aruba,
+UniFi, Juniper, MikroTik and Horaco switches, UniFi and Mercusys Wi-Fi, a
+three-node Proxmox cluster, NAS, desk phones with PCs behind them, about 80
+people coming and going, a branch office (MikroTik + Omada, over WireGuard), a
+store (OpenWrt, over IPsec) and a pfSense lab behind double NAT. Omini runs
+its **real integrations** against it: the plugins from their own repositories
+and the network scan with SNMP. People arrive, roam and leave; the fiber fails
+on Tuesday afternoon; devices reboot and fill up on a schedule. The design is
+[testdata/devnet/DESIGN.md](../testdata/devnet/DESIGN.md); how it runs is in
 [testdata/devnet/README.md](../testdata/devnet/README.md).
+
+It needs Linux with unprivileged user namespaces (every emulated device gets
+its own address in a network namespace), `uv`, and the `omini-plugin-*`
+repositories next to this one (or `OMINI_DEVNET_PLUGINS=<folder>`). It uses
+its own data folder (`data-devnet/`); `bootstrap.py` creates the admin user
+with generated credentials (saved in `data-devnet/devnet-admin.json`) and adds
+the integrations. It only reads simulated data and never touches a real
+device.
 
 ## Tests
 
@@ -90,14 +97,18 @@ Every change ships with tests that run in CI.
 | Go | `*_test.go` next to the code | `go test ./...` (`-race` in CI) |
 | Python SDK | `sdk/python/tests` | `cd sdk/python && uv run pytest` |
 | Web | `web/src/**/__tests__` (Vitest) | `cd web && npm test` |
+| Devnet emulator | `testdata/devnet/tests` | `cd testdata/devnet && uv run pytest` |
 
 - Topology and insights tests use JSON fixtures of anonymized real networks in
   `testdata/`; `internal/demo` is a fictional network used as a fixture.
-- `internal/collector/devnet_test.go` builds the map from the simulated
-  network and checks where things hang and which alerts fire. It needs `uv`
-  and is skipped without it or with `-short`.
-- `sdk/python/tests/test_devnet.py` runs every devnet plugin the way Omini
-  does and validates their output.
+- `internal/collector/devnet_test.go` runs the real plugins against the
+  emulated network, builds the map and checks that every device and client
+  hangs where the design says, and which alerts fire (Tuesday morning; the
+  fiber down in the afternoon). It needs `uv` and the plugin repositories, and
+  is skipped without them or with `-short`.
+- `testdata/devnet/tests` (`cd testdata/devnet && uv run pytest`) checks the
+  emulators: each plugin against its emulated API, the SNMP agents, the scan
+  services and the design.
 - SNMP code is tested against an in-memory agent (`internal/snmp/snmptest`).
 
 Never commit credentials, communities, public IPs, serial numbers or real MAC

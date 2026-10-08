@@ -8,6 +8,7 @@ web/node_modules/
 # Runtime data
 /data/
 /data-devnet/
+/testdata/devnet/.cache/
 *.db
 *.db-journal
 
