@@ -275,3 +275,29 @@ func mustFloat(s string) float64 {
 	_ = json.Unmarshal([]byte(s), &f)
 	return f
 }
+
+// A Discord, Slack or ntfy.sh address saved with the default "json" format
+// still gets the format its service needs (Discord refused Omini's events
+// with "Cannot send an empty message").
+func TestWebhookFormatFromTheAddress(t *testing.T) {
+	for address, want := range map[string]string{
+		"https://discord.com/api/webhooks/1/abc":        "discord",
+		"https://discordapp.com/api/webhooks/1/abc":     "discord",
+		"https://hooks.slack.com/services/T/B/x":        "slack",
+		"https://ntfy.sh/omini-home":                    "ntfy",
+		"https://homeassistant.local/api/webhook/omini": "json",
+	} {
+		s, err := newWebhook(integration.Config{"url": address, "format": "json"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := s.(*webhook).format; got != want {
+			t.Errorf("%s: format %q, want %q", address, got, want)
+		}
+	}
+	// A format picked on purpose is kept.
+	s, _ := newWebhook(integration.Config{"url": "https://ntfy.sh/x", "format": "slack"}, nil)
+	if s.(*webhook).format != "slack" {
+		t.Error("a chosen format was replaced")
+	}
+}

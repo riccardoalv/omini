@@ -31,7 +31,20 @@ const types: NotifierType[] = [
       { key: 'chat_id', type: 'string', required: true },
     ],
   },
-  { type: 'webhook', name: 'Webhook', fields: [{ key: 'url', type: 'url', required: true }] },
+  {
+    type: 'webhook',
+    name: 'Webhook',
+    fields: [
+      { key: 'url', type: 'url', required: true },
+      {
+        key: 'format',
+        type: 'select',
+        options: ['json', 'slack', 'discord', 'ntfy'],
+        default: 'json',
+      },
+      { key: 'secret', type: 'secret' },
+    ],
+  },
 ]
 const saved: Notifier = {
   id: 7,
@@ -97,6 +110,62 @@ describe('NotificationsSection', () => {
     await flushPromises()
     expect(api.updateNotifier).toHaveBeenCalledWith(7, {
       config: { token: '********', chat_id: '42' },
+      min_severity: 'warning',
+      notify_resolved: true,
+    })
+  })
+})
+
+describe('NotificationsSection accordions', () => {
+  beforeEach(() => {
+    vi.mocked(api.notifierTypes).mockResolvedValue(types)
+    vi.mocked(api.notifiers).mockResolvedValue([
+      saved,
+      {
+        ...saved,
+        id: 9,
+        type: 'webhook',
+        config: { url: 'https://discord.com/api/webhooks/1/x', format: 'discord' },
+      },
+    ])
+    vi.mocked(api.createNotifier).mockResolvedValue({ ...saved, id: 10 })
+  })
+
+  it('lists every way to be told, with the ones in use open', async () => {
+    const w = mount(NotificationsSection, { global: { plugins: plugins() } })
+    await flushPromises()
+    // E-mail is not offered by this server: not listed.
+    expect(w.findAll('[data-test^=kind-]').map((k) => k.attributes('data-test'))).toEqual([
+      'kind-telegram',
+      'kind-slack',
+      'kind-discord',
+      'kind-ntfy',
+      'kind-webhook',
+    ])
+    expect(w.get('[data-test=toggle-telegram]').attributes('aria-expanded')).toBe('true')
+    expect(w.get('[data-test=toggle-slack]').attributes('aria-expanded')).toBe('false')
+    // The Discord webhook is under Discord, not under Webhook.
+    expect(w.get('[data-test=kind-discord] [data-test=channel]').text()).toContain('discord.com')
+    expect(w.get('[data-test=kind-discord]').text()).toContain('1 of 1 on')
+    expect(w.get('[data-test=kind-slack]').text()).toContain('Not set up')
+    // Opening one shows how to set it up.
+    await w.get('[data-test=toggle-slack]').trigger('click')
+    expect(w.get('[data-test=kind-slack]').text()).toContain('Incoming Webhooks')
+  })
+
+  it('saves a Discord channel as a webhook in the Discord format, without asking for it', async () => {
+    const w = mount(NotificationsSection, { global: { plugins: plugins() } })
+    await flushPromises()
+    await w.get('[data-test=add-discord]').trigger('click')
+    const form = w.get('[data-test=kind-discord] [data-test=channel-form]')
+    expect(form.find('[name=format]').exists()).toBe(false)
+    expect(form.find('[name=secret]').exists()).toBe(false)
+    await form.get('input[name=url]').setValue('https://discord.com/api/webhooks/2/y')
+    await form.trigger('submit')
+    await flushPromises()
+    expect(api.createNotifier).toHaveBeenCalledWith({
+      type: 'webhook',
+      config: { url: 'https://discord.com/api/webhooks/2/y', format: 'discord' },
       min_severity: 'warning',
       notify_resolved: true,
     })

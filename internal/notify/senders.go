@@ -38,12 +38,31 @@ func newWebhook(cfg integration.Config, client *http.Client) (Sender, error) {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return nil, fmt.Errorf("%w: the webhook needs an http(s) URL", ErrConfig)
 	}
+	// A Slack, Discord or ntfy.sh address left as "json" (the default) gets its
+	// own format: they refuse Omini's events ("Cannot send an empty message").
+	if w.format == "json" {
+		w.format = formatOf(u)
+	}
 	switch w.format {
 	case "json", "slack", "discord", "ntfy":
 	default:
 		return nil, fmt.Errorf("%w: unknown format %q", ErrConfig, w.format)
 	}
 	return w, nil
+}
+
+// formatOf recognizes the services whose webhooks need their own format.
+func formatOf(u *url.URL) string {
+	host := strings.ToLower(u.Hostname())
+	switch {
+	case host == "hooks.slack.com":
+		return "slack"
+	case (host == "discord.com" || host == "discordapp.com" || strings.HasSuffix(host, ".discord.com")) && strings.HasPrefix(u.Path, "/api/webhooks/"):
+		return "discord"
+	case host == "ntfy.sh":
+		return "ntfy"
+	}
+	return "json"
 }
 
 func (w *webhook) Send(ctx context.Context, m Message) error {
