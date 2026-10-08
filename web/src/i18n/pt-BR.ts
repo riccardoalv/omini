@@ -71,6 +71,8 @@ const ptBR: typeof en = {
     refresh: 'Atualizar agora',
     resetLayout: 'Reorganizar mapa',
     hideOffline: 'Ocultar offline',
+    netFilter: 'Destacar uma VLAN ou sub-rede',
+    allNetworks: 'Todas as redes',
     showHidden: 'Mostrar ocultos',
     hideHidden: 'Esconder ocultos',
     showOffline: 'Mostrar offline',

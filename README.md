@@ -108,7 +108,7 @@ Omini opens straight into a **full-screen map** with a summary bar on top (devic
 - **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.
 - **Orientation:** the map is laid out left to right by default; one click switches to top down (dragged positions are kept separately for each orientation).
 - **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor (six presets or any color from the color picker: hue, hex or R/G/B, previewed live), hide or delete with a right click on the title ("Show hidden" brings a hidden one back). Areas show in both orientations.
-- **Automatic areas:** when the network has more than one VLAN or subnet, each gets an area of its own ("VLAN 20 · IOT", "LAN · 192.168.1.0/24") with the devices that are only in it — the firewall, trunk switches and access points carrying several stay between them. Rename or recolor them like any area; deleting one removes it for good.
+- **VLANs and subnets:** a picker in the map toolbar highlights everything in one VLAN or subnet and dims the rest.
 - **Expand and collapse:** the node you expand or collapse stays where it is on screen; the rest of the map makes room around it.
 - **Sidebar:** compact (icons) or expanded (icons and names).
 - **Theme:** dark by default, light available, follows your OS setting.
@@ -314,7 +314,7 @@ Omini ships in incremental releases, each one usable on its own.
 - Write actions behind explicit permissions
 - ✅ SNMP v3
 - ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)
-- ✅ VLANs and subnets as automatic map areas
+- ✅ VLAN and subnet filter on the map
 - ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
 - ✅ Topology export to draw.io (and PNG, SVG, JSON)
 - ✅ Collapsing an area into a bubble

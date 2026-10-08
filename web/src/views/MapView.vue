@@ -42,10 +42,9 @@ import {
   MIN_AREA_SIZE,
   membersOf,
   rectFrom,
-  regroup,
   withDescendants,
 } from '@/lib/areas'
-import { areaMembers, AUTO_AREA_COLORS, autoGroups } from '@/lib/autoAreas'
+import { autoGroups } from '@/lib/autoAreas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import {
   clientCount,
@@ -158,28 +157,27 @@ const view = computed(() =>
     ? collapseClients(mapGraph.value.nodes, mapGraph.value.edges, Infinity, new Set())
     : collapseAreas(clientView.value, collapsedAreaList.value),
 )
-/** Areas on the map: automatic ones the user removed are kept only so they are not made again. */
+/** Areas on the map: the ones the user drew (VLANs and subnets are a filter, not areas). */
 const liveAreas = computed(() =>
-  areas.value.filter((a) => !a.dismissed && (!a.hidden || showHidden.value)),
+  areas.value.filter((a) => !a.auto && !a.dismissed && (!a.hidden || showHidden.value)),
 )
 /**
- * One automatic area per VLAN and subnet (when there are several), with the
- * devices only in it; devices in an area the user drew stay in that one.
+ * The VLANs and subnets of the network (when there are several), each with
+ * every device in it: the toolbar's filter highlights one and dims the rest
+ * (as Omada, Auvik or Catalyst do) instead of drawing them as areas.
  */
-const autoAreaGroups = computed(() => {
-  const drawn = liveAreas.value.filter((a) => !a.auto).flatMap((a) => a.members)
-  return autoGroups(
-    mapGraph.value.nodes,
-    mapGraph.value.edges,
-    new Set(withDescendants(drawn, mapGraph.value.edges)),
-  )
+const networkGroups = computed(() =>
+  autoGroups(mapGraph.value.nodes, mapGraph.value.edges, new Set(), 'inclusive'),
+)
+const netFilter = ref<string>()
+/** Nodes of the picked VLAN or subnet, with what hangs below them; undefined: no filter. */
+const inNet = computed(() => {
+  const g = networkGroups.value.find((x) => x.key === netFilter.value)
+  return g ? new Set(withDescendants([...g.members], view.value.edges)) : undefined
 })
-const autoMembers = computed(() => new Map(autoAreaGroups.value.map((g) => [g.key, g.members])))
 /** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
 const collapsedAreaList = computed(() =>
-  liveAreas.value
-    .filter((a) => prefs.collapsedAreas.includes(a.id))
-    .map((a) => ({ ...a, members: areaMembers(a, clientView.value, autoMembers.value) })),
+  liveAreas.value.filter((a) => prefs.collapsedAreas.includes(a.id)),
 )
 const failedIntegrations = computed(
   () => new Set((data.value?.statuses ?? []).filter((s) => !s.ok).map((s) => s.integration_id)),
@@ -240,6 +238,7 @@ const flowNodes = computed<Node[]>(() => {
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
+    class: inNet.value && !inNet.value.has(n.id) ? 'net-dim' : undefined,
     // A Wi-Fi network has no panel or menu, but it can be moved like any node.
     ...(n.kind === 'ssid' ? { selectable: false, focusable: false } : {}),
   }))
@@ -288,6 +287,7 @@ const flowEdges = computed<Edge[]>(() => {
         slow: look.slow,
         vpn: look.vpn,
         offline: target ? !target.online : false,
+        'net-dim': !!inNet.value && !(inNet.value.has(e.source) && inNet.value.has(e.target)),
       },
       style: {
         strokeWidth: look.width,
@@ -328,16 +328,15 @@ async function load() {
 function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
   return liveAreas.value.map((a) => ({
     id: String(a.id),
-    children: withDescendants(areaMembers(a, view.value, autoMembers.value), edges),
+    members: a.members,
+    children: withDescendants(a.members, edges),
     padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
   }))
 }
 
 /** Areas and their devices (drawn or automatic): the map is laid out again when they change. */
 const autoAreaKey = computed(() =>
-  liveAreas.value
-    .map((a) => `${a.id}:${areaMembers(a, view.value, autoMembers.value).join(',')}`)
-    .join(';'),
+  liveAreas.value.map((a) => `${a.id}:${a.members.join(',')}`).join(';'),
 )
 
 // Re-layout only when the visible graph, the direction or the areas
@@ -450,8 +449,7 @@ const nodeBoxes = computed(
 )
 
 /** A node in an area brings everything below it (apps, clients, VMs). */
-const areaNodes = (a: MapArea) =>
-  withDescendants(areaMembers(a, view.value, autoMembers.value), view.value.edges)
+const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
 
 /**
  * Areas drawn around their nodes, in both orientations. An area with none of
@@ -554,10 +552,30 @@ async function regroupDropped(ids: string[]) {
   const dropped = ids.map((id) => nodeBoxes.value.get(id)).filter((b) => !!b)
   const rects = frozen.value
   const changes: Promise<void>[] = []
-  for (const a of areas.value) {
+  // A dropped device joins the innermost area it lands in (areas can sit
+  // inside others) and leaves every other: it belongs to one area.
+  const home = new Map<string, number>()
+  for (const d of dropped) {
+    const cx = d.x + d.width / 2
+    const cy = d.y + d.height / 2
+    let best: { id: number; size: number } | undefined
+    for (const [id, r] of Object.entries(rects)) {
+      if (cx < r.x || cx > r.x + r.width || cy < r.y || cy > r.y + r.height) continue
+      if (!best || r.width * r.height < best.size)
+        best = { id: Number(id), size: r.width * r.height }
+    }
+    if (best) home.set(d.id, best.id)
+  }
+  for (const a of liveAreas.value) {
     const rect = rects[a.id]
-    if (!rect || a.auto) continue // an automatic area's members are worked out
-    const members = regroup(a.members, rect, dropped)
+    if (!rect) continue
+    const members = [
+      // Kept unless it was dropped elsewhere (outside every area, or in another).
+      ...a.members.filter((m) =>
+        home.has(m) ? home.get(m) === a.id : !dropped.some((d) => d.id === m),
+      ),
+      ...[...home].filter(([m, id]) => id === a.id && !a.members.includes(m)).map(([m]) => m),
+    ]
     if (members.join() === a.members.join()) continue
     // The last member left: the area stays where it was.
     changes.push(saveArea(a.id, members.length ? { members } : { members, ...rect }))
@@ -575,6 +593,19 @@ function resizeArea(id: number, size: { width: number; height: number }) {
 }
 
 /** Resizing changes which devices are inside; the area then fits around them. */
+/** A device belongs to one area: putting it in one takes it out of the others. */
+async function claim(ids: string[], owner: number) {
+  const taken = new Set(ids)
+  const changes: Promise<unknown>[] = []
+  for (const a of areas.value) {
+    if (a.id === owner || !a.members.some((m) => taken.has(m))) continue
+    const members = a.members.filter((m) => !taken.has(m))
+    patchArea(a.id, { members })
+    changes.push(api.updateArea(a.id, { members }))
+  }
+  await Promise.all(changes)
+}
+
 async function finishResize(id: number) {
   const rect = frozen.value[id]
   try {
@@ -583,6 +614,7 @@ async function finishResize(id: number) {
       patchArea(id, { ...rect, members })
       frozen.value = {}
       await api.updateArea(id, { ...rect, members })
+      await claim(members, id)
     }
   } finally {
     frozen.value = {}
@@ -600,37 +632,6 @@ async function colorArea(id: number, color: string) {
   patchArea(id, { color })
   await api.updateArea(id, { color })
 }
-
-// Automatic areas: one per VLAN and subnet, created as they appear (once:
-// removing one only dismisses it). Colors go round a palette.
-const creatingAuto = new Set<string>()
-watch(autoAreaGroups, async (groups) => {
-  if (!data.value) return
-  const known = new Set(areas.value.map((a) => a.auto).filter(Boolean))
-  let next = areas.value.filter((a) => a.auto).length
-  for (const g of groups) {
-    if (known.has(g.key) || creatingAuto.has(g.key)) continue
-    creatingAuto.add(g.key)
-    try {
-      const created = await api.createArea({
-        name: g.name,
-        color: AUTO_AREA_COLORS[next++ % AUTO_AREA_COLORS.length]!,
-        direction: prefs.layoutDirection,
-        x: 0,
-        y: 0,
-        width: MIN_AREA_SIZE,
-        height: MIN_AREA_SIZE,
-        members: [],
-        auto: g.key,
-      })
-      if (!areas.value.some((a) => a.id === created.id)) areas.value = [...areas.value, created]
-    } catch {
-      // Tried again on the next change.
-    } finally {
-      creatingAuto.delete(g.key)
-    }
-  }
-})
 
 /** Hides an area (or shows a hidden one again): its frame leaves the map, its devices stay. */
 async function hideArea(id: number) {
@@ -695,6 +696,7 @@ async function onDrawEnd() {
   })
   areas.value = [...areas.value, created]
   editingArea.value = created.id // name it right away
+  await claim(members, created.id)
 }
 
 function onDrawKey(e: KeyboardEvent) {
@@ -1104,6 +1106,17 @@ onBeforeUnmount(() => {
             <template v-if="offlineCount"> ({{ offlineCount }})</template>
           </span>
         </button>
+        <select
+          v-if="networkGroups.length"
+          v-model="netFilter"
+          class="select small net-pick"
+          data-test="net-filter"
+          :class="{ active: netFilter }"
+          :aria-label="t('map.netFilter')"
+        >
+          <option :value="undefined">{{ t('map.allNetworks') }}</option>
+          <option v-for="g in networkGroups" :key="g.key" :value="g.key">{{ g.name }}</option>
+        </select>
         <button
           v-if="hiddenCount"
           class="btn small"
@@ -1439,6 +1452,19 @@ onBeforeUnmount(() => {
 /* Vue Flow theming */
 .flow :deep(.vue-flow__edge-path) {
   stroke: var(--edge);
+}
+.flow :deep(.vue-flow__node.net-dim),
+.flow :deep(.vue-flow__edge.net-dim) {
+  opacity: 0.15;
+}
+.net-pick {
+  width: auto;
+  max-width: 260px;
+  pointer-events: auto;
+}
+.net-pick.active {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .flow :deep(.vue-flow__edge.vpn .vue-flow__edge-path) {
   stroke: #a371f7;

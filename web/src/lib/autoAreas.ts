@@ -162,6 +162,8 @@ export function autoGroups(
   nodes: TopoNode[],
   edges: TopoEdge[],
   exclude: Set<string> = new Set(),
+  /** inclusive: a node is in every VLAN or subnet it is in (for the filter); exclusive: only in its one (for areas). */
+  mode: 'exclusive' | 'inclusive' = 'exclusive',
 ): AutoGroup[] {
   const vlans = networkVlans(nodes)
   const listed = new Set(vlans.map((v) => v.id))
@@ -206,7 +208,8 @@ export function autoGroups(
     // The default VLAN with a subnet is that subnet (the plain LAN).
     if (!listed.has(1) && ks.has('vlan:1') && [...ks].some((k) => k.startsWith('subnet:')))
       ks.delete('vlan:1')
-    if (ks.size === 1) members.get([...ks][0]!)?.add(id)
+    if (mode === 'inclusive') for (const k of ks) members.get(k)?.add(id)
+    else if (ks.size === 1) members.get([...ks][0]!)?.add(id)
   }
   // A node with no address or VLAN of its own (a scanned network, an
   // unmanaged switch, a Wi-Fi network) joins the area all its children are in.

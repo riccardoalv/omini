@@ -222,6 +222,10 @@ var migrations = []string{
 	`
 	ALTER TABLE areas ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 	`,
+	// 15: VLANs and subnets are a filter of the map now, not areas.
+	`
+	DELETE FROM areas WHERE auto IS NOT NULL;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

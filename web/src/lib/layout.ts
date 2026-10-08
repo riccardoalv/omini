@@ -19,6 +19,8 @@ export interface LayoutEdge {
 export interface LayoutGroup {
   id: string
   children: string[]
+  /** The nodes the user put in the area (children also has what hangs below them). */
+  members?: string[]
   /** Space between the box and its nodes: top, right, bottom, left. */
   padding: [number, number, number, number]
 }
@@ -213,6 +215,48 @@ function treeLayout(
   for (const n of nodes) visit(n.id) // cycles
   for (const [p, cs] of companions) for (const c of cs) depth.set(c, depth.get(p) ?? 0)
 
+  // An area holds its members only: members hanging from different parents
+  // are brought under the parent most of them share (their own links still
+  // cross the border), so the box never takes in the branches between them.
+  const top = new Map<LayoutGroup, string[]>()
+  const parentIn = new Map<string, string>()
+  for (const [p, cs] of children) for (const c of cs) parentIn.set(c, p)
+  for (const [id, g] of groupOf) {
+    const p = parentIn.get(id)
+    if (p !== undefined && groupOf.get(p) !== g) top.set(g, [...(top.get(g) ?? []), id])
+  }
+  let moved = false
+  for (const tops of top.values()) {
+    const count = new Map<string, number>()
+    for (const t of tops) count.set(parentIn.get(t)!, (count.get(parentIn.get(t)!) ?? 0) + 1)
+    if (count.size < 2) continue
+    const main = [...count].sort((a, b) => b[1] - a[1])[0]![0]
+    for (const t of tops) {
+      const p = parentIn.get(t)!
+      if (p === main) continue
+      children.set(
+        p,
+        (children.get(p) ?? []).filter((c) => c !== t),
+      )
+      children.set(main, [...(children.get(main) ?? []), t])
+      parentIn.set(t, main)
+      moved = true
+    }
+  }
+  if (moved) {
+    // Depths again, from the roots, along the new tree.
+    const queue = [...roots]
+    for (const r of roots) depth.set(r, 0)
+    while (queue.length) {
+      const id = queue.shift()!
+      for (const c of children.get(id) ?? []) {
+        depth.set(c, depth.get(id)! + 1)
+        queue.push(c)
+      }
+    }
+    for (const [p, cs] of companions) for (const c of cs) depth.set(c, depth.get(p) ?? 0)
+  }
+
   // Siblings of one area next to each other, where the first of them was.
   const parentOf = new Map<string, string>()
   for (const [p, cs] of children) for (const c of cs) parentOf.set(c, p)
@@ -358,6 +402,11 @@ export async function layout(
 ): Promise<Record<string, Point>> {
   const groupOf = new Map<string, LayoutGroup>()
   const all = new Set(allNodes.map((n) => n.id))
+  // A node put in an area belongs to it, even below a member of another (an
+  // area inside an area); what hangs below a member comes along otherwise.
+  for (const g of groups) {
+    for (const c of g.members ?? []) if (all.has(c) && !groupOf.has(c)) groupOf.set(c, g)
+  }
   for (const g of groups) {
     for (const c of g.children) if (all.has(c) && !groupOf.has(c)) groupOf.set(c, g)
   }
@@ -379,7 +428,29 @@ export async function layout(
   const out: Record<string, Point> = {}
   for (const [id, p] of Object.entries(tree)) out[id] = id.startsWith('pack:') ? p : (free[id] ?? p)
   unpack(packs, out, free)
-  return clearSaved(out, allNodes, free, direction)
+  const placed = clearSaved(out, allNodes, free, direction)
+  // Nothing but its members inside an area: a node dragged into a box it
+  // does not belong to goes back to its place in the tree.
+  const size = new Map(allNodes.map((n) => [n.id, n]))
+  for (const g of groups) {
+    const inside = new Set(g.children.filter((c) => placed[c] && size.has(c)))
+    if (!inside.size) continue
+    const xs = [...inside].map((c) => placed[c]!.x)
+    const ys = [...inside].map((c) => placed[c]!.y)
+    const left = Math.min(...xs) - g.padding[3]
+    const top = Math.min(...ys) - g.padding[0]
+    const right =
+      Math.max(...[...inside].map((c) => placed[c]!.x + size.get(c)!.width)) + g.padding[1]
+    const bottom =
+      Math.max(...[...inside].map((c) => placed[c]!.y + size.get(c)!.height)) + g.padding[2]
+    for (const [id, p] of Object.entries(placed)) {
+      const n = size.get(id)
+      if (!n || inside.has(id) || !free[id] || !tree[id]) continue
+      if (p.x < right && p.x + n.width > left && p.y < bottom && p.y + n.height > top)
+        placed[id] = tree[id]!
+    }
+  }
+  return placed
 }
 
 const GAP = 12

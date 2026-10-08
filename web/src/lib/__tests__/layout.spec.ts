@@ -369,3 +369,58 @@ describe('dragged nodes in areas', () => {
     expect(kept.vm1).toEqual(moved.vm1)
   })
 })
+
+describe('strict areas', () => {
+  const box = (id: string) => ({ id, width: 200, height: 40 })
+  const pad: [number, number, number, number] = [54, 24, 24, 24]
+  // fw → sw1 → {a, x}; fw → sw2 → {b, y}: the area holds a and b, from two branches.
+  const nodes = ['fw', 'sw1', 'sw2', 'a', 'b', 'x', 'y'].map(box)
+  const edges = [
+    { id: '1', source: 'fw', target: 'sw1' },
+    { id: '2', source: 'fw', target: 'sw2' },
+    { id: '3', source: 'sw1', target: 'a' },
+    { id: '4', source: 'sw1', target: 'x' },
+    { id: '5', source: 'sw2', target: 'b' },
+    { id: '6', source: 'sw2', target: 'y' },
+  ]
+  const rectOf = (pos: Record<string, { x: number; y: number }>, ids: string[]) => ({
+    left: Math.min(...ids.map((i) => pos[i]!.x)) - 24,
+    top: Math.min(...ids.map((i) => pos[i]!.y)) - 54,
+    right: Math.max(...ids.map((i) => pos[i]!.x + 200)) + 24,
+    bottom: Math.max(...ids.map((i) => pos[i]!.y + 40)) + 24,
+  })
+  const inside = (r: ReturnType<typeof rectOf>, p: { x: number; y: number }) =>
+    p.x < r.right && p.x + 200 > r.left && p.y < r.bottom && p.y + 40 > r.top
+
+  it('brings members from different branches together: nothing else inside', async () => {
+    for (const dir of ['RIGHT', 'DOWN'] as const) {
+      const pos = await layout(nodes, edges, {}, dir, [
+        { id: 'g', members: ['a', 'b'], children: ['a', 'b'], padding: pad },
+      ])
+      const r = rectOf(pos, ['a', 'b'])
+      for (const id of ['fw', 'sw1', 'sw2', 'x', 'y'])
+        expect(inside(r, pos[id]!), `${dir}: ${id}`).toBe(false)
+    }
+  })
+
+  it('keeps a node dragged once into a box it does not belong to out of it', async () => {
+    const free = await layout(nodes, edges, {}, 'RIGHT', [
+      { id: 'g', members: ['a', 'x'], children: ['a', 'x'], padding: pad },
+    ])
+    const target = free.a!
+    const pos = await layout(nodes, edges, { y: target }, 'RIGHT', [
+      { id: 'g', members: ['a', 'x'], children: ['a', 'x'], padding: pad },
+    ])
+    expect(inside(rectOf(pos, ['a', 'x']), pos.y!)).toBe(false)
+  })
+
+  it('lets an area sit inside another: a member of the inner one is not taken by the outer', async () => {
+    const outer = { id: 'o', members: ['sw1'], children: ['sw1', 'a', 'x'], padding: pad }
+    const inner = { id: 'i', members: ['a'], children: ['a'], padding: pad }
+    const pos = await layout(nodes, edges, {}, 'RIGHT', [outer, inner])
+    // The inner area's member stays inside the outer box; the other branch stays out.
+    const r = rectOf(pos, ['sw1', 'a', 'x'])
+    expect(inside(r, pos.a!)).toBe(true)
+    for (const id of ['sw2', 'b', 'y']) expect(inside(r, pos[id]!)).toBe(false)
+  })
+})

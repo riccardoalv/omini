@@ -69,6 +69,8 @@ export default {
     refresh: 'Refresh now',
     resetLayout: 'Reset layout',
     hideOffline: 'Hide offline',
+    netFilter: 'Highlight a VLAN or subnet',
+    allNetworks: 'All networks',
     showHidden: 'Show hidden',
     hideHidden: 'Hide hidden',
     showOffline: 'Show offline',

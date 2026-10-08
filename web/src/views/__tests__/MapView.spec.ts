@@ -85,7 +85,7 @@ describe('MapView', () => {
     w.unmount()
   })
 
-  it('creates an area for each subnet, once', async () => {
+  it('offers the subnets as a filter, not as areas', async () => {
     vi.mocked(api.integrations).mockResolvedValue([])
     vi.mocked(api.createArea).mockImplementation(async (a) => ({
       ...a,
@@ -127,14 +127,14 @@ describe('MapView', () => {
     })
     const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
-    const made = vi.mocked(api.createArea).mock.calls.map(([a]) => [a.auto, a.name])
-    expect(made).toEqual([
-      ['subnet:10.0.5.0/24', 'LAB · 10.0.5.0/24'],
-      ['subnet:192.168.1.0/24', 'LAN · 192.168.1.0/24'],
+    // No area is made: the subnets are a filter in the toolbar.
+    expect(api.createArea).not.toHaveBeenCalled()
+    const pick = w.get('[data-test=net-filter]')
+    expect(pick.findAll('option').map((o) => o.text())).toEqual([
+      'All networks',
+      'LAB · 10.0.5.0/24',
+      'LAN · 192.168.1.0/24',
     ])
-    // Each area is created once, though the map changes as they appear.
-    await flushPromises()
-    expect(api.createArea).toHaveBeenCalledTimes(2)
     w.unmount()
   })
 
