@@ -77,3 +77,30 @@ func TestInterfaceErrorsBetweenCollections(t *testing.T) {
 		t.Fatalf("errors during the interval: %+v", r)
 	}
 }
+
+// A 100 Mbit/s port cannot carry 1.8 Gbit/s: such a jump is a counter
+// glitch, not traffic, and gives no rate (no "1800 % saturated" alert).
+func TestImpossibleRateIsDiscarded(t *testing.T) {
+	m := newTrafficMeter()
+	t0 := time.Unix(1_790_000_000, 0)
+	snap := func(at time.Time, rx uint64) store.Snapshot {
+		return store.Snapshot{IntegrationID: 2, CollectedAt: at, OK: true, Devices: []model.Device{{
+			Key: "sw", Name: "sw",
+			Interfaces: []model.Interface{{Name: "Port 1", SpeedMbps: model.Ptr(uint64(100)), RxBytes: model.Ptr(rx), TxBytes: model.Ptr(uint64(0))}},
+		}}}
+	}
+	m.observe(snap(t0, 0))
+	m.observe(snap(t0.Add(time.Minute), 13_500_000_000)) // 1.8 Gbit/s over a minute
+	tp := topology.Topology{Nodes: []topology.Node{{ID: "dev:sw", Kind: topology.KindDevice, Device: &model.Device{Key: "sw"}}}}
+	m.attach(&tp)
+	if _, ok := tp.Nodes[0].Traffic["Port 1"]; ok {
+		t.Fatalf("an impossible rate was kept: %+v", tp.Nodes[0].Traffic)
+	}
+	// A plausible minute after it is measured again (50 Mbit/s).
+	m.observe(snap(t0.Add(2*time.Minute), 13_500_000_000+375_000_000))
+	tp = topology.Topology{Nodes: []topology.Node{{ID: "dev:sw", Kind: topology.KindDevice, Device: &model.Device{Key: "sw"}}}}
+	m.attach(&tp)
+	if r := tp.Nodes[0].Traffic["Port 1"]; r.RxBps != 50_000_000 {
+		t.Fatalf("plausible rate: %+v", tp.Nodes[0].Traffic)
+	}
+}

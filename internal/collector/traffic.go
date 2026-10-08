@@ -52,12 +52,19 @@ func (t *trafficMeter) observe(snap store.Snapshot) {
 			if !ok || secs <= 0 || now.rx < prev.rx || now.tx < prev.tx {
 				continue
 			}
+			rx, tx := float64(now.rx-prev.rx)*8/secs, float64(now.tx-prev.tx)*8/secs
+			// More than twice what the port can carry is a counter glitch (a
+			// reset not seen as one, a device answering with another's counters),
+			// never traffic: skip it rather than report a link at 1800 %.
+			if s := float64(deref(i.SpeedMbps)) * 1e6; s > 0 && max(rx, tx) > 2*s {
+				continue
+			}
 			if byDevice[d.Key] == nil {
 				byDevice[d.Key] = map[string]topology.Rate{}
 			}
 			byDevice[d.Key][i.Name] = topology.Rate{
-				RxBps:    uint64(float64(now.rx-prev.rx) * 8 / secs),
-				TxBps:    uint64(float64(now.tx-prev.tx) * 8 / secs),
+				RxBps:    uint64(rx),
+				TxBps:    uint64(tx),
 				RxErrors: grew(prev.rxErr, now.rxErr),
 				TxErrors: grew(prev.txErr, now.txErr),
 			}
