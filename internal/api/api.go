@@ -43,7 +43,9 @@ type Server struct {
 	Plugins   *plugins.Manager
 	Icons     http.Handler // app icons (internal/appicons); public, used by <img>
 	UI        fs.FS        // built web UI; nil serves a placeholder page
-	Version   string
+	// NotifyClient sends test notifications (nil: a default client).
+	NotifyClient *http.Client
+	Version      string
 }
 
 // Handler returns the HTTP handler with all routes.
@@ -95,6 +97,12 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/alerts/{id}/dismiss", s.dismissAlert)
 	private.HandleFunc("GET /api/presence", s.presence)
 	private.HandleFunc("GET /api/history", s.trafficHistory)
+	private.HandleFunc("GET /api/notifier-types", s.notifierTypes)
+	private.HandleFunc("GET /api/notifiers", s.listNotifiers)
+	private.HandleFunc("POST /api/notifiers", s.createNotifier)
+	private.HandleFunc("PUT /api/notifiers/{id}", s.updateNotifier)
+	private.HandleFunc("DELETE /api/notifiers/{id}", s.deleteNotifier)
+	private.HandleFunc("POST /api/notifiers/test", s.testNotifier)
 	mux.Handle("/api/", s.requireAuth(private))
 
 	mux.Handle("/", s.ui())

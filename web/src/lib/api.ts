@@ -1,5 +1,7 @@
 import type {
   Alert,
+  Notifier,
+  NotifierType,
   PresenceEvent,
   TrafficPoint,
   AuthStatus,
@@ -92,6 +94,15 @@ export const api = {
   updateIntegration: (id: number, input: IntegrationInput) =>
     request<Integration>('PUT', `/api/integrations/${id}`, input),
   deleteIntegration: (id: number) => request<void>('DELETE', `/api/integrations/${id}`),
+  notifierTypes: () => request<NotifierType[]>('GET', '/api/notifier-types'),
+  notifiers: () => request<Notifier[]>('GET', '/api/notifiers'),
+  createNotifier: (input: Partial<Omit<Notifier, 'id'>>) =>
+    request<Notifier>('POST', '/api/notifiers', input),
+  updateNotifier: (id: number, input: Partial<Omit<Notifier, 'id' | 'type'>>) =>
+    request<Notifier>('PUT', `/api/notifiers/${id}`, input),
+  deleteNotifier: (id: number) => request<void>('DELETE', `/api/notifiers/${id}`),
+  testNotifier: (input: { id?: number; type?: string; config?: Config }) =>
+    request<{ ok: boolean; error?: string }>('POST', '/api/notifiers/test', input),
   testIntegration: (input: { id?: number; type?: string; config: Config }) =>
     request<TestResult>('POST', '/api/integrations/test', input),
 

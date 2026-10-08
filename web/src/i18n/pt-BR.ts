@@ -435,6 +435,32 @@ const ptBR: typeof en = {
     'Scan one device': 'Escanear um dispositivo',
   },
   fields: {
+    notify_webhook: {
+      format: {
+        label: 'Formato',
+        help: 'json: os eventos do Omini; slack e discord: os webhooks de entrada deles; ntfy: a URL de um tópico.',
+      },
+      secret: {
+        label: 'Segredo de assinatura',
+        help: 'Opcional: as requisições levam X-Omini-Signature (HMAC sha256 do corpo).',
+      },
+    },
+    notify_telegram: {
+      token: { label: 'Token do bot', help: 'Crie um bot com o @BotFather e cole o token dele.' },
+      chat_id: {
+        label: 'ID do chat',
+        help: 'O id do seu usuário, grupo ou canal (mande uma mensagem ao @userinfobot para ver o seu).',
+      },
+    },
+    notify_email: {
+      host: { label: 'Servidor SMTP' },
+      port: { label: 'Porta' },
+      security: { label: 'Segurança' },
+      username: { label: 'Usuário' },
+      password: { label: 'Senha' },
+      from: { label: 'Remetente' },
+      to: { label: 'Destinatários', help: 'Um ou mais endereços, separados por vírgula.' },
+    },
     nmap: {
       subnets: {
         label: 'Sub-redes',
@@ -575,6 +601,23 @@ const ptBR: typeof en = {
     confirmRemove: 'Clique de novo para remover',
     dev: 'desenvolvimento',
     hint: 'Plugins conectam o Omini a dispositivos e softwares de outras marcas (OPNsense, roteadores, controladoras). Eles rodam no próprio ambiente Python.',
+  },
+  notifications: {
+    title: 'Notificações',
+    hint: 'Envie os alertas para um webhook (Slack, Discord, ntfy ou o seu), um bot do Telegram ou e-mail.',
+    add: 'Adicionar canal',
+    none: 'Nenhum canal ainda: os alertas só aparecem no Omini.',
+    types: { webhook: 'Webhook', telegram: 'Telegram', email: 'E-mail' },
+    minSeverity: 'Enviar alertas a partir de',
+    severity: { critical: 'Só críticos', warning: 'Atenção e críticos', info: 'Tudo' },
+    notifyResolved: 'Avisar também quando um alerta for resolvido',
+    enabled: 'Ativo',
+    test: 'Enviar um teste',
+    testOk: 'Mensagem de teste enviada.',
+    lastSent: 'Último envio {ago}',
+    never: 'Nada enviado ainda',
+    confirmDelete: 'Excluir este canal?',
+    missing: 'Preencha: {fields}',
   },
   settings: {
     title: 'Configurações',

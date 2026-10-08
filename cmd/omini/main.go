@@ -24,6 +24,7 @@ import (
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/nmapscan"
+	"github.com/riccardoalv/omini/internal/notify"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
@@ -149,7 +150,8 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 		return err
 	}
 
-	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval})
+	notifier := &notify.Dispatcher{Store: st, Box: box}
+	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
 		WebUI: webui.New(), Plugins: plugs, UI: web.FS(), Version: version,

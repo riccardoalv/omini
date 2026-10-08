@@ -351,3 +351,22 @@ export interface TrafficPoint {
   rx_max_bps?: number
   tx_max_bps?: number
 }
+
+/** A type of notification channel and its form. */
+export interface NotifierType {
+  type: 'webhook' | 'telegram' | 'email'
+  name: string
+  fields: FormField[]
+}
+
+/** A channel alerts are sent to (secrets come back masked). */
+export interface Notifier {
+  id: number
+  type: NotifierType['type']
+  config: Config
+  min_severity: Severity
+  notify_resolved: boolean
+  enabled: boolean
+  last_sent_at?: string
+  last_error?: string
+}

@@ -182,6 +182,20 @@ var migrations = []string{
 	CREATE UNIQUE INDEX alerts_open ON alerts(key) WHERE resolved_at IS NULL;
 	CREATE INDEX alerts_resolved ON alerts(resolved_at);
 	`,
+	// 11: notification channels (webhook, Telegram, e-mail).
+	`
+	CREATE TABLE notifiers (
+		id              INTEGER PRIMARY KEY,
+		type            TEXT    NOT NULL, -- webhook | telegram | email
+		config          TEXT    NOT NULL, -- JSON; secret fields sealed by internal/secret
+		min_severity    TEXT    NOT NULL DEFAULT 'warning',
+		notify_resolved INTEGER NOT NULL DEFAULT 1,
+		enabled         INTEGER NOT NULL DEFAULT 1,
+		last_sent_at    INTEGER,
+		last_error      TEXT,
+		created_at      INTEGER NOT NULL
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

@@ -314,7 +314,7 @@ Omini ships in incremental releases, each one usable on its own.
 - SNMP v3
 - More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense
 - VLAN view
-- Notifications (Telegram, e-mail, webhook)
+- ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
 - Topology export to draw.io (PNG, SVG and JSON: done)
 - ✅ Collapsing an area into a bubble
 

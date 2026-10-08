@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import NotificationsSection from '@/components/NotificationsSection.vue'
 import PluginsSection from '@/components/PluginsSection.vue'
 import { locales } from '@/i18n'
 import { api } from '@/lib/api'
@@ -64,6 +65,8 @@ onMounted(async () => {
         <span class="help">{{ t('settings.collapseHint') }}</span>
       </div>
     </section>
+
+    <NotificationsSection />
 
     <PluginsSection />
 
