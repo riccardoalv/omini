@@ -645,3 +645,27 @@ func TestALeftClientIsNotDrawnTwice(t *testing.T) {
 		t.Fatalf("the modem is drawn %d times: %v", len(ids), ids)
 	}
 }
+
+// The device list says where a managed device is connected too (its link),
+// not only for clients.
+func TestInventoryRecordsWhereDevicesHang(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	fw := model.Device{Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{"58:9c:fc:00:00:01"}}
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{"1c:2a:a3:00:00:01"},
+		Neighbors: []model.Neighbor{{LocalPort: "Port 8", Protocol: model.Ptr(model.NeighborProtocolLldp), RemoteName: model.Ptr("fw"), RemotePort: model.Ptr("igc1")}},
+	}
+	e.fake.set([]model.Device{fw, sw}, nil)
+	e.collect(t)
+	inv, _ := e.st.ListInventory(context.Background())
+	for _, x := range inv {
+		if x.ID == "dev:1c:2a:a3:00:00:01" {
+			if x.ParentID != "dev:58:9c:fc:00:00:01" || x.Port != "igc1" {
+				t.Fatalf("switch entry: parent %q port %q", x.ParentID, x.Port)
+			}
+			return
+		}
+	}
+	t.Fatal("no switch in the inventory")
+}

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -361,10 +362,22 @@ func (c *Collector) rebuild(ctx context.Context) error {
 		slog.Warn("could not save where MACs were learned", "err", err)
 	}
 
+	// Where each node hangs: clients carry it; devices only have their link.
+	uplink := map[string]topology.Edge{}
+	for _, e := range topo.Edges {
+		if _, ok := uplink[e.Target]; !ok && e.Kind != topology.EdgeVPN {
+			uplink[e.Target] = e
+		}
+	}
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
 	for _, n := range topo.Nodes {
 		if n.Online && n.Kind != topology.KindWAN { // an uplink is not a device
+			if n.ParentID == "" {
+				if e, ok := uplink[n.ID]; ok && !strings.HasPrefix(e.Source, "wan:") {
+					n.ParentID, n.Port = e.Source, e.SourcePort
+				}
+			}
 			seen = append(seen, store.InventoryEntry{
 				ID: n.ID, Kind: string(n.Kind), Label: n.Label, MAC: n.MAC, IP: n.IP,
 				Hostname: n.Hostname, Vendor: n.Vendor, ParentID: n.ParentID, Port: n.Port,
