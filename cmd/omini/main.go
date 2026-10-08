@@ -27,6 +27,7 @@ import (
 	"github.com/riccardoalv/omini/internal/notify"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
+	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/webui"
 	"github.com/riccardoalv/omini/sdk"
@@ -136,6 +137,12 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	reg.Register(netscan.New())
 	reg.Register(nmapscan.New())
 
+	// SNMP profiles: the shipped ones plus the user's (<data>/profiles/*.yaml).
+	if n, err := snmp.LoadProfiles(filepath.Join(cfg.DataDir, "profiles")); err != nil {
+		slog.Warn("some SNMP profiles could not be read", "err", err)
+	} else {
+		slog.Debug("snmp profiles loaded", "count", n)
+	}
 	plugs := &plugins.Manager{Dir: filepath.Join(cfg.DataDir, "plugins"), DevDirs: cfg.PluginDirs, UV: cfg.UV, SDK: sdk.Python}
 	loaded, loadErrs := plugs.Load()
 	for _, err := range loadErrs {

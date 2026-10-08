@@ -1,0 +1,9 @@
+# HPE / Aruba ProCurve switches (HP-SWITCH-POINT-MIB / STATISTICS-MIB).
+id: hpe-aruba
+name: HPE Aruba (ProCurve)
+priority: 10
+match:
+  sys_object_id: [1.3.6.1.4.1.11.2.3.7.11]
+vendor: HPE Aruba
+role: switch
+cpu_pct: { oid: 1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0 } # hpSwitchCpuStat

@@ -1,4 +1,4 @@
-// Package snmp implements the generic SNMP v2c integration, which covers most
+// Package snmp implements the generic SNMP (v2c and v3) integration, which covers most
 // managed switches, routers and firewalls through standard MIBs.
 package snmp
 
@@ -18,7 +18,7 @@ type client struct {
 	g *gosnmp.GoSNMP
 }
 
-func dial(ctx context.Context, host string, port int, community string, timeout time.Duration) (*client, error) {
+func dial(ctx context.Context, host string, port int, community string, v3 *V3, timeout time.Duration) (*client, error) {
 	g := &gosnmp.GoSNMP{
 		Target:         host,
 		Port:           uint16(port),
@@ -29,10 +29,78 @@ func dial(ctx context.Context, host string, port int, community string, timeout 
 		MaxRepetitions: 25,
 		Context:        ctx,
 	}
+	if v3 != nil {
+		if err := v3.apply(g); err != nil {
+			return nil, err
+		}
+	}
 	if err := g.Connect(); err != nil {
 		return nil, fmt.Errorf("connect %s:%d: %w", host, port, err)
 	}
 	return &client{g: g}, nil
+}
+
+// V3 holds SNMP v3 (USM) credentials: a user, optionally authenticated
+// (MD5, SHA...) and encrypted (DES, AES...).
+type V3 struct {
+	User      string
+	Auth      string // none | md5 | sha | sha224 | sha256 | sha384 | sha512
+	AuthPass  string
+	Priv      string // none | des | aes | aes192 | aes256 | aes192c | aes256c
+	PrivPass  string
+	ContextID string // context name, rarely needed
+}
+
+var authProtocols = map[string]gosnmp.SnmpV3AuthProtocol{
+	"": gosnmp.NoAuth, "none": gosnmp.NoAuth, "md5": gosnmp.MD5, "sha": gosnmp.SHA,
+	"sha224": gosnmp.SHA224, "sha256": gosnmp.SHA256, "sha384": gosnmp.SHA384, "sha512": gosnmp.SHA512,
+}
+
+var privProtocols = map[string]gosnmp.SnmpV3PrivProtocol{
+	"": gosnmp.NoPriv, "none": gosnmp.NoPriv, "des": gosnmp.DES, "aes": gosnmp.AES,
+	"aes192": gosnmp.AES192, "aes256": gosnmp.AES256, "aes192c": gosnmp.AES192C, "aes256c": gosnmp.AES256C,
+}
+
+// Check validates the credentials (protocols known, privacy only with authentication).
+func (v *V3) Check() error {
+	return v.apply(&gosnmp.GoSNMP{})
+}
+
+// apply configures a session for v3: the security level follows the
+// protocols given (no auth, auth without privacy, auth and privacy).
+func (v *V3) apply(g *gosnmp.GoSNMP) error {
+	auth, ok := authProtocols[strings.ToLower(v.Auth)]
+	if !ok {
+		return fmt.Errorf("unknown SNMP v3 authentication %q", v.Auth)
+	}
+	priv, ok := privProtocols[strings.ToLower(v.Priv)]
+	if !ok {
+		return fmt.Errorf("unknown SNMP v3 privacy %q", v.Priv)
+	}
+	if v.User == "" {
+		return fmt.Errorf("the SNMP v3 user is required")
+	}
+	flags := gosnmp.NoAuthNoPriv
+	switch {
+	case auth != gosnmp.NoAuth && priv != gosnmp.NoPriv:
+		flags = gosnmp.AuthPriv
+	case auth != gosnmp.NoAuth:
+		flags = gosnmp.AuthNoPriv
+	case priv != gosnmp.NoPriv:
+		return fmt.Errorf("SNMP v3 privacy needs authentication")
+	}
+	g.Version = gosnmp.Version3
+	g.SecurityModel = gosnmp.UserSecurityModel
+	g.MsgFlags = flags
+	g.ContextName = v.ContextID
+	g.SecurityParameters = &gosnmp.UsmSecurityParameters{
+		UserName:                 v.User,
+		AuthenticationProtocol:   auth,
+		AuthenticationPassphrase: v.AuthPass,
+		PrivacyProtocol:          priv,
+		PrivacyPassphrase:        v.PrivPass,
+	}
+	return nil
 }
 
 func (c *client) close() {

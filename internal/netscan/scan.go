@@ -73,6 +73,7 @@ func (*Integration) Info() integration.Info {
 func fields() []model.FormField {
 	methods := model.Ptr("Methods")
 	advanced := model.Ptr("Advanced")
+	v3 := model.Ptr("SNMP v3")
 	method := func(key, label, help string) model.FormField {
 		return model.FormField{Key: key, Type: model.FormFieldTypeBool, Label: model.Ptr(label), Help: model.Ptr(help), Default: true, Group: methods}
 	}
@@ -90,11 +91,25 @@ func fields() []model.FormField {
 		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players."),
 		method("web_titles", "Web page titles", "Reads the title of web interfaces to recognize apps (Proxmox, TrueNAS, Home Assistant...)."),
 		method("ssh_banners", "SSH banners", "Reads the SSH version line, which often names the operating system."),
-		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP v2c enabled. Read-only."),
+		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP (v2c or v3) enabled. Read-only."),
 		{
 			Key: "snmp_communities", Type: model.FormFieldTypeSecret, Label: model.Ptr("SNMP communities"), Default: "public", Group: methods,
 			Help: model.Ptr(`Read-only communities to try, separated by commas (e.g. "public, homelab"). It is the "community" or "read community" set in the device's SNMP settings.`),
 		},
+		{
+			Key: "snmp_v3_user", Type: model.FormFieldTypeString, Label: model.Ptr("User"), Group: v3,
+			Help: model.Ptr("Set it to also try SNMP v3 (tried before the communities). Leave empty for v2c only."),
+		},
+		{
+			Key: "snmp_v3_auth", Type: model.FormFieldTypeSelect, Label: model.Ptr("Authentication"), Group: v3, Default: "sha",
+			Options: []string{"none", "md5", "sha", "sha224", "sha256", "sha384", "sha512"},
+		},
+		{Key: "snmp_v3_auth_pass", Type: model.FormFieldTypeSecret, Label: model.Ptr("Authentication password"), Group: v3},
+		{
+			Key: "snmp_v3_priv", Type: model.FormFieldTypeSelect, Label: model.Ptr("Privacy (encryption)"), Group: v3, Default: "aes",
+			Options: []string{"none", "des", "aes", "aes192", "aes256"},
+		},
+		{Key: "snmp_v3_priv_pass", Type: model.FormFieldTypeSecret, Label: model.Ptr("Privacy password"), Group: v3},
 		{
 			Key: "ports", Type: model.FormFieldTypeString, Label: model.Ptr("Ports to check"), Group: advanced,
 			Help: model.Ptr("Empty uses the common homelab ports. Example: 22,80,443,8000-8100 (at most 1024 ports)."),
@@ -111,6 +126,7 @@ func fields() []model.FormField {
 type options struct {
 	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners, snmp bool
 	communities                                                       []string
+	v3                                                                *snmp.V3
 	portList                                                          []int
 	deepEvery                                                         time.Duration
 }
@@ -145,6 +161,15 @@ func (s *Integration) options(cfg integration.Config) (options, error) {
 	}
 	if len(o.communities) > 10 {
 		return o, fmt.Errorf("at most 10 SNMP communities")
+	}
+	if user := strings.TrimSpace(cfg.String("snmp_v3_user")); user != "" {
+		o.v3 = &snmp.V3{
+			User: user, Auth: cfg.String("snmp_v3_auth"), AuthPass: cfg.String("snmp_v3_auth_pass"),
+			Priv: cfg.String("snmp_v3_priv"), PrivPass: cfg.String("snmp_v3_priv_pass"),
+		}
+		if err := o.v3.Check(); err != nil {
+			return o, err
+		}
 	}
 	if spec := strings.TrimSpace(cfg.String("ports")); spec != "" {
 		list, err := parsePorts(spec)
@@ -445,7 +470,7 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	// Managed devices: a full SNMP read every run (traffic needs fresh counters).
 	var managed []model.Device
 	if opts.snmp {
-		managed = s.collectSNMP(ctx, list)
+		managed = s.collectSNMP(ctx, list, opts.v3)
 	}
 
 	if ctx.Err() != nil {
@@ -454,22 +479,28 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	return append(s.devices(prefixes, locals, hosts), managed...), nil
 }
 
-func (s *Integration) snmpTarget(ip netip.Addr, community string) snmp.Target {
-	return snmp.Target{Host: ip.String(), Port: s.SNMPPort, Community: community, Timeout: s.SNMPTimeout}
+// snmpTarget is a host's agent with the credential it answered to (a
+// community, or snmp.V3Credential for the v3 user).
+func (s *Integration) snmpTarget(ip netip.Addr, credential string, v3 *snmp.V3) snmp.Target {
+	t := snmp.Target{Host: ip.String(), Port: s.SNMPPort, Community: credential, Timeout: s.SNMPTimeout}
+	if credential == snmp.V3Credential {
+		t.Community, t.V3 = "", v3
+	}
+	return t
 }
 
 // collectSNMP reads every host whose SNMP agent answered during the deep scan.
-func (s *Integration) collectSNMP(ctx context.Context, hosts []*hostAcc) []model.Device {
+func (s *Integration) collectSNMP(ctx context.Context, hosts []*hostAcc, v3 *snmp.V3) []model.Device {
 	var (
 		mu  sync.Mutex
 		out []model.Device
 	)
 	sweepHosts(ctx, hosts, 8, func(h *hostAcc) {
-		community := s.cached(h).snmp
-		if community == "" {
+		credential := s.cached(h).snmp
+		if credential == "" || (credential == snmp.V3Credential && v3 == nil) {
 			return
 		}
-		d, err := snmp.Collect(ctx, s.snmpTarget(h.ip, community))
+		d, err := snmp.Collect(ctx, s.snmpTarget(h.ip, credential, v3))
 		if err != nil {
 			slog.Debug("snmp read failed", "host", h.ip, "err", err)
 			return
@@ -507,7 +538,9 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 		d.netbios = netbiosName(h.ip, 800*time.Millisecond)
 	}
 	if opts.snmp {
-		d.snmp, _ = snmp.Probe(ctx, s.snmpTarget(h.ip, ""), opts.communities)
+		probe := s.snmpTarget(h.ip, "", nil)
+		probe.V3 = opts.v3
+		d.snmp, _ = snmp.Probe(ctx, probe, opts.communities)
 	}
 	if opts.banners && slices.Contains(d.ports, 22) {
 		d.banner = sshBanner(ctx, h.ip, 1500*time.Millisecond)

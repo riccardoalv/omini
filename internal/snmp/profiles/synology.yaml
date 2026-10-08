@@ -1,0 +1,18 @@
+# Synology DSM (SYNOLOGY-SYSTEM-MIB, SYNOLOGY-DISK-MIB). DSM's agent is
+# Net-SNMP: CPU, memory and load come from the net-snmp profile.
+id: synology
+name: Synology DSM
+priority: 20
+match:
+  oid_exists: [1.3.6.1.4.1.6574.1.5.1.0] # modelName
+vendor: Synology
+role: server
+model: { oid: 1.3.6.1.4.1.6574.1.5.1.0 } # modelName
+serial: { oid: 1.3.6.1.4.1.6574.1.5.2.0 } # serialNumber
+os_version: { oid: 1.3.6.1.4.1.6574.1.5.3.0 } # version
+temperatures:
+  - { sensor: System, kind: board, oid: 1.3.6.1.4.1.6574.1.2.0 } # temperature
+  - { sensor: Disks (hottest), kind: disk, oid: 1.3.6.1.4.1.6574.2.1.1.6, walk: max } # diskTemperature
+firmware:
+  current: { oid: 1.3.6.1.4.1.6574.1.5.3.0 }
+  update_available: { oid: 1.3.6.1.4.1.6574.1.5.4.0, map: { "1": "true", "2": "false" } } # upgradeAvailable

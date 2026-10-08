@@ -297,7 +297,7 @@ Omini ships in incremental releases, each one usable on its own.
 
 - Remote store index and a full store screen
 - Review process to promote a plugin between trust levels
-- YAML SNMP profiles
+- ✅ YAML SNMP profiles
 
 ### v0.4 — public launch
 
@@ -311,7 +311,7 @@ Omini ships in incremental releases, each one usable on its own.
 - ✅ Long-term traffic history (hourly average and peak, kept a year)
 - "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
-- SNMP v3
+- ✅ SNMP v3
 - ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)
 - ✅ VLAN view
 - ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
@@ -325,7 +325,6 @@ Omini ships in incremental releases, each one usable on its own.
 
 ### Open questions
 
-- SNMP profile format (YAML schema)
 - Where the store index lives and how plugins are reviewed
 - Discovery methods and the privileges they need (ICMP/ARP without root)
 

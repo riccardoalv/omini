@@ -451,6 +451,7 @@ const ptBR: typeof en = {
     Methods: 'Métodos',
     Advanced: 'Avançado',
     'Scan one device': 'Escanear um dispositivo',
+    'SNMP v3': 'SNMP v3',
   },
   fields: {
     notify_webhook: {
@@ -515,6 +516,14 @@ const ptBR: typeof en = {
       },
     },
     network: {
+      snmp_v3_user: {
+        label: 'Usuário',
+        help: 'Preencha para tentar também o SNMP v3 (antes das comunidades). Vazio: só v2c.',
+      },
+      snmp_v3_auth: { label: 'Autenticação' },
+      snmp_v3_auth_pass: { label: 'Senha de autenticação' },
+      snmp_v3_priv: { label: 'Privacidade (criptografia)' },
+      snmp_v3_priv_pass: { label: 'Senha de privacidade' },
       subnets: {
         label: 'Sub-redes',
         help: '"auto" varre as redes às quais este servidor está conectado, ou liste-as: 192.168.1.0/24, 10.0.20.0/24',
@@ -554,7 +563,7 @@ const ptBR: typeof en = {
       },
       snmp: {
         label: 'SNMP',
-        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP v2c ativado. Somente leitura.',
+        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Somente leitura.',
       },
       snmp_communities: {
         label: 'Communities SNMP',

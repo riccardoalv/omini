@@ -1,0 +1,11 @@
+# Juniper Junos (JUNIPER-MIB jnxOperatingTable: one row per component).
+id: juniper
+name: Juniper Junos
+priority: 10
+match:
+  sys_object_id: [1.3.6.1.4.1.2636]
+vendor: Juniper
+cpu_pct: { oid: 1.3.6.1.4.1.2636.3.1.13.1.8, walk: max } # jnxOperatingCPU
+mem_pct: { oid: 1.3.6.1.4.1.2636.3.1.13.1.11, walk: max } # jnxOperatingBuffer
+temperatures:
+  - { sensor: Components (hottest), kind: board, oid: 1.3.6.1.4.1.2636.3.1.13.1.7, walk: max } # jnxOperatingTemp

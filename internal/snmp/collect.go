@@ -15,11 +15,12 @@ import (
 	"github.com/riccardoalv/omini/internal/model"
 )
 
-// Target is an SNMP v2c agent to read.
+// Target is an SNMP agent to read: v2c with a community, or v3 with a user.
 type Target struct {
 	Host      string
 	Port      int           // default 161
-	Community string        // default "public"
+	Community string        // v2c; default "public"
+	V3        *V3           // v3 credentials (then Community is not used)
 	Timeout   time.Duration // per request (one retry is made); default 3s
 }
 
@@ -36,22 +37,30 @@ func (t Target) dial(ctx context.Context) (*client, error) {
 	if t.Timeout == 0 {
 		t.Timeout = 3 * time.Second
 	}
-	return dial(ctx, t.Host, t.Port, t.Community, t.Timeout)
+	return dial(ctx, t.Host, t.Port, t.Community, t.V3, t.Timeout)
 }
 
-// Probe returns the first community the host answers to, if any. A single
-// quick request per community, without retries: most hosts have no agent.
+// V3Credential is what Probe returns when the host answered to the v3
+// credentials (Target.V3) rather than to a community.
+const V3Credential = "\x00v3"
+
+// Probe returns the credential the host answers to, if any: V3Credential
+// when it answers to the v3 user (tried first, when set), else the first
+// community. A single quick request each, without retries: most hosts have
+// no agent.
 func Probe(ctx context.Context, t Target, communities []string) (string, bool) {
-	for _, community := range communities {
-		t.Community = community
-		c, err := t.dial(ctx)
-		if err != nil {
+	if t.V3 != nil {
+		if answers(ctx, t) {
+			return V3Credential, true
+		}
+		if ctx.Err() != nil {
 			return "", false
 		}
-		c.g.Retries = 0
-		sys, err := c.get(oidSysName, oidSysObjectID)
-		c.close()
-		if err == nil && len(sys) > 0 {
+	}
+	t.V3 = nil
+	for _, community := range communities {
+		t.Community = community
+		if answers(ctx, t) {
 			return community, true
 		}
 		if ctx.Err() != nil {
@@ -59,6 +68,18 @@ func Probe(ctx context.Context, t Target, communities []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// answers reports whether the agent answers a quick read with these credentials.
+func answers(ctx context.Context, t Target) bool {
+	c, err := t.dial(ctx)
+	if err != nil {
+		return false
+	}
+	defer c.close()
+	c.g.Retries = 0
+	sys, err := c.get(oidSysName, oidSysObjectID)
+	return err == nil && len(sys) > 0
 }
 
 // Collect reads a managed switch, router or firewall: system, interfaces and
@@ -98,6 +119,12 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 		log.Debug("host resources unavailable", "err", err)
 	}
 	d.Role = model.Ptr(guessRole(c, &d))
+	// Vendor profiles: what the standard MIBs lack (vendor CPU, temperatures...).
+	if sys, err := c.get(oidSysObjectID, oidSysDescr); err == nil {
+		if used := applyProfiles(c, &d, pduString(sys[oidSysObjectID]), pduString(sys[oidSysDescr])); len(used) > 0 {
+			log.Debug("snmp profiles applied", "profiles", used)
+		}
+	}
 	// Stable identity: the chassis MAC (LLDP) or first interface MAC, else the host.
 	d.Key = host
 	if len(d.MACs) > 0 {
@@ -110,7 +137,7 @@ func collectSystem(c *client, host string) (model.Device, error) {
 	sys, err := c.get(oidSysDescr, oidSysObjectID, oidSysUpTime, oidSysName,
 		oidLldpLocChassisIDSubtype, oidLldpLocChassisID)
 	if err != nil {
-		return model.Device{}, fmt.Errorf("no SNMP response from %s (check host, community and that SNMP v2c is enabled): %w", host, err)
+		return model.Device{}, fmt.Errorf("no SNMP response from %s (check host, community or v3 user and that SNMP is enabled): %w", host, err)
 	}
 	d := model.Device{Host: model.Ptr(host), Name: pduString(sys[oidSysName])}
 	if d.Name == "" {
