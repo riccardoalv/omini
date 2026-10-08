@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { plugins } from '@/components/__tests__/helpers'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 
 import SettingsView from '../SettingsView.vue'
 
@@ -17,6 +17,7 @@ vi.mock('@/lib/api', async (orig) => {
       notifierTypes: vi.fn<typeof mod.api.notifierTypes>().mockResolvedValue([]),
       notifiers: vi.fn<typeof mod.api.notifiers>().mockResolvedValue([]),
       plugins: vi.fn<typeof mod.api.plugins>().mockResolvedValue([]),
+      changePassword: vi.fn<typeof mod.api.changePassword>(),
     },
   }
 })
@@ -45,5 +46,35 @@ describe('SettingsView', () => {
     await w.get('[data-test=section-about]').trigger('click')
     await flushPromises()
     expect(w.text()).toContain('Version 0.4.0')
+  })
+  it('changes the password, checking it before sending', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/settings', component: SettingsView }],
+    })
+    await router.push('/settings?section=account')
+    const w = mount(SettingsView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    await w.get('[data-test=change-password]').trigger('click')
+    const [current, next, again] = w.findAll('[data-test=password-form] input')
+    await current!.setValue('old password')
+    await next!.setValue('new password')
+    await again!.setValue('new passw0rd')
+    await w.get('[data-test=password-form]').trigger('submit')
+    expect(w.text()).toContain('do not match')
+    expect(api.changePassword).not.toHaveBeenCalled()
+
+    vi.mocked(api.changePassword).mockRejectedValueOnce(new ApiError(403, 'wrong'))
+    await again!.setValue('new password')
+    await w.get('[data-test=password-form]').trigger('submit')
+    await flushPromises()
+    expect(api.changePassword).toHaveBeenCalledWith('old password', 'new password')
+    expect(w.text()).toContain('current password is wrong')
+
+    vi.mocked(api.changePassword).mockResolvedValueOnce(undefined)
+    await w.get('[data-test=password-form]').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-test=password-form]').exists()).toBe(false)
+    expect(w.find('[data-test=password-saved]').exists()).toBe(true)
   })
 })

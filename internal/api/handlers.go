@@ -131,6 +131,31 @@ func (s *Server) updateMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, userView{Authenticated: true, Username: u.Username, Locale: u.Locale})
 }
 
+// changePassword sets a new admin password; other sessions are signed out.
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Current string `json:"current"`
+		New     string `json:"new"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	err := s.Auth.ChangePassword(r.Context(), sessionToken(r), in.Current, in.New)
+	switch {
+	case errors.Is(err, auth.ErrUnauthenticated):
+		writeError(w, http.StatusUnauthorized, "login required")
+	case errors.Is(err, auth.ErrWrongPassword):
+		// Not 401: the session is fine, only the password typed is wrong.
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, auth.ErrPasswordTooShort):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		internalError(w, err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 	if token := sessionToken(r); token != "" {
 		if err := s.Auth.Logout(r.Context(), token); err != nil {

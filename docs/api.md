@@ -47,6 +47,7 @@ Requests without it get 403.
 | `POST` | `/api/auth/login` | no | Body `{username, password}`. Sets the session cookie. 401 on wrong credentials |
 | `POST` | `/api/auth/logout` | no | Ends the session |
 | `PATCH` | `/api/me` | yes | Body `{locale}`: `en`, `pt-BR` or `""` (the browser's) |
+| `POST` | `/api/me/password` | yes | Body `{current, new}` (8+ characters). `204`; `403` when the current password is wrong; other sessions are signed out |
 
 Every other `/api/` route requires a session and answers 401 without one.
 

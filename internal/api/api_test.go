@@ -678,3 +678,24 @@ func TestCapabilities(t *testing.T) {
 		t.Fatalf("no host_network: %+v", got)
 	}
 }
+
+func TestChangePassword(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	if code := h.do("POST", "/api/me/password", map[string]string{"current": "nope nope", "new": "new password"}, nil); code != http.StatusForbidden {
+		t.Fatalf("wrong current password: %d, want 403", code)
+	}
+	if code := h.do("POST", "/api/me/password", map[string]string{"current": "correct horse", "new": "short"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("short password: %d, want 400", code)
+	}
+	if code := h.do("POST", "/api/me/password", map[string]string{"current": "correct horse", "new": "new password"}, nil); code != http.StatusNoContent {
+		t.Fatalf("change: %d", code)
+	}
+	if code := h.do("GET", "/api/integrations", nil, nil); code != 200 {
+		t.Fatalf("still signed in: %d", code)
+	}
+	h.do("POST", "/api/auth/logout", nil, nil)
+	if code := h.do("POST", "/api/auth/login", map[string]string{"username": "admin", "password": "new password"}, nil); code != 200 {
+		t.Fatalf("login with the new password: %d", code)
+	}
+}

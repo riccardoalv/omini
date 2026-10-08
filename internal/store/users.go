@@ -59,6 +59,25 @@ func (s *Store) SetUserLocale(ctx context.Context, userID int64, locale string) 
 	return nil
 }
 
+// SetUserPassword replaces the user's password hash.
+func (s *Store) SetUserPassword(ctx context.Context, userID int64, passwordHash string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, passwordHash, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteUserSessions signs the user out everywhere but the session whose
+// token hash is keep (empty: everywhere).
+func (s *Store) DeleteUserSessions(ctx context.Context, userID int64, keep string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?`, userID, keep)
+	return err
+}
+
 // CreateSession stores a session by the hash of its token (never the token itself).
 func (s *Store) CreateSession(ctx context.Context, tokenHash string, userID int64, expires time.Time) error {
 	_, err := s.db.ExecContext(ctx,
@@ -92,4 +111,14 @@ func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
 func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, unix(now))
 	return err
+}
+
+// AdminUsername is the name of the first user (Omini has a single admin).
+func (s *Store) AdminUsername(ctx context.Context) (string, error) {
+	var name string
+	err := s.db.QueryRowContext(ctx, `SELECT username FROM users ORDER BY id LIMIT 1`).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return name, err
 }

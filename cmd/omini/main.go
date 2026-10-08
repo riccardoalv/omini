@@ -118,6 +118,13 @@ func main() {
 		os.Exit(2)
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel})))
+	if len(os.Args) > 1 && os.Args[1] == "reset-password" {
+		if err := resetPassword(context.Background(), cfg, os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "omini:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err = run(ctx, cfg, nil)
 	stop()

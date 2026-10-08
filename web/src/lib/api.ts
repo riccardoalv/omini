@@ -95,6 +95,8 @@ export const api = {
     request<AuthStatus>('POST', '/api/auth/login', { username, password }),
   logout: () => request<AuthStatus>('POST', '/api/auth/logout'),
   updateMe: (input: { locale?: string }) => request<AuthStatus>('PATCH', '/api/me', input),
+  changePassword: (current: string, next: string) =>
+    request<void>('POST', '/api/me/password', { current, new: next }),
 
   health: () => request<{ status: string; version: string }>('GET', '/api/health'),
 

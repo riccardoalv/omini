@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -142,5 +143,22 @@ func TestHideDevice(t *testing.T) {
 	}
 	if e, _ = s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{Hidden: &no}); e.Hidden {
 		t.Fatal("unhide failed")
+	}
+}
+
+func TestNewerDatabaseIsRefused(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "omini.db")
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A newer Omini migrated it further than this one knows.
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", len(migrations)+1)); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if _, err := Open(ctx, path); !errors.Is(err, ErrNewerDatabase) {
+		t.Fatalf("opening a newer database: %v", err)
 	}
 }

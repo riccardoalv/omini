@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import NotificationsSection from '@/components/NotificationsSection.vue'
 import { locales } from '@/i18n'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { prefs } from '@/lib/prefs'
 import { session, setLocale, signOut } from '@/lib/session'
 
@@ -18,6 +18,56 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const version = ref('')
+
+// Changing the admin password (Account).
+const pw = ref({
+  open: false,
+  current: '',
+  next: '',
+  confirm: '',
+  busy: false,
+  error: '',
+  saved: false,
+})
+function openPassword() {
+  pw.value = {
+    open: true,
+    current: '',
+    next: '',
+    confirm: '',
+    busy: false,
+    error: '',
+    saved: false,
+  }
+}
+async function savePassword() {
+  const p = pw.value
+  p.error = ''
+  if (p.next.length < 8) return (p.error = t('settings.password.tooShort'))
+  if (p.next !== p.confirm) return (p.error = t('settings.password.mismatch'))
+  p.busy = true
+  try {
+    await api.changePassword(p.current, p.next)
+    pw.value = {
+      open: false,
+      current: '',
+      next: '',
+      confirm: '',
+      busy: false,
+      error: '',
+      saved: true,
+    }
+  } catch (e) {
+    p.error =
+      e instanceof ApiError && e.status === 403
+        ? t('settings.password.wrong')
+        : e instanceof ApiError
+          ? e.message
+          : t('common.error')
+  } finally {
+    p.busy = false
+  }
+}
 
 const sections = [
   { id: 'general', icon: Palette },
@@ -144,6 +194,61 @@ onMounted(async () => {
                 {{ t('auth.signOut') }}
               </button>
             </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="label">{{ t('settings.password.title') }}</span>
+                <small class="muted">{{ t('settings.password.hint') }}</small>
+                <small v-if="pw.saved" class="ok" data-test="password-saved">{{
+                  t('settings.password.saved')
+                }}</small>
+              </div>
+              <button v-if="!pw.open" class="btn" data-test="change-password" @click="openPassword">
+                {{ t('settings.password.change') }}
+              </button>
+            </div>
+            <form
+              v-if="pw.open"
+              class="row password"
+              data-test="password-form"
+              @submit.prevent="savePassword"
+            >
+              <input
+                v-model="pw.current"
+                class="input"
+                type="password"
+                autocomplete="current-password"
+                :placeholder="t('settings.password.current')"
+                :aria-label="t('settings.password.current')"
+                required
+              />
+              <input
+                v-model="pw.next"
+                class="input"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="t('settings.password.new')"
+                :aria-label="t('settings.password.new')"
+                required
+              />
+              <input
+                v-model="pw.confirm"
+                class="input"
+                type="password"
+                autocomplete="new-password"
+                :placeholder="t('settings.password.confirm')"
+                :aria-label="t('settings.password.confirm')"
+                required
+              />
+              <p v-if="pw.error" class="error" role="alert">{{ pw.error }}</p>
+              <div class="actions">
+                <button class="btn" type="button" @click="pw.open = false">
+                  {{ t('settings.password.cancel') }}
+                </button>
+                <button class="btn primary" type="submit" :disabled="pw.busy">
+                  {{ t('settings.password.save') }}
+                </button>
+              </div>
+            </form>
           </div>
         </template>
 
@@ -290,5 +395,24 @@ onMounted(async () => {
   .row .select {
     width: 100%;
   }
+}
+.row.password {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.row.password .input {
+  max-width: 360px;
+}
+.row.password .actions {
+  display: flex;
+  gap: 8px;
+}
+.row .ok {
+  color: var(--ok);
+}
+.row .error {
+  margin: 0;
+  color: var(--danger);
 }
 </style>

@@ -21,6 +21,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid username or password")
 	ErrAlreadySetUp       = errors.New("an admin user already exists")
 	ErrUnauthenticated    = errors.New("not authenticated")
+	ErrWrongPassword      = errors.New("the current password is wrong")
+	ErrPasswordTooShort   = errors.New("password must have at least 8 characters")
 )
 
 // MinPasswordLength is enforced when creating the admin user.
@@ -65,7 +67,7 @@ func (s *Service) Setup(ctx context.Context, username, password string) (string,
 		return "", time.Time{}, errors.New("username is required")
 	}
 	if len(password) < MinPasswordLength {
-		return "", time.Time{}, errors.New("password must have at least 8 characters")
+		return "", time.Time{}, ErrPasswordTooShort
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {
@@ -105,6 +107,43 @@ func (s *Service) Authenticate(ctx context.Context, token string) (store.User, e
 		return u, ErrUnauthenticated
 	}
 	return u, err
+}
+
+// ChangePassword sets a new password for the signed-in user after checking
+// the current one; every other session of the user is signed out.
+func (s *Service) ChangePassword(ctx context.Context, token, current, next string) error {
+	u, err := s.Authenticate(ctx, token)
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(current)) != nil {
+		return ErrWrongPassword
+	}
+	return s.setPassword(ctx, u.ID, next, hashToken(token))
+}
+
+// ResetPassword sets a new password for a user without the current one (the
+// command line, for a forgotten password) and signs them out everywhere.
+func (s *Service) ResetPassword(ctx context.Context, username, next string) error {
+	u, err := s.store.GetUserByName(ctx, strings.TrimSpace(username))
+	if err != nil {
+		return err
+	}
+	return s.setPassword(ctx, u.ID, next, "")
+}
+
+func (s *Service) setPassword(ctx context.Context, userID int64, next, keep string) error {
+	if len(next) < MinPasswordLength {
+		return ErrPasswordTooShort
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(next), BcryptCost)
+	if err != nil {
+		return err
+	}
+	if err := s.store.SetUserPassword(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+	return s.store.DeleteUserSessions(ctx, userID, keep)
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {

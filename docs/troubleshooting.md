@@ -220,20 +220,21 @@ By channel:
 
 ## I forgot the admin password
 
-The UI has no password change or reset yet. To create the admin account
-again, remove the user from the database; everything else (integrations,
-inventory, history) is kept:
+Set a new one from the command line, where Omini runs. It asks for the new
+password twice (nothing is shown as you type) and signs out every session;
+integrations, inventory and history are kept:
 
 ```bash
-docker stop omini
-cp /path/to/data/omini.db /path/to/data/omini.db.bak     # just in case
-sqlite3 /path/to/data/omini.db "DELETE FROM sessions; DELETE FROM users;"
-docker start omini
+docker exec -it omini omini reset-password      # Docker
+./omini reset-password                          # the binary (same OMINI_DATA_DIR)
 ```
 
-The next visit shows the setup screen: create the admin again. Use the
-`sqlite3` tool on the host, on the data directory or volume (the image does
-not include it).
+Without a terminal it reads the password from the first line of stdin
+(`printf '%s\n' "$NEW" | docker exec -i omini omini reset-password`). Give a
+username after `reset-password` if yours is not the first user.
+
+To change a password you still know, use **Settings → Account → Change
+password**: your other sessions are signed out.
 
 ## Credentials stopped working after moving Omini
 

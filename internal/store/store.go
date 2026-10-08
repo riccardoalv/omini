@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -247,10 +248,17 @@ func Open(ctx context.Context, path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+// ErrNewerDatabase: the database was last used by a newer Omini, whose
+// changes this version does not know. Opening it anyway could lose data.
+var ErrNewerDatabase = errors.New("the database was created by a newer version of Omini: run that version, or restore a backup made with this one")
+
 func (s *Store) migrate(ctx context.Context) error {
 	var version int
 	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
+	}
+	if version > len(migrations) {
+		return fmt.Errorf("%w (database schema %d, this version knows up to %d)", ErrNewerDatabase, version, len(migrations))
 	}
 	for i := version; i < len(migrations); i++ {
 		tx, err := s.db.BeginTx(ctx, nil)

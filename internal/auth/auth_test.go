@@ -95,3 +95,46 @@ func TestUnknownTokenIsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeAndResetPassword(t *testing.T) {
+	ctx := context.Background()
+	s := newService(t)
+	here, _, err := s.Setup(ctx, "admin", "correct horse battery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere, _, _ := s.Login(ctx, "admin", "correct horse battery")
+
+	if err := s.ChangePassword(ctx, here, "wrong one!", "new password 1"); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("wrong current password: %v", err)
+	}
+	if err := s.ChangePassword(ctx, here, "correct horse battery", "short"); !errors.Is(err, ErrPasswordTooShort) {
+		t.Fatalf("short new password: %v", err)
+	}
+	if err := s.ChangePassword(ctx, here, "correct horse battery", "new password 1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Authenticate(ctx, here); err != nil {
+		t.Fatalf("the session that changed it stays signed in: %v", err)
+	}
+	if _, err := s.Authenticate(ctx, elsewhere); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("other sessions are signed out: %v", err)
+	}
+	if _, _, err := s.Login(ctx, "admin", "correct horse battery"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("old password: %v", err)
+	}
+
+	// Forgotten: reset from the command line, every session signed out.
+	if err := s.ResetPassword(ctx, "admin", "new password 2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Authenticate(ctx, here); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("reset signs out everywhere: %v", err)
+	}
+	if _, _, err := s.Login(ctx, "admin", "new password 2"); err != nil {
+		t.Fatalf("new password: %v", err)
+	}
+	if err := s.ResetPassword(ctx, "nobody", "new password 3"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unknown user: %v", err)
+	}
+}

@@ -199,8 +199,10 @@ docker compose up -d
 From source, pull the new code, rebuild and restart.
 
 Database changes are applied automatically on start. Downgrading is not
-supported: to go back to an older version, restore the backup you made before
-the upgrade. Installed plugins are kept; update them from the store
+supported: an older Omini refuses to start on a database a newer one has
+changed ("the database was created by a newer version of Omini"), so nothing is
+lost. To go back to an older version, restore the backup you made before the
+upgrade. Installed plugins are kept; update them from the store
 (**Integrations → Add integration → Plugin store**, "Update").
 
 ## Backup and restore
