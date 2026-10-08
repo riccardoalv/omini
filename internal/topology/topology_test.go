@@ -879,3 +879,27 @@ func TestFirewallRunningAsAVMIsNotABranchOfItsHost(t *testing.T) {
 		}
 	}
 }
+
+// A VM reported by its hypervisor without IPs (no guest agent) takes the
+// address the scan found for its MAC: one node, not the VM plus an "IP".
+func TestDeviceWithoutIPTakesTheAddressOfItsMAC(t *testing.T) {
+	const vm = "bc:24:11:00:00:a1"
+	guest := model.Device{Key: vm, Name: "haos", MACs: []model.MACAddress{vm}, Role: model.Ptr(model.DeviceRoleServer)}
+	scan := model.Device{
+		Key: "gw", Name: "Gateway", Host: model.Ptr("192.168.1.1"), IPs: []string{"192.168.1.1"}, Role: model.Ptr(model.DeviceRoleRouter),
+		Hosts: []model.Host{{IP: "192.168.1.54", MAC: model.Ptr(model.MACAddress(vm)), OpenPorts: []uint16{8123}}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 2, Online: true, Devices: []model.Device{scan}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{guest}},
+	})
+	var with []string
+	for _, n := range topo.Nodes {
+		if n.IP == "192.168.1.54" || n.MAC == vm {
+			with = append(with, n.ID)
+		}
+	}
+	if !reflect.DeepEqual(with, []string{"dev:" + vm}) {
+		t.Fatalf("nodes of the VM: %v", with)
+	}
+}

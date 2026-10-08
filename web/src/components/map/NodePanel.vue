@@ -47,7 +47,6 @@ const props = defineProps<{
   nodes: TopoNode[]
   edges: TopoEdge[]
   integration?: Integration
-  expandedParent: boolean
   /** The nmap integration is added: devices can be scanned on demand. */
   canScan?: boolean
 }>()
@@ -56,7 +55,6 @@ const emit = defineEmits<{
   changed: [patch: Partial<TopoNode>]
   select: [id: string]
   expand: [parentId: string]
-  collapse: [parentId: string]
   deleted: [id: string]
   scanned: []
 }>()
@@ -636,9 +634,6 @@ async function save(patch: {
           >
             <component :is="n.pinned ? PinOff : Pin" :size="14" />
             {{ n.pinned ? t('panel.unpin') : t('panel.pin') }}
-          </button>
-          <button v-if="expandedParent" class="btn small" @click="emit('collapse', n.id)">
-            {{ t('panel.collapseGroup') }}
           </button>
         </div>
         <p v-if="error" class="alert error">{{ error }}</p>

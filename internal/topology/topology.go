@@ -860,6 +860,24 @@ func (b *builder) placeCollected(
 			enrich(b.nodes[id], hs.h)
 		}
 	}
+	// A known node without an address takes the one its MAC has (a VM reported
+	// without its IPs, seen by the scan or in ARP): one node, all it is known by.
+	for m, id := range b.byMAC {
+		n := b.nodes[id]
+		if n == nil || n.IP != "" {
+			continue
+		}
+		ip := hostsByMAC[m].h.IP
+		if ip == "" {
+			ip = arp[m].ip
+		}
+		if ip != "" {
+			n.IP = ip
+			if _, taken := b.byIP[ip]; !taken {
+				b.byIP[ip] = id
+			}
+		}
+	}
 	for ip, hs := range hostsByIP {
 		if id, ok := b.byIP[ip]; ok {
 			enrich(b.nodes[id], hs.h)

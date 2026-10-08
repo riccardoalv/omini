@@ -196,7 +196,6 @@ export default {
     deleteHint:
       'Removes the device and its history from Omini. If it is still on the network, it comes back on the next scan — use Hide to keep it off the map.',
     expandGroup: 'Show all clients',
-    collapseGroup: 'Group clients',
     ip: 'IP address',
     mac: 'MAC address',
     hostname: 'Hostname',

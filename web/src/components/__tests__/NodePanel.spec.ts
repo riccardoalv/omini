@@ -33,7 +33,7 @@ const firewall: TopoNode = {
 
 const mountPanel = (node: TopoNode) =>
   mount(NodePanel, {
-    props: { node, nodes: [node], edges: [], expandedParent: false },
+    props: { node, nodes: [node], edges: [] },
     global: { plugins: plugins(), stubs: { RouterLink: true } },
   })
 
@@ -160,7 +160,7 @@ describe('NodePanel app node', () => {
       ],
     }
     const w = mount(NodePanel, {
-      props: { node: app, nodes: [host, app], edges: [], expandedParent: false },
+      props: { node: app, nodes: [host, app], edges: [] },
       global: { plugins: plugins(), stubs: { RouterLink: true } },
     })
     await flushPromises()
@@ -285,7 +285,7 @@ describe('NodePanel scan', () => {
 
   const mountWith = (canScan: boolean, node: TopoNode = firewall) =>
     mount(NodePanel, {
-      props: { node, nodes: [node], edges: [], expandedParent: false, canScan },
+      props: { node, nodes: [node], edges: [], canScan },
       global: { plugins: plugins(), stubs: { RouterLink: true } },
     })
 
@@ -404,7 +404,7 @@ describe('NodePanel clients', () => {
       kind: 'inferred' as const,
     }))
     const w = mount(NodePanel, {
-      props: { node: firewall, nodes: [firewall, ...clients], edges, expandedParent: false },
+      props: { node: firewall, nodes: [firewall, ...clients], edges },
       global: { plugins: plugins(), stubs: { RouterLink: true } },
     })
     expect(w.findAll('.client-list li')).toHaveLength(8)

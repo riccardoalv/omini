@@ -199,7 +199,6 @@ const ptBR: typeof en = {
     deleteHint:
       'Remove o dispositivo e o histórico dele do Omini. Se ainda estiver na rede, ele volta na próxima varredura — use Ocultar para tirá-lo do mapa.',
     expandGroup: 'Mostrar todos os clientes',
-    collapseGroup: 'Agrupar clientes',
     ip: 'Endereço IP',
     mac: 'Endereço MAC',
     hostname: 'Hostname',

@@ -1237,7 +1237,6 @@ onBeforeUnmount(() => {
       :nodes="nodes"
       :edges="edges"
       :integration="selectedIntegration"
-      :expanded-parent="!!selectedNode && prefs.expanded.includes(selectedNode.id)"
       :can-scan="integrations.some((i) => i.type === 'nmap' && i.enabled)"
       @close="selectedId = undefined"
       @select="(id) => (selectedId = id)"
@@ -1246,7 +1245,6 @@ onBeforeUnmount(() => {
         (id: string) =>
           id.startsWith('area-bubble:') ? expandArea(Number(id.slice(12))) : expand(id, true)
       "
-      @collapse="collapse"
       @deleted="removeNode"
       @scanned="load"
     />

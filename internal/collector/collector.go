@@ -403,6 +403,16 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 	for i := range topo.Nodes {
 		present[topo.Nodes[i].ID] = true
 	}
+	// What the nodes on the map are known by: a client that left is not drawn
+	// again when its MAC or address belongs to a node that is here.
+	here := map[string]bool{}
+	for _, n := range topo.Nodes {
+		for _, k := range []string{n.MAC, n.IP} {
+			if k != "" {
+				here[k] = true
+			}
+		}
+	}
 	byID := make(map[string]store.InventoryEntry, len(inventory))
 	for _, e := range inventory {
 		byID[e.ID] = e
@@ -420,6 +430,9 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 	for _, e := range inventory {
 		if e.Kind != string(topology.KindClient) || present[e.ID] || now.Sub(e.LastSeen) > OfflineVisible {
 			continue
+		}
+		if (e.MAC != "" && here[e.MAC]) || (e.IP != "" && here[e.IP]) {
+			continue // the same machine, on the map under another id
 		}
 		lastSeen := e.LastSeen
 		n := topology.Node{

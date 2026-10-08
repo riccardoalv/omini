@@ -615,3 +615,33 @@ func TestAKnownMachineReportedByAnIntegrationIsNotNew(t *testing.T) {
 		}
 	}
 }
+
+// A client that left is drawn (dimmed) for a while — unless the same machine
+// is on the map under another id (its MAC or its address).
+func TestALeftClientIsNotDrawnTwice(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	modem := model.MACAddress("e0:d3:62:00:00:01")
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs:  []model.MACAddress{"58:9c:fc:00:00:01"},
+		Hosts: []model.Host{{IP: "192.168.100.1"}}, // first seen by address only
+	}
+	e.fake.set([]model.Device{fw}, nil)
+	e.collect(t)
+
+	// Now known with its MAC: a node of another id, same address.
+	fw.Hosts = []model.Host{{IP: "192.168.100.1", MAC: model.Ptr(modem)}}
+	e.fake.set([]model.Device{fw}, nil)
+	e.clock = e.clock.Add(time.Minute)
+	s := e.collect(t)
+	var ids []string
+	for _, n := range s.Topology.Nodes {
+		if n.IP == "192.168.100.1" {
+			ids = append(ids, n.ID)
+		}
+	}
+	if len(ids) != 1 {
+		t.Fatalf("the modem is drawn %d times: %v", len(ids), ids)
+	}
+}
