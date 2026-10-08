@@ -26,7 +26,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Core | **Go**: discovery, generic SNMP + YAML profiles, LLDP, topology engine, traffic rates, insights, API, serving the UI |
 | Integrations | **Go** for standard protocols (SNMP/LLDP/ARP/ICMP); **Python plugins** for anything vendor/software specific (OPNsense, Mercusys, UniFi, MikroTik...) |
 | Plugin runtime | uv-managed venv per plugin, SDK embedded in the core and installed into every venv, install from GitHub release tarballs, `OMINI_PLUGIN_DIRS` for development — see "Plugin runtime (core)" |
-| Docker image | `ghcr.io/riccardoalv/omini` (amd64 + arm64), built and pushed by the release workflow when release-please creates a release: Debian slim with Python 3 and uv (plugins), app icons bundled; data in `/data`; `network_mode: host` recommended; `OMINI_NMAP=install` installs nmap on start |
+| Docker image | `ghcr.io/riccardoalv/omini` and Docker Hub (`<DOCKERHUB_USERNAME>/omini`, when the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set) (amd64 + arm64), built and pushed by the release workflow when release-please creates a release: Debian slim with Python 3 and uv (plugins), app icons bundled; data in `/data`; `network_mode: host` recommended; `OMINI_NMAP=install` installs nmap on start |
 | Python runtime | Always bundled in the official image, so every plugin works out of the box |
 | Plugin protocol | Exec per collection: core runs the plugin, sends config as JSON on stdin, reads devices as JSON on stdout |
 | Frontend | **Vue 3** + TypeScript (Vite); map with **Vue Flow** + **ELK.js** auto-layout (left-to-right: firewall on the left, clients stacked on the right — top-down made wide networks unreadable); vue-i18n; built assets embedded in the Go binary. Tooling: Vitest, ESLint + oxlint, Prettier, vue-tsc. Node.js 24 |
@@ -49,7 +49,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | UI screens | Map (home, full screen), Devices (inventory), Integrations, Settings in v0.1; Insights (alerts + timeline) in v0.2; Store in v0.3 |
 | Map clients | All clients shown as nodes; a group (AP / switch port) with **more than 8** clients collapses into a "N clients" bubble that expands on click. Threshold configurable; expanded/collapsed state persisted. Pinned devices and servers always visible |
 | Node details | Click opens a **slide-over side panel** (summary, ports with status/speed/traffic, connected clients, alerts) without leaving the map; "open full page" link |
-| Repositories | Personal GitHub account for now (organization only at public launch, v0.4). Main monorepo `omini` + one repo per plugin from day one (`omini-plugin-opnsense`) |
+| Repositories | Personal GitHub account (`riccardoalv`): no organization (decided by the maintainer). Main monorepo `omini` + one repo per plugin (`omini-plugin-<id>`) |
 | Data contract | **JSON Schema** in `schema/` is the single source of truth; Go types and Python (pydantic) models are generated from it; CI fails if generated code is stale |
 | Plugin format | `plugin.yaml` manifest (id, name, version, protocol version, entrypoint, form fields) + `requirements.txt`; Python SDK `omini-sdk` handles stdin/stdout, validation and errors so authors only write `collect()` and `test()` |
 | Dev environment | `make dev` runs the Go backend and the Vite dev server together; `make run` builds and runs the production-like binary. Optional Nix flake. (Docker Compose + SNMP simulator: later) |

@@ -178,7 +178,7 @@ onBeforeUnmount(() => clearInterval(timer))
                 }}</span>
                 <button
                   v-if="c.a_node || c.b_node"
-                  class="link small"
+                  class="link small map-link"
                   type="button"
                   @click="open(c.b_node ?? c.a_node)"
                 >
@@ -289,6 +289,10 @@ onBeforeUnmount(() => clearInterval(timer))
 }
 .dirs {
   font-size: 11.5px;
+}
+.map-link {
+  margin-left: 4px;
+  font-size: 12px;
 }
 .svc {
   display: inline-block;

@@ -338,3 +338,20 @@ table.table {
     padding: 20px 16px 40px;
   }
 }
+
+/* A button that looks like a link. */
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+button.link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+button.link:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}

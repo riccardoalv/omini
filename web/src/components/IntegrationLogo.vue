@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Network, Puzzle, Radar } from 'lucide-vue-next'
+import { ArrowLeftRight, Network, Puzzle, Radar } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
@@ -15,7 +15,9 @@ const props = withDefaults(defineProps<{ type: string; icon?: string; size?: num
   size: 26,
 })
 
-const builtin = computed(() => ({ network: Network, nmap: Radar })[props.type])
+const builtin = computed(
+  () => ({ network: Network, nmap: Radar, flows: ArrowLeftRight })[props.type],
+)
 const device = computed(() =>
   props.icon && deviceTypes.includes(props.icon)
     ? { type: props.icon }
