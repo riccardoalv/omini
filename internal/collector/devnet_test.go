@@ -201,7 +201,8 @@ func TestDevnet(t *testing.T) {
 		"iPhone-de-Ricardo": {"ap-office1"},
 		"DESKTOP-ERR7C4B":   {"acc-floor1"},
 		"ups-01":            {"acc-floor2"},
-		"mkt-router":        {"WAN", "acc-floor2"},
+		"mkt-router":        {"acc-floor2"}, // a double-NAT router: its "WAN" is a link into the LAN
+		"lab-router":        {"pve3"},       // a router VM that is not the center hangs from its host
 		"br-sw":             {"br-gw"},
 		"br-cap":            {"br-sw"},
 	}

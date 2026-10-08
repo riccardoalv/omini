@@ -334,13 +334,13 @@ func discordPayload(m Message) map[string]any {
 		if i == 9 && len(m.Groups) > 10 {
 			var rest []string
 			for _, h := range m.Groups[9:] {
-				rest = append(rest, severityIcon[h.Severity]+" "+h.Title)
+				rest = append(rest, h.Title)
 			}
 			embeds = append(embeds, embed{Title: fmt.Sprintf("+%d", len(m.Groups)-9), Description: cut(strings.Join(rest, "\n"), 4000), Color: 0x8b949e})
 			break
 		}
 		embeds = append(embeds, embed{
-			Title:       cut(severityIcon[g.Severity]+" "+g.Title, 256),
+			Title:       cut(g.Title, 256),
 			Description: cut(strings.Join(g.Lines, "\n"), 4000),
 			Color:       cardColor[g.Severity],
 		})
@@ -358,7 +358,7 @@ func slackPayload(m Message) map[string]any {
 	for _, g := range m.Groups {
 		atts = append(atts, map[string]any{
 			"color": fmt.Sprintf("#%06x", cardColor[g.Severity]),
-			"title": severityIcon[g.Severity] + " " + g.Title,
+			"title": g.Title,
 			"text":  strings.Join(g.Lines, "\n"),
 		})
 	}

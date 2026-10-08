@@ -34,12 +34,14 @@ func TestMoreRules(t *testing.T) {
 	tv := topology.Node{ID: "mac:tv", Kind: topology.KindClient, Label: "TV", Online: true}
 	cam := topology.Node{ID: "mac:cam", Kind: topology.KindClient, Label: "camera", Online: true, OpenPorts: []int{23, 80}}
 	pve := topology.Node{ID: "mac:pve", Kind: topology.KindClient, Label: "pve", Online: true, Product: "proxmox"}
+	// A Proxmox already read by a plugin of another type (not a built-in scan): no suggestion.
+	pve2 := topology.Node{ID: "dev:pve2", Kind: topology.KindDevice, Label: "pve2", Online: true, Product: "proxmox", IntegrationID: 9, Device: &model.Device{}}
 	vm := topology.Node{ID: "mac:vm", Kind: topology.KindClient, Label: "vm", Online: true, Brand: "proxmox"}
 	ap := topology.Node{ID: "mac:ap", Kind: topology.KindClient, Label: "halo", Online: true, Brand: "mercusys"}
 	in := Input{
 		Now: now,
 		Topology: topology.Topology{
-			Nodes: []topology.Node{sw, fw, tv, cam, pve, vm, ap},
+			Nodes: []topology.Node{sw, fw, tv, cam, pve, pve2, vm, ap},
 			Edges: []topology.Edge{
 				{ID: "e1", Source: "dev:sw", SourcePort: "Port 3", Target: "mac:tv", Kind: topology.EdgeFDB, SpeedMbps: 100},
 				{ID: "e2", Source: "dev:sw", SourcePort: "Port 4", Target: "mac:cam", Kind: topology.EdgeFDB, SpeedMbps: 1000},

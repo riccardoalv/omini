@@ -166,6 +166,8 @@ type builder struct {
 	// beside: clients seen on the port towards a device that lists its own
 	// clients without them — an unmanaged switch is on that port.
 	beside map[portKey][]string
+	// center: routers and firewalls with a real internet uplink (see centers).
+	center map[string]bool
 	// hangsBy: links an integration declared from one side only (a neighbor
 	// of protocol "other": a VM under its host, a mesh satellite under its
 	// unit), by edge key → the node that reported it. Only that node counts
@@ -212,6 +214,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 		}
 	}
 	b.adoptMACs(sources)
+	b.center = b.centers()
 	managed := b.sortedIDs(KindDevice)
 	for _, id := range managed {
 		b.addNeighborEdges(id)
@@ -453,7 +456,9 @@ func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 		// A router or firewall running as a virtual machine is the center of the
 		// network, not a branch of its host: no link, its host is named instead.
 		if model.Deref(nb.Protocol) == model.NeighborProtocolOther {
-			if r := model.Deref(d.Role); r == model.DeviceRoleFirewall || r == model.DeviceRoleRouter {
+			// Whichever source declared it (the firewall's own integration, or the
+			// hypervisor's, which sees it as one more VM).
+			if b.center[id] {
 				b.nodes[id].RunsOn = target
 				continue
 			}
@@ -1204,6 +1209,7 @@ func (b *builder) fillDirectLinkSpeeds() {
 // addWANs adds one node per internet uplink of each router/firewall, as
 // its parent: several WANs give several parents.
 func (b *builder) addWANs(managed []string) {
+	nets := b.lanNets()
 	for _, id := range managed {
 		var ifaces []model.Interface
 		var gateways []model.Gateway
@@ -1222,7 +1228,7 @@ func (b *builder) addWANs(managed []string) {
 			byName[i.Name] = i
 		}
 		for _, i := range ifaces {
-			if !model.Deref(i.Wan) {
+			if !model.Deref(i.Wan) || b.nestedWAN(id, i, gateways, nets) {
 				continue
 			}
 			wanID := "wan:" + id + ":" + i.Name

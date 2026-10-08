@@ -35,9 +35,9 @@ func TestCompose(t *testing.T) {
 	if m.Subject != "Omini: 1 critical, 1 warning, 1 resolved" {
 		t.Fatalf("subject: %q", m.Subject)
 	}
-	want := "🔴 Switch\n   🔴 Offline: Its integration could not reach it. timeout\n" +
-		"🟠 AP\n   🟠 Slow uplink: The link from sw (Port 3) runs at 100M: below 1 Gbps\n" +
-		"✅ Resolved\n   High CPU on fw"
+	want := "Switch\n   Offline: Its integration could not reach it. timeout\n" +
+		"AP\n   Slow uplink: The link from sw (Port 3) runs at 100M: below 1 Gbps\n" +
+		"Resolved\n   High CPU on fw"
 	if m.Text != want {
 		t.Fatalf("text:\n%s\nwant:\n%s", m.Text, want)
 	}
@@ -320,7 +320,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 		t.Fatalf("subject: %q", m.Subject)
 	}
 	if len(m.Groups) != 2 || m.Groups[0].Title != "proxmox" || len(m.Groups[0].Lines) != 2 ||
-		m.Groups[0].Lines[0] != "🟠 Memory almost full: Memory at 98.3%" ||
+		m.Groups[0].Lines[0] != "Memory almost full: Memory at 98.3%" ||
 		m.Groups[1].Title != "2 new devices" || m.Groups[1].Lines[0] != "haos · Proxmox Server Solutions bc:24:11:5a:a5:b2" {
 		t.Fatalf("groups: %+v", m.Groups)
 	}
@@ -328,7 +328,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 	d := discordPayload(m)
 	embeds := d["embeds"]
 	b, _ := json.Marshal(embeds)
-	if !strings.Contains(string(b), `"title":"🟠 proxmox"`) || !strings.Contains(string(b), `"color":13801762`) ||
+	if !strings.Contains(string(b), `"title":"proxmox"`) || !strings.Contains(string(b), `"color":13801762`) ||
 		d["content"] != "**Omini: 2 warnings, 2 new devices**" {
 		t.Fatalf("discord: %v %s", d["content"], b)
 	}
@@ -341,7 +341,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 		on("pve", "high_memory", "warning", map[string]any{"node": "proxmox", "pct": 98.3}),
 		on("vm1", "new_device", "info", map[string]any{"node": "haos"}),
 	}, "pt-BR")
-	if pt.Subject != "Omini: 1 aviso, 1 dispositivo novo" || pt.Groups[0].Lines[0] != "🟠 Memória quase cheia: Memória em 98.3%" {
+	if pt.Subject != "Omini: 1 aviso, 1 dispositivo novo" || pt.Groups[0].Lines[0] != "Memória quase cheia: Memória em 98.3%" {
 		t.Fatalf("pt-BR: %q %+v", pt.Subject, pt.Groups)
 	}
 }

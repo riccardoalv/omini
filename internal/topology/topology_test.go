@@ -858,6 +858,10 @@ func TestFirewallRunningAsAVMIsNotABranchOfItsHost(t *testing.T) {
 	fw := model.Device{
 		Key: "58:9c:fc:00:00:01", Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
 		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{
+			{Name: "pppoe0", Wan: model.Ptr(true), IPs: []string{"203.0.113.7/32"}},
+			{Name: "lan", IPs: []string{"192.168.1.1/24"}},
+		},
 		Neighbors: []model.Neighbor{{
 			LocalPort: "net0", Protocol: model.Ptr(model.NeighborProtocolOther),
 			RemoteName: model.Ptr("pve"), RemoteIP: model.Ptr("192.168.1.50"),
@@ -869,7 +873,7 @@ func TestFirewallRunningAsAVMIsNotABranchOfItsHost(t *testing.T) {
 		{IntegrationID: 7, Online: true, Devices: []model.Device{pve}},
 	})
 	for _, e := range topo.Edges {
-		if (e.Source == "dev:58:9c:fc:00:00:01" && e.Target == "dev:7:proxmox:pve") || (e.Target == "dev:58:9c:fc:00:00:01" && e.Source == "dev:7:proxmox:pve") {
+		if e.Kind == topology.EdgeLLDP && ((e.Source == "dev:58:9c:fc:00:00:01" && e.Target == "dev:7:proxmox:pve") || (e.Target == "dev:58:9c:fc:00:00:01" && e.Source == "dev:7:proxmox:pve")) {
 			t.Fatalf("a link between the firewall and its host: %+v", e)
 		}
 	}
@@ -901,5 +905,77 @@ func TestDeviceWithoutIPTakesTheAddressOfItsMAC(t *testing.T) {
 	}
 	if !reflect.DeepEqual(with, []string{"dev:" + vm}) {
 		t.Fatalf("nodes of the VM: %v", with)
+	}
+}
+
+// A lab router running as a VM, its "WAN" an address in the firewall's LAN
+// (double NAT): not the center of the network. It keeps its link to its host
+// and gets no WAN node; the main firewall does.
+func TestNestedRouterIsNotTheCenter(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{
+			{Name: "wan", Wan: model.Ptr(true), IPs: []string{"203.0.113.7/24"}},
+			{Name: "lan", IPs: []string{"192.168.1.1/24"}},
+		},
+	}
+	lab := model.Device{
+		Key: "bc:24:11:00:00:99", Name: "lab-router", Host: model.Ptr("192.168.1.99"),
+		MACs: []model.MACAddress{"bc:24:11:00:00:99"}, Role: model.Ptr(model.DeviceRoleRouter),
+		Interfaces: []model.Interface{
+			{Name: "wan", Wan: model.Ptr(true), IPs: []string{"192.168.1.99/24"}},
+			{Name: "lan", IPs: []string{"10.99.0.1/24"}},
+		},
+		Neighbors: []model.Neighbor{{LocalPort: "net0", Protocol: model.Ptr(model.NeighborProtocolOther), RemoteName: model.Ptr("pve"), RemoteIP: model.Ptr("192.168.1.50")}},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.1.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{lab}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{pve}},
+	})
+	wans, labUnderHost := 0, false
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindWAN {
+			wans++
+		}
+	}
+	for _, e := range topo.Edges {
+		if e.Source == "dev:7:proxmox:pve" && e.Target == "dev:bc:24:11:00:00:99" {
+			labUnderHost = true
+		}
+	}
+	if wans != 1 || !labUnderHost {
+		t.Fatalf("WAN nodes %d (want 1, the firewall's); lab router under its host: %v", wans, labUnderHost)
+	}
+}
+
+// The firewall's own integration reports it as a firewall with its WAN; the
+// hypervisor's reports the same machine (same MAC) as one more VM — a server
+// with a link to its host. Merged, it is still the center: no link to the host.
+func TestFirewallReportedAsAVMByItsHost(t *testing.T) {
+	const fwMAC = "58:9c:fc:00:00:01"
+	fw := model.Device{
+		Key: fwMAC, Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{fwMAC}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{
+			{Name: "pppoe1", Wan: model.Ptr(true), IPs: []string{"100.64.67.216/32"}},
+			{Name: "lan", IPs: []string{"192.168.1.1/24"}},
+		},
+	}
+	asVM := model.Device{
+		Key: fwMAC, Name: "OPNsense", MACs: []model.MACAddress{fwMAC}, Role: model.Ptr(model.DeviceRoleServer),
+		Neighbors: []model.Neighbor{{LocalPort: "net0", Protocol: model.Ptr(model.NeighborProtocolOther), RemoteName: model.Ptr("pve"), RemoteIP: model.Ptr("192.168.1.50"), RemotePort: model.Ptr("vmbr1")}},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.1.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 3, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{pve, asVM}},
+	})
+	for _, e := range topo.Edges {
+		if e.Kind == topology.EdgeLLDP && e.Target == "dev:7:proxmox:pve" {
+			t.Fatalf("the firewall links to its host: %+v", e)
+		}
 	}
 }

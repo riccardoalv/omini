@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/insights"
+	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
@@ -42,12 +43,15 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		slog.Warn("could not record traffic history", "err", err)
 	}
 
-	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}}
+	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}, Core: map[int64]bool{}}
 	names := map[int64]string{}
 	if all, err := c.store.ListIntegrations(ctx); err == nil {
 		for _, it := range all {
 			names[it.ID] = it.Name
 			in.Configured[it.Type] = true
+			if impl, err := c.reg.Get(it.Type); err == nil && impl.Info().Kind == integration.KindCore {
+				in.Core[it.ID] = true
+			}
 		}
 	}
 	in.Detectors = detectors()

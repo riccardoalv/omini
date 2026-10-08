@@ -72,6 +72,9 @@ type Input struct {
 	// integration types already set up.
 	Detectors  []Detector
 	Configured map[string]bool
+	// Core are the built-in integrations (network scan, nmap...): a device only
+	// they report is not read by an integration of its own yet.
+	Core map[int64]bool
 }
 
 // Rule is one check.

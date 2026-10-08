@@ -159,8 +159,6 @@ func Describe(a store.Alert, locale string) (title, detail string) {
 	return fill(pair[0], p), fill(pair[1], p)
 }
 
-var severityIcon = map[string]string{"critical": "🔴", "warning": "🟠", "info": "🔵", "resolved": "✅"}
-
 // short names a rule without its device, for a line under the device's name.
 var short = map[string]map[string]string{
 	"en": {
@@ -285,7 +283,7 @@ func Compose(changes []store.AlertChange, locale string) Message {
 		if detail != "" {
 			line += ": " + strings.TrimSuffix(detail, ".")
 		}
-		g.Lines = append(g.Lines, severityIcon[c.Alert.Severity]+" "+line)
+		g.Lines = append(g.Lines, line)
 	}
 	if n := len(newDevs.Lines); n > 0 {
 		newDevs.Title = count(locale, "new", n)
@@ -297,7 +295,7 @@ func Compose(changes []store.AlertChange, locale string) Message {
 	var text []string
 	for _, g := range groups {
 		m.Groups = append(m.Groups, *g)
-		text = append(text, severityIcon[g.Severity]+" "+g.Title)
+		text = append(text, g.Title)
 		for _, l := range g.Lines {
 			text = append(text, "   "+l)
 		}

@@ -83,6 +83,9 @@ func integrationAvailable(in Input, _ index) []Insight {
 		if !n.Online || n.Kind == topology.KindApp {
 			continue
 		}
+		if n.Device != nil && n.IntegrationID != 0 && !in.Core[n.IntegrationID] {
+			continue // already read by an integration of its own
+		}
 		for _, d := range in.Detectors {
 			if in.Configured[d.Type] {
 				continue
