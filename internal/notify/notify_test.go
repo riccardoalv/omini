@@ -351,7 +351,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 func TestEveryRuleHasAShortName(t *testing.T) {
 	for _, locale := range []string{"en", "pt-BR"} {
 		for rule := range texts["en"] {
-			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || rule == "new_device" || rule == "new_devices_burst" {
+			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || strings.HasSuffix(rule, "_latest") || rule == "new_device" || rule == "new_devices_burst" {
 				continue
 			}
 			if short[locale][rule] == "" {
@@ -364,6 +364,13 @@ func TestEveryRuleHasAShortName(t *testing.T) {
 func TestUpdateWithoutVersion(t *testing.T) {
 	_, detail := Describe(alert("update_pending", "warning", map[string]any{"node": "bkp-01", "updates": 7.0}), "en")
 	if detail != "7 updates available." {
+		t.Fatalf("detail: %q", detail)
+	}
+}
+
+func TestUpdateWithoutCount(t *testing.T) {
+	_, detail := Describe(alert("update_pending", "warning", map[string]any{"node": "br-ap02", "latest": "1.1.6"}), "en")
+	if detail != "1.1.6 is available." {
 		t.Fatalf("detail: %q", detail)
 	}
 }

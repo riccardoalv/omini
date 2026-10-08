@@ -358,6 +358,8 @@ const ptBR: typeof en = {
         detail: '{latest} disponível ({updates} atualizações).',
         detailReboot: '{latest} disponível ({updates} atualizações); a instalação exige reiniciar.',
         detailCount: '{updates} atualizações disponíveis.',
+        detailVersion: '{latest} disponível.',
+        detailVersionReboot: '{latest} disponível; a instalação exige reiniciar.',
       },
       disk_full: { title: 'Disco quase cheio em {node}', detail: '{mount} está {pct}% cheio.' },
       hot_cpu: { title: '{node} está esquentando', detail: '{sensor} a {celsius} °C.' },

@@ -355,6 +355,8 @@ export default {
         detail: '{latest} is available ({updates} updates).',
         detailReboot: '{latest} is available ({updates} updates); installing needs a reboot.',
         detailCount: '{updates} updates available.',
+        detailVersion: '{latest} is available.',
+        detailVersionReboot: '{latest} is available; installing needs a reboot.',
       },
       disk_full: { title: 'Disk almost full on {node}', detail: '{mount} is {pct}% full.' },
       hot_cpu: { title: '{node} is running hot', detail: '{sensor} at {celsius} °C.' },

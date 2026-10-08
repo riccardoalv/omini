@@ -20,6 +20,18 @@ const alert = (over: Partial<Alert>): Alert => ({
 })
 
 describe('alerts', () => {
+  it('words an update by what the device said', () => {
+    const update = (params: Record<string, unknown>) =>
+      alertText(alert({ rule: 'update_pending', params: { node: 'ap', ...params } }), t, 'en')
+        .detail
+    expect(update({ latest: '1.1.6', updates: 2 })).toBe('1.1.6 is available (2 updates).')
+    expect(update({ latest: '1.1.6' })).toBe('1.1.6 is available.')
+    expect(update({ latest: '1.1.6', reboot: true })).toBe(
+      '1.1.6 is available; installing needs a reboot.',
+    )
+    expect(update({ updates: 7 })).toBe('7 updates available.')
+  })
+
   it('describes each rule with its values', () => {
     expect(alertText(alert({ params: { node: 'OPNsense', pct: 97 } }), t, 'en')).toEqual({
       title: 'High CPU on OPNsense',
