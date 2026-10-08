@@ -304,7 +304,7 @@ Omini ships in incremental releases, each one usable on its own.
 
 - ✅ **Horaco** switch plugin (web interface: ports, counters, MAC table)
 - ✅ **Mercusys Halo** plugin (mesh units and their clients) — first version, being validated
-- Refined subnet discovery
+- ✅ Refined subnet discovery (the routers' VLANs and LANs are scanned too)
 - Repositories move to a GitHub organization
 
 ### Later

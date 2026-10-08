@@ -517,6 +517,10 @@ const ptBR: typeof en = {
       },
     },
     network: {
+      learned_subnets: {
+        label: 'Varrer também as redes dos roteadores',
+        help: 'Com "auto": as redes privadas que seus roteadores e firewalls informam (VLANs, outras LANs, até 16) também são varridas, através do roteador (ping e portas abertas; sem endereços MAC).',
+      },
       snmp_v3_user: {
         label: 'Usuário',
         help: 'Preencha para tentar também o SNMP v3 (antes das comunidades). Vazio: só v2c.',

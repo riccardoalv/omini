@@ -335,7 +335,8 @@ func (c *Collector) runIntegration(ctx context.Context, in store.Integration) (d
 			devices, err = nil, fmt.Errorf("integration panicked: %v", r)
 		}
 	}()
-	return impl.Collect(integration.WithInstance(ctx, in.ID), cfg)
+	ctx = integration.WithKnownSubnets(integration.WithInstance(ctx, in.ID), c.knownSubnets(in.ID))
+	return impl.Collect(ctx, cfg)
 }
 
 func (c *Collector) rebuild(ctx context.Context) error {

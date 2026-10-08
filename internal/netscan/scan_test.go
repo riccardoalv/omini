@@ -170,3 +170,25 @@ func TestSNMPDevicesAreRead(t *testing.T) {
 		t.Fatalf("with SNMP off: %d devices, %v", len(devices), err)
 	}
 }
+
+func TestAutoAddsTheRoutersSubnets(t *testing.T) {
+	s := &Integration{Locals: func() []localNet {
+		return []localNet{{Prefix: netip.MustParsePrefix("192.168.1.0/24"), Self: netip.MustParseAddr("192.168.1.5")}}
+	}}
+	ctx := integration.WithKnownSubnets(context.Background(), []netip.Prefix{
+		netip.MustParsePrefix("192.168.1.0/25"), // inside the local network: already scanned
+		netip.MustParsePrefix("192.168.20.0/24"),
+		netip.MustParsePrefix("10.0.30.0/24"),
+	})
+	msg, err := s.Test(ctx, integration.Config{"subnets": "auto"})
+	if err != nil || msg != "Will scan 192.168.1.0/24, 192.168.20.0/24, 10.0.30.0/24" {
+		t.Fatalf("Test = %q, %v", msg, err)
+	}
+	// Turned off, or subnets listed by hand: only those.
+	if msg, _ := s.Test(ctx, integration.Config{"subnets": "auto", "learned_subnets": false}); msg != "Will scan 192.168.1.0/24" {
+		t.Fatalf("off: %q", msg)
+	}
+	if msg, _ := s.Test(ctx, integration.Config{"subnets": "10.9.9.0/24"}); msg != "Will scan 10.9.9.0/24" {
+		t.Fatalf("listed: %q", msg)
+	}
+}

@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"sort"
 	"sync"
 
@@ -82,6 +83,20 @@ func WithForce(ctx context.Context) context.Context {
 // Forced reports whether the collection was requested by the user.
 func Forced(ctx context.Context) bool {
 	v, _ := ctx.Value(forceKey{}).(bool)
+	return v
+}
+
+type subnetsKey struct{}
+
+// WithKnownSubnets tells an integration the subnets other integrations
+// reported (routers' interfaces, VLANs): the network scan also scans them.
+func WithKnownSubnets(ctx context.Context, prefixes []netip.Prefix) context.Context {
+	return context.WithValue(ctx, subnetsKey{}, prefixes)
+}
+
+// KnownSubnets returns the subnets set by WithKnownSubnets.
+func KnownSubnets(ctx context.Context) []netip.Prefix {
+	v, _ := ctx.Value(subnetsKey{}).([]netip.Prefix)
 	return v
 }
 

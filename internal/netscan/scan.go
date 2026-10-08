@@ -82,6 +82,10 @@ func fields() []model.FormField {
 			Key: "subnets", Type: model.FormFieldTypeString, Label: model.Ptr("Subnets"), Default: "auto",
 			Help: model.Ptr(`"auto" scans the networks this server is connected to, or list them: 192.168.1.0/24, 10.0.20.0/24`),
 		},
+		{
+			Key: "learned_subnets", Type: model.FormFieldTypeBool, Label: model.Ptr("Also scan the routers' networks"), Default: true,
+			Help: model.Ptr(`With "auto": the private networks your routers and firewalls report (VLANs, other LANs, up to 16) are scanned too, through the router (ping and open ports; no MAC addresses).`),
+		},
 		method("arp", "ARP", "Finds every device on the local network, even ones that ignore everything else."),
 		method("ping", "Ping (ICMP)", "Finds devices that answer ping; the reply also hints the operating system."),
 		method("port_scan", "Open ports", "Checks common ports to identify services (web, SSH, SMB, printers, cameras...)."),
@@ -220,7 +224,7 @@ func parsePorts(spec string) ([]int, error) {
 }
 
 func (s *Integration) Test(ctx context.Context, cfg integration.Config) (string, error) {
-	prefixes, err := s.prefixes(cfg)
+	prefixes, err := s.prefixes(ctx, cfg)
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +271,10 @@ func (s *Integration) defaults() {
 	}
 }
 
-func (s *Integration) prefixes(cfg integration.Config) ([]netip.Prefix, error) {
+// MaxLearned is how many subnets learned from other integrations are scanned.
+const MaxLearned = 16
+
+func (s *Integration) prefixes(ctx context.Context, cfg integration.Config) ([]netip.Prefix, error) {
 	s.mu.Lock()
 	s.defaults()
 	s.mu.Unlock()
@@ -282,12 +289,34 @@ func (s *Integration) prefixes(cfg integration.Config) ([]netip.Prefix, error) {
 				out = append(out, l.Prefix)
 			}
 		}
+		// Subnets the routers and firewalls report (VLANs, other LANs): scanned
+		// too, routed (no ARP: ping and TCP find the hosts).
+		if cfg.Bool("learned_subnets", true) {
+			learned := 0
+			for _, p := range integration.KnownSubnets(ctx) {
+				if learned == MaxLearned || overlaps(out, p) {
+					continue
+				}
+				out = append(out, p)
+				learned++
+			}
+		}
 		if len(out) == 0 {
 			return nil, fmt.Errorf("no private IPv4 network found on this server; list the subnets to scan")
 		}
 		return out, nil
 	}
 	return spec, nil
+}
+
+// overlaps reports whether p overlaps a subnet of the list.
+func overlaps(list []netip.Prefix, p netip.Prefix) bool {
+	for _, x := range list {
+		if x.Overlaps(p) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsPrefix(list []netip.Prefix, p netip.Prefix) bool {
@@ -310,7 +339,7 @@ type hostAcc struct {
 }
 
 func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]model.Device, error) {
-	prefixes, err := s.prefixes(cfg)
+	prefixes, err := s.prefixes(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
