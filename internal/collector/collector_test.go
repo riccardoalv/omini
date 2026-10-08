@@ -586,3 +586,32 @@ func TestPresenceTimelineAlertsAndHistory(t *testing.T) {
 		t.Fatalf("phone came back: %+v", events)
 	}
 }
+
+// A machine seen as a client for a while that an integration starts to
+// report (a VM once the Proxmox integration sees it) becomes a device node
+// with another id: it is not a new device.
+func TestAKnownMachineReportedByAnIntegrationIsNotNew(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	vm := model.MACAddress("bc:24:11:00:00:01")
+	sw := model.Device{
+		Key: "aa:00:00:00:00:01", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch),
+		MACs: []model.MACAddress{"aa:00:00:00:00:01"},
+		Fdb:  []model.FdbEntry{{MAC: vm, Port: "ge1"}},
+	}
+	e.fake.set([]model.Device{sw}, nil)
+	e.collect(t)
+
+	e.clock = e.clock.Add(collector.NewDeviceGrace + time.Hour)
+	guest := model.Device{Key: string(vm), Name: "haos", Role: model.Ptr(model.DeviceRoleServer), MACs: []model.MACAddress{vm}}
+	e.fake.set([]model.Device{sw, guest}, nil)
+	s := e.collect(t)
+	if _, ok := node(s, "dev:"+string(vm)); !ok {
+		t.Fatal("the VM is a device node now")
+	}
+	for _, a := range s.Alerts {
+		if a.Rule == "new_device" {
+			t.Fatalf("a known machine reported as new: %+v", a)
+		}
+	}
+}

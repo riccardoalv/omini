@@ -850,3 +850,32 @@ func TestDeviceHangsFromTheRouterOfItsNetwork(t *testing.T) {
 	}
 	t.Fatalf("the host does not hang from the firewall's VLAN 20: %+v", topo.Edges)
 }
+
+// The firewall runs as a VM on the Proxmox host that hangs from its own LAN
+// switch: no link from the firewall to the host (it would make the host hang
+// from two places); the firewall names its host instead.
+func TestFirewallRunningAsAVMIsNotABranchOfItsHost(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Neighbors: []model.Neighbor{{
+			LocalPort: "net0", Protocol: model.Ptr(model.NeighborProtocolOther),
+			RemoteName: model.Ptr("pve"), RemoteIP: model.Ptr("192.168.1.50"),
+		}},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.1.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{pve}},
+	})
+	for _, e := range topo.Edges {
+		if (e.Source == "dev:58:9c:fc:00:00:01" && e.Target == "dev:7:proxmox:pve") || (e.Target == "dev:58:9c:fc:00:00:01" && e.Source == "dev:7:proxmox:pve") {
+			t.Fatalf("a link between the firewall and its host: %+v", e)
+		}
+	}
+	for _, n := range topo.Nodes {
+		if n.ID == "dev:58:9c:fc:00:00:01" && n.RunsOn != "dev:7:proxmox:pve" {
+			t.Fatalf("runs on %q", n.RunsOn)
+		}
+	}
+}

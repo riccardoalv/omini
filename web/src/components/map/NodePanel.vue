@@ -164,6 +164,8 @@ const activityTime = computed(
 const n = computed(() => props.node)
 const byId = computed(() => new Map(props.nodes.map((x) => [x.id, x])))
 const parent = computed(() => (n.value?.parent_id ? byId.value.get(n.value.parent_id) : undefined))
+// A router or firewall running as a VM: the host it runs on (no link on the map).
+const runsOn = computed(() => (n.value?.runs_on ? byId.value.get(n.value.runs_on) : undefined))
 const children = computed(() =>
   n.value
     ? childrenOf(n.value.id, props.nodes, props.edges).filter((c) => c.kind === 'client')
@@ -844,6 +846,12 @@ async function save(patch: {
               <dd>
                 <a href="#" @click.prevent="emit('select', parent.id)">{{ parent.label }}</a>
                 <template v-if="n.port"> · {{ t('panel.port', { port: n.port }) }}</template>
+              </dd>
+            </template>
+            <template v-if="runsOn">
+              <dt>{{ t('panel.runsOn') }}</dt>
+              <dd data-test="runs-on">
+                <a href="#" @click.prevent="emit('select', runsOn.id)">{{ runsOn.label }}</a>
               </dd>
             </template>
             <template v-if="n.ssid">

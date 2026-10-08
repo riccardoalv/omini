@@ -84,6 +84,7 @@ type Node struct {
 	Hostname      string            `json:"hostname,omitempty"`
 	RandomMAC     bool              `json:"random_mac,omitempty"`
 	ParentID      string            `json:"parent_id,omitempty"` // where a client/segment is attached
+	RunsOn        string            `json:"runs_on,omitempty"`   // a router or firewall running as a VM: its host (no link drawn)
 	Port          string            `json:"port,omitempty"`      // port (or radio) on the parent
 	SSID          string            `json:"ssid,omitempty"`
 	SignalDBM     *int64            `json:"signal_dbm,omitempty"`
@@ -448,6 +449,14 @@ func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 		}
 		if target == "" || target == id {
 			continue
+		}
+		// A router or firewall running as a virtual machine is the center of the
+		// network, not a branch of its host: no link, its host is named instead.
+		if model.Deref(nb.Protocol) == model.NeighborProtocolOther {
+			if r := model.Deref(d.Role); r == model.DeviceRoleFirewall || r == model.DeviceRoleRouter {
+				b.nodes[id].RunsOn = target
+				continue
+			}
 		}
 		remotePort := model.Deref(nb.RemotePort)
 		b.addEdge(id, nb.LocalPort, target, remotePort, EdgeLLDP, portSpeed(d, nb.LocalPort))

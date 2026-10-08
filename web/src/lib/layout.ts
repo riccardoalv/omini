@@ -366,11 +366,20 @@ export async function layout(
       ? packLeaves(allNodes, allEdges, groupOf)
       : { nodes: allNodes, edges: allEdges, packs: [] }
   const tree = treeLayout(nodes, edges, groupOf, direction)
+  // A node in an area is placed with its area (its band), not where it was
+  // dragged once: a few dragged members stretched the area over the map.
+  // Only an area moved as a whole (every member dragged with it) keeps them.
+  const keep = new Set<LayoutGroup>()
+  for (const g of groups) if (g.children.every((c) => !all.has(c) || saved[c])) keep.add(g)
+  const free: Record<string, Point> = {}
+  for (const [id, p] of Object.entries(saved)) {
+    const g = groupOf.get(id)
+    if (!g || keep.has(g)) free[id] = p
+  }
   const out: Record<string, Point> = {}
-  for (const [id, p] of Object.entries(tree))
-    out[id] = id.startsWith('pack:') ? p : (saved[id] ?? p)
-  unpack(packs, out, saved)
-  return clearSaved(out, allNodes, saved, direction)
+  for (const [id, p] of Object.entries(tree)) out[id] = id.startsWith('pack:') ? p : (free[id] ?? p)
+  unpack(packs, out, free)
+  return clearSaved(out, allNodes, free, direction)
 }
 
 const GAP = 12

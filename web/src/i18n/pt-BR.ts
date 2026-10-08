@@ -211,6 +211,7 @@ const ptBR: typeof en = {
     cpus: '{n} CPU | {n} CPUs',
     memory: 'Memória',
     connectedTo: 'Conectado a',
+    runsOn: 'Roda em',
     port: 'porta {port}',
     ssid: 'Rede Wi-Fi',
     signal: 'Sinal',

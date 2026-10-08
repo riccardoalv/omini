@@ -338,3 +338,34 @@ describe('nodes without links in an area', () => {
     expect(pos.fw!.x + 200).toBeLessThan(Math.min(...members.map((m) => m.x)) - 24)
   })
 })
+
+describe('dragged nodes in areas', () => {
+  it('are placed with their area unless the whole area was moved', async () => {
+    const nodes = ['fw', 'sw', 'pve', 'vm1', 'vm2'].map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      { id: '1', source: 'fw', target: 'sw' },
+      { id: '2', source: 'sw', target: 'pve' },
+      { id: '3', source: 'pve', target: 'vm1' },
+      { id: '4', source: 'pve', target: 'vm2' },
+    ]
+    const rack = {
+      id: 'rack',
+      children: ['pve', 'vm1', 'vm2'],
+      padding: [54, 24, 24, 24] as [number, number, number, number],
+    }
+    // One VM dragged far away once: ignored, it stays in the area's band.
+    const pos = await layout(
+      nodes,
+      edges,
+      { vm1: { x: 5000, y: 5000 }, fw: { x: -900, y: 0 } },
+      'RIGHT',
+      [rack],
+    )
+    expect(pos.vm1!.x).toBe(pos.vm2!.x)
+    expect(pos.fw).toEqual({ x: -900, y: 0 }) // outside areas, a dragged node stays
+    // The whole area moved: its members keep their places.
+    const moved = { pve: { x: 3000, y: 0 }, vm1: { x: 3400, y: -50 }, vm2: { x: 3400, y: 50 } }
+    const kept = await layout(nodes, edges, moved, 'RIGHT', [rack])
+    expect(kept.vm1).toEqual(moved.vm1)
+  })
+})

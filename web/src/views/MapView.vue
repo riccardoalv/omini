@@ -329,15 +329,14 @@ function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
   }))
 }
 
-/** Automatic areas and their devices: the map is laid out again when they change. */
+/** Areas and their devices (drawn or automatic): the map is laid out again when they change. */
 const autoAreaKey = computed(() =>
   liveAreas.value
-    .filter((a) => a.auto)
     .map((a) => `${a.id}:${areaMembers(a, view.value, autoMembers.value).join(',')}`)
     .join(';'),
 )
 
-// Re-layout only when the visible graph, the direction or the automatic areas
+// Re-layout only when the visible graph, the direction or the areas
 // change, not on every poll.
 watch([view, direction, autoAreaKey], async ([v, direction, autoKey]) => {
   const ids = [...v.nodes.map((n) => n.id), ...v.groups.map((g) => g.id)]

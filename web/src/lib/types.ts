@@ -168,6 +168,8 @@ export interface TopoNode {
   hostname?: string
   random_mac?: boolean
   parent_id?: string
+  /** A router or firewall running as a VM: the node of its host. */
+  runs_on?: string
   port?: string
   ssid?: string
   signal_dbm?: number

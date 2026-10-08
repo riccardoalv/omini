@@ -54,9 +54,10 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error,
 		})
 	}
+	seenMAC := firstSeenByMAC(inventory)
 	for _, e := range inventory {
 		if (e.Kind == string(topology.KindClient) || e.Kind == string(topology.KindDevice)) &&
-			e.FirstSeen.After(since.Add(NewDeviceGrace)) {
+			firstSeen(e, seenMAC).After(since.Add(NewDeviceGrace)) {
 			in.NewDevices = append(in.NewDevices, insights.NewDevice{NodeID: e.ID, FirstSeen: e.FirstSeen})
 		}
 	}
@@ -77,6 +78,30 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		return []store.Alert{}
 	}
 	return open
+}
+
+// firstSeenByMAC is when each MAC was first seen, whatever node it was: a
+// machine seen as a client that an integration starts reporting becomes a
+// device node with another id, and is not new for that.
+func firstSeenByMAC(inventory []store.InventoryEntry) map[string]time.Time {
+	out := map[string]time.Time{}
+	for _, e := range inventory {
+		if e.MAC == "" || e.FirstSeen.IsZero() {
+			continue
+		}
+		if t, ok := out[e.MAC]; !ok || e.FirstSeen.Before(t) {
+			out[e.MAC] = e.FirstSeen
+		}
+	}
+	return out
+}
+
+// firstSeen is when an inventory entry's machine was first seen (by its MAC).
+func firstSeen(e store.InventoryEntry, byMAC map[string]time.Time) time.Time {
+	if t, ok := byMAC[e.MAC]; ok && t.Before(e.FirstSeen) {
+		return t
+	}
+	return e.FirstSeen
 }
 
 // trackingSince returns when presence tracking started, starting it now the
@@ -117,6 +142,7 @@ func (c *Collector) trackPresence(ctx context.Context, topo topology.Topology, i
 		byID[e.ID] = e
 	}
 	present := map[string]bool{}
+	seenMAC := firstSeenByMAC(inventory)
 	var events []store.PresenceEvent
 	c.mu.Lock()
 	for _, n := range topo.Nodes {
@@ -130,7 +156,7 @@ func (c *Collector) trackPresence(ctx context.Context, topo topology.Topology, i
 		}
 		e := byID[n.ID]
 		// The first sighting ever: the inventory entry was just created.
-		first := !known && !e.FirstSeen.IsZero() && now.Sub(e.FirstSeen) < time.Minute
+		first := !known && !e.FirstSeen.IsZero() && now.Sub(firstSeen(e, seenMAC)) < time.Minute
 		events = append(events, store.PresenceEvent{NodeID: n.ID, Kind: "join", At: now, First: first})
 		c.presence[n.ID] = true
 	}

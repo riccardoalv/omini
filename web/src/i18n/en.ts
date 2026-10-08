@@ -208,6 +208,7 @@ export default {
     cpus: '{n} CPU | {n} CPUs',
     memory: 'Memory',
     connectedTo: 'Connected to',
+    runsOn: 'Runs on',
     port: 'port {port}',
     ssid: 'Wi-Fi network',
     signal: 'Signal',
