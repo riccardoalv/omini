@@ -164,6 +164,18 @@ function treeLayout(
     parents.set(e.target, [...(parents.get(e.target) ?? []), e.source])
     outgoing.set(e.source, [...(outgoing.get(e.source) ?? []), e.target])
   }
+  // A node without links in an area stands with the area's other nodes (as a
+  // sibling of the first that hangs from something), not apart, which would
+  // stretch the area's box over everything between.
+  for (const n of nodes) {
+    const g = groupOf.get(n.id)
+    if (!g || parents.has(n.id) || outgoing.has(n.id)) continue
+    const mate = nodes.find((m) => m.id !== n.id && groupOf.get(m.id) === g && parents.has(m.id))
+    if (!mate) continue
+    const p = parents.get(mate.id)![0]!
+    parents.set(n.id, [p])
+    outgoing.set(p, [...(outgoing.get(p) ?? []), n.id])
+  }
   // Parents with nothing but this child and no parent of their own stand next
   // to the child's first parent instead of starting a tree of their own.
   const companions = new Map<string, string[]>()

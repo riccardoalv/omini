@@ -117,8 +117,22 @@ func TestVMsReportedByAnIntegrationStayPut(t *testing.T) {
 func TestNoInferenceWithAProxmoxIntegration(t *testing.T) {
 	topo := proxmoxNet(1)
 	topo.Nodes[1].Device = &model.Device{Key: "pve1", Vendor: model.Ptr("Proxmox")}
+	// The integration reports a guest of its own under the host.
+	topo.Nodes = append(topo.Nodes, topology.Node{ID: "dev:ha", Kind: topology.KindDevice, Device: &model.Device{Key: "ha"}})
+	topo.Edges = append(topo.Edges, topology.Edge{ID: "e:pve1|dev:ha", Source: "pve1", Target: "dev:ha"})
 	attachVMs(&topo)
 	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "gw" {
 		t.Fatalf("guests are placed by the integration, not guessed: %v", got)
+	}
+}
+
+// A Proxmox integration whose token cannot see the guests (no VM.Audit: empty
+// lists) reports the host alone: the guests are inferred as without it.
+func TestInferenceWhenTheProxmoxIntegrationSeesNoGuests(t *testing.T) {
+	topo := proxmoxNet(1)
+	topo.Nodes[1].Device = &model.Device{Key: "pve1", Vendor: model.Ptr("Proxmox")}
+	attachVMs(&topo)
+	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "pve1" {
+		t.Fatalf("guests go under the only host: %v", got)
 	}
 }

@@ -209,6 +209,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 			b.addManaged(src, &src.Devices[i])
 		}
 	}
+	b.adoptMACs(sources)
 	managed := b.sortedIDs(KindDevice)
 	for _, id := range managed {
 		b.addNeighborEdges(id)
@@ -300,6 +301,51 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 	b.nodes[id] = n
 	b.sources[id] = []*model.Device{d}
 	b.index(id, d, macs)
+}
+
+// adoptMACs gives a device reported without any MAC (e.g. a Proxmox host: its
+// API exposes none) the MAC its address has in the ARP tables, DHCP leases or
+// scans of the network. Without it, the device would float apart from the
+// client already seen with that MAC on a switch port: one machine, two nodes.
+func (b *builder) adoptMACs(sources []Source) {
+	byIP := map[string]model.MACAddress{}
+	add := func(ip string, m model.MACAddress) {
+		if m = model.NormMAC(string(m)); ip != "" && m != "" && !m.IsGroup() {
+			if _, ok := byIP[ip]; !ok {
+				byIP[ip] = m
+			}
+		}
+	}
+	for _, src := range sources {
+		for i := range src.Devices {
+			d := &src.Devices[i]
+			for _, a := range d.Arp {
+				add(a.IP, a.MAC)
+			}
+			for _, l := range d.DhcpLeases {
+				add(l.IP, l.MAC)
+			}
+			for _, h := range d.Hosts {
+				if h.MAC != nil {
+					add(h.IP, *h.MAC)
+				}
+			}
+		}
+	}
+	for _, id := range b.sortedIDs(KindDevice) {
+		n := b.nodes[id]
+		if n.IP == "" || len(deviceMACs(n.Device)) > 0 {
+			continue
+		}
+		m, ok := byIP[n.IP]
+		if _, taken := b.byMAC[m]; !ok || taken {
+			continue
+		}
+		d := *n.Device // a copy: the collected data stays as it came
+		d.MACs = []model.MACAddress{m}
+		n.Device, n.MAC = &d, string(m)
+		b.byMAC[m] = id
+	}
 }
 
 func (b *builder) index(id string, d *model.Device, macs []model.MACAddress) {

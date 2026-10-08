@@ -674,3 +674,44 @@ func TestEmptyScannedNetworkIsNotDrawn(t *testing.T) {
 		t.Fatalf("devices on the map: %v", labels)
 	}
 }
+
+// A Proxmox host comes from its API without any MAC: it takes the one its
+// address has in the firewall's ARP table, so it is the machine the switch
+// sees on Port 1 — one node, on that port — instead of a second one floating.
+func TestDeviceWithoutMACTakesItsARPMAC(t *testing.T) {
+	const pveMAC = "22:28:4d:00:00:50"
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Arp: []model.ArpEntry{{IP: "192.168.1.50", MAC: pveMAC}},
+	}
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "switch", Host: model.Ptr("192.168.1.96"),
+		MACs: []model.MACAddress{"1c:2a:a3:00:00:01"}, Role: model.Ptr(model.DeviceRoleSwitch),
+		Fdb: []model.FdbEntry{{MAC: pveMAC, Port: "Port 1"}, {MAC: "58:9c:fc:00:00:01", Port: "Port 8"}},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.1.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{sw}},
+		{IntegrationID: 3, Online: true, Devices: []model.Device{pve}},
+	})
+	var withIP []string
+	for _, n := range topo.Nodes {
+		if n.IP == "192.168.1.50" {
+			withIP = append(withIP, n.ID)
+		}
+	}
+	if !reflect.DeepEqual(withIP, []string{"dev:3:proxmox:pve"}) {
+		t.Fatalf("nodes with the host's address: %v", withIP)
+	}
+	found := false
+	for _, e := range topo.Edges {
+		if e.Target == "dev:3:proxmox:pve" && e.Source == "dev:1c:2a:a3:00:00:01" && e.SourcePort == "Port 1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the host hangs from the switch's Port 1: %+v", topo.Edges)
+	}
+}

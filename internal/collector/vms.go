@@ -13,10 +13,16 @@ import (
 // host. With several hosts the VMs stay where the network data put them
 // (a Proxmox integration can tell them apart later).
 func attachVMs(topo *topology.Topology) {
+	reported := map[string]bool{} // devices an integration reports
+	for _, n := range topo.Nodes {
+		if n.Device != nil {
+			reported[n.ID] = true
+		}
+	}
 	var hosts []string
 	for _, n := range topo.Nodes {
 		if n.Product == "proxmox" && n.Kind != topology.KindApp {
-			if n.Device != nil && n.Device.Vendor != nil && *n.Device.Vendor == "Proxmox" {
+			if n.Device != nil && n.Device.Vendor != nil && *n.Device.Vendor == "Proxmox" && hasGuests(topo, n.ID, reported) {
 				return // a Proxmox integration places the guests
 			}
 			hosts = append(hosts, n.ID)
@@ -51,6 +57,18 @@ func attachVMs(topo *topology.Topology) {
 		edges = append(edges, topology.Edge{ID: "e:" + host + "|" + id, Source: host, Target: id, Kind: topology.EdgeInferred})
 	}
 	topo.Edges = edges
+}
+
+// hasGuests reports whether a Proxmox integration placed guests under its
+// host. It may see none (a token without VM.Audit gets empty lists): then the
+// guests are inferred like without the integration.
+func hasGuests(topo *topology.Topology, host string, reported map[string]bool) bool {
+	for _, e := range topo.Edges {
+		if e.Source == host && reported[e.Target] {
+			return true
+		}
+	}
+	return false
 }
 
 // proxmoxGuest reports whether a node's MAC was assigned by Proxmox.

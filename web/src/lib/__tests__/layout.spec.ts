@@ -315,3 +315,26 @@ describe('tree layout', () => {
     expect(srv.y >= bottom || srv.y + 60 <= top).toBe(true)
   })
 })
+
+describe('nodes without links in an area', () => {
+  it('stand with the rest of their area, not apart', async () => {
+    // fw → sw → {pc, tv}; "pve" has no link yet but is in the LAN area with sw.
+    const nodes = ['fw', 'sw', 'pc', 'tv', 'pve'].map((id) => ({ id, width: 200, height: 40 }))
+    const edges = [
+      { id: '1', source: 'fw', target: 'sw' },
+      { id: '2', source: 'sw', target: 'pc' },
+      { id: '3', source: 'sw', target: 'tv' },
+    ]
+    const lan = {
+      id: 'lan',
+      children: ['sw', 'pc', 'tv', 'pve'],
+      padding: [54, 24, 24, 24] as [number, number, number, number],
+    }
+    const pos = await layout(nodes, edges, {}, 'RIGHT', [lan])
+    // Same column as the switch (a sibling under the firewall), not a root of its own.
+    expect(pos.pve!.x).toBe(pos.sw!.x)
+    // The firewall stays out of the area.
+    const members = ['sw', 'pc', 'tv', 'pve'].map((id) => pos[id]!)
+    expect(pos.fw!.x + 200).toBeLessThan(Math.min(...members.map((m) => m.x)) - 24)
+  })
+})
