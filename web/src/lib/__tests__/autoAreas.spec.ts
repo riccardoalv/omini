@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { areaMembers, autoGroups, networkSubnets, subnetOf } from '@/lib/autoAreas'
+import {
+  areaMembers,
+  autoGroups,
+  networkHighlight,
+  networkSubnets,
+  subnetOf,
+} from '@/lib/autoAreas'
 import type { MapArea, TopoEdge, TopoNode } from '@/lib/types'
 
 const fw: TopoNode = {
@@ -150,5 +156,42 @@ describe('automatic areas', () => {
     expect(areaMembers(area, view, auto)).toEqual(['pc', 'g1'])
     expect(areaMembers({ ...area, auto: undefined }, view, auto)).toEqual(['stored'])
     expect(areaMembers({ ...area, auto: 'vlan:99' }, view, auto)).toEqual([])
+  })
+})
+
+describe('networkHighlight', () => {
+  it('lights a router in several networks alone, not what hangs below it', () => {
+    // wan → fw (LAN + modem network) → sw (LAN) → pc; wan → modem (modem network).
+    const fw: TopoNode = {
+      id: 'fw',
+      kind: 'device',
+      label: 'fw',
+      online: true,
+      device: {
+        key: 'fw',
+        name: 'fw',
+        interfaces: [
+          { name: 'wanphys', description: 'WAN_PHYSICAL', ips: ['192.168.100.2/24'] },
+          { name: 'lan', description: 'LAN', ips: ['192.168.1.1/24'] },
+        ],
+      },
+    }
+    const nodes = [
+      fw,
+      client('sw', '192.168.1.96'),
+      client('pc', '192.168.1.50'),
+      client('modem', '192.168.100.1'),
+    ]
+    const edges: TopoEdge[] = [
+      { id: '1', source: 'fw', target: 'sw', kind: 'lldp' },
+      { id: '2', source: 'sw', target: 'pc', kind: 'fdb' },
+    ]
+    const inclusive = autoGroups(nodes, edges, new Set(), 'inclusive')
+    const exclusive = autoGroups(nodes, edges)
+    const wan = networkHighlight('subnet:192.168.100.0/24', inclusive, exclusive, edges)!
+    expect([...wan].sort()).toEqual(['fw', 'modem'])
+    const lan = networkHighlight('subnet:192.168.1.0/24', inclusive, exclusive, edges)!
+    expect([...lan].sort()).toEqual(['fw', 'pc', 'sw'])
+    expect(networkHighlight(undefined, inclusive, exclusive, edges)).toBeUndefined()
   })
 })

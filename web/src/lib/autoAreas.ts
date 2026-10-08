@@ -255,3 +255,30 @@ export function areaMembers(
       .map((g) => g.id),
   ]
 }
+
+/**
+ * What the VLAN/subnet filter highlights: every device in the network
+ * (inclusive), and below the devices only in it (exclusive) what hangs from
+ * them. A router also in other networks lights up alone: else picking the
+ * modem's network lit the whole LAN under the firewall.
+ */
+export function networkHighlight(
+  key: string | undefined,
+  inclusive: AutoGroup[],
+  exclusive: AutoGroup[],
+  edges: { source: string; target: string }[],
+): Set<string> | undefined {
+  const g = inclusive.find((x) => x.key === key)
+  if (!g) return undefined
+  const own = [...(exclusive.find((x) => x.key === key)?.members ?? [])]
+  const below = new Map<string, string[]>()
+  for (const e of edges) below.set(e.source, [...(below.get(e.source) ?? []), e.target])
+  const out = new Set(g.members)
+  const stack = [...own]
+  while (stack.length) {
+    const id = stack.pop()!
+    out.add(id)
+    for (const c of below.get(id) ?? []) if (!out.has(c)) stack.push(c)
+  }
+  return out
+}

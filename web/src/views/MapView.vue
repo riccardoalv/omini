@@ -45,7 +45,7 @@ import {
   rectFrom,
   withDescendants,
 } from '@/lib/areas'
-import { autoGroups } from '@/lib/autoAreas'
+import { autoGroups, networkHighlight } from '@/lib/autoAreas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import {
   clientCount,
@@ -170,12 +170,18 @@ const liveAreas = computed(() =>
 const networkGroups = computed(() =>
   autoGroups(mapGraph.value.nodes, mapGraph.value.edges, new Set(), 'inclusive'),
 )
+// The devices only in one VLAN or subnet: what hangs below them is in it too.
+const onlyIn = computed(() => autoGroups(mapGraph.value.nodes, mapGraph.value.edges))
 const netFilter = ref<string>()
-/** Nodes of the picked VLAN or subnet, with what hangs below them; undefined: no filter. */
-const inNet = computed(() => {
-  const g = networkGroups.value.find((x) => x.key === netFilter.value)
-  return g ? new Set(withDescendants([...g.members], view.value.edges)) : undefined
-})
+/**
+ * Nodes of the picked VLAN or subnet; undefined: no filter. A device only in it
+ * brings what hangs below it; one also in other networks (the firewall, with an
+ * address in each) lights up alone — else picking the modem's network lit the
+ * whole LAN under the firewall.
+ */
+const inNet = computed(() =>
+  networkHighlight(netFilter.value, networkGroups.value, onlyIn.value, view.value.edges),
+)
 /** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
 const collapsedAreaList = computed(() =>
   liveAreas.value.filter((a) => prefs.collapsedAreas.includes(a.id)),
