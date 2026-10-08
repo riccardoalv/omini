@@ -7,7 +7,13 @@ import { formatSpeed } from '@/lib/format'
 import { speedColor } from '@/lib/speed'
 import type { LinkLabel } from '@/lib/traffic'
 
-export type LinkData = Partial<LinkLabel>
+export type LinkData = Partial<LinkLabel> & {
+  /** Extra room before the device (the border and title of an area the link enters). */
+  inset?: number
+}
+
+/** Room left before the device: its traffic badge sits above it, top down. */
+const BEFORE_DEVICE = { side: 10, top: 28 }
 
 /**
  * A link of the map, with its port's name and speed in the middle.
@@ -26,21 +32,26 @@ const path = computed(() =>
 )
 
 // A link shows its maximum speed (the traffic is shown on the devices) with
-// its port's name — "Porta LAN | 10G" — in the middle of the wire. Links
-// sharing a port show one pill in the middle of the part they share.
+// its port's name — "Porta LAN | 10G" — at the end of the wire, just before
+// the device it reaches (clear of its traffic badge and of the border of an
+// area it enters), so pills of siblings never meet. Links sharing a port show
+// one pill at the port, where the wire leaves it.
 const label = computed(() => {
   const d = props.data
   if (!d || d.hidden || !d.at) return undefined
   const speed = formatSpeed(d.speed)
   if (!speed && !d.name) return undefined
-  const [, cx, cy] = path.value
   const vertical = props.targetPosition === Position.Top
+  const inset = d.inset ?? 0
+  // The point the pill hangs from, and which of its sides touches it.
   const at =
     d.at === 'shared'
       ? vertical
-        ? { x: props.sourceX, y: (props.sourceY + cy) / 2 }
-        : { x: (props.sourceX + cx) / 2, y: props.sourceY }
-      : { x: cx, y: cy }
+        ? { x: props.sourceX, y: props.sourceY + 8, anchor: '-50%, 0' }
+        : { x: props.sourceX + 10, y: props.sourceY, anchor: '0, -50%' }
+      : vertical
+        ? { x: props.targetX, y: props.targetY - BEFORE_DEVICE.top - inset, anchor: '-50%, -100%' }
+        : { x: props.targetX - BEFORE_DEVICE.side - inset, y: props.targetY, anchor: '-100%, -50%' }
   return { speed, name: d.name, color: speedColor(d.speed), ...at }
 })
 </script>
@@ -52,7 +63,7 @@ const label = computed(() => {
       class="link-speed nodrag nopan"
       data-test="link-speed"
       :style="{
-        transform: `translate(-50%, -50%) translate(${label.x}px, ${label.y}px)`,
+        transform: `translate(${label.x}px, ${label.y}px) translate(${label.anchor})`,
         '--c': label.color,
       }"
     >

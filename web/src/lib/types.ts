@@ -254,6 +254,8 @@ export interface MapArea {
   auto?: string
   /** An automatic area the user removed: kept so it is not created again. */
   dismissed?: boolean
+  /** Hidden from the map (shown again with "Show hidden"). */
+  hidden?: boolean
 }
 
 export type FieldType = 'string' | 'secret' | 'host' | 'url' | 'int' | 'bool' | 'select'

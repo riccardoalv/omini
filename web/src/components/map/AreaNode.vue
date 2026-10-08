@@ -65,7 +65,7 @@ function onResizeEnd() {
 </script>
 
 <template>
-  <div class="area" :style="{ '--c': areaCss(area.color) }">
+  <div class="area" :class="{ 'is-hidden': area.hidden }" :style="{ '--c': areaCss(area.color) }">
     <div class="area-title" :title="t('map.areas.dragHint')" @dblclick.stop="emit('startRename')">
       <input
         v-if="editing"
@@ -103,6 +103,11 @@ function onResizeEnd() {
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--c) 7%, transparent);
   pointer-events: none; /* the inside of an area never blocks the map or its nodes */
+}
+/* A hidden area, shown for a while with "Show hidden". */
+.area.is-hidden {
+  opacity: 0.45;
+  border-style: dotted;
 }
 /* The title sits above the rectangle, so devices inside never cover it. */
 .area-title {

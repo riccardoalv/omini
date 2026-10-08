@@ -127,3 +127,28 @@ func TestAutoAreas(t *testing.T) {
 		t.Fatalf("created again: %+v %v", again, err)
 	}
 }
+
+func TestHideArea(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	a, err := s.CreateArea(ctx, Area{Name: "LAN", Color: "blue", Direction: "RIGHT", Width: 100, Height: 100, Auto: "subnet:192.168.1.0/24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	yes, no := true, false
+	if u, err := s.UpdateArea(ctx, a.ID, AreaUpdate{Hidden: &yes}); err != nil || !u.Hidden {
+		t.Fatalf("hide: %+v %v", u, err)
+	}
+	list, _ := s.ListAreas(ctx)
+	if !list[0].Hidden || list[0].Dismissed {
+		t.Fatalf("hidden area listed as %+v", list[0])
+	}
+	// Renaming keeps it hidden; showing it again brings it back.
+	name := "Home"
+	if u, _ := s.UpdateArea(ctx, a.ID, AreaUpdate{Name: &name}); !u.Hidden {
+		t.Fatalf("rename showed it: %+v", u)
+	}
+	if u, _ := s.UpdateArea(ctx, a.ID, AreaUpdate{Hidden: &no}); u.Hidden {
+		t.Fatalf("show: %+v", u)
+	}
+}

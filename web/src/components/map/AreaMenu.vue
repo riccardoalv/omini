@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronsDownUp, Pencil, Trash2 } from 'lucide-vue-next'
+import { ChevronsDownUp, Eye, EyeOff, Pencil, Trash2 } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -7,10 +7,12 @@ import ColorPicker from '@/components/ColorPicker.vue'
 import { areaCss, areaHex } from '@/lib/areas'
 import { AREA_COLORS } from '@/lib/types'
 
-const props = defineProps<{ x: number; y: number; color: string }>()
+const props = defineProps<{ x: number; y: number; color: string; isHidden?: boolean }>()
 const emit = defineEmits<{
   rename: []
   collapse: []
+  /** Hide the area (or show a hidden one again). */
+  hide: []
   color: [color: string]
   /** The color being picked, shown on the area before it is applied (undefined: back). */
   preview: [color: string | undefined]
@@ -56,6 +58,11 @@ onBeforeUnmount(() => {
     </button>
     <button role="menuitem" data-test="rename" @click="emit('rename')">
       <Pencil :size="15" />{{ t('map.areas.rename') }}
+    </button>
+    <button role="menuitem" data-test="hide-area" @click="emit('hide')">
+      <component :is="isHidden ? Eye : EyeOff" :size="15" />{{
+        isHidden ? t('map.areas.show') : t('map.areas.hide')
+      }}
     </button>
     <div class="colors" role="group" :aria-label="t('map.areas.color')">
       <button

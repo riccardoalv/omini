@@ -99,6 +99,8 @@ const ptBR: typeof en = {
       defaultName: 'Nova área',
       name: 'Nome da área',
       rename: 'Renomear',
+      hide: 'Ocultar área',
+      show: 'Mostrar área',
       delete: 'Excluir área',
       color: 'Cor',
       customColor: 'Qualquer cor',

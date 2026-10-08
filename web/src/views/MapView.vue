@@ -115,7 +115,12 @@ const unhidden = computed(() =>
     ? { nodes: allNodes.value, edges: allEdges.value, hidden: 0 }
     : withoutHidden(allNodes.value, allEdges.value),
 )
-const hiddenCount = computed(() => allNodes.value.filter((n) => n.hidden).length)
+// Hidden devices and hidden areas: "Show hidden" brings both back for a while.
+const hiddenCount = computed(
+  () =>
+    allNodes.value.filter((n) => n.hidden).length +
+    areas.value.filter((a) => a.hidden && !a.dismissed).length,
+)
 const filtered = computed(() =>
   prefs.hideOffline ? withoutOffline(unhidden.value.nodes, unhidden.value.edges) : unhidden.value,
 )
@@ -151,7 +156,9 @@ const view = computed(() =>
     : collapseAreas(clientView.value, collapsedAreaList.value),
 )
 /** Areas on the map: automatic ones the user removed are kept only so they are not made again. */
-const liveAreas = computed(() => areas.value.filter((a) => !a.dismissed))
+const liveAreas = computed(() =>
+  areas.value.filter((a) => !a.dismissed && (!a.hidden || showHidden.value)),
+)
 /**
  * One automatic area per VLAN and subnet (when there are several), with the
  * devices only in it; devices in an area the user drew stay in that one.
@@ -247,6 +254,20 @@ const flowNodes = computed<Node[]>(() => {
   return out
 })
 
+/** The area each node on the map is drawn in. */
+const areaOfNode = computed(() => {
+  const out = new Map<string, number>()
+  for (const a of visibleAreas.value)
+    for (const id of areaNodes(a)) if (!out.has(id)) out.set(id, a.id)
+  return out
+})
+/** A link entering an area: its pill stays out of the area's border (and title, top down). */
+function insetOf(source: string, target: string) {
+  const a = areaOfNode.value.get(target)
+  if (a === undefined || areaOfNode.value.get(source) === a) return 0
+  return direction.value === 'DOWN' ? AREA_PADDING + AREA_TITLE : AREA_PADDING
+}
+
 const flowEdges = computed<Edge[]>(() => {
   const byId = new Map(nodes.value.map((n) => [n.id, n]))
   const labels = linkInfo.value.labels
@@ -259,7 +280,7 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: labels.get(e.id),
+      data: { ...labels.get(e.id), inset: insetOf(e.source, e.target) },
       class: {
         slow: look.slow,
         offline: target ? !target.online : false,
@@ -606,6 +627,13 @@ watch(autoAreaGroups, async (groups) => {
   }
 })
 
+/** Hides an area (or shows a hidden one again): its frame leaves the map, its devices stay. */
+async function hideArea(id: number) {
+  const hidden = !areas.value.find((a) => a.id === id)?.hidden
+  patchArea(id, { hidden })
+  await api.updateArea(id, { hidden })
+}
+
 async function deleteArea(id: number) {
   // An automatic area is only dismissed (kept, so it is not created again).
   areas.value = areas.value
@@ -691,7 +719,7 @@ function closeAreaMenu() {
   areaPreview.value = undefined
 }
 
-function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | { color: string }) {
+function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | 'hide' | { color: string }) {
   const id = areaMenu.value?.id
   areaMenu.value = undefined
   areaPreview.value = undefined
@@ -699,6 +727,7 @@ function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | { color: stri
   if (action === 'collapse') collapseArea(id)
   else if (action === 'rename') editingArea.value = id
   else if (action === 'delete') deleteArea(id)
+  else if (action === 'hide') hideArea(id)
   else colorArea(id, action.color)
 }
 
@@ -1160,8 +1189,10 @@ onBeforeUnmount(() => {
       :x="areaMenu.x"
       :y="areaMenu.y"
       :color="areaMenuArea.color"
+      :is-hidden="!!areaMenuArea.hidden"
       @rename="areaMenuAction('rename')"
       @collapse="areaMenuAction('collapse')"
+      @hide="areaMenuAction('hide')"
       @color="(color: string) => areaMenuAction({ color })"
       @delete="areaMenuAction('delete')"
       @preview="previewArea"

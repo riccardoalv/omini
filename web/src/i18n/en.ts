@@ -96,6 +96,8 @@ export default {
       defaultName: 'New area',
       name: 'Area name',
       rename: 'Rename',
+      hide: 'Hide area',
+      show: 'Show area',
       delete: 'Delete area',
       color: 'Color',
       customColor: 'Any color',

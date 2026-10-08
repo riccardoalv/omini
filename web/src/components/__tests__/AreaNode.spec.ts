@@ -126,6 +126,15 @@ describe('AreaMenu', () => {
     expect(w.emitted('preview')!.slice(-1)[0]).toEqual([undefined])
   })
 
+  it('hides the area, or shows a hidden one', async () => {
+    const w = mountMenu()
+    expect(w.get('[data-test=hide-area]').text()).toBe('Hide area')
+    await w.get('[data-test=hide-area]').trigger('click')
+    expect(w.emitted('hide')).toHaveLength(1)
+    await w.setProps({ isHidden: true })
+    expect(w.get('[data-test=hide-area]').text()).toBe('Show area')
+  })
+
   it('closes with Escape', () => {
     const w = mountMenu()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))

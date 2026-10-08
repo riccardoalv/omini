@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { alignOn, clearSaved, layout, layoutKey, modelOrder, positionsFor } from '../layout'
+import {
+  alignOn,
+  clearSaved,
+  LAYER_GAP,
+  layout,
+  layoutKey,
+  modelOrder,
+  positionsFor,
+} from '../layout'
 
 describe('per-direction layout positions', () => {
   it('keys left-to-right positions by node id and top-down ones with a prefix', () => {
@@ -122,7 +130,7 @@ describe('top-down layout', () => {
       { id: 'e:b', source: 'gw', target: 'b' },
     ]
     const pos = await layout(nodes, edges, { b: { x: 999, y: 999 } }, 'DOWN')
-    expect(pos.a!.y).toBe(pos.gw!.y + 40 + 80)
+    expect(pos.a!.y).toBe(pos.gw!.y + 40 + LAYER_GAP.DOWN)
     expect(pos.b).toEqual({ x: 999, y: 999 })
   })
 })
@@ -233,5 +241,77 @@ describe('areas keep their place', () => {
     ])
     expect(pos.p1!.y).toBeLessThan(pos.p2!.y)
     expect(pos.p2!.y).toBeLessThan(pos.p5!.y)
+  })
+})
+
+describe('tree layout', () => {
+  // wan → fw → sw → {ap → {c1, c2, c3}, srv}; a second WAN also feeds fw.
+  const nodes = [
+    { id: 'wan', width: 160, height: 50 },
+    { id: 'wan2', width: 160, height: 50 },
+    { id: 'fw', width: 220, height: 60 },
+    { id: 'sw', width: 220, height: 60 },
+    { id: 'ap', width: 220, height: 60 },
+    { id: 'srv', width: 220, height: 60 },
+    { id: 'c1', width: 200, height: 38 },
+    { id: 'c2', width: 200, height: 38 },
+    { id: 'c3', width: 200, height: 38 },
+  ]
+  const edges = [
+    { id: '1', source: 'wan', target: 'fw' },
+    { id: '2', source: 'wan2', target: 'fw' },
+    { id: '3', source: 'fw', target: 'sw' },
+    { id: '4', source: 'sw', target: 'ap' },
+    { id: '5', source: 'sw', target: 'srv' },
+    { id: '6', source: 'ap', target: 'c1' },
+    { id: '7', source: 'ap', target: 'c2' },
+    { id: '8', source: 'ap', target: 'c3' },
+  ]
+  const center = (pos: Record<string, { y: number }>, id: string) =>
+    pos[id]!.y + nodes.find((n) => n.id === id)!.height / 2
+
+  it('puts each level in one column and a parent in the middle of its children', async () => {
+    const pos = await layout(nodes, edges, {}, 'RIGHT')
+    // Columns: every node of a level starts at the same x.
+    expect(pos.wan!.x).toBe(pos.wan2!.x)
+    expect(pos.ap!.x).toBe(pos.srv!.x)
+    expect(new Set(['c1', 'c2', 'c3'].map((id) => pos[id]!.x)).size).toBe(1)
+    expect(pos.fw!.x).toBe(pos.wan!.x + 160 + LAYER_GAP.RIGHT)
+    // The AP sits in the middle of its clients; the switch in the middle of its two.
+    expect(center(pos, 'ap')).toBeCloseTo((center(pos, 'c1') + center(pos, 'c3')) / 2)
+    expect(center(pos, 'sw')).toBeCloseTo((center(pos, 'ap') + center(pos, 'srv')) / 2)
+    // The second WAN stands next to the first, both in front of the firewall.
+    expect(Math.abs(pos.wan!.y - pos.wan2!.y)).toBeGreaterThanOrEqual(50)
+    expect(center(pos, 'fw')).toBeCloseTo((center(pos, 'wan') + center(pos, 'wan2')) / 2)
+  })
+
+  it('lays top down in rows', async () => {
+    const pos = await layout(nodes, edges, {}, 'DOWN')
+    expect(pos.ap!.y).toBe(pos.srv!.y)
+    expect(pos.sw!.y).toBe(pos.fw!.y + 60 + LAYER_GAP.DOWN)
+    const mid = (id: string) => pos[id]!.x + nodes.find((n) => n.id === id)!.width / 2
+    expect(mid('sw')).toBeCloseTo((mid('ap') + mid('srv')) / 2)
+  })
+
+  it('leaves room for an area: its padding across and its border before the level', async () => {
+    const pad = 24
+    const title = 30
+    const group = {
+      id: 'lan',
+      children: ['ap', 'c1', 'c2', 'c3'],
+      padding: [pad + title, pad, pad, pad] as [number, number, number, number],
+    }
+    const pos = await layout(nodes, edges, {}, 'RIGHT', [group])
+    // The AP column moves right by the area's left padding.
+    expect(pos.ap!.x).toBe(pos.sw!.x + 220 + LAYER_GAP.RIGHT + pad)
+    // The server (outside) stays clear of the area's box, title included.
+    const members = ['ap', 'c1', 'c2', 'c3'].map((id) => ({
+      ...pos[id]!,
+      ...nodes.find((n) => n.id === id)!,
+    }))
+    const top = Math.min(...members.map((m) => m.y)) - pad - title
+    const bottom = Math.max(...members.map((m) => m.y + m.height)) + pad
+    const srv = pos.srv!
+    expect(srv.y >= bottom || srv.y + 60 <= top).toBe(true)
   })
 })

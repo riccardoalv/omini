@@ -31,6 +31,8 @@ type Area struct {
 	// per key; removing it only dismisses it, so it is not created again.
 	Auto      string `json:"auto,omitempty"`
 	Dismissed bool   `json:"dismissed,omitempty"`
+	// Hidden areas are not drawn (nor laid out as boxes) until shown again.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // AreaColors are the preset colors offered by the UI; any "#rrggbb" is valid too.
@@ -56,6 +58,7 @@ type AreaUpdate struct {
 	Width   *float64  `json:"width"`
 	Height  *float64  `json:"height"`
 	Members *[]string `json:"members"`
+	Hidden  *bool     `json:"hidden"`
 }
 
 // ErrInvalidArea is returned for areas with an invalid name, color, orientation or size.
@@ -84,14 +87,14 @@ func (a *Area) validate() error {
 	return nil
 }
 
-const areaColumns = `id, name, color, direction, x, y, width, height, members, COALESCE(auto, ''), dismissed`
+const areaColumns = `id, name, color, direction, x, y, width, height, members, COALESCE(auto, ''), dismissed, hidden`
 
 func scanArea(row interface{ Scan(...any) error }) (Area, error) {
 	var (
 		a       Area
 		members string
 	)
-	err := row.Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height, &members, &a.Auto, &a.Dismissed)
+	err := row.Scan(&a.ID, &a.Name, &a.Color, &a.Direction, &a.X, &a.Y, &a.Width, &a.Height, &members, &a.Auto, &a.Dismissed, &a.Hidden)
 	a.Members = decodeMembers(members)
 	return a, err
 }
@@ -175,12 +178,15 @@ func (s *Store) UpdateArea(ctx context.Context, id int64, u AreaUpdate) (Area, e
 	if u.Members != nil {
 		a.Members = *u.Members
 	}
+	if u.Hidden != nil {
+		a.Hidden = *u.Hidden
+	}
 	if err := a.validate(); err != nil {
 		return a, err
 	}
 	_, err = s.db.ExecContext(ctx, `
-		UPDATE areas SET name = ?, color = ?, x = ?, y = ?, width = ?, height = ?, members = ? WHERE id = ?`,
-		a.Name, a.Color, a.X, a.Y, a.Width, a.Height, encodeMembers(a.Members), id)
+		UPDATE areas SET name = ?, color = ?, x = ?, y = ?, width = ?, height = ?, members = ?, hidden = ? WHERE id = ?`,
+		a.Name, a.Color, a.X, a.Y, a.Width, a.Height, encodeMembers(a.Members), a.Hidden, id)
 	return a, err
 }
 

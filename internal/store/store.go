@@ -218,6 +218,10 @@ var migrations = []string{
 	ALTER TABLE areas ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0;
 	CREATE UNIQUE INDEX areas_auto ON areas(auto) WHERE auto IS NOT NULL;
 	`,
+	// 14: areas the user hid from the map (kept, shown again from the toolbar).
+	`
+	ALTER TABLE areas ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.
