@@ -8,6 +8,8 @@ import { speedColor } from '@/lib/speed'
 import type { LinkLabel } from '@/lib/traffic'
 
 export type LinkData = Partial<LinkLabel> & {
+  /** A second parent's link: its pill at the source end. */
+  atSource?: boolean
   /** Extra room before the device (the border and title of an area the link enters). */
   inset?: number
 }
@@ -45,7 +47,7 @@ const label = computed(() => {
   const inset = d.inset ?? 0
   // The point the pill hangs from, and which of its sides touches it.
   const at =
-    d.at === 'shared'
+    d.at === 'shared' || d.atSource
       ? vertical
         ? { x: props.sourceX, y: props.sourceY + 8, anchor: '-50%, 0' }
         : { x: props.sourceX + 10, y: props.sourceY, anchor: '0, -50%' }

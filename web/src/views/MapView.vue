@@ -299,6 +299,14 @@ function insetOf(source: string, target: string) {
   return direction.value === 'DOWN' ? AREA_PADDING + AREA_TITLE : AREA_PADDING
 }
 
+/** The link each node hangs from in the layout: the first one reaching it (VPN tunnels aside). */
+const treeEdgeOf = computed(() => {
+  const out = new Map<string, string>()
+  for (const e of view.value.edges)
+    if (e.kind !== 'vpn' && !out.has(e.target)) out.set(e.target, e.id)
+  return out
+})
+
 const flowEdges = computed<Edge[]>(() => {
   const byId = new Map(nodes.value.map((n) => [n.id, n]))
   const labels = linkInfo.value.labels
@@ -311,7 +319,13 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: { ...labels.get(e.id), inset: insetOf(e.source, e.target) },
+      data: {
+        ...labels.get(e.id),
+        inset: insetOf(e.source, e.target),
+        // A second parent (a loop, a VPN): its pill sits at its own end, not on
+        // top of the tree link's at the device.
+        atSource: treeEdgeOf.value.get(e.target) !== e.id,
+      },
       class: {
         slow: look.slow,
         vpn: look.vpn,
