@@ -77,6 +77,9 @@ export function collapseClients(
     const list = children.get(e.source) ?? []
     if (isClient) list.push(target!)
     else if (target?.kind === 'ssid') list.push(...(viaNetwork.get(target.id) ?? []))
+    // Folded by the user: every child goes (switches, APs, segments...), with
+    // what hangs below it.
+    else if (target && forced.has(e.source)) list.push(target)
     else continue
     children.set(e.source, list)
   }
@@ -88,7 +91,7 @@ export function collapseClients(
     const force = forced.has(parentId)
     if (!force && (clients.length <= threshold || expanded.has(parentId))) continue
     const collapsible = clients.filter((c) => (force ? !c.pinned : !alwaysVisible(c)))
-    if (collapsible.length < 2) continue
+    if (collapsible.length < (force ? 1 : 2)) continue
     for (const c of collapsible) hidden.add(c.id)
     groups.push({
       id: groupId(parentId),

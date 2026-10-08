@@ -48,7 +48,7 @@ import {
 import { autoGroups, networkHighlight } from '@/lib/autoAreas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import {
-  clientCount,
+  childrenOf,
   collapseClients,
   edgeLook,
   isWifiNetwork,
@@ -1034,7 +1034,7 @@ const menuCanCollapse = computed(() => {
   return (
     !!id &&
     !prefs.collapsed.includes(id) &&
-    clientCount(id, mapGraph.value.nodes, mapGraph.value.edges) >= 2
+    childrenOf(id, mapGraph.value.nodes, mapGraph.value.edges).length > 0
   )
 })
 const menuCanExpand = computed(() => {
@@ -1048,7 +1048,8 @@ function toggleChildren(id: string) {
   const parent = view.value.groups.find((g) => g.id === id)?.parentId ?? id
   if (view.value.groups.some((g) => g.parentId === parent)) expand(parent)
   // Counted on the map's graph: a Wi-Fi network's clients are its children there.
-  else if (clientCount(parent, mapGraph.value.nodes, mapGraph.value.edges) >= 2) collapse(parent)
+  else if (childrenOf(parent, mapGraph.value.nodes, mapGraph.value.edges).length > 0)
+    collapse(parent)
 }
 
 function menuAction(action: 'collapse' | 'expand' | 'details') {

@@ -318,8 +318,9 @@ describe('folding the VMs of a host', () => {
   it('groups every VM into a bubble when the user collapses the host, and their apps go too', () => {
     const v = collapseClients(nodes, edges, 8, new Set(), new Set(['pve']))
     expect(v.groups).toHaveLength(1)
-    expect(v.groups[0]!.clients.map((c) => c.id).sort()).toEqual(['haos', 'master', 'nas'])
-    expect(v.nodes.map((n) => n.id).sort()).toEqual(['pve', 'sw']) // a switch is never folded
+    // Folded by the user: every child goes, the switch behind it too.
+    expect(v.groups[0]!.clients.map((c) => c.id).sort()).toEqual(['haos', 'master', 'nas', 'sw'])
+    expect(v.nodes.map((n) => n.id)).toEqual(['pve'])
     expect(clientCount('pve', nodes, edges)).toBe(3)
   })
 
@@ -327,5 +328,28 @@ describe('folding the VMs of a host', () => {
     const v = collapseClients(nodes, edges, 8, new Set())
     expect(v.groups).toHaveLength(0)
     expect(v.nodes).toHaveLength(6)
+  })
+})
+
+describe('folding any node', () => {
+  it('folds every child of a node the user collapses, switches and segments too', () => {
+    const fw: TopoNode = { id: 'fw', kind: 'device', role: 'firewall', label: 'fw', online: true }
+    const sw: TopoNode = { id: 'sw', kind: 'device', role: 'switch', label: 'sw', online: true }
+    const seg: TopoNode = { id: 'seg', kind: 'segment', label: 'segment', online: true }
+    const pc: TopoNode = { id: 'pc', kind: 'client', label: 'pc', online: true }
+    const edges: TopoEdge[] = [
+      { id: '1', source: 'fw', target: 'sw', kind: 'lldp' },
+      { id: '2', source: 'sw', target: 'seg', kind: 'fdb' },
+      { id: '3', source: 'seg', target: 'pc', kind: 'fdb' },
+    ]
+    // The unmanaged switch (segment) folds its single client.
+    const seg1 = collapseClients([fw, sw, seg, pc], edges, 8, new Set(), new Set(['seg']))
+    expect(seg1.groups.map((g) => g.clients.map((c) => c.id))).toEqual([['pc']])
+    // The firewall folds the switch, and everything below goes with it.
+    const all = collapseClients([fw, sw, seg, pc], edges, 8, new Set(), new Set(['fw']))
+    expect(all.nodes.map((n) => n.id)).toEqual(['fw'])
+    expect(all.groups[0]!.clients.map((c) => c.id)).toEqual(['sw'])
+    // Not folded by the user: nothing of this is grouped automatically.
+    expect(collapseClients([fw, sw, seg, pc], edges, 0, new Set()).nodes).toHaveLength(4)
   })
 })
