@@ -37,6 +37,8 @@ export function alertText(a: Alert, t: T, locale: string): { title: string; deta
   let detail = `${base}.detail`
   if (a.rule === 'device_offline' && p.error) detail = `${base}.detailError`
   if (a.rule === 'update_pending' && p.reboot) detail = `${base}.detailReboot`
+  // The device did not say which version: only how many updates.
+  if (a.rule === 'update_pending' && !a.params.latest) detail = `${base}.detailCount`
   if (a.rule === 'discovery_limited' && typeof p.limits === 'string')
     p.what = p.limits
       .split(',')

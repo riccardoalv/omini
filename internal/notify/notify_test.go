@@ -349,12 +349,19 @@ func TestComposeGroupsByDevice(t *testing.T) {
 func TestEveryRuleHasAShortName(t *testing.T) {
 	for _, locale := range []string{"en", "pt-BR"} {
 		for rule := range texts["en"] {
-			if strings.HasPrefix(rule, "_") || rule == "new_device" || rule == "new_devices_burst" {
+			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || rule == "new_device" || rule == "new_devices_burst" {
 				continue
 			}
 			if short[locale][rule] == "" {
 				t.Errorf("%s: no short name for %s", locale, rule)
 			}
 		}
+	}
+}
+
+func TestUpdateWithoutVersion(t *testing.T) {
+	_, detail := Describe(alert("update_pending", "warning", map[string]any{"node": "bkp-01", "updates": 7.0}), "en")
+	if detail != "7 updates available." {
+		t.Fatalf("detail: %q", detail)
 	}
 }

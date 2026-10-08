@@ -24,6 +24,7 @@ import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
 import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
 import { api, ApiError } from '@/lib/api'
+import { ui } from '@/lib/ui'
 import { formatAgo, formatBytes, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, linkOnPort } from '@/lib/graph'
@@ -214,6 +215,9 @@ function savedWidth(): number {
   return clampWidth(Math.min(460, window.innerWidth * 0.34))
 }
 const width = ref(savedWidth())
+// The popups of alerts move aside while the panel is open.
+watch(width, (w) => (ui.panelWidth = w), { immediate: true })
+onBeforeUnmount(() => (ui.panelWidth = 0))
 const resizing = ref(false)
 function keepWidth() {
   try {

@@ -20,6 +20,7 @@ var texts = map[string]map[string][2]string{
 		"wan_degraded":          {"Unstable internet on {node}", "Gateway {gateway}: {loss_pct}% loss, {rtt_ms} ms."},
 		"duplicate_ip":          {"Duplicate IP {ip}", "Used by several devices at once: {devices}"},
 		"update_pending":        {"Update available for {node}", "{latest} is available ({updates} updates)."},
+		"update_pending_count":  {"Update available for {node}", "{updates} updates available."},
 		"disk_full":             {"Disk almost full on {node}", "{mount} is {pct}% full."},
 		"hot_cpu":               {"{node} is running hot", "{sensor} at {celsius} °C."},
 		"high_cpu":              {"High CPU on {node}", "CPU at {pct}%."},
@@ -53,6 +54,7 @@ var texts = map[string]map[string][2]string{
 		"wan_degraded":          {"Internet instável em {node}", "Gateway {gateway}: {loss_pct}% de perda, {rtt_ms} ms."},
 		"duplicate_ip":          {"IP duplicado {ip}", "Usado por vários dispositivos ao mesmo tempo: {devices}"},
 		"update_pending":        {"Atualização disponível para {node}", "{latest} disponível ({updates} atualizações)."},
+		"update_pending_count":  {"Atualização disponível para {node}", "{updates} atualizações disponíveis."},
 		"disk_full":             {"Disco quase cheio em {node}", "{mount} está {pct}% cheio."},
 		"hot_cpu":               {"{node} está esquentando", "{sensor} a {celsius} °C."},
 		"high_cpu":              {"CPU alta em {node}", "CPU em {pct}%."},
@@ -153,7 +155,11 @@ func params(a store.Alert) map[string]string {
 // Describe returns an alert's title and detail in a language.
 func Describe(a store.Alert, locale string) (title, detail string) {
 	t := catalog(locale)
-	pair, ok := t[a.Rule]
+	rule := a.Rule
+	if rule == "update_pending" && a.Params["latest"] == nil {
+		rule = "update_pending_count" // the device did not say which version
+	}
+	pair, ok := t[rule]
 	if !ok {
 		return a.Rule, ""
 	}

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { alertsState, alertText } from '@/lib/alerts'
+import { ui } from '@/lib/ui'
 import type { Alert } from '@/lib/types'
 
 /**
@@ -64,7 +65,13 @@ function showOnMap(a: Alert) {
 </script>
 
 <template>
-  <div v-if="shown.length" class="toasts" role="region" :aria-label="t('toasts.label')">
+  <div
+    v-if="shown.length"
+    class="toasts"
+    role="region"
+    :aria-label="t('toasts.label')"
+    :style="ui.panelWidth ? { right: `${ui.panelWidth + 28}px` } : undefined"
+  >
     <article
       v-for="a in shown"
       :key="a.id"
