@@ -273,7 +273,7 @@ Omini ships in incremental releases, each one usable on its own.
 ### ✅ v0.1 — see your network
 
 - **Zero-config discovery:** network scan (ARP, ping, common ports, reverse DNS, NetBIOS, mDNS, SSDP/UPnP) with **SNMP** as one of its methods (several read-only communities; interfaces, traffic, LLDP, MAC table, ARP)
-- **Device identification:** type, OS, brand and product with the evidence behind them; MAC vendors (IEEE), Apple and Android model names, solar inverters; user overrides for type and icon
+- **Device identification:** type, OS, brand and product with the evidence behind them; MAC vendors (IEEE), Apple and Android model names, solar inverters, TVs, smart speakers, IP phones and UPSes; user overrides for type and icon
 - **App nodes** (several apps on one IP) and **Proxmox guests** drawn under their host (when the network has a single Proxmox)
 - **nmap** integration, in the background
 - **Topology map:** left-to-right or top-down layout, named **areas** that follow their devices, client groups that collapse into bubbles, saved positions, hide/delete devices

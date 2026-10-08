@@ -280,6 +280,12 @@ export const brandNames: Record<string, string> = {
   zte: 'ZTE',
   realme: 'realme',
   nintendo: 'Nintendo',
+  apc: 'APC',
+  cyberpower: 'CyberPower',
+  yealink: 'Yealink',
+  poly: 'Poly',
+  snom: 'Snom',
+  fanvil: 'Fanvil',
 }
 
 /** Human name of a logo or brand slug. */
@@ -311,6 +317,8 @@ export const typeIcons: Record<string, string> = {
   appliance: 'refrigerator',
   game_console: 'gamepad-2',
   wearable: 'watch',
+  ip_phone: 'phone',
+  ups: 'battery-charging',
   segment: 'network',
   app: 'app-window',
   unknown: 'circle-question-mark',

@@ -64,6 +64,12 @@ var portApps = map[int]string{
 	9925: "mealie", 11434: "ollama",
 }
 
+// ownBrand reports whether an app of the catalog is the node's maker: a page
+// named after the brand is the device's own interface, not an app it runs.
+func ownBrand(n *topology.Node, app string) bool {
+	return n.Brand != "" && strings.ReplaceAll(app, "-", "") == n.Brand
+}
+
 func toCatalog(product string) string {
 	if n, ok := catalogName[product]; ok {
 		return n
@@ -87,6 +93,9 @@ func expandApps(topo *topology.Topology) {
 		for j := range n.Web {
 			w := &n.Web[j]
 			if app, ok := appicons.Match(w.Title); ok {
+				if ownBrand(n, app) {
+					continue // the device's own interface ("APC | Network Management Card" on an APC UPS)
+				}
 				w.App = app
 			} else if app, ok := portApps[w.Port]; ok {
 				w.App = app

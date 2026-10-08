@@ -2,6 +2,7 @@
 import {
   AirVent,
   AppWindow,
+  BatteryCharging,
   Box,
   Cast,
   Cctv,
@@ -15,6 +16,7 @@ import {
   Layers,
   Monitor,
   Network,
+  Phone,
   Printer,
   Refrigerator,
   Router,
@@ -36,6 +38,7 @@ const props = withDefaults(defineProps<{ name: string; size?: number }>(), { siz
 const icons: Record<string, Component> = {
   'air-vent': AirVent,
   'app-window': AppWindow,
+  'battery-charging': BatteryCharging,
   box: Box,
   cast: Cast,
   cctv: Cctv,
@@ -49,6 +52,7 @@ const icons: Record<string, Component> = {
   layers: Layers,
   monitor: Monitor,
   network: Network,
+  phone: Phone,
   printer: Printer,
   refrigerator: Refrigerator,
   router: Router,

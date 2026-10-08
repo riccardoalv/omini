@@ -14,7 +14,8 @@ func TestName(t *testing.T) {
 			t.Errorf("Name(%q) = %q, %v; want %q", id, got, ok, want)
 		}
 	}
-	for _, id := range []string{"", "Living room TV", "iphone14,2"} { // Apple ids are exact
+	// Apple ids are exact; words without a digit are no model codes.
+	for _, id := range []string{"", "Living room TV", "iphone14,2", "Chromecast", "chromecast", "Access"} {
 		if got, ok := Name(id); ok {
 			t.Errorf("Name(%q) = %q, want unknown", id, got)
 		}

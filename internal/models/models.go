@@ -35,11 +35,13 @@ func load() {
 }
 
 // Name returns the marketing name of a model identifier, if known. Apple
-// identifiers match exactly; Android model codes in any case.
+// identifiers match exactly; Android model codes in any case. An id without a
+// digit is a plain word, not a model code: Google's list also names devices
+// "CHROMECAST" or "ACCESS", and a device called "Chromecast" keeps its name.
 func Name(id string) (string, bool) {
 	once.Do(load)
 	id = strings.TrimSpace(id)
-	if id == "" {
+	if !strings.ContainsAny(id, "0123456789") {
 		return "", false
 	}
 	if n, ok := names[id]; ok {

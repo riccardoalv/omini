@@ -4,8 +4,45 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/topology"
 )
+
+func TestTitleNamingTheMakerIsTheDeviceItself(t *testing.T) {
+	ups := classified(topology.Node{
+		ID: "ups", Kind: topology.KindDevice, Label: "ups-01", Vendor: "APC", Model: "Smart-UPS SRT 3000",
+		OpenPorts: []int{80, 443}, Titles: []string{"APC | Network Management Card"},
+		Web: []topology.WebApp{{Port: 443, Title: "APC | Network Management Card"}},
+	})
+	ctrl := classified(topology.Node{
+		ID: "ctrl", Kind: topology.KindDevice, Label: "unifi-ctrl", Role: "server", OpenPorts: []int{8080, 8443},
+		Titles: []string{"UniFi Network"}, Web: []topology.WebApp{{Port: 8443, Title: "UniFi Network"}},
+	})
+	topo := topology.Topology{Nodes: []topology.Node{ups, ctrl}}
+	expandApps(&topo)
+	if topo.Nodes[0].Type != "ups" || len(topo.Nodes) != 3 {
+		t.Fatalf("want the UPS without apps and one app for the controller, got %+v", topo.Nodes)
+	}
+	if app := topo.Nodes[2]; app.ParentID != "ctrl" || app.Product != "unifi" {
+		t.Fatalf("controller app = %+v", app)
+	}
+}
+
+func TestDevicesOnTheWANAreTheISPsEquipment(t *testing.T) {
+	gw := "192.168.8.1"
+	topo := topology.Topology{Nodes: []topology.Node{
+		{ID: "wan:fw:igc1", Kind: topology.KindWAN, WAN: &topology.WANLink{Gateways: []model.Gateway{{Address: &gw}}}},
+		{ID: "modem", Kind: topology.KindClient, IP: gw, Vendor: "HUAWEI TECHNOLOGIES CO.,LTD"},
+		{ID: "ont", Kind: topology.KindClient, ParentID: "wan:fw:igc1", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD"},
+		{ID: "phone", Kind: topology.KindClient, IP: "10.0.0.5", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD"},
+	}}
+	classifyNodes(&topo)
+	for i, want := range []string{"wan", "router", "router", "phone"} {
+		if n := topo.Nodes[i]; n.Type != want {
+			t.Errorf("%s: type %q, want %q", n.ID, n.Type, want)
+		}
+	}
+}
 
 func classified(n topology.Node) topology.Node {
 	classifyNode(&n)

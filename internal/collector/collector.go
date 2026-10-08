@@ -458,10 +458,37 @@ func applyInventory(topo *topology.Topology, inventory []store.InventoryEntry, n
 
 // classifyNodes fills type, OS, brand and product of every node.
 func classifyNodes(topo *topology.Topology) {
+	upstream := upstreamNodes(topo)
 	for i := range topo.Nodes {
 		nameModel(&topo.Nodes[i])
-		classifyNode(&topo.Nodes[i])
+		classifyWith(&topo.Nodes[i], upstream[topo.Nodes[i].ID])
 	}
+}
+
+// upstreamNodes are the nodes on an internet uplink: hung under a WAN node or
+// answering at one of its gateways' addresses (the ISP's modem or router).
+func upstreamNodes(topo *topology.Topology) map[string]bool {
+	wans, gateways := map[string]bool{}, map[string]bool{}
+	for _, n := range topo.Nodes {
+		if n.Kind != topology.KindWAN {
+			continue
+		}
+		wans[n.ID] = true
+		if n.WAN != nil {
+			for _, g := range n.WAN.Gateways {
+				if a := model.Deref(g.Address); a != "" {
+					gateways[a] = true
+				}
+			}
+		}
+	}
+	out := map[string]bool{}
+	for _, n := range topo.Nodes {
+		if n.Kind != topology.KindWAN && (wans[n.ParentID] || (n.IP != "" && gateways[n.IP])) {
+			out[n.ID] = true
+		}
+	}
+	return out
 }
 
 // nameModel replaces model identifiers with the names people know
@@ -481,7 +508,10 @@ func nameModel(n *topology.Node) {
 	}
 }
 
-func classifyNode(n *topology.Node) {
+func classifyNode(n *topology.Node) { classifyWith(n, false) }
+
+// classifyWith classifies a node; upstream when it is on an internet uplink.
+func classifyWith(n *topology.Node, upstream bool) {
 	if n.Kind == topology.KindWAN {
 		n.Type = "wan"
 		return
@@ -490,6 +520,7 @@ func classifyNode(n *topology.Node) {
 		Kind: string(n.Kind), Role: n.Role, Vendor: n.Vendor, Model: n.Model, Hostname: n.Hostname,
 		OS: n.ReportedOS, RandomMAC: n.RandomMAC, OpenPorts: n.OpenPorts, Services: n.Services,
 		Titles: n.Titles, Banners: n.Banners, TTL: n.TTL, Self: slices.Contains(n.Services, "omini"),
+		Upstream: upstream,
 	}
 	if in.Hostname == "" && n.Kind != topology.KindClient {
 		in.Hostname = n.Label // managed devices: the name reported by the integration

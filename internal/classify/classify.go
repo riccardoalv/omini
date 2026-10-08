@@ -35,6 +35,8 @@ const (
 	SolarInverter  = "solar_inverter"
 	GameConsole    = "game_console"
 	Wearable       = "wearable"
+	IPPhone        = "ip_phone"
+	UPS            = "ups"
 	Segment        = "segment"
 	Unknown        = "unknown"
 )
@@ -54,6 +56,7 @@ type Input struct {
 	Banners   []string // e.g. SSH version strings
 	TTL       int
 	Self      bool // the Omini server itself
+	Upstream  bool // seen on an internet uplink (WAN port or gateway address): the ISP's modem or router
 }
 
 // Result is the classification. Product is set for homelab software and
@@ -174,6 +177,37 @@ var typeRules = []struct {
 	{[]string{"sungrow", "winet-s"}, SolarInverter, "sungrow"},
 	{[]string{"solarman", "deye"}, SolarInverter, "deye"},
 	{[]string{"ginlong", "solis-"}, SolarInverter, "solis"},
+}
+
+// nameRules recognize consumer devices by a pattern in their name, model or
+// web title (lowercase), some only for one brand ("echo" alone is a word,
+// "Echo-Dot" from Amazon is a speaker). The first matching rule wins; a brand
+// set by a rule only fills a brand not known yet.
+var nameRules = []struct {
+	re    *regexp.Regexp
+	typ   string
+	only  string // the rule applies only to devices of this brand
+	brand string
+}{
+	// Streaming sticks and boxes before TVs: "Chromecast with Google TV".
+	{re: regexp.MustCompile(`\bchromecast\b|\bgoogle[- ]?tv\b`), typ: MediaPlayer, brand: "google"},
+	{re: regexp.MustCompile(`\bapple[- ]?tv\b`), typ: MediaPlayer, brand: "apple"},
+	{re: regexp.MustCompile(`\bfire[- ]?(tv|stick)\b`), typ: MediaPlayer, brand: "amazon"},
+	{re: regexp.MustCompile(`\broku\b`), typ: MediaPlayer, brand: "roku"},
+	// Smart displays, then smart speakers.
+	{re: regexp.MustCompile(`\bnest[- ]?hub\b|\bhome[- ]?hub\b|\becho[- ]?show\b`), typ: SmartHome},
+	{re: regexp.MustCompile(`\bnest[- ]?(mini|audio)\b|\bgoogle[- ]?home\b|\bhome[- ]?mini\b|\bhomepod\b`), typ: Speaker},
+	{re: regexp.MustCompile(`\becho\b`), typ: Speaker, only: "amazon"},
+	// TVs: their OS, a "TV" in the name, or a Samsung model code ("QN85B", "UE55AU7100").
+	{re: regexp.MustCompile(`\bwebos\b|\btizen\b|\bbravia\b|\bsmart[- ]?tv\b|\bandroid[- ]?tv\b|\btv\b|\boled\d{2}[a-z]`), typ: TV},
+	{re: regexp.MustCompile(`\b(q[naeu]|u[nae])\d{2}[a-z]`), typ: TV, only: "samsung"},
+	// IP phones: Yealink "SIP-T54W", Cisco "SEP" + MAC, Polycom "VVX".
+	{re: regexp.MustCompile(`\bsip-[a-z]{1,2}\d|\bsep[0-9a-f]{12}\b|\bip[- ]phone\b|\bvvx[- ]?\d`), typ: IPPhone},
+	// UPSes and their network cards (APC "Smart-UPS", "Back-UPS").
+	{re: regexp.MustCompile(`\bups\b|\bsymmetra\b|\bpowerchute\b`), typ: UPS},
+	// Mobile broadband (LTE/5G) routers: Huawei "B535-232", "E5186s-22a", HiLink.
+	{re: regexp.MustCompile(`\b(lte|4g|5g)[- ]?(cpe|router|modem)\b|\bhilink\b|\bmobile ?wi-?fi\b`), typ: Router},
+	{re: regexp.MustCompile(`\b[be]\d{3,4}[a-z]{0,2}-\d{2,3}[a-z]?\b`), typ: Router, only: "huawei"},
 }
 
 // solarVendors are MAC vendors that only make solar equipment.
@@ -315,7 +349,8 @@ var brands = []struct{ fragment, brand string }{
 	{"oneplus", "oneplus"},
 	{"motorola", "motorola"},
 	{"google", "google"},
-	{"lg electronics", "lg"},
+	{"lg", "lg"},
+	{"sony interactive", "playstation"},
 	{"sony", "sony"},
 	{"raspberry pi", "raspberrypi"},
 	{"espressif", "espressif"},
@@ -340,7 +375,6 @@ var brands = []struct{ fragment, brand string }{
 	{"philips lighting", "philipshue"},
 	{"midea", "midea"},
 	{"nintendo", "nintendo"},
-	{"sony interactive", "playstation"},
 	{"roku", "roku"},
 	{"proxmox", "proxmox"},
 	{"vmware", "vmware"},
@@ -365,6 +399,30 @@ var brands = []struct{ fragment, brand string }{
 	{"oppo", "oppo"},
 	{"vivo mobile", "vivo"},
 	{"realme", "realme"},
+	{"american power conversion", "apc"},
+	{"apc", "apc"},
+	{"cyberpower", "cyberpower"},
+	{"yealink", "yealink"},
+	{"polycom", "poly"},
+	{"snom", "snom"},
+	{"fanvil", "fanvil"},
+}
+
+// containsWord reports whether frag appears in s as whole words: "lg" is in
+// "LG Electronics" but not in "Algo Communication".
+func containsWord(s, frag string) bool {
+	alnum := func(b byte) bool { return b >= 'a' && b <= 'z' || b >= '0' && b <= '9' }
+	for i := 0; ; {
+		j := strings.Index(s[i:], frag)
+		if j < 0 {
+			return false
+		}
+		start, end := i+j, i+j+len(frag)
+		if (start == 0 || !alnum(s[start-1])) && (end == len(s) || !alnum(s[end])) {
+			return true
+		}
+		i = start + 1
+	}
 }
 
 func brand(s *state) {
@@ -373,7 +431,7 @@ func brand(s *state) {
 		return
 	}
 	for _, b := range brands {
-		if strings.Contains(v, b.fragment) {
+		if containsWord(v, b.fragment) {
 			s.set(&s.r.Brand, b.brand, "vendor:"+s.in.Vendor)
 			return
 		}
@@ -387,6 +445,8 @@ var (
 	smartHome      = []string{"espressif", "tuya", "shelly", "philipshue"}
 	cameraBrands   = []string{"hikvision", "dahua", "reolink"}
 	printerBrands  = []string{"epson", "brother", "canon"}
+	ipPhoneBrands  = []string{"yealink", "poly", "snom", "fanvil"}
+	upsBrands      = []string{"apc", "cyberpower"}
 	desktopOSes    = []string{"windows", "macos", "nixos", "ubuntu", "fedora", "archlinux", "linuxmint", "popos", "manjaro", "opensuse"}
 	serverOSes     = []string{"debian", "freebsd", "alpinelinux", "centos", "redhat", "raspberrypi"}
 	printerPorts   = []int{9100, 631, 515}
@@ -403,6 +463,27 @@ func deviceType(s *state) {
 	switch in.Role {
 	case Firewall, Router, Switch, AccessPoint, Server:
 		s.set(&r.Type, in.Role, "integration:"+in.Role)
+	}
+	for _, rule := range nameRules {
+		if r.Type != "" {
+			break
+		}
+		if rule.only != "" && r.Brand != rule.only {
+			continue
+		}
+		if m := rule.re.FindString(s.txt); m != "" {
+			s.set(&r.Type, rule.typ, evidence(s, m))
+			s.set(&r.Brand, rule.brand, "")
+		}
+	}
+	if in.Upstream {
+		s.set(&r.Type, Router, "wan") // the ISP's modem or router
+	}
+	if slices.Contains(ipPhoneBrands, r.Brand) {
+		s.set(&r.Type, IPPhone, "vendor:"+in.Vendor)
+	}
+	if slices.Contains(upsBrands, r.Brand) {
+		s.set(&r.Type, UPS, "vendor:"+in.Vendor)
 	}
 	for _, p := range printerPorts {
 		if s.port(p) {
@@ -464,7 +545,9 @@ func deviceType(s *state) {
 		s.set(&r.Type, AccessPoint, "vendor:"+in.Vendor) // consumer Wi-Fi routers / APs
 	}
 	// Phones answer pings with TTL 64; 255 is typical of embedded/network gear.
-	if slices.Contains(phoneBrands, r.Brand) && len(in.OpenPorts) == 0 && in.TTL <= 64 {
+	// Only for a device nothing else identified: a Huawei inverter or a
+	// Samsung TV is no Android phone.
+	if r.Type == "" && slices.Contains(phoneBrands, r.Brand) && len(in.OpenPorts) == 0 && in.TTL <= 64 {
 		s.set(&r.Type, Phone, "vendor:"+in.Vendor)
 		s.set(&r.OS, "android", "")
 	}

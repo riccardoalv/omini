@@ -149,6 +149,84 @@ func TestClassify(t *testing.T) {
 			Input{Kind: "device", Role: "switch", Vendor: "Horaco"},
 			Result{Type: Switch},
 		},
+
+		// Devices of the development network (testdata/devnet), as it reports them.
+		{
+			"Samsung TV by its model code (DHCP name)",
+			Input{Kind: "client", Hostname: "Samsung-QN85B", Vendor: "Samsung Electronics Co.,Ltd"},
+			Result{Type: TV, Brand: "samsung"},
+		},
+		{
+			"Huawei LTE modem on the WAN port",
+			Input{Kind: "client", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD", Upstream: true},
+			Result{Type: Router, Brand: "huawei"},
+		},
+		{
+			"Huawei LTE router (web title)",
+			Input{Kind: "client", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD", Titles: []string{"HUAWEI B535-232"}, OpenPorts: []int{80, 443}},
+			Result{Type: Router, Brand: "huawei"},
+		},
+		{
+			"Huawei 4G router (web title)",
+			Input{Kind: "client", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD", Titles: []string{"Huawei 4G Router"}},
+			Result{Type: Router, Brand: "huawei"},
+		},
+		{
+			"Huawei solar inverter is no Android device (TTL 64)",
+			Input{Kind: "client", Hostname: "SUN2000-10KTL-M1", Vendor: "HUAWEI TECHNOLOGIES CO.,LTD", TTL: 64},
+			Result{Type: SolarInverter, Brand: "huawei"},
+		},
+		{
+			"LG webOS TV (DHCP name)",
+			Input{Kind: "client", Hostname: "LG-webOS-TV", Vendor: "LG"},
+			Result{Type: TV, Brand: "lg"},
+		},
+		{
+			"Amazon Echo Dot",
+			Input{Kind: "client", Hostname: "Echo-Dot", Vendor: "Amazon Technologies Inc."},
+			Result{Type: Speaker, Brand: "amazon"},
+		},
+		{
+			"Google Nest Hub (a smart display that also casts)",
+			Input{Kind: "client", Hostname: "Google-Nest-Hub", Vendor: "Google", Services: []string{"_googlecast._tcp"}},
+			Result{Type: SmartHome, Brand: "google"},
+		},
+		{
+			"Yealink desk phone (name)",
+			Input{Kind: "client", Hostname: "SIP-T54W-1", Vendor: "YEALINK(XIAMEN) NETWORK TECHNOLOGY CO.,LTD"},
+			Result{Type: IPPhone, Brand: "yealink"},
+		},
+		{
+			"Yealink conference phone (vendor only)",
+			Input{Kind: "client", Hostname: "SIP-CP965", Vendor: "XIAMEN YEALINK NETWORK TECHNOLOGY CO.,LTD"},
+			Result{Type: IPPhone, Brand: "yealink"},
+		},
+		{
+			"Cisco IP phone (SEP + MAC)",
+			Input{Kind: "unmanaged", Hostname: "sepf87b20a1b2c3.acme.lan", Model: "Cisco IP Phone 8845"},
+			Result{Type: IPPhone},
+		},
+		{
+			"Chromecast by its name",
+			Input{Kind: "client", Hostname: "Chromecast", Vendor: "Google"},
+			Result{Type: MediaPlayer, Brand: "google"},
+		},
+		{
+			"APC UPS with its network card",
+			Input{Kind: "device", Hostname: "ups-01", Vendor: "APC", Model: "Smart-UPS SRT 3000", Titles: []string{"APC | Network Management Card"}, OpenPorts: []int{80, 443}},
+			Result{Type: UPS, Brand: "apc"},
+		},
+		{
+			"UPS by MAC vendor only",
+			Input{Kind: "client", Vendor: "American Power Conversion Corp"},
+			Result{Type: UPS, Brand: "apc"},
+		},
+		{
+			"brand fragments match whole words only",
+			Input{Kind: "client", Vendor: "Algo Communication Products"},
+			Result{Type: Unknown},
+		},
+
 		{"unmanaged segment", Input{Kind: "segment"}, Result{Type: Segment}},
 		{"nothing known", Input{Kind: "client"}, Result{Type: Unknown}},
 	}

@@ -19,13 +19,21 @@ func TestMatch(t *testing.T) {
 		"Sonarr":                                "sonarr",
 		"Portainer":                             "portainer",
 		"TrueNAS - 192.168.1.51":                "truenas",
+		"Media Manager":                         "media-manager", // a name of generic words, distinctive as a whole
+		// An app's name beats another app's generic alias ("network").
+		"UniFi Network":                 "unifi",
+		"APC | Network Management Card": "apc",
 	}
 	for title, want := range cases {
 		if got, ok := Match(title); !ok || got != want {
 			t.Errorf("Match(%q) = %q, %v; want %q", title, got, ok, want)
 		}
 	}
-	for _, title := range []string{"", "Login", "Dashboard", "Welcome to nginx!", "403 Forbidden", "Router admin"} {
+	for _, title := range []string{
+		"", "Login", "Dashboard", "Welcome to nginx!", "403 Forbidden", "Router admin",
+		// Generic words alone: names and aliases made of them never match.
+		"Network", "Network Management", "Network Devices", "Files", "Printer", "UPS status", "Management Card",
+	} {
 		if got, ok := Match(title); ok {
 			t.Errorf("Match(%q) = %q, want no match", title, got)
 		}

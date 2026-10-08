@@ -244,6 +244,46 @@ func TestDevnet(t *testing.T) {
 		t.Errorf("docker-01 has %d apps, want 6", apps)
 	}
 
+	// Identification: what each device is (type / OS), from names, vendors and titles.
+	types := map[string][2]string{
+		"Samsung-QN85B":    {"tv", ""},
+		"LG-webOS-TV":      {"tv", ""},
+		"192.168.8.1":      {"router", ""}, // the LTE modem, seen on the WAN port
+		"SUN2000-10KTL-M1": {"solar_inverter", ""},
+		"Echo-Dot":         {"speaker", ""},
+		"Google-Nest-Hub":  {"smart_home", ""},
+		"SIP-T54W-1":       {"ip_phone", ""},
+		"SEPF87B20A1B2C3":  {"ip_phone", ""},
+		"Chromecast":       {"media_player", ""}, // keeps its name
+		"ups-01":           {"ups", ""},
+	}
+	for l, want := range types {
+		n := nodeByLabel(topo, l)
+		if n == nil {
+			t.Errorf("%s is not on the map", l)
+			continue
+		}
+		if n.Type != want[0] || n.OS != want[1] {
+			t.Errorf("%s: type %q os %q, want %q %q (%v)", l, n.Type, n.OS, want[0], want[1], n.Reasons)
+		}
+	}
+	// Web titles name the right app, or none.
+	appsOf := func(parent string) []string {
+		var out []string
+		for _, n := range topo.Nodes {
+			if n.Kind == topology.KindApp && label(topo, n.ParentID) == parent {
+				out = append(out, n.Product)
+			}
+		}
+		return out
+	}
+	if got := appsOf("unifi-ctrl"); !slices.Equal(got, []string{"unifi"}) {
+		t.Errorf("unifi-ctrl apps: %v, want [unifi]", got)
+	}
+	if got := appsOf("ups-01"); len(got) != 0 {
+		t.Errorf("ups-01 apps: %v, want none (its own interface)", got)
+	}
+
 	// The scenarios raise their alerts.
 	rules := map[string]int{}
 	for _, f := range insights.Evaluate(insights.Input{Topology: topo, Now: time.Unix(devnetAt, 0)}) {

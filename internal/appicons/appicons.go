@@ -42,6 +42,7 @@ type Entry struct {
 type phrase struct {
 	words []string
 	name  string
+	alias bool // from the entry's aliases, a weaker signal than its name
 }
 
 var (
@@ -50,13 +51,38 @@ var (
 	phrases  []phrase
 )
 
-// generic words are never enough to recognize an app on their own.
-var generic = map[string]bool{
-	"login": true, "log in": true, "sign in": true, "dashboard": true, "admin": true, "web": true,
-	"app": true, "server": true, "home": true, "router": true, "status": true, "monitor": true,
-	"index": true, "welcome": true, "default": true, "page": true, "portal": true, "settings": true,
-	"setup": true, "error": true, "linux": true, "ubuntu": true, "debian": true, "nginx": true,
-	"apache": true, "http": true, "https": true, "api": true, "ui": true, "web ui": true, "webui": true,
+// generic words are never enough to recognize an app: a catalog name made of
+// one of them ("router", "files", "ups") is ignored, and so is an alias made
+// only of them ("Network", "Network Management"), so that "UniFi Network" or
+// "APC | Network Management Card" are not taken for other apps.
+var generic = func() map[string]bool {
+	m := map[string]bool{}
+	for _, w := range strings.Fields(`
+		a an and the of for to in on at by with my your our de da do
+		login log sign dashboard admin administration web app apps application server home router
+		status monitor monitoring index welcome default page portal settings setup error linux ubuntu
+		debian nginx apache http https api ui webui interface console panel control center centre
+		network networks networking management manager managed card device devices system systems
+		service services platform cloud online site website tool tools os client storage media
+		file files video music audio player streaming tv photo photos image images book books
+		database db office editor code text notes mail email chat messaging voice social search
+		backup proxy reverse dns vpn gateway firewall printer camera nas ups power smart
+		automation analytics tracker tracking privacy hosting hub engine software digital data
+		feed news password security private personal mobile remote virtual open free
+		company generator archive sync link url wiki docs document documents downloader
+	`) {
+		m[w] = true
+	}
+	return m
+}()
+
+func allGeneric(ws []string) bool {
+	for _, w := range ws {
+		if !generic[w] {
+			return false
+		}
+	}
+	return true
 }
 
 func load() {
@@ -71,17 +97,19 @@ func load() {
 	}
 	for _, e := range list {
 		entries[e.Name] = e
-		add := func(text string) {
+		add := func(text string, alias bool) {
 			w := words(text)
 			p := strings.Join(w, " ")
-			if len(p) < 3 || generic[p] {
+			// A name of several words is distinctive as a whole ("code-server");
+			// an alias needs at least one word of its own.
+			if len(p) < 3 || (len(w) == 1 || alias) && allGeneric(w) {
 				return
 			}
-			phrases = append(phrases, phrase{words: w, name: e.Name})
+			phrases = append(phrases, phrase{words: w, name: e.Name, alias: alias})
 		}
-		add(strings.ReplaceAll(e.Name, "-", " "))
+		add(strings.ReplaceAll(e.Name, "-", " "), false)
 		for _, a := range e.Aliases {
-			add(a)
+			add(a, true)
 		}
 	}
 }
@@ -117,17 +145,23 @@ func Count() int {
 }
 
 // Match recognizes the app named in a web page title, e.g. "qBittorrent WebUI"
-// -> "qbittorrent". The longest name found as whole words wins.
+// -> "qbittorrent". Names and aliases match as whole words; an app's own name
+// wins over another app's alias ("UniFi Network" is UniFi, not the app whose
+// alias is "network"), then the longest phrase wins.
 func Match(title string) (string, bool) {
 	loadOnce.Do(load)
 	t := words(title)
-	best, bestLen := "", 0
+	best, bestLen, bestAlias := "", 0, true
 	for _, p := range phrases {
-		if containsWords(t, p.words) {
-			n := len(strings.Join(p.words, " "))
-			if n > bestLen || (n == bestLen && p.name < best) {
-				best, bestLen = p.name, n
-			}
+		if !containsWords(t, p.words) {
+			continue
+		}
+		n := len(strings.Join(p.words, " "))
+		switch {
+		case best == "",
+			bestAlias && !p.alias,
+			bestAlias == p.alias && (n > bestLen || (n == bestLen && p.name < best)):
+			best, bestLen, bestAlias = p.name, n, p.alias
 		}
 	}
 	return best, best != ""
