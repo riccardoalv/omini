@@ -205,6 +205,7 @@ export default {
     role: 'Type',
     uptime: 'Uptime',
     cpu: 'CPU',
+    cpus: '{n} CPU | {n} CPUs',
     memory: 'Memory',
     connectedTo: 'Connected to',
     port: 'port {port}',

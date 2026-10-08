@@ -597,6 +597,18 @@ class Device(BaseModel):
     uptime_s: Annotated[int | None, Field(ge=0)] = None
     cpu_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
     mem_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
+    cpu_count: Annotated[int | None, Field(ge=1)] = None
+    """
+    Logical CPUs (cores or threads); for a virtual machine or container, its vCPUs.
+    """
+    mem_total_bytes: Annotated[int | None, Field(ge=0)] = None
+    """
+    Memory installed (or given to a virtual machine or container).
+    """
+    mem_used_bytes: Annotated[int | None, Field(ge=0)] = None
+    """
+    Memory in use.
+    """
     swap_pct: Annotated[float | None, Field(ge=0.0, le=100.0)] = None
     """
     Swap in use.

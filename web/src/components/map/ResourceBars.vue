@@ -8,6 +8,11 @@ import type { Storage } from '@/lib/types'
 const props = defineProps<{
   cpu?: number
   memory?: number
+  /** Logical CPUs (vCPUs of a VM), shown next to the CPU bar. */
+  cpuCount?: number
+  /** Memory in use and installed, shown next to the memory bar. */
+  memUsed?: number
+  memTotal?: number
   swap?: number
   /** File systems: one bar each, with used of total. */
   storage?: Storage[]
@@ -33,8 +38,31 @@ const bars = computed<Bar[]>(() => {
     const pct = Math.min(100, Math.max(0, value))
     out.push({ key, label, pct, level: disk ? level(pct, 80, 90) : level(pct), detail })
   }
-  add('cpu', t('panel.cpu'), props.cpu)
-  add('memory', t('panel.memory'), props.memory)
+  add(
+    'cpu',
+    t('panel.cpu'),
+    props.cpu,
+    props.cpuCount ? t('panel.cpus', { n: props.cpuCount }, props.cpuCount) : undefined,
+  )
+  // Memory: the percentage, or worked out from used and total when only they are known.
+  const memory =
+    props.memory ??
+    (props.memTotal && props.memUsed !== undefined
+      ? (props.memUsed / props.memTotal) * 100
+      : undefined)
+  add(
+    'memory',
+    t('panel.memory'),
+    memory,
+    props.memTotal
+      ? props.memUsed !== undefined
+        ? t('panel.usedOf', {
+            used: formatBytes(props.memUsed),
+            total: formatBytes(props.memTotal),
+          })
+        : formatBytes(props.memTotal)
+      : undefined,
+  )
   add('swap', t('panel.swap'), props.swap)
   for (const s of props.storage ?? []) {
     if (!s.total_bytes) continue

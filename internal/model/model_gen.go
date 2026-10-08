@@ -45,6 +45,9 @@ type Device struct {
 	// Arp corresponds to the JSON schema field "arp".
 	Arp []ArpEntry `json:"arp,omitempty,omitzero" yaml:"arp,omitempty"`
 
+	// Logical CPUs (cores or threads); for a virtual machine or container, its vCPUs.
+	CPUCount *uint64 `json:"cpu_count,omitempty,omitzero" yaml:"cpu_count,omitempty"`
+
 	// CPUPct corresponds to the JSON schema field "cpu_pct".
 	CPUPct *float64 `json:"cpu_pct,omitempty,omitzero" yaml:"cpu_pct,omitempty"`
 
@@ -91,6 +94,12 @@ type Device struct {
 
 	// MemPct corresponds to the JSON schema field "mem_pct".
 	MemPct *float64 `json:"mem_pct,omitempty,omitzero" yaml:"mem_pct,omitempty"`
+
+	// Memory installed (or given to a virtual machine or container).
+	MemTotalBytes *uint64 `json:"mem_total_bytes,omitempty,omitzero" yaml:"mem_total_bytes,omitempty"`
+
+	// Memory in use.
+	MemUsedBytes *uint64 `json:"mem_used_bytes,omitempty,omitzero" yaml:"mem_used_bytes,omitempty"`
 
 	// Model corresponds to the JSON schema field "model".
 	Model *string `json:"model,omitempty,omitzero" yaml:"model,omitempty"`
@@ -192,6 +201,9 @@ func (j *Device) UnmarshalJSON(value []byte) error {
 	var plain Plain
 	if err := json.Unmarshal(value, &plain); err != nil {
 		return err
+	}
+	if plain.CPUCount != nil && 1 > *plain.CPUCount {
+		return fmt.Errorf("field %s: must be >= %v", "cpu_count", 1)
 	}
 	if plain.CPUPct != nil && 100 < *plain.CPUPct {
 		return fmt.Errorf("field %s: must be <= %v", "cpu_pct", 100)

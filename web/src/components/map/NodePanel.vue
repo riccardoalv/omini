@@ -676,6 +676,9 @@ async function save(patch: {
         <ResourceBars
           :cpu="n.device?.cpu_pct"
           :memory="n.device?.mem_pct"
+          :cpu-count="n.device?.cpu_count"
+          :mem-used="n.device?.mem_used_bytes"
+          :mem-total="n.device?.mem_total_bytes"
           :swap="n.device?.swap_pct"
           :storage="n.device?.storage"
         />

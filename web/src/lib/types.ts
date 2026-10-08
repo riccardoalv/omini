@@ -128,6 +128,10 @@ export interface Device {
   uptime_s?: number
   cpu_pct?: number
   mem_pct?: number
+  /** Logical CPUs; a VM's or container's vCPUs. */
+  cpu_count?: number
+  mem_total_bytes?: number
+  mem_used_bytes?: number
   macs?: string[]
   ips?: string[]
   interfaces?: Interface[]

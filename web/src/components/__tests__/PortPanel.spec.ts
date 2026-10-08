@@ -166,6 +166,19 @@ describe('ResourceBars', () => {
     expect(w.get('[data-test=bar-memory] [role=meter]').attributes('aria-valuenow')).toBe('91')
   })
 
+  it('names the CPUs and the memory in use of the installed', () => {
+    const GiB = 1024 ** 3
+    const w = mount(ResourceBars, {
+      props: { cpu: 5, cpuCount: 4, memUsed: 3 * GiB, memTotal: 8 * GiB },
+      global: { plugins: plugins() },
+    })
+    expect(w.get('[data-test=bar-cpu]').text()).toContain('4 CPUs')
+    // Without a percentage, it is worked out from used and installed.
+    const mem = w.get('[data-test=bar-memory]')
+    expect(mem.text()).toContain('3.0 GiB of 8.0 GiB')
+    expect(mem.text()).toContain('38%')
+  })
+
   it('adds swap and one bar per disk, which warn later', () => {
     const GiB = 1024 ** 3
     const w = mount(ResourceBars, {

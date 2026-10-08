@@ -715,3 +715,81 @@ func TestDeviceWithoutMACTakesItsARPMAC(t *testing.T) {
 		t.Fatalf("the host hangs from the switch's Port 1: %+v", topo.Edges)
 	}
 }
+
+// A Proxmox cluster: two nodes reported without MACs (the API has none), each
+// running a guest that names its node only by address and name. Every guest
+// hangs from the node that runs it, and every node from its own switch port.
+func TestProxmoxClusterGuestsUnderTheirNode(t *testing.T) {
+	const (
+		fwMAC  = "58:9c:fc:00:00:01"
+		pve1M  = "22:28:4d:00:00:10"
+		pve2M  = "22:28:4d:00:00:11"
+		vmMAC  = "bc:24:11:00:00:a1"
+		ctMAC  = "bc:24:11:00:00:b2"
+		swID   = "dev:1c:2a:a3:00:00:01"
+		pve1ID = "dev:7:proxmox:pve1"
+		pve2ID = "dev:7:proxmox:pve2"
+	)
+	fw := model.Device{
+		Key: fwMAC, Name: "OPNsense", Host: model.Ptr("192.168.1.1"), MACs: []model.MACAddress{fwMAC},
+		Role: model.Ptr(model.DeviceRoleFirewall),
+		Arp: []model.ArpEntry{
+			{IP: "192.168.1.10", MAC: pve1M},
+			{IP: "192.168.1.11", MAC: pve2M},
+			{IP: "192.168.1.20", MAC: vmMAC},
+			{IP: "192.168.1.21", MAC: ctMAC},
+		},
+	}
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "switch", Host: model.Ptr("192.168.1.96"),
+		MACs: []model.MACAddress{"1c:2a:a3:00:00:01"}, Role: model.Ptr(model.DeviceRoleSwitch),
+		Fdb: []model.FdbEntry{
+			{MAC: fwMAC, Port: "Port 8"},
+			{MAC: pve1M, Port: "Port 1"},
+			{MAC: vmMAC, Port: "Port 1"},
+			{MAC: pve2M, Port: "Port 2"},
+			{MAC: ctMAC, Port: "Port 2"},
+		},
+	}
+	node := func(name, ip string) model.Device {
+		return model.Device{Key: "proxmox:" + name, Name: name, Host: model.Ptr(ip), Role: model.Ptr(model.DeviceRoleServer), Vendor: model.Ptr("Proxmox")}
+	}
+	guest := func(name, mac, ip, host, hostIP string) model.Device {
+		return model.Device{
+			Key: mac, Name: name, Host: model.Ptr(ip), MACs: []model.MACAddress{model.MACAddress(mac)},
+			Role: model.Ptr(model.DeviceRoleServer), CPUPct: model.Ptr(12.5), MemPct: model.Ptr(40.0),
+			Neighbors: []model.Neighbor{{
+				LocalPort: "net0", Protocol: model.Ptr(model.NeighborProtocolOther),
+				RemoteName: model.Ptr(host), RemotePort: model.Ptr("vmbr0"), RemoteIP: model.Ptr(hostIP),
+			}},
+		}
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 3, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 5, Online: true, Devices: []model.Device{sw}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{
+			node("pve1", "192.168.1.10"), guest("vm-a", vmMAC, "192.168.1.20", "pve1", "192.168.1.10"),
+			node("pve2", "192.168.1.11"), guest("ct-b", ctMAC, "192.168.1.21", "pve2", "192.168.1.11"),
+		}},
+	})
+	parent := map[string]string{}
+	for _, e := range topo.Edges {
+		parent[e.Target] = e.Source + "|" + e.SourcePort
+	}
+	want := map[string]string{
+		"dev:" + vmMAC: pve1ID + "|vmbr0",
+		"dev:" + ctMAC: pve2ID + "|vmbr0",
+		pve1ID:         swID + "|Port 1",
+		pve2ID:         swID + "|Port 2",
+	}
+	for child, p := range want {
+		if parent[child] != p {
+			t.Errorf("%s hangs from %q, want %q", child, parent[child], p)
+		}
+	}
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindClient && (n.MAC == vmMAC || n.MAC == ctMAC || n.MAC == pve1M || n.MAC == pve2M) {
+			t.Errorf("a second node for %s: %s", n.MAC, n.ID)
+		}
+	}
+}

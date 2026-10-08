@@ -208,6 +208,7 @@ const ptBR: typeof en = {
     role: 'Tipo',
     uptime: 'Ligado há',
     cpu: 'CPU',
+    cpus: '{n} CPU | {n} CPUs',
     memory: 'Memória',
     connectedTo: 'Conectado a',
     port: 'porta {port}',

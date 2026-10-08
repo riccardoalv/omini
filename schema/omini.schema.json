@@ -53,6 +53,21 @@
           "minimum": 0,
           "maximum": 100
         },
+        "cpu_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Logical CPUs (cores or threads); for a virtual machine or container, its vCPUs."
+        },
+        "mem_total_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Memory installed (or given to a virtual machine or container)."
+        },
+        "mem_used_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Memory in use."
+        },
         "swap_pct": {
           "type": "number",
           "minimum": 0,
