@@ -29,7 +29,7 @@ const alert = (id: number, severity: Alert['severity'], dismissed = false): Aler
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: ['/', '/devices', '/insights', '/flows', '/integrations', '/store', '/settings'].map(
+  routes: ['/', '/devices', '/alerts', '/flows', '/integrations', '/store', '/settings'].map(
     (path) => ({
       path,
       component: { template: '<div />' },
@@ -65,7 +65,7 @@ describe('AppShell', () => {
     expect(w.findAll('a').map((a) => a.attributes('href'))).toEqual([
       '/',
       '/devices',
-      '/insights',
+      '/alerts',
       '/flows',
       '/integrations',
       '/store',
@@ -73,7 +73,7 @@ describe('AppShell', () => {
     ])
   })
 
-  it('counts the alerts that ask for attention on the Insights entry', async () => {
+  it('counts the alerts that ask for attention on the Alerts entry', async () => {
     vi.mocked(api.alerts).mockResolvedValue([
       alert(1, 'critical'),
       alert(2, 'warning'),

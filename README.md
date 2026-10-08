@@ -102,7 +102,7 @@ Omini opens straight into a **full-screen map** with a summary bar on top (devic
 └────┴───────────────────────────────────┴────────────────────┘
 ```
 
-- **Screens:** Map, Devices (inventory), Integrations, Settings — plus Insights (v0.2) and Store (v0.3).
+- **Screens:** Map, Devices (inventory), Integrations, Settings — plus Alerts (v0.2, called Insights before) and Store (v0.3).
 - **Clients on the map:** every client is shown; when an AP or switch port has more than 8 clients, they collapse into a "N clients" bubble that expands on click (threshold configurable).
 - **Details:** clicking a node opens a side panel with its ports, traffic, clients and alerts — without leaving the map.
 - **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.
@@ -293,7 +293,7 @@ Omini ships in incremental releases, each one usable on its own.
 - ✅ **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
 - ✅ **24h traffic history** per link and port, as a chart (hourly for a year)
 - ✅ **Presence timeline** (joined/left, debounced) and a "new device" insight
-- ✅ **Insights screen** (alerts + timeline)
+- ✅ **Alerts screen** (alerts + timeline)
 
 ### v0.3 — find integrations
 

@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import type { Alert, PresenceEvent } from '@/lib/types'
 
 import { plugins } from '../../components/__tests__/helpers'
-import InsightsView from '../InsightsView.vue'
+import AlertsView from '../AlertsView.vue'
 
 vi.mock('@/lib/api', async (orig) => {
   const mod = await orig<typeof import('@/lib/api')>()
@@ -50,13 +50,13 @@ function setup() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'map', component: { template: '<div />' } },
-      { path: '/insights', name: 'insights', component: InsightsView },
+      { path: '/alerts', name: 'alerts', component: AlertsView },
     ],
   })
   return router
 }
 
-describe('InsightsView', () => {
+describe('AlertsView', () => {
   beforeEach(() => {
     alertsState.list = []
     alertsState.loaded = false
@@ -99,8 +99,8 @@ describe('InsightsView', () => {
 
   it('lists open alerts, most severe first, hiding dismissed ones', async () => {
     const router = setup()
-    await router.push('/insights')
-    const w = mount(InsightsView, { global: { plugins: [...plugins(), router] } })
+    await router.push('/alerts')
+    const w = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
     const rows = w.findAll('[data-test=alert]')
     expect(rows.map((r) => r.text())).toEqual([
@@ -114,8 +114,8 @@ describe('InsightsView', () => {
 
   it('dismisses an alert and opens a node on the map', async () => {
     const router = setup()
-    await router.push('/insights')
-    const w = mount(InsightsView, { global: { plugins: [...plugins(), router] } })
+    await router.push('/alerts')
+    const w = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
     await w.findAll('[data-test=alert-dismiss]')[1]!.trigger('click')
     expect(api.dismissAlert).toHaveBeenCalledWith(1, true)
@@ -131,8 +131,8 @@ describe('InsightsView', () => {
 
   it('shows the timeline by day, and only new devices when asked', async () => {
     const router = setup()
-    await router.push('/insights?tab=timeline')
-    const w = mount(InsightsView, { global: { plugins: [...plugins(), router] } })
+    await router.push('/alerts?tab=timeline')
+    const w = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
     const rows = w.findAll('[data-test=event]')
     expect(rows.map((r) => r.text())).toEqual([

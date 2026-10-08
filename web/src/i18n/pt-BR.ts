@@ -5,7 +5,7 @@ const ptBR: typeof en = {
   nav: {
     map: 'Mapa',
     devices: 'Dispositivos',
-    insights: 'Insights',
+    alerts: 'Alertas',
     flows: 'Fluxos',
     store: 'Loja',
     integrations: 'Integrações',
@@ -303,7 +303,7 @@ const ptBR: typeof en = {
     allFlows: 'Todas as conversas dele',
   },
   insights: {
-    title: 'Insights',
+    title: 'Alertas',
     subtitle: 'O que precisa de atenção na sua rede, e quem entrou e saiu.',
     alerts: 'Alertas',
     timeline: 'Linha do tempo',

@@ -1005,7 +1005,7 @@ onBeforeUnmount(() => {
       <div class="chips">
         <span class="chip">{{ t('map.devices', summary.devices) }}</span>
         <span class="chip">{{ t('map.clients', summary.clients) }}</span>
-        <RouterLink v-if="attention" to="/insights" class="chip problem" data-test="alerts-chip">
+        <RouterLink v-if="attention" to="/alerts" class="chip problem" data-test="alerts-chip">
           <Bell :size="12" />
           {{ t('map.alerts', { n: attention }, attention) }}
         </RouterLink>

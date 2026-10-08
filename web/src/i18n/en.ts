@@ -3,7 +3,7 @@ export default {
   nav: {
     map: 'Map',
     devices: 'Devices',
-    insights: 'Insights',
+    alerts: 'Alerts',
     flows: 'Flows',
     store: 'Store',
     integrations: 'Integrations',
@@ -300,7 +300,7 @@ export default {
     allFlows: 'All its conversations',
   },
   insights: {
-    title: 'Insights',
+    title: 'Alerts',
     subtitle: 'What needs attention on your network, and who came and went.',
     alerts: 'Alerts',
     timeline: 'Timeline',

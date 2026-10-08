@@ -23,7 +23,7 @@ const { t } = useI18n()
 const items = [
   { to: '/', icon: Network, label: 'nav.map' },
   { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
-  { to: '/insights', icon: Bell, label: 'nav.insights' },
+  { to: '/alerts', icon: Bell, label: 'nav.alerts' },
   { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows' },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
   { to: '/store', icon: Puzzle, label: 'nav.store' },
@@ -57,7 +57,7 @@ onBeforeUnmount(() => clearInterval(timer))
         <span class="nav-icon">
           <component :is="item.icon" :size="20" :stroke-width="1.75" />
           <span
-            v-if="item.to === '/insights' && attention"
+            v-if="item.to === '/alerts' && attention"
             class="nav-badge"
             data-test="alerts-badge"
             >{{ attention > 99 ? '99+' : attention }}</span

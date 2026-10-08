@@ -12,7 +12,8 @@ export const router = createRouter({
     },
     { path: '/flows', name: 'flows', component: () => import('./views/FlowsView.vue') },
     { path: '/store', name: 'store', component: () => import('./views/StoreView.vue') },
-    { path: '/insights', name: 'insights', component: () => import('./views/InsightsView.vue') },
+    { path: '/alerts', name: 'alerts', component: () => import('./views/AlertsView.vue') },
+    { path: '/insights', redirect: (to) => ({ path: '/alerts', query: to.query }) }, // old address
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

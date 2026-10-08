@@ -92,7 +92,7 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       <span class="up">↑ {{ formatRate(data.flow.up) }}</span>
     </div>
 
-    <!-- An open alert (critical or warning): details in the panel and in Insights. -->
+    <!-- An open alert (critical or warning): details in the panel and in Alerts. -->
     <span
       v-if="data.alert && data.alert !== 'info'"
       class="alert-mark"
