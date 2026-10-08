@@ -388,6 +388,84 @@ const ptBR: typeof en = {
         title: 'Dispositivo novo: {node}',
         detail: 'Visto pela primeira vez {ago}.',
       },
+      fast_ethernet: {
+        title: '{node} está conectado a {speed}',
+        detail: 'O link a partir de {from} {port} roda em Fast Ethernet ou menos.',
+      },
+      integration_available: {
+        title: '{integration} encontrado: {node}',
+        detail: 'A integração {integration} mostraria as portas, a saúde e o que roda nele.',
+      },
+      link_flapping: {
+        title: '{iface} de {node} está caindo e voltando',
+        detail: '{changes} quedas e retornos na última hora.',
+      },
+      half_duplex: {
+        title: '{iface} de {node} está em half-duplex',
+        detail: 'O link negociou half-duplex: colisões e tráfego lento.',
+      },
+      device_rebooted: { title: '{node} reiniciou', detail: 'Voltou {since}.' },
+      sfp_low_rx: {
+        title: 'Sinal óptico fraco em {iface} de {node}',
+        detail: 'Recebendo {rx_dbm} dBm, abaixo de {limit_dbm} dBm.',
+      },
+      dhcp_pool_full: {
+        title: 'Pool DHCP quase cheio em {node}',
+        detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
+      },
+      firewall_states_full: {
+        title: 'Tabela de states quase cheia em {node}',
+        detail: '{current} de {limit} states ({pct}%).',
+      },
+      insecure_service: {
+        title: '{service} aberto em {node}',
+        detail: 'Porta {port}: senhas e dados trafegam sem criptografia.',
+      },
+      new_devices_burst: {
+        title: '{count} dispositivos novos em {minutes} minutos',
+        detail: '{devices}',
+      },
+    },
+    tips: {
+      device_offline:
+        'Veja se está ligado e conectado; se estiver, confira o endereço e as credenciais da integração.',
+      integration_failed:
+        'Abra a integração e clique em "Testar conexão": a mensagem diz o que está errado.',
+      wan_down: 'Confira o modem e o cabo até ele, ou ligue para o provedor.',
+      wan_degraded: 'Perda ou latência alta: reinicie o modem ou verifique a linha com o provedor.',
+      duplicate_ip:
+        'Dois dispositivos usam o mesmo endereço: dê a um deles uma reserva de DHCP ou outro IP fixo.',
+      update_pending:
+        'Instale a atualização pela interface do próprio equipamento quando for conveniente.',
+      disk_full: 'Apague arquivos, logs ou snapshots antigos, ou aumente o disco.',
+      hot_cpu: 'Confira os ventiladores e a circulação de ar em volta.',
+      high_cpu:
+        'Veja no próprio equipamento qual processo está usando; pode ser um pico passageiro.',
+      high_memory: 'Veja o que está usando a memória; cache que se libera sozinho não é problema.',
+      slow_uplink: 'Confira o cabo (os 8 fios) e as duas portas: devem chegar a 1 Gbps.',
+      interface_errors: 'Quase sempre é cabo ou conector ruim: troque o cabo primeiro.',
+      weak_wifi: 'Aproxime do access point, ou coloque um perto dele.',
+      saturated_link: 'O link está cheio: veja quem está usando em Fluxos, ou aumente o link.',
+      unmanaged_switch: 'Vários dispositivos atrás de uma porta: há um switch pequeno ou hub ali.',
+      unknown_neighbor: 'Um equipamento se anuncia, mas o Omini não tem integração para ele.',
+      new_device: 'Se não reconhecer, veja o fabricante e onde ele está conectado.',
+      fast_ethernet:
+        'Muitas câmeras, impressoras e TVs só fazem 100 Mbps; se não for o caso, confira o cabo (os 8 fios) e a porta.',
+      integration_available: 'Adicione a integração em Integrações → Adicionar integração.',
+      link_flapping:
+        'Troque o cabo, ou fixe a velocidade nas duas pontas em vez da autonegociação.',
+      half_duplex:
+        'Deixe as duas pontas em autonegociação (ou na mesma velocidade fixa, full-duplex).',
+      device_rebooted:
+        'Queda de energia, travamento ou atualização: veja os logs dele se não foi planejado.',
+      sfp_low_rx:
+        'Limpe os conectores da fibra e veja se ela não está dobrada; confira o módulo da outra ponta.',
+      dhcp_pool_full: 'Aumente a faixa do DHCP ou diminua o tempo de lease.',
+      firewall_states_full:
+        'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
+      insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',
+      new_devices_burst:
+        'Uma visita, um aparelho novo... ou alguém que não deveria estar na sua rede.',
     },
   },
   traffic: {
@@ -672,6 +750,11 @@ const ptBR: typeof en = {
     confirmRemove: 'Clique de novo para remover',
     dev: 'desenvolvimento',
     hint: 'Plugins conectam o Omini a dispositivos e softwares de outras marcas (OPNsense, roteadores, controladoras). Eles rodam no próprio ambiente Python.',
+  },
+  toasts: {
+    label: 'Alertas abertos',
+    close: 'Fechar',
+    more: 'mais {n} alerta | mais {n} alertas',
   },
   round: {
     title: 'Coleta em rodadas',

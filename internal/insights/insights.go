@@ -67,6 +67,11 @@ type Input struct {
 	Integrations []Integration
 	NewDevices   []NewDevice
 	Now          time.Time
+	History      History
+	// Detectors are what each known integration can read; Configured the
+	// integration types already set up.
+	Detectors  []Detector
+	Configured map[string]bool
 }
 
 // Rule is one check.

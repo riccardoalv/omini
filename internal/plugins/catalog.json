@@ -1,6 +1,7 @@
 [
   {
     "id": "opnsense",
+    "detect": {"products": ["opnsense"]},
     "name": "OPNsense",
     "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, VLANs, SFP modules, ARP, DHCP leases and pool usage, VPN peers (WireGuard, OpenVPN, IPsec), services, firewall states, CPU, memory, disks, temperatures, pending updates and uptime. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-opnsense",
@@ -14,6 +15,7 @@
   },
   {
     "id": "horaco",
+    "detect": {"brands": ["horaco"]},
     "name": "Horaco switch",
     "description": "Horaco HC-SWTGW218AS and managed switches with the same web interface: ports with link speed and connector, traffic counters and MAC table. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-horaco",
@@ -26,6 +28,7 @@
   },
   {
     "id": "mercusys",
+    "detect": {"brands": ["mercusys"]},
     "name": "Mercusys Halo",
     "description": "Mercusys Halo mesh systems through their local web interface: every unit, Wi-Fi and wired clients with names, band and rates, CPU and memory. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-mercusys",
@@ -38,6 +41,7 @@
   },
   {
     "id": "mikrotik",
+    "detect": {"products": ["mikrotik"], "brands": ["mikrotik"]},
     "name": "MikroTik RouterOS",
     "description": "MikroTik routers, switches and access points through the RouterOS v7 REST API: ports with link speed, traffic, SFP diagnostics and VLANs, bridge MAC table, ARP, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi clients, gateways, CPU, memory, temperatures and pending updates. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-mikrotik",
@@ -52,6 +56,7 @@
   },
   {
     "id": "unifi",
+    "detect": {"brands": ["ubiquiti"]},
     "name": "UniFi Network",
     "description": "UniFi Network controllers (UniFi OS consoles or the self-hosted application): every adopted gateway, switch and access point with ports, link speed, LLDP and uplinks, Wi-Fi and wired clients with band, signal and traffic, VLANs, WAN status, CPU, memory, temperatures and pending firmware. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-unifi",
@@ -66,6 +71,7 @@
   },
   {
     "id": "openwrt",
+    "detect": {"products": ["openwrt"], "os": ["openwrt"]},
     "name": "OpenWrt",
     "description": "OpenWrt routers and access points through ubus (the API LuCI uses): ports with link speed, traffic and bridge VLANs, WANs and gateways, Wi-Fi clients with signal and rates, ARP, DHCP leases, host names, memory, load, disks and temperatures. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-openwrt",
@@ -79,6 +85,7 @@
   },
   {
     "id": "proxmox",
+    "detect": {"products": ["proxmox"]},
     "name": "Proxmox VE",
     "description": "Proxmox VE hosts and clusters through the official API with a read-only token: node CPU, memory, storage and interfaces, and every running VM and container placed under the node that runs it. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-proxmox",
@@ -105,6 +112,7 @@
   },
   {
     "id": "pfsense",
+    "detect": {"products": ["pfsense"]},
     "name": "pfSense",
     "description": "pfSense CE and Plus firewalls through the pfSense REST API package: ports with link speed, WANs and gateways, ARP, DHCP leases and pool usage, VLANs, services, VPN peers, firewall states, CPU, memory, temperature and uptime. Read-only.",
     "url": "https://github.com/riccardoalv/omini-plugin-pfsense",

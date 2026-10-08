@@ -53,6 +53,8 @@ func TestEveryRuleHasTexts(t *testing.T) {
 			"device_offline", "integration_failed", "wan_down", "wan_degraded", "duplicate_ip", "update_pending",
 			"disk_full", "hot_cpu", "high_cpu", "high_memory", "slow_uplink", "interface_errors", "weak_wifi",
 			"saturated_link", "unmanaged_switch", "unknown_neighbor", "new_device",
+			"fast_ethernet", "integration_available", "link_flapping", "half_duplex", "device_rebooted", "sfp_low_rx",
+			"dhcp_pool_full", "firewall_states_full", "insecure_service", "new_devices_burst",
 		} {
 			if _, ok := texts[locale][rule]; !ok {
 				t.Errorf("%s: no text for %s", locale, rule)
@@ -347,7 +349,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 func TestEveryRuleHasAShortName(t *testing.T) {
 	for _, locale := range []string{"en", "pt-BR"} {
 		for rule := range texts["en"] {
-			if strings.HasPrefix(rule, "_") || rule == "new_device" {
+			if strings.HasPrefix(rule, "_") || rule == "new_device" || rule == "new_devices_burst" {
 				continue
 			}
 			if short[locale][rule] == "" {

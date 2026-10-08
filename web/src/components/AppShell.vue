@@ -17,6 +17,7 @@ import { api } from '@/lib/api'
 import { features, noteIntegrations } from '@/lib/features'
 import { prefs } from '@/lib/prefs'
 
+import AlertToasts from './AlertToasts.vue'
 import Logo from './LogoMark.vue'
 
 const { t } = useI18n()
@@ -92,6 +93,7 @@ onBeforeUnmount(() => clearInterval(timer))
     <main class="content">
       <slot />
     </main>
+    <AlertToasts />
   </div>
 </template>
 

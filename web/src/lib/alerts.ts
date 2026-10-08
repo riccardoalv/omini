@@ -25,6 +25,7 @@ function params(a: Alert, locale: string): Record<string, unknown> {
   for (const k of ['rx_bps', 'tx_bps'] as const)
     if (typeof p[k] === 'number') p[k] = formatRate(p[k] as number)
   if (typeof p.first_seen === 'string') p.ago = formatAgo(p.first_seen, locale)
+  if (typeof p.at === 'string') p.since = formatAgo(p.at, locale)
   for (const k of ['loss_pct', 'rtt_ms', 'updates', 'latest'] as const) p[k] ??= '?'
   return p
 }

@@ -37,6 +37,16 @@ type CatalogEntry struct {
 	ReviewedAt      string `json:"reviewed_at,omitempty"` // date, YYYY-MM-DD
 	// KnownIssues links the documented issues (stable plugins).
 	KnownIssues string `json:"known_issues,omitempty"`
+	// Detect says which devices it reads, by what Omini identified on them,
+	// so the alerts can suggest setting it up.
+	Detect *Detect `json:"detect,omitempty"`
+}
+
+// Detect matches devices by their identification (product, brand or OS slug).
+type Detect struct {
+	Products []string `json:"products,omitempty"`
+	Brands   []string `json:"brands,omitempty"`
+	OS       []string `json:"os,omitempty"`
 }
 
 //go:embed catalog.json

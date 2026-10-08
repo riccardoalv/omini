@@ -42,13 +42,15 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		slog.Warn("could not record traffic history", "err", err)
 	}
 
-	in := insights.Input{Topology: topo, Now: now}
+	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}}
 	names := map[int64]string{}
 	if all, err := c.store.ListIntegrations(ctx); err == nil {
 		for _, it := range all {
 			names[it.ID] = it.Name
+			in.Configured[it.Type] = true
 		}
 	}
+	in.Detectors = detectors()
 	for _, s := range statuses {
 		in.Integrations = append(in.Integrations, insights.Integration{
 			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error,

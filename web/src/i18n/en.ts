@@ -385,6 +385,82 @@ export default {
         title: 'New device: {node}',
         detail: 'Seen for the first time {ago}.',
       },
+      fast_ethernet: {
+        title: '{node} is connected at {speed}',
+        detail: 'Its link from {from} {port} runs at Fast Ethernet speed or less.',
+      },
+      integration_available: {
+        title: '{integration} found: {node}',
+        detail: 'The {integration} integration would show its ports, health and what runs on it.',
+      },
+      link_flapping: {
+        title: '{iface} of {node} keeps going down',
+        detail: '{changes} up/down changes in the last hour.',
+      },
+      half_duplex: {
+        title: '{iface} of {node} is half-duplex',
+        detail: 'The link negotiated half-duplex: collisions and slow traffic.',
+      },
+      device_rebooted: { title: '{node} restarted', detail: 'It came back {since}.' },
+      sfp_low_rx: {
+        title: 'Weak optical signal on {iface} of {node}',
+        detail: 'Receiving {rx_dbm} dBm, below {limit_dbm} dBm.',
+      },
+      dhcp_pool_full: {
+        title: 'DHCP pool almost full on {node}',
+        detail: '{network}: {used} of {total} addresses in use ({pct}%).',
+      },
+      firewall_states_full: {
+        title: 'Firewall state table almost full on {node}',
+        detail: '{current} of {limit} states ({pct}%).',
+      },
+      insecure_service: {
+        title: '{service} open on {node}',
+        detail: 'Port {port}: passwords and data travel unencrypted.',
+      },
+      new_devices_burst: {
+        title: '{count} new devices in {minutes} minutes',
+        detail: '{devices}',
+      },
+    },
+    tips: {
+      device_offline:
+        "Check that it is powered and connected; if it is, check the integration's address and credentials.",
+      integration_failed:
+        'Open the integration and press "Test connection": the message says what is wrong.',
+      wan_down: 'Check the modem and the cable to it, or call your provider.',
+      wan_degraded:
+        'Loss or high latency: restart the modem, or check the line with your provider.',
+      duplicate_ip:
+        'Two devices use the same address: give one a DHCP reservation or another static IP.',
+      update_pending: "Install the update from the device's own interface when it suits you.",
+      disk_full: 'Delete old files, logs or snapshots, or grow the disk.',
+      hot_cpu: 'Check the fans and the airflow around it.',
+      high_cpu: 'See which process uses it on the device itself; it may be a short peak.',
+      high_memory: 'See what uses the memory; a cache that frees itself is not a problem.',
+      slow_uplink: 'Check the cable (all 8 wires) and both ports: they should reach 1 Gbps.',
+      interface_errors: 'Usually a bad cable or connector: replace the cable first.',
+      weak_wifi: 'Move it closer to the access point, or add one near it.',
+      saturated_link: 'The link is full: find who uses it in Flows, or upgrade the link.',
+      unmanaged_switch: 'Several devices behind one port: a small switch or hub is there.',
+      unknown_neighbor: 'A device announces itself but Omini has no integration for it.',
+      new_device: 'If you do not know it, look at its vendor and where it is connected.',
+      fast_ethernet:
+        'Many cameras, printers and TVs only do 100 Mbps; otherwise check the cable (all 8 wires) and the port.',
+      integration_available: 'Add the integration in Integrations → Add integration.',
+      link_flapping:
+        'Replace the cable, or fix the speed on both ends instead of auto-negotiation.',
+      half_duplex:
+        'Set both ends to auto-negotiation (or to the same fixed speed and full-duplex).',
+      device_rebooted: 'A power cut, a crash or an update: check its logs if it was not planned.',
+      sfp_low_rx:
+        'Clean the fiber connectors and check the fiber is not bent; check the module on the other end.',
+      dhcp_pool_full: 'Widen the DHCP range or shorten the lease time.',
+      firewall_states_full:
+        'Raise the state table limit, or look for a device opening many connections.',
+      insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',
+      new_devices_burst:
+        'A visitor, a new appliance... or someone who should not be on your network.',
     },
   },
   traffic: {
@@ -543,6 +619,11 @@ export default {
     confirmRemove: 'Click again to remove',
     dev: 'development',
     hint: 'Plugins connect Omini to devices and software of other brands (OPNsense, routers, controllers). They run in their own Python environment.',
+  },
+  toasts: {
+    label: 'Open alerts',
+    close: 'Close',
+    more: '{n} more alert | {n} more alerts',
   },
   round: {
     title: 'Collection in rounds',

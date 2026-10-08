@@ -68,6 +68,8 @@ type Collector struct {
 	lastSeen map[model.MACAddress]seenAt
 	// Whether each device is present (presence timeline); loaded once.
 	presence map[string]bool
+	// What changed between rounds, for the alerts (see observeChanges).
+	changes changeTracker
 
 	round      sync.Mutex // one collection round at a time
 	trigger    chan struct{}
