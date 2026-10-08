@@ -41,6 +41,7 @@ export default {
     signIn: 'Sign in',
     signOut: 'Sign out',
   },
+  color: { hex: 'Hex color', apply: 'Apply' },
   map: {
     exportDialog: {
       title: 'Export the map',

@@ -5,7 +5,16 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue({
+      // The area color picker: vanilla-colorful's web components.
+      template: {
+        compilerOptions: {
+          isCustomElement: (tag) => tag === 'hex-color-picker' || tag === 'hex-input',
+        },
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -653,3 +653,24 @@ func TestGuestUnderHostAndHostOnItsPort(t *testing.T) {
 		t.Fatalf("the guest has another link too: %+v", topo.Edges)
 	}
 }
+
+// A scanned network stands for the hosts found there: when none of them is
+// left under it (they were all placed elsewhere, or none answered), it is
+// not drawn — an empty "Network 192.168.100.0/24" floating on the map.
+func TestEmptyScannedNetworkIsNotDrawn(t *testing.T) {
+	empty := model.Device{Key: "net:192.168.100.0/24", Name: "Network 192.168.100.0/24", Role: model.Ptr(model.DeviceRoleUnknown)}
+	full := model.Device{
+		Key: "net:10.9.0.0/24", Name: "Network 10.9.0.0/24", Role: model.Ptr(model.DeviceRoleUnknown),
+		Hosts: []model.Host{{IP: "10.9.0.5", MAC: model.Ptr(model.MACAddress("aa:00:00:00:00:05"))}},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 2, Online: true, Devices: []model.Device{empty, full}}})
+	var labels []string
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindDevice {
+			labels = append(labels, n.Label)
+		}
+	}
+	if !reflect.DeepEqual(labels, []string{"Network 10.9.0.0/24"}) {
+		t.Fatalf("devices on the map: %v", labels)
+	}
+}

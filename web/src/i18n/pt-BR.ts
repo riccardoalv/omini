@@ -43,6 +43,7 @@ const ptBR: typeof en = {
     signIn: 'Entrar',
     signOut: 'Sair',
   },
+  color: { hex: 'Cor em hex', apply: 'Aplicar' },
   map: {
     exportDialog: {
       title: 'Exportar o mapa',

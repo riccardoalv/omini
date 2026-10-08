@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ChevronsDownUp, Pencil, Trash2 } from 'lucide-vue-next'
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ColorPicker from '@/components/ColorPicker.vue'
 import { areaCss, areaHex } from '@/lib/areas'
 import { AREA_COLORS } from '@/lib/types'
 
@@ -11,12 +12,25 @@ const emit = defineEmits<{
   rename: []
   collapse: []
   color: [color: string]
+  /** The color being picked, shown on the area before it is applied (undefined: back). */
+  preview: [color: string | undefined]
   delete: []
   close: []
 }>()
 const { t } = useI18n()
 
 const custom = () => !(AREA_COLORS as readonly string[]).includes(props.color)
+const picking = ref(false)
+const draft = ref(areaHex(props.color))
+function togglePicker() {
+  picking.value = !picking.value
+  draft.value = areaHex(props.color)
+  if (!picking.value) emit('preview', undefined)
+}
+function onDraft(c: string) {
+  draft.value = c
+  emit('preview', c)
+}
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
@@ -56,21 +70,24 @@ onBeforeUnmount(() => {
         :aria-pressed="c === color"
         @click="emit('color', c)"
       />
-      <!-- Any color: the browser's RGB picker. -->
-      <label
+      <!-- Any color: opens the picker below. -->
+      <button
         class="swatch picker"
-        :class="{ current: custom() }"
+        :class="{ current: custom(), open: picking }"
         :style="custom() ? { '--c': areaHex(color) } : undefined"
+        data-test="custom-color"
         :title="t('map.areas.customColor')"
-      >
-        <input
-          type="color"
-          data-test="custom-color"
-          :value="areaHex(color)"
-          :aria-label="t('map.areas.customColor')"
-          @change="emit('color', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
+        :aria-label="t('map.areas.customColor')"
+        :aria-expanded="picking"
+        @click="togglePicker"
+      />
+    </div>
+    <div v-if="picking" class="picker-panel">
+      <ColorPicker
+        :model-value="draft"
+        @update:model-value="onDraft"
+        @apply="(c) => emit('color', c)"
+      />
     </div>
     <button role="menuitem" class="danger" data-test="delete" @click="emit('delete')">
       <Trash2 :size="15" />{{ t('map.areas.delete') }}
@@ -131,14 +148,10 @@ button[role='menuitem']:focus-visible {
 .picker:not(.current) {
   background: conic-gradient(#f85149, #d29922, #3fb950, #2dd4bf, #4c8dff, #a371f7, #f85149);
 }
-.picker input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  cursor: pointer;
+.picker.open {
+  border-color: var(--accent);
+}
+.picker-panel {
+  padding: 4px 10px 8px;
 }
 </style>

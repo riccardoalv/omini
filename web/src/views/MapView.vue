@@ -126,6 +126,8 @@ const expanded = computed(() => new Set(prefs.expanded))
 const forced = computed(() => new Set(prefs.collapsed))
 // Map areas: declared before the view, which collapses them.
 const areas = ref<MapArea[]>([])
+/** A color being picked in the area menu, shown on the area until it is applied or the menu closes. */
+const areaPreview = ref<{ id: number; color: string }>()
 // The map's graph: each access point's Wi-Fi networks as mini nodes between it
 // and its clients (the panel and lists use the plain graph).
 const mapGraph = computed(() => withWifiNetworks(nodes.value, edges.value))
@@ -441,6 +443,7 @@ const visibleAreas = computed(() =>
     .map((a) => ({
       ...a,
       ...(frozen.value[a.id] ?? fitArea({ ...a, members: areaNodes(a) }, nodeBoxes.value)),
+      ...(areaPreview.value?.id === a.id ? { color: areaPreview.value.color } : {}),
     })),
 )
 
@@ -680,9 +683,18 @@ function expandArea(id: number) {
   selectedId.value = undefined
 }
 
+function previewArea(color?: string) {
+  areaPreview.value = color && areaMenu.value ? { id: areaMenu.value.id, color } : undefined
+}
+function closeAreaMenu() {
+  areaMenu.value = undefined
+  areaPreview.value = undefined
+}
+
 function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | { color: string }) {
   const id = areaMenu.value?.id
   areaMenu.value = undefined
+  areaPreview.value = undefined
   if (id === undefined) return
   if (action === 'collapse') collapseArea(id)
   else if (action === 'rename') editingArea.value = id
@@ -1152,7 +1164,8 @@ onBeforeUnmount(() => {
       @collapse="areaMenuAction('collapse')"
       @color="(color: string) => areaMenuAction({ color })"
       @delete="areaMenuAction('delete')"
-      @close="areaMenu = undefined"
+      @preview="previewArea"
+      @close="closeAreaMenu"
     />
 
     <NodeMenu

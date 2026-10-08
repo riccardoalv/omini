@@ -110,11 +110,20 @@ describe('AreaMenu', () => {
       props: { x: 5, y: 6, color: '#123abc' },
       global: { plugins: plugins() },
     })
-    const input = w.get<HTMLInputElement>('[data-test=custom-color]')
-    expect(input.element.value).toBe('#123abc')
     expect(w.get('.swatch.current').classes()).toContain('picker')
-    await input.setValue('#ff8800')
-    expect(w.emitted('color')).toEqual([['#ff8800']])
+    await w.get('[data-test=custom-color]').trigger('click')
+    expect(w.get<HTMLInputElement>('[data-test=hex]').element.value).toBe('123abc')
+    // Typing shows the color on the area; applying saves it.
+    await w.get('[data-test=hex]').setValue('ff8800')
+    expect(w.emitted('preview')).toEqual([['#ff8800']])
+    expect(w.get<HTMLInputElement>('[data-test=rgb-r]').element.value).toBe('255')
+    await w.get('[data-test=rgb-b]').setValue('170')
+    expect(w.emitted('preview')!.slice(-1)[0]).toEqual(['#ff88aa'])
+    await w.get('[data-test=apply]').trigger('click')
+    expect(w.emitted('color')).toEqual([['#ff88aa']])
+    // Closing the picker puts the area's color back.
+    await w.get('[data-test=custom-color]').trigger('click')
+    expect(w.emitted('preview')!.slice(-1)[0]).toEqual([undefined])
   })
 
   it('closes with Escape', () => {

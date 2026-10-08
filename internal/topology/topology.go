@@ -221,7 +221,28 @@ func BuildWith(sources []Source, opts Options) Topology {
 	b.groupSegments()
 	b.sharedPorts()
 	b.fillDirectLinkSpeeds()
+	b.dropEmptyNetworks()
 	return b.result()
+}
+
+// dropEmptyNetworks removes devices that only stand for a scanned network (no
+// address, MAC, port or neighbor of their own: they exist to hold the hosts
+// found there) when every one of those hosts was placed somewhere else — e.g.
+// a routed subnet whose only host is the modem, already under its WAN. An
+// empty placeholder floating on the map says nothing.
+func (b *builder) dropEmptyNetworks() {
+	linked := map[string]bool{}
+	for _, e := range b.edges {
+		linked[e.Source], linked[e.Target] = true, true
+	}
+	for id, n := range b.nodes {
+		d := n.Device
+		if n.Kind != KindDevice || linked[id] || d == nil || len(b.sources[id]) > 1 ||
+			d.Host != nil || len(d.IPs) > 0 || len(deviceMACs(d)) > 0 || len(d.Interfaces) > 0 || len(d.Neighbors) > 0 {
+			continue
+		}
+		delete(b.nodes, id)
+	}
 }
 
 func (b *builder) addManaged(src Source, d *model.Device) {
