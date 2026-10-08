@@ -15,6 +15,7 @@ import (
 	"github.com/riccardoalv/omini/internal/appicons"
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
+	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/plugins"
 	"github.com/riccardoalv/omini/internal/secret"
@@ -45,6 +46,8 @@ type Server struct {
 	PluginIndex *plugins.Index
 	Icons       http.Handler // app icons (internal/appicons); public, used by <img>
 	UI          fs.FS        // built web UI; nil serves a placeholder page
+	// Flows receives NetFlow/IPFIX/sFlow (nil: no flow data).
+	Flows *flows.Service
 	// NotifyClient sends test notifications (nil: a default client).
 	NotifyClient *http.Client
 	Version      string
@@ -101,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/alerts/{id}/dismiss", s.dismissAlert)
 	private.HandleFunc("GET /api/presence", s.presence)
 	private.HandleFunc("GET /api/history", s.trafficHistory)
+	private.HandleFunc("GET /api/flows", s.flowsView)
 	private.HandleFunc("GET /api/notifier-types", s.notifierTypes)
 	private.HandleFunc("GET /api/notifiers", s.listNotifiers)
 	private.HandleFunc("POST /api/notifiers", s.createNotifier)

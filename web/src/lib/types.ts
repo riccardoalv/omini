@@ -435,3 +435,28 @@ export interface PluginIndexStatus {
   error?: string
   plugins: number
 }
+
+/** Traffic between two addresses over a period (from flow exports). */
+export interface Conversation {
+  a: string
+  b: string
+  /** The map nodes of the two addresses, when known. */
+  a_node?: string
+  b_node?: string
+  bytes_ab: number
+  bytes_ba: number
+  packets: number
+  ports: { proto: number; port: number; bytes: number }[]
+}
+
+export interface FlowsResponse {
+  conversations: Conversation[]
+  listening: boolean
+  exporters: {
+    ip: string
+    kind: 'netflow' | 'sflow'
+    flows: number
+    last_at: string
+    version?: string
+  }[]
+}

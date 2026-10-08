@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ArrowLeftRight,
   Bell,
   Cable,
   LayoutGrid,
@@ -23,6 +24,7 @@ const items = [
   { to: '/', icon: Network, label: 'nav.map' },
   { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
   { to: '/insights', icon: Bell, label: 'nav.insights' },
+  { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows' },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
   { to: '/store', icon: Puzzle, label: 'nav.store' },
   { to: '/settings', icon: Settings, label: 'nav.settings' },

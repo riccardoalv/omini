@@ -21,6 +21,7 @@ import (
 	"github.com/riccardoalv/omini/internal/appicons"
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
+	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/nmapscan"
@@ -145,6 +146,9 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	reg := integration.NewRegistry()
 	reg.Register(netscan.New())
 	reg.Register(nmapscan.New())
+	flowSvc := &flows.Service{Store: st}
+	defer flowSvc.Close()
+	reg.Register(flows.New(flowSvc))
 
 	// SNMP profiles: the shipped ones plus the user's (<data>/profiles/*.yaml).
 	if n, err := snmp.LoadProfiles(filepath.Join(cfg.DataDir, "profiles")); err != nil {
@@ -174,7 +178,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	coll := collector.New(st, reg, box, collector.Options{Interval: cfg.PollInterval, OnAlerts: notifier.Handle})
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: auth.New(st, 0),
-		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, UI: web.FS(), Version: version,
+		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, UI: web.FS(), Version: version,
 		Icons: appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 	}
 	httpServer := &http.Server{

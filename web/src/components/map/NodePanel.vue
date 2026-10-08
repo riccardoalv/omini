@@ -24,14 +24,22 @@ import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
 import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
 import { api, ApiError } from '@/lib/api'
-import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
+import { formatAgo, formatBytes, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, linkOnPort } from '@/lib/graph'
 import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
 import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
 import { formatRate, nodeFlow } from '@/lib/traffic'
-import type { Integration, PresenceEvent, TopoEdge, TopoNode, WebService } from '@/lib/types'
+import { serviceName } from '@/lib/services'
+import type {
+  Conversation,
+  Integration,
+  PresenceEvent,
+  TopoEdge,
+  TopoNode,
+  WebService,
+} from '@/lib/types'
 
 const props = defineProps<{
   node?: TopoNode
@@ -102,6 +110,26 @@ async function loadActivity(id: string | undefined) {
   }
 }
 
+// Who the node talks to (flow exports), when Omini receives them.
+const talks = ref<Conversation[]>([])
+async function loadTalks(id: string | undefined) {
+  talks.value = []
+  if (!id || props.node?.kind === 'ssid' || props.node?.kind === 'app') return
+  try {
+    const res = await api.flows({ node: id, minutes: 60, limit: 5 })
+    if (props.node?.id === id) talks.value = res.conversations
+  } catch {
+    // flows are optional
+  }
+}
+const peerOf = (c: Conversation) => {
+  const mine = c.a_node === n.value?.id
+  const id = mine ? c.b_node : c.a_node
+  const ip = mine ? c.b : c.a
+  const peer = id ? byId.value.get(id) : undefined
+  return { id, label: peer ? displayName(peer, t) : ip }
+}
+
 watch(
   () => props.node?.id,
   (id) => {
@@ -109,6 +137,7 @@ watch(
     error.value = ''
     detectWeb(id, props.node?.ip)
     loadActivity(id)
+    loadTalks(id)
   },
   { immediate: true },
 )
@@ -738,6 +767,32 @@ async function save(patch: {
           </button>
         </section>
 
+        <section v-if="talks.length" class="block" data-test="node-talks">
+          <h3>{{ t('flows.talksTo') }}</h3>
+          <ul class="talks">
+            <li v-for="c in talks" :key="c.a + c.b">
+              <button
+                class="link grow"
+                type="button"
+                :disabled="!peerOf(c).id"
+                @click="peerOf(c).id && emit('select', peerOf(c).id!)"
+              >
+                {{ peerOf(c).label }}
+              </button>
+              <span class="muted small">{{
+                c.ports
+                  .slice(0, 2)
+                  .map((p) => serviceName(p.proto, p.port))
+                  .join(', ')
+              }}</span>
+              <span class="mono small">{{ formatBytes(c.bytes_ab + c.bytes_ba) }}</span>
+            </li>
+          </ul>
+          <RouterLink class="link small" :to="{ path: '/flows', query: { node: n.id } }">{{
+            t('flows.allFlows')
+          }}</RouterLink>
+        </section>
+
         <section v-if="activity.length" class="block" data-test="node-activity">
           <h3>{{ t('insights.activity') }}</h3>
           <ul class="activity">
@@ -911,6 +966,31 @@ async function save(patch: {
 </template>
 
 <style scoped>
+.talks {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.talks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.talks .grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.talks .small {
+  font-size: 12px;
+  white-space: nowrap;
+}
 .node-alerts {
   display: grid;
   gap: 6px;

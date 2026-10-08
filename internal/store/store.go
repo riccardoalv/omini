@@ -196,6 +196,22 @@ var migrations = []string{
 		created_at      INTEGER NOT NULL
 	);
 	`,
+	// 12: conversations from flow exports (NetFlow, IPFIX, sFlow), per minute, kept a day.
+	`
+	CREATE TABLE flow_minutes (
+		at       INTEGER NOT NULL, -- start of the minute
+		a        TEXT    NOT NULL, -- the lower IP of the pair
+		b        TEXT    NOT NULL,
+		proto    INTEGER NOT NULL,
+		port     INTEGER NOT NULL, -- the service port (the lower of the two)
+		bytes_ab INTEGER NOT NULL, -- a → b
+		bytes_ba INTEGER NOT NULL,
+		packets  INTEGER NOT NULL,
+		PRIMARY KEY (at, a, b, proto, port)
+	) WITHOUT ROWID;
+	CREATE INDEX flow_minutes_a ON flow_minutes(a, at);
+	CREATE INDEX flow_minutes_b ON flow_minutes(b, at);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

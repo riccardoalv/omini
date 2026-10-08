@@ -69,3 +69,29 @@ func TestAlertsPresenceAndHistory(t *testing.T) {
 		t.Fatalf("history hours: %d", code)
 	}
 }
+
+func TestFlowsView(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	if err := h.store.SaveFlows(context.Background(), time.Now(), []store.FlowRow{
+		{A: "192.168.1.10", B: "192.168.1.20", Proto: 6, Port: 445, BytesAB: 100, BytesBA: 900, Packets: 5},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Conversations []struct {
+			A, B    string
+			BytesBA uint64 `json:"bytes_ba"`
+		} `json:"conversations"`
+		Listening bool `json:"listening"`
+	}
+	if code := h.do("GET", "/api/flows?minutes=30", nil, &res); code != 200 || len(res.Conversations) != 1 || res.Conversations[0].BytesBA != 900 || res.Listening {
+		t.Fatalf("flows: %d %+v", code, res)
+	}
+	if h.do("GET", "/api/flows?ip=10.0.0.1", nil, &res); len(res.Conversations) != 0 {
+		t.Fatalf("other ip: %+v", res)
+	}
+	if code := h.do("GET", "/api/flows?minutes=0", nil, nil); code != http.StatusBadRequest {
+		t.Fatalf("bad minutes: %d", code)
+	}
+}

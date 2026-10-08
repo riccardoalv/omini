@@ -29,10 +29,12 @@ const alert = (id: number, severity: Alert['severity'], dismissed = false): Aler
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: ['/', '/devices', '/insights', '/integrations', '/store', '/settings'].map((path) => ({
-    path,
-    component: { template: '<div />' },
-  })),
+  routes: ['/', '/devices', '/insights', '/flows', '/integrations', '/store', '/settings'].map(
+    (path) => ({
+      path,
+      component: { template: '<div />' },
+    }),
+  ),
 })
 
 describe('AppShell', () => {
@@ -64,6 +66,7 @@ describe('AppShell', () => {
       '/',
       '/devices',
       '/insights',
+      '/flows',
       '/integrations',
       '/store',
       '/settings',

@@ -10,6 +10,7 @@ export const router = createRouter({
       name: 'integrations',
       component: () => import('./views/IntegrationsView.vue'),
     },
+    { path: '/flows', name: 'flows', component: () => import('./views/FlowsView.vue') },
     { path: '/store', name: 'store', component: () => import('./views/StoreView.vue') },
     { path: '/insights', name: 'insights', component: () => import('./views/InsightsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue') },

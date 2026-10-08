@@ -239,6 +239,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
 ## Preparing your devices
 
 - **Network scan:** run Omini with **host networking** (`network_mode: host` in Docker) so it sees your LAN directly. If the host has a firewall, allow inbound **UDP 5353** (mDNS) and **UDP 1900** (SSDP) — otherwise names and models announced by devices are not received. To get hostnames from your router, enable registering DHCP leases in its DNS (OPNsense: *Services → Unbound DNS → General → Register DHCP leases*).
+- **Traffic flows:** add the "Traffic flows" integration and point your router's NetFlow/IPFIX at Omini's address, **UDP 2055** (OPNsense: *Reporting → NetFlow*, version 9, the LAN interfaces), or a switch's sFlow at **UDP 6343**. Allow those ports in the host's firewall.
 - **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. The network scan finds them by itself and tries the community `public`; if yours is different, add it in *Integrations → Network scan → SNMP communities*. Without LLDP Omini still works, but links between switches become *inferred*.
 - **Plugins:** install them in *Settings → Plugins* from their GitHub URL (Omini installs the latest release). Plugins run in their own Python environment, created with [uv](https://docs.astral.sh/uv/) — the Docker image includes it; when running the binary directly, install uv first.
 - **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
@@ -310,7 +311,7 @@ Omini ships in incremental releases, each one usable on its own.
 ### Later
 
 - ✅ Long-term traffic history (hourly average and peak, kept a year)
-- "Who talks to whom" flow analysis (NetFlow/sFlow/IPFIX, e.g. from OPNsense NetFlow)
+- ✅ "Who talks to whom" flow analysis (NetFlow v5/v9, IPFIX and sFlow v5, e.g. from OPNsense NetFlow)
 - Write actions behind explicit permissions
 - ✅ SNMP v3
 - ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)

@@ -1,5 +1,6 @@
 import type {
   Alert,
+  FlowsResponse,
   Notifier,
   NotifierType,
   PresenceEvent,
@@ -168,6 +169,14 @@ export const api = {
     if (q.first) params.set('first', '1')
     const qs = params.toString()
     return request<PresenceEvent[]>('GET', `/api/presence${qs ? `?${qs}` : ''}`)
+  },
+  flows: (q: { minutes?: number; node?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (q.minutes) params.set('minutes', String(q.minutes))
+    if (q.node) params.set('node', q.node)
+    if (q.limit) params.set('limit', String(q.limit))
+    const qs = params.toString()
+    return request<FlowsResponse>('GET', `/api/flows${qs ? `?${qs}` : ''}`)
   },
   history: (node: string, iface: string, hours = 24) =>
     request<TrafficPoint[]>(
