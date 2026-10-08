@@ -91,3 +91,57 @@ describe('MapView device list', () => {
     again.unmount()
   })
 })
+
+describe('MapView areas and bubbles', () => {
+  it('draws an area around the bubble its members were folded into, not where they were', async () => {
+    vi.mocked(api.integrations).mockResolvedValue([])
+    vi.mocked(api.inventory).mockResolvedValue([])
+    const tvs = ['tv1', 'tv2', 'tv3'].map((id) => ({
+      id,
+      kind: 'client' as const,
+      label: id,
+      online: true,
+    }))
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [{ id: 'dev:fw', kind: 'device', label: 'fw', online: true }, ...tvs],
+        edges: tvs.map((t) => ({
+          id: `e:${t.id}`,
+          source: 'dev:fw',
+          target: t.id,
+          kind: 'inferred' as const,
+        })),
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [
+        {
+          id: 1,
+          name: 'Living',
+          color: 'blue',
+          direction: 'RIGHT',
+          x: 5000,
+          y: 5000,
+          width: 100,
+          height: 100,
+          members: ['tv1', 'tv2'],
+        },
+      ],
+    })
+    const { prefs } = await import('@/lib/prefs')
+    prefs.collapsed = ['dev:fw'] // the TVs are folded into a bubble
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const areaNode = w.findAllComponents({ name: 'AreaNode' })
+    expect(areaNode).toHaveLength(1)
+    // Not at its old place (5000, 5000): fitted around the bubble.
+    expect(areaNode[0]!.props('area').x).not.toBe(5000)
+    prefs.collapsed = []
+    w.unmount()
+  })
+})

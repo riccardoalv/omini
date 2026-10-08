@@ -357,8 +357,8 @@ async function load() {
 function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
   return liveAreas.value.map((a) => ({
     id: String(a.id),
-    members: a.members,
-    children: withDescendants(a.members, edges),
+    members: onMap(a.members),
+    children: withDescendants(onMap(a.members), edges),
     padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
   }))
 }
@@ -478,7 +478,24 @@ const nodeBoxes = computed(
 )
 
 /** A node in an area brings everything below it (apps, clients, VMs). */
-const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
+/**
+ * An area's members as they are on the map: a member folded into a bubble
+ * (its parent collapsed) is that bubble — the area follows it instead of
+ * staying empty where it was.
+ */
+function onMap(members: string[]): string[] {
+  const shown = new Set(view.value.nodes.map((n) => n.id))
+  const out = new Set<string>()
+  for (const m of members) {
+    if (shown.has(m)) out.add(m)
+    else {
+      const g = view.value.groups.find((x) => x.clients.some((c) => c.id === m))
+      if (g) out.add(g.id)
+    }
+  }
+  return [...out]
+}
+const areaNodes = (a: MapArea) => withDescendants(onMap(a.members), view.value.edges)
 
 /**
  * Areas drawn around their nodes, in both orientations. An area with none of
@@ -490,8 +507,9 @@ const visibleAreas = computed(() =>
     .filter((a) => !prefs.collapsedAreas.includes(a.id))
     .filter((a) => {
       const shown = areaNodes(a).some((id) => nodeBoxes.value.has(id))
-      // An automatic area is only drawn around its devices.
-      return shown || (!a.auto && a.direction === direction.value)
+      // Members, none of them on the map (hidden, offline): not drawn. An area
+      // drawn empty keeps its rectangle (in the orientation it was drawn in).
+      return shown || (!a.members.length && a.direction === direction.value)
     })
     .map((a) => ({
       ...a,
