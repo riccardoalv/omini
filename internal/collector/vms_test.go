@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
@@ -97,5 +98,27 @@ func TestModelNames(t *testing.T) {
 	nameModel(&tv)
 	if tv.Model != "" || tv.Label != "living-room-tv" {
 		t.Fatalf("unknown names stay: %+v", tv)
+	}
+}
+
+func TestVMsReportedByAnIntegrationStayPut(t *testing.T) {
+	topo := proxmoxNet(1)
+	// The firewall runs as a VM (Proxmox MAC) and is reported by its own integration.
+	topo.Nodes = append(topo.Nodes, topology.Node{ID: "dev:fw", Kind: topology.KindDevice, Vendor: "Proxmox Server Solutions", Device: &model.Device{Key: "fw"}})
+	attachVMs(&topo)
+	if got := parentEdges(topo, "dev:fw"); len(got) != 0 {
+		t.Fatalf("the firewall was moved under the host: %v", got)
+	}
+	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "pve1" {
+		t.Fatalf("an unreported guest is still inferred: %v", got)
+	}
+}
+
+func TestNoInferenceWithAProxmoxIntegration(t *testing.T) {
+	topo := proxmoxNet(1)
+	topo.Nodes[1].Device = &model.Device{Key: "pve1", Vendor: model.Ptr("Proxmox")}
+	attachVMs(&topo)
+	if got := parentEdges(topo, "vm"); len(got) != 1 || got[0] != "gw" {
+		t.Fatalf("guests are placed by the integration, not guessed: %v", got)
 	}
 }

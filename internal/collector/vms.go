@@ -16,6 +16,9 @@ func attachVMs(topo *topology.Topology) {
 	var hosts []string
 	for _, n := range topo.Nodes {
 		if n.Product == "proxmox" && n.Kind != topology.KindApp {
+			if n.Device != nil && n.Device.Vendor != nil && *n.Device.Vendor == "Proxmox" {
+				return // a Proxmox integration places the guests
+			}
 			hosts = append(hosts, n.ID)
 		}
 	}
@@ -26,7 +29,9 @@ func attachVMs(topo *topology.Topology) {
 	vms := map[string]bool{}
 	for i := range topo.Nodes {
 		n := &topo.Nodes[i]
-		if n.ID == host || n.Kind == topology.KindApp || !proxmoxGuest(n) {
+		// A device an integration reports (a Proxmox integration places its
+		// guests itself; a firewall running as a VM stays the root) is left alone.
+		if n.ID == host || n.Kind == topology.KindApp || n.Device != nil || !proxmoxGuest(n) {
 			continue
 		}
 		vms[n.ID] = true

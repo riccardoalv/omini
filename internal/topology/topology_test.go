@@ -618,3 +618,38 @@ func TestMACOnlySeenBehindAnAccessPointIsNotShown(t *testing.T) {
 		}
 	}
 }
+
+// A Proxmox integration hangs each guest under its host with an "other"
+// neighbor; the host itself is still placed on its switch port.
+func TestGuestUnderHostAndHostOnItsPort(t *testing.T) {
+	hostMAC := model.MACAddress("bc:24:11:00:00:01")
+	vmMAC := model.MACAddress("bc:24:11:00:00:99")
+	switchDev := model.Device{
+		Key: "sw", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{"1c:2a:a3:10:00:01"},
+		Fdb: []model.FdbEntry{{MAC: hostMAC, Port: "Port 1"}, {MAC: vmMAC, Port: "Port 1"}},
+	}
+	host := model.Device{Key: string(hostMAC), Name: "pve", Role: model.Ptr(model.DeviceRoleServer), MACs: []model.MACAddress{hostMAC}}
+	vm := model.Device{
+		Key: string(vmMAC), Name: "ubuntu", Role: model.Ptr(model.DeviceRoleServer), MACs: []model.MACAddress{vmMAC},
+		Neighbors: []model.Neighbor{{Protocol: model.Ptr(model.NeighborProtocolOther), LocalPort: "net0", RemoteMAC: &hostMAC, RemotePort: model.Ptr("vmbr0")}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{switchDev}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{host, vm}},
+	})
+	links := map[string]bool{}
+	for _, e := range topo.Edges {
+		links[e.Source+"@"+e.SourcePort+">"+e.Target+"@"+e.TargetPort] = true
+		links[e.Target+"@"+e.TargetPort+">"+e.Source+"@"+e.SourcePort] = true
+	}
+	swID, hostID, vmID := "dev:1c:2a:a3:10:00:01", "dev:"+string(hostMAC), "dev:"+string(vmMAC)
+	if !links[swID+"@Port 1>"+hostID+"@"] {
+		t.Fatalf("the host is not on the switch's Port 1: %+v", topo.Edges)
+	}
+	if !links[hostID+"@vmbr0>"+vmID+"@net0"] {
+		t.Fatalf("the guest is not under its host: %+v", topo.Edges)
+	}
+	if len(topo.Edges) != 2 {
+		t.Fatalf("the guest has another link too: %+v", topo.Edges)
+	}
+}

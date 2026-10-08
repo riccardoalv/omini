@@ -164,6 +164,11 @@ type builder struct {
 	// beside: clients seen on the port towards a device that lists its own
 	// clients without them — an unmanaged switch is on that port.
 	beside map[portKey][]string
+	// hangsBy: links an integration declared from one side only (a neighbor
+	// of protocol "other": a VM under its host, a mesh satellite under its
+	// unit), by edge key → the node that reported it. Only that node counts
+	// as placed by the link: the other end is still placed on its port.
+	hangsBy map[string]string
 }
 
 // Build computes the topology for the given sources.
@@ -197,6 +202,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 		portMACs: map[portKey]int{},
 		sources:  map[string][]*model.Device{},
 		beside:   map[portKey][]string{},
+		hangsBy:  map[string]string{},
 	}
 	for _, src := range sources {
 		for i := range src.Devices {
@@ -377,6 +383,9 @@ func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 		}
 		remotePort := model.Deref(nb.RemotePort)
 		b.addEdge(id, nb.LocalPort, target, remotePort, EdgeLLDP, portSpeed(d, nb.LocalPort))
+		if model.Deref(nb.Protocol) == model.NeighborProtocolOther {
+			b.hangsBy[edgeKey(id, target)] = id
+		}
 		b.uplinks[portKey{id, nb.LocalPort}] = target
 		if remotePort != "" {
 			b.uplinks[portKey{target, remotePort}] = id
@@ -541,7 +550,11 @@ func (b *builder) bestPort(cands []portKey, exclude string) (portKey, bool, bool
 // the MAC tables of the other devices (or, failing that, their ARP tables).
 func (b *builder) placeUnlinkedDevices(managed []string) {
 	linked := map[string]bool{}
-	for _, e := range b.edges {
+	for key, e := range b.edges {
+		if child, ok := b.hangsBy[key]; ok {
+			linked[child] = true
+			continue
+		}
 		linked[e.Source], linked[e.Target] = true, true
 	}
 	for _, id := range managed {
