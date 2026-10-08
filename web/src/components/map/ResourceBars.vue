@@ -29,12 +29,17 @@ interface Bar {
   pct: number
   level: string
   detail?: string
+  /** Only a size is known (a VM's assigned memory): no bar. */
+  plain?: boolean
 }
 
 const bars = computed<Bar[]>(() => {
   const out: Bar[] = []
   const add = (key: string, label: string, value?: number, detail?: string, disk = false) => {
-    if (value === undefined) return
+    if (value === undefined) {
+      if (detail) out.push({ key, label, pct: 0, level: 'low', detail, plain: true })
+      return
+    }
     const pct = Math.min(100, Math.max(0, value))
     out.push({ key, label, pct, level: disk ? level(pct, 80, 90) : level(pct), detail })
   }
@@ -86,10 +91,11 @@ const bars = computed<Bar[]>(() => {
         <span class="label">{{ b.label }}</span>
         <span class="right">
           <span v-if="b.detail" class="detail">{{ b.detail }}</span>
-          <strong class="value" :class="b.level">{{ Math.round(b.pct) }}%</strong>
+          <strong v-if="!b.plain" class="value" :class="b.level">{{ Math.round(b.pct) }}%</strong>
         </span>
       </div>
       <div
+        v-if="!b.plain"
         class="track"
         role="meter"
         :aria-label="b.label"

@@ -179,6 +179,17 @@ describe('ResourceBars', () => {
     expect(mem.text()).toContain('38%')
   })
 
+  it("shows only the size when the use is unknown (a VM's assigned memory)", () => {
+    const w = mount(ResourceBars, {
+      props: { cpu: 3, memTotal: 8 * 1024 ** 3 },
+      global: { plugins: plugins() },
+    })
+    const mem = w.get('[data-test=bar-memory]')
+    expect(mem.text()).toContain('8.0 GiB')
+    expect(mem.find('[role=meter]').exists()).toBe(false)
+    expect(mem.text()).not.toContain('%')
+  })
+
   it('adds swap and one bar per disk, which warn later', () => {
     const GiB = 1024 ** 3
     const w = mount(ResourceBars, {

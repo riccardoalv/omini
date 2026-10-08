@@ -73,13 +73,9 @@ func (w *webhook) Send(ctx context.Context, m Message) error {
 	)
 	switch w.format {
 	case "slack":
-		body, err = json.Marshal(map[string]string{"text": "*" + m.Subject + "*\n" + m.Text})
+		body, err = json.Marshal(slackPayload(m))
 	case "discord":
-		text := "**" + m.Subject + "**\n" + m.Text
-		if len(text) > 2000 { // Discord's limit
-			text = text[:1997] + "..."
-		}
-		body, err = json.Marshal(map[string]string{"content": text})
+		body, err = json.Marshal(discordPayload(m))
 	case "ntfy":
 		body, contentType = []byte(m.Text), "text/plain; charset=utf-8"
 	default:
@@ -96,7 +92,9 @@ func (w *webhook) Send(ctx context.Context, m Message) error {
 	req.Header.Set("User-Agent", "Omini")
 	if w.format == "ntfy" {
 		req.Header.Set("Title", m.Subject)
-		req.Header.Set("Tags", "omini")
+		sev := worst(m)
+		req.Header.Set("Tags", ntfyTag[sev]+",omini")
+		req.Header.Set("Priority", ntfyPriority[sev])
 	}
 	if w.secret != "" {
 		mac := hmac.New(sha256.New, []byte(w.secret))
@@ -286,4 +284,83 @@ func qEncode(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// --- message formats of chat services ---
+
+// Card colors by severity (the UI's palette).
+var cardColor = map[string]int{"critical": 0xf85149, "warning": 0xd29922, "info": 0x4c8dff, "resolved": 0x3fb950}
+
+var (
+	ntfyTag      = map[string]string{"critical": "rotating_light", "warning": "warning", "info": "information_source", "resolved": "white_check_mark", "": "bell"}
+	ntfyPriority = map[string]string{"critical": "urgent", "warning": "high", "info": "default", "resolved": "low", "": "default"}
+)
+
+// worst is the most severe group of a message ("" for a plain message).
+func worst(m Message) string {
+	best := ""
+	for _, rank := range []string{"critical", "warning", "info", "resolved"} {
+		for _, g := range m.Groups {
+			if g.Severity == rank && best == "" {
+				best = rank
+			}
+		}
+	}
+	return best
+}
+
+func cut(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
+}
+
+// discordPayload: the summary as the message, a colored card per group (at
+// most 10, Discord's limit; the rest summed up in the last one).
+func discordPayload(m Message) map[string]any {
+	type embed struct {
+		Title       string `json:"title"`
+		Description string `json:"description,omitempty"`
+		Color       int    `json:"color"`
+	}
+	out := map[string]any{"username": "Omini", "content": cut("**"+m.Subject+"**", 2000)}
+	if len(m.Groups) == 0 {
+		out["content"] = cut("**"+m.Subject+"**\n"+m.Text, 2000)
+		return out
+	}
+	var embeds []embed
+	for i, g := range m.Groups {
+		if i == 9 && len(m.Groups) > 10 {
+			var rest []string
+			for _, h := range m.Groups[9:] {
+				rest = append(rest, severityIcon[h.Severity]+" "+h.Title)
+			}
+			embeds = append(embeds, embed{Title: fmt.Sprintf("+%d", len(m.Groups)-9), Description: cut(strings.Join(rest, "\n"), 4000), Color: 0x8b949e})
+			break
+		}
+		embeds = append(embeds, embed{
+			Title:       cut(severityIcon[g.Severity]+" "+g.Title, 256),
+			Description: cut(strings.Join(g.Lines, "\n"), 4000),
+			Color:       cardColor[g.Severity],
+		})
+	}
+	out["embeds"] = embeds
+	return out
+}
+
+// slackPayload: the summary as the message, a colored attachment per group.
+func slackPayload(m Message) map[string]any {
+	if len(m.Groups) == 0 {
+		return map[string]any{"text": "*" + m.Subject + "*\n" + m.Text}
+	}
+	var atts []map[string]any
+	for _, g := range m.Groups {
+		atts = append(atts, map[string]any{
+			"color": fmt.Sprintf("#%06x", cardColor[g.Severity]),
+			"title": severityIcon[g.Severity] + " " + g.Title,
+			"text":  strings.Join(g.Lines, "\n"),
+		})
+	}
+	return map[string]any{"text": "*" + m.Subject + "*", "attachments": atts}
 }

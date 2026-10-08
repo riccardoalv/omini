@@ -28,6 +28,16 @@ type Message struct {
 	Subject string  `json:"subject"`
 	Text    string  `json:"text"`
 	Events  []Event `json:"events"`
+	// Groups is the message as cards: a device and what happened to it, the
+	// new devices together, what was resolved (Discord embeds, Slack attachments).
+	Groups []Group `json:"groups,omitempty"`
+}
+
+// Group is one card of a message.
+type Group struct {
+	Severity string   `json:"severity"` // critical | warning | info | resolved
+	Title    string   `json:"title"`
+	Lines    []string `json:"lines"`
 }
 
 // Sender delivers messages to one channel.

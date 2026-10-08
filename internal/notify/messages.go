@@ -139,10 +139,64 @@ func Describe(a store.Alert, locale string) (title, detail string) {
 	return fill(pair[0], p), fill(pair[1], p)
 }
 
-var severityIcon = map[string]string{"critical": "🔴", "warning": "🟠", "info": "🔵"}
+var severityIcon = map[string]string{"critical": "🔴", "warning": "🟠", "info": "🔵", "resolved": "✅"}
 
-// Compose builds one message for several alert changes (a collection round),
-// most severe first, opened before resolved.
+// short names a rule without its device, for a line under the device's name.
+var short = map[string]map[string]string{
+	"en": {
+		"device_offline": "Offline", "integration_failed": "Integration failing", "wan_down": "Internet down",
+		"wan_degraded": "Unstable internet", "duplicate_ip": "Duplicate IP", "update_pending": "Update available",
+		"disk_full": "Disk almost full", "hot_cpu": "Running hot", "high_cpu": "High CPU",
+		"high_memory": "Memory almost full", "slow_uplink": "Slow uplink", "interface_errors": "Interface errors",
+		"weak_wifi": "Weak Wi-Fi signal", "saturated_link": "Saturated link",
+		"unmanaged_switch": "Likely unmanaged switch", "unknown_neighbor": "Unknown neighbor",
+	},
+	"pt-BR": {
+		"device_offline": "Offline", "integration_failed": "Integração falhando", "wan_down": "Internet fora",
+		"wan_degraded": "Internet instável", "duplicate_ip": "IP duplicado", "update_pending": "Atualização disponível",
+		"disk_full": "Disco quase cheio", "hot_cpu": "Esquentando", "high_cpu": "CPU alta",
+		"high_memory": "Memória quase cheia", "slow_uplink": "Uplink lento", "interface_errors": "Erros de interface",
+		"weak_wifi": "Sinal Wi-Fi fraco", "saturated_link": "Link saturado",
+		"unmanaged_switch": "Provável switch não gerenciável", "unknown_neighbor": "Vizinho desconhecido",
+	},
+}
+
+// counts words the summary of a message: {singular, plural}.
+var counts = map[string]map[string][2]string{
+	"en": {
+		"critical": {"{n} critical", "{n} critical"}, "warning": {"{n} warning", "{n} warnings"},
+		"info": {"{n} notice", "{n} notices"}, "new": {"{n} new device", "{n} new devices"},
+		"resolved": {"{n} resolved", "{n} resolved"},
+	},
+	"pt-BR": {
+		"critical": {"{n} crítico", "{n} críticos"}, "warning": {"{n} aviso", "{n} avisos"},
+		"info": {"{n} informação", "{n} informações"}, "new": {"{n} dispositivo novo", "{n} dispositivos novos"},
+		"resolved": {"{n} resolvido", "{n} resolvidos"},
+	},
+}
+
+func localeOf(m map[string]map[string]string, locale string) map[string]string {
+	if t, ok := m[locale]; ok {
+		return t
+	}
+	return m["en"]
+}
+
+func count(locale, key string, n int) string {
+	c, ok := counts[locale]
+	if !ok {
+		c = counts["en"]
+	}
+	form := c[key][1]
+	if n == 1 {
+		form = c[key][0]
+	}
+	return fill(form, map[string]string{"n": fmt.Sprint(n)})
+}
+
+// Compose builds one message for several alert changes (a collection round):
+// a group per device with what happened to it (most severe first), the new
+// devices together, and what was resolved; the subject sums it up.
 func Compose(changes []store.AlertChange, locale string) Message {
 	rank := map[string]int{"critical": 0, "warning": 1, "info": 2}
 	sorted := append([]store.AlertChange(nil), changes...)
@@ -154,32 +208,91 @@ func Compose(changes []store.AlertChange, locale string) Message {
 		return rank[a.Alert.Severity] < rank[b.Alert.Severity]
 	})
 	t := catalog(locale)
+	names := localeOf(short, locale)
 	m := Message{}
-	var lines []string
+
+	var (
+		groups   []*Group
+		byKey    = map[string]*Group{}
+		newDevs  = &Group{Severity: "info"}
+		resolved = &Group{Severity: "resolved", Title: localeOf(map[string]map[string]string{
+			"en": {"t": "Resolved"}, "pt-BR": {"t": "Resolvidos"},
+		}, locale)["t"]}
+		tally = map[string]int{}
+	)
 	for _, c := range sorted {
 		title, detail := Describe(c.Alert, locale)
-		ev := Event{Opened: c.Opened, Alert: c.Alert, Title: title, Detail: detail}
-		m.Events = append(m.Events, ev)
-		if c.Opened {
-			line := severityIcon[c.Alert.Severity] + " " + title
+		m.Events = append(m.Events, Event{Opened: c.Opened, Alert: c.Alert, Title: title, Detail: detail})
+		if !c.Opened {
+			resolved.Lines = append(resolved.Lines, title)
+			tally["resolved"]++
+			continue
+		}
+		if c.Alert.Rule == "new_device" {
+			p := params(c.Alert)
+			line := p["node"]
 			if detail != "" {
-				line += "\n   " + detail
+				line += " · " + detail
 			}
-			lines = append(lines, line)
+			newDevs.Lines = append(newDevs.Lines, line)
+			tally["new"]++
+			continue
+		}
+		tally[c.Alert.Severity]++
+		// One group per device; alerts without one stand alone.
+		key, label := c.Alert.NodeID, fmt.Sprint(c.Alert.Params["node"])
+		if key == "" || c.Alert.Params["node"] == nil || names[c.Alert.Rule] == "" {
+			key, label = c.Alert.Key, title
 		} else {
-			lines = append(lines, "✅ "+fill(t["_resolved"][0], map[string]string{"title": title}))
+			key += "|" + label
+		}
+		g := byKey[key]
+		if g == nil {
+			g = &Group{Severity: c.Alert.Severity, Title: label}
+			byKey[key] = g
+			groups = append(groups, g)
+		}
+		line := title
+		if label != title {
+			line = names[c.Alert.Rule]
+		}
+		if detail != "" {
+			line += ": " + strings.TrimSuffix(detail, ".")
+		}
+		g.Lines = append(g.Lines, severityIcon[c.Alert.Severity]+" "+line)
+	}
+	if n := len(newDevs.Lines); n > 0 {
+		newDevs.Title = count(locale, "new", n)
+		groups = append(groups, newDevs)
+	}
+	if len(resolved.Lines) > 0 {
+		groups = append(groups, resolved)
+	}
+	var text []string
+	for _, g := range groups {
+		m.Groups = append(m.Groups, *g)
+		text = append(text, severityIcon[g.Severity]+" "+g.Title)
+		for _, l := range g.Lines {
+			text = append(text, "   "+l)
 		}
 	}
-	m.Text = strings.Join(lines, "\n")
+	m.Text = strings.Join(text, "\n")
+
 	if len(m.Events) == 1 {
 		title := m.Events[0].Title
 		if !m.Events[0].Opened {
 			title = fill(t["_resolved"][0], map[string]string{"title": title})
 		}
 		m.Subject = fill(t["_subject"][0], map[string]string{"title": title})
-	} else {
-		m.Subject = fill(t["_subject"][1], map[string]string{"n": fmt.Sprint(len(m.Events))})
+		return m
 	}
+	var parts []string
+	for _, k := range []string{"critical", "warning", "info", "new", "resolved"} {
+		if tally[k] > 0 {
+			parts = append(parts, count(locale, k, tally[k]))
+		}
+	}
+	m.Subject = "Omini: " + strings.Join(parts, ", ")
 	return m
 }
 
