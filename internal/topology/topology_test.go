@@ -793,3 +793,60 @@ func TestProxmoxClusterGuestsUnderTheirNode(t *testing.T) {
 		}
 	}
 }
+
+// The switch forgot the Proxmox host's MAC for a while (quiet, aged out) and
+// the firewall's ARP has no entry for it: the host stays on the port where it
+// was last learned instead of floating apart with its guests.
+func TestDeviceStaysOnTheLastPortItWasLearnedOn(t *testing.T) {
+	const pveMAC = "22:28:4d:00:00:50"
+	swID := "dev:1c:2a:a3:00:00:01"
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "switch", Host: model.Ptr("192.168.1.96"),
+		MACs: []model.MACAddress{"1c:2a:a3:00:00:01"}, Role: model.Ptr(model.DeviceRoleSwitch),
+		Fdb: []model.FdbEntry{{MAC: "aa:00:00:00:00:09", Port: "Port 9"}},
+	}
+	scan := model.Device{
+		Key: "net", Name: "Network", Role: model.Ptr(model.DeviceRoleUnknown),
+		Hosts: []model.Host{{IP: "192.168.1.50", MAC: model.Ptr(model.MACAddress(pveMAC))}},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.1.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.BuildWith([]topology.Source{
+		{IntegrationID: 2, Online: true, Devices: []model.Device{sw}},
+		{IntegrationID: 3, Online: true, Devices: []model.Device{scan}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{pve}},
+	}, topology.Options{LastSeen: map[model.MACAddress]topology.PortRef{pveMAC: {Node: swID, Port: "Port 1"}}})
+	for _, e := range topo.Edges {
+		if e.Target == "dev:7:proxmox:pve" {
+			if e.Source != swID || e.SourcePort != "Port 1" {
+				t.Fatalf("host under %s %s, want the switch's Port 1", e.Source, e.SourcePort)
+			}
+			return
+		}
+	}
+	t.Fatalf("the host hangs from nothing: %+v", topo.Edges)
+}
+
+// Nothing places the device (no MAC table, no ARP, nothing remembered), but
+// its address is in a network of the firewall: it hangs from that interface.
+func TestDeviceHangsFromTheRouterOfItsNetwork(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{
+			{Name: "igc0", Wan: model.Ptr(true), IPs: []string{"192.168.100.2/24"}},
+			{Name: "igc1", IPs: []string{"192.168.1.1/24"}},
+			{Name: "igc1_vlan20", IPs: []string{"192.168.20.1/24"}},
+		},
+	}
+	pve := model.Device{Key: "proxmox:pve", Name: "pve", Host: model.Ptr("192.168.20.50"), Role: model.Ptr(model.DeviceRoleServer)}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 7, Online: true, Devices: []model.Device{pve}},
+	})
+	for _, e := range topo.Edges {
+		if e.Target == "dev:7:proxmox:pve" && e.Source == "dev:58:9c:fc:00:00:01" && e.SourcePort == "igc1_vlan20" {
+			return
+		}
+	}
+	t.Fatalf("the host does not hang from the firewall's VLAN 20: %+v", topo.Edges)
+}

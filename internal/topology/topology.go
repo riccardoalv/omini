@@ -9,6 +9,7 @@ package topology
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"slices"
 	"sort"
 	"strings"
@@ -629,8 +630,10 @@ func (b *builder) placeUnlinkedDevices(managed []string) {
 			continue
 		}
 		var cands []portKey
+		// Where its MAC is learned now, else where it last was: switches age
+		// quiet MACs out, and a host would float apart until it talks again.
 		for _, m := range deviceMACs(b.nodes[id].Device) {
-			cands = append(cands, b.fdbPorts[m]...)
+			cands = append(cands, b.fdbOrLast(m)...)
 		}
 		if port, ok, _ := b.bestPort(cands, id); ok {
 			// Our own end of the link: the interface where we see the peer in ARP.
@@ -649,8 +652,44 @@ func (b *builder) placeUnlinkedDevices(managed []string) {
 			}
 			b.addEdge(peer, iface, id, local, EdgeInferred, portSpeed(b.nodes[id].Device, local))
 			linked[id], linked[peer] = true, true
+			continue
+		}
+		// Last: the router whose network its address is in (an interface of
+		// that router has the subnet), rather than floating apart.
+		if router, iface := b.subnetRouter(id, managed); router != "" {
+			b.addEdge(router, iface, id, "", EdgeInferred, 0)
+			linked[id], linked[router] = true, true
 		}
 	}
+}
+
+// subnetRouter finds a router or firewall with an interface (not a WAN) in the
+// same IPv4 network as the device's address: the smallest such network wins.
+func (b *builder) subnetRouter(id string, managed []string) (string, string) {
+	ip, err := netip.ParseAddr(b.nodes[id].IP)
+	if err != nil || !ip.Is4() {
+		return "", ""
+	}
+	best, bestIface, bestBits := "", "", -1
+	for _, rid := range managed {
+		r := b.nodes[rid]
+		if rid == id || (r.Role != string(model.DeviceRoleRouter) && r.Role != string(model.DeviceRoleFirewall)) {
+			continue
+		}
+		for _, i := range r.Device.Interfaces {
+			if model.Deref(i.Wan) {
+				continue
+			}
+			for _, a := range i.IPs {
+				p, err := netip.ParsePrefix(a)
+				if err != nil || !p.Addr().Is4() || p.Bits() < 8 || p.Bits() > 30 || !p.Contains(ip) || p.Bits() <= bestBits {
+					continue
+				}
+				best, bestIface, bestBits = rid, i.Name, p.Bits()
+			}
+		}
+	}
+	return best, bestIface
 }
 
 // portOf is the port of a device's own MAC table where any of macs is learned

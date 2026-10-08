@@ -318,7 +318,8 @@ export const typeIcons: Record<string, string> = {
 
 /**
  * Decides what to draw for a device: homelab products get only their logo;
- * other devices get their type icon with the OS (or else brand) as a badge.
+ * other devices get their type icon with the OS (or else brand) as a badge;
+ * a device of unknown type gets its brand's (or OS's) logo alone.
  */
 export function iconChoice(d: Classified): IconChoice {
   const custom = d.icon && logos[d.icon] ? d.icon : undefined
@@ -332,6 +333,12 @@ export function iconChoice(d: Classified): IconChoice {
     return { type, remote: d.product, badge: false }
   }
   if (d.icon && !custom && inCatalog(d.icon)) return { type, remote: d.icon, badge: true }
+  // Type unknown but the brand (or OS) known: its logo alone instead of a question mark.
+  if (!custom && !d.icon && type === 'circle-question-mark') {
+    const known = [d.brand, d.os].find((s) => s && logos[s])
+    if (known) return { logo: known, badge: false }
+    if (d.brand && inCatalog(d.brand)) return { type, remote: d.brand, badge: false }
+  }
   const badge = custom ?? [d.os, d.brand].find((s) => s && logos[s])
   if (badge) return { type, logo: badge, badge: true }
   // Brands without a Simple Icons logo may have one in the app catalog; if not, no badge.

@@ -55,6 +55,21 @@ describe('iconChoice', () => {
     expect(iconChoice({})).toEqual({ type: 'circle-question-mark', logo: undefined, badge: false })
   })
 
+  it('shows the brand alone when the type is unknown, not a question mark', () => {
+    expect(iconChoice({ type: 'unknown', brand: 'tplink' })).toEqual({
+      logo: 'tplink',
+      badge: false,
+    })
+    expect(iconChoice({ brand: 'tplink' })).toEqual({ logo: 'tplink', badge: false })
+    // No brand: the OS.
+    expect(iconChoice({ type: 'unknown', os: 'linux' })).toEqual({ logo: 'linux', badge: false })
+    // A known type keeps its icon with the brand as a badge.
+    expect(iconChoice({ type: 'router', brand: 'tplink' })).toMatchObject({
+      logo: 'tplink',
+      badge: true,
+    })
+  })
+
   it('uses the icon chosen by the user', () => {
     expect(iconChoice({ type: 'server', icon: 'jellyfin' })).toEqual({
       logo: 'jellyfin',
