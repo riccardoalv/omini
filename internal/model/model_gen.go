@@ -820,6 +820,10 @@ func (j *MACAddress) UnmarshalJSON(value []byte) error {
 
 // A device seen through a discovery protocol.
 type Neighbor struct {
+	// What the neighbor says it is (LLDP enabled capabilities): a desk phone
+	// announces telephone, a switch bridge.
+	Capabilities []NeighborCapability `json:"capabilities,omitempty,omitzero" yaml:"capabilities,omitempty"`
+
 	// LocalPort corresponds to the JSON schema field "local_port".
 	LocalPort string `json:"local_port" yaml:"local_port"`
 
@@ -840,6 +844,48 @@ type Neighbor struct {
 
 	// RemotePort corresponds to the JSON schema field "remote_port".
 	RemotePort *string `json:"remote_port,omitempty,omitzero" yaml:"remote_port,omitempty"`
+}
+
+type NeighborCapability string
+
+const NeighborCapabilityAp NeighborCapability = "ap"
+const NeighborCapabilityBridge NeighborCapability = "bridge"
+const NeighborCapabilityDocsis NeighborCapability = "docsis"
+const NeighborCapabilityOther NeighborCapability = "other"
+const NeighborCapabilityRepeater NeighborCapability = "repeater"
+const NeighborCapabilityRouter NeighborCapability = "router"
+const NeighborCapabilityStation NeighborCapability = "station"
+const NeighborCapabilityTelephone NeighborCapability = "telephone"
+
+var enumValues_NeighborCapability = []interface{}{
+	"other",
+	"repeater",
+	"bridge",
+	"ap",
+	"router",
+	"telephone",
+	"docsis",
+	"station",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *NeighborCapability) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_NeighborCapability {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_NeighborCapability, v)
+	}
+	*j = NeighborCapability(v)
+	return nil
 }
 
 type NeighborProtocol string

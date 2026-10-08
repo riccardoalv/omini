@@ -46,8 +46,21 @@ type Profile struct {
 	LoadAvg      []Value       `yaml:"load_avg"`
 	Temperatures []Temperature `yaml:"temperatures"`
 	Firmware     *Firmware     `yaml:"firmware"`
+	// FdbPerVLAN: the MAC table is kept per VLAN, each read on its own (Cisco
+	// IOS: BRIDGE-MIB through community@vlan, or the v3 context vlan-N).
+	FdbPerVLAN *FdbPerVLAN `yaml:"fdb_per_vlan"`
 
 	source string // file it came from, for messages
+}
+
+// FdbPerVLAN tells how to read a MAC table kept per VLAN.
+type FdbPerVLAN struct {
+	// VLANs is a column whose rows end with a VLAN id (e.g. vtpVlanState).
+	VLANs string `yaml:"vlans"`
+	// Community for SNMP v1/v2c, with {community} and {vlan}: "{community}@{vlan}".
+	Community string `yaml:"community"`
+	// Context for SNMP v3, with {vlan}: "vlan-{vlan}".
+	Context string `yaml:"context"`
 }
 
 // Match tells which devices a profile is for. Every key given must match;
@@ -208,6 +221,11 @@ func ParseProfile(raw []byte) (Profile, error) {
 	default:
 		return p, fmt.Errorf("unknown role %q", p.Role)
 	}
+	if f := p.FdbPerVLAN; f != nil {
+		if f.VLANs == "" || (f.Community == "" && f.Context == "") {
+			return p, errors.New("fdb_per_vlan needs vlans and a community or a context")
+		}
+	}
 	for _, t := range p.Temperatures {
 		switch t.Kind {
 		case "", "cpu", "disk", "board", "other":
@@ -245,16 +263,18 @@ func (p Profile) matches(c *client, sysObjectID, sysDescr string) bool {
 }
 
 // applyProfiles fills a device from every profile that matches it.
-func applyProfiles(c *client, d *model.Device, sysObjectID, sysDescr string) []string {
-	var used []string
+func applyProfiles(c *client, d *model.Device, sysObjectID, sysDescr string) (used []string, fdb *FdbPerVLAN) {
 	for _, p := range Profiles() {
 		if !p.matches(c, sysObjectID, sysDescr) {
 			continue
 		}
 		used = append(used, p.ID)
 		p.apply(c, d)
+		if p.FdbPerVLAN != nil {
+			fdb = p.FdbPerVLAN
+		}
 	}
-	return used
+	return used, fdb
 }
 
 func (p Profile) apply(c *client, d *model.Device) {

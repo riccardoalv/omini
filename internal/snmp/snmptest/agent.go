@@ -19,9 +19,10 @@ type Agent struct {
 	Community string
 	Port      int
 
-	conn net.PacketConn
-	vars []variable
-	wg   sync.WaitGroup
+	conn  net.PacketConn
+	mu    sync.RWMutex
+	views map[string][]variable // community → its variables
+	wg    sync.WaitGroup
 }
 
 type variable struct {
@@ -36,12 +37,8 @@ func Start(t testing.TB, community string, pdus []gosnmp.SnmpPDU) *Agent {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &Agent{Community: community, Port: conn.LocalAddr().(*net.UDPAddr).Port, conn: conn}
-	for _, p := range pdus {
-		p.Name = "." + strings.TrimPrefix(p.Name, ".")
-		a.vars = append(a.vars, variable{oid: parseOID(p.Name), pdu: p})
-	}
-	sort.Slice(a.vars, func(i, j int) bool { return compareOID(a.vars[i].oid, a.vars[j].oid) < 0 })
+	a := &Agent{Community: community, Port: conn.LocalAddr().(*net.UDPAddr).Port, conn: conn, views: map[string][]variable{}}
+	a.AddCommunity(community, pdus)
 
 	a.wg.Add(1)
 	go a.serve(t)
@@ -50,6 +47,20 @@ func Start(t testing.TB, community string, pdus []gosnmp.SnmpPDU) *Agent {
 		a.wg.Wait()
 	})
 	return a
+}
+
+// AddCommunity answers another community with its own variables (e.g. the
+// MAC table of one VLAN, read as "community@vlan").
+func (a *Agent) AddCommunity(community string, pdus []gosnmp.SnmpPDU) {
+	vars := make([]variable, 0, len(pdus))
+	for _, p := range pdus {
+		p.Name = "." + strings.TrimPrefix(p.Name, ".")
+		vars = append(vars, variable{oid: parseOID(p.Name), pdu: p})
+	}
+	sort.Slice(vars, func(i, j int) bool { return compareOID(vars[i].oid, vars[j].oid) < 0 })
+	a.mu.Lock()
+	a.views[community] = vars
+	a.mu.Unlock()
 }
 
 func (a *Agent) serve(t testing.TB) {
@@ -65,7 +76,13 @@ func (a *Agent) serve(t testing.TB) {
 			return
 		}
 		req, err := decoder.SnmpDecodePacket(buf[:n])
-		if err != nil || req.Community != a.Community {
+		if err != nil {
+			continue
+		}
+		a.mu.RLock()
+		vars, ok := a.views[req.Community]
+		a.mu.RUnlock()
+		if !ok {
 			continue // like real agents: wrong community means no answer
 		}
 		resp := &gosnmp.SnmpPacket{
@@ -73,7 +90,7 @@ func (a *Agent) serve(t testing.TB) {
 			Community: req.Community,
 			PDUType:   gosnmp.GetResponse,
 			RequestID: req.RequestID,
-			Variables: a.answer(req),
+			Variables: answer(vars, req),
 			Logger:    gosnmp.NewLogger(nil),
 		}
 		out, err := resp.MarshalMsg()
@@ -87,22 +104,22 @@ func (a *Agent) serve(t testing.TB) {
 	}
 }
 
-func (a *Agent) answer(req *gosnmp.SnmpPacket) []gosnmp.SnmpPDU {
+func answer(vars []variable, req *gosnmp.SnmpPacket) []gosnmp.SnmpPDU {
 	var out []gosnmp.SnmpPDU
 	switch req.PDUType {
 	case gosnmp.GetRequest:
 		for _, v := range req.Variables {
-			out = append(out, a.get(v.Name))
+			out = append(out, get(vars, v.Name))
 		}
 	case gosnmp.GetNextRequest:
 		for _, v := range req.Variables {
-			out = append(out, a.next(v.Name))
+			out = append(out, next(vars, v.Name))
 		}
 	case gosnmp.GetBulkRequest:
 		nonRep := int(req.NonRepeaters)
 		for i, v := range req.Variables {
 			if i < nonRep {
-				out = append(out, a.next(v.Name))
+				out = append(out, next(vars, v.Name))
 			}
 		}
 		cursors := make([]string, 0, len(req.Variables))
@@ -113,7 +130,7 @@ func (a *Agent) answer(req *gosnmp.SnmpPacket) []gosnmp.SnmpPDU {
 		}
 		for r := 0; r < int(req.MaxRepetitions) && len(cursors) > 0; r++ {
 			for i, c := range cursors {
-				p := a.next(c)
+				p := next(vars, c)
 				out = append(out, p)
 				cursors[i] = p.Name
 			}
@@ -122,20 +139,20 @@ func (a *Agent) answer(req *gosnmp.SnmpPacket) []gosnmp.SnmpPDU {
 	return out
 }
 
-func (a *Agent) get(name string) gosnmp.SnmpPDU {
+func get(vars []variable, name string) gosnmp.SnmpPDU {
 	oid := parseOID(name)
-	i := sort.Search(len(a.vars), func(i int) bool { return compareOID(a.vars[i].oid, oid) >= 0 })
-	if i < len(a.vars) && compareOID(a.vars[i].oid, oid) == 0 {
-		return a.vars[i].pdu
+	i := sort.Search(len(vars), func(i int) bool { return compareOID(vars[i].oid, oid) >= 0 })
+	if i < len(vars) && compareOID(vars[i].oid, oid) == 0 {
+		return vars[i].pdu
 	}
 	return gosnmp.SnmpPDU{Name: name, Type: gosnmp.NoSuchObject}
 }
 
-func (a *Agent) next(name string) gosnmp.SnmpPDU {
+func next(vars []variable, name string) gosnmp.SnmpPDU {
 	oid := parseOID(name)
-	i := sort.Search(len(a.vars), func(i int) bool { return compareOID(a.vars[i].oid, oid) > 0 })
-	if i < len(a.vars) {
-		return a.vars[i].pdu
+	i := sort.Search(len(vars), func(i int) bool { return compareOID(vars[i].oid, oid) > 0 })
+	if i < len(vars) {
+		return vars[i].pdu
 	}
 	return gosnmp.SnmpPDU{Name: name, Type: gosnmp.EndOfMibView}
 }

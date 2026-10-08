@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -121,8 +122,12 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	d.Role = model.Ptr(guessRole(c, &d))
 	// Vendor profiles: what the standard MIBs lack (vendor CPU, temperatures...).
 	if sys, err := c.get(oidSysObjectID, oidSysDescr); err == nil {
-		if used := applyProfiles(c, &d, pduString(sys[oidSysObjectID]), pduString(sys[oidSysDescr])); len(used) > 0 {
+		used, perVLAN := applyProfiles(c, &d, pduString(sys[oidSysObjectID]), pduString(sys[oidSysDescr]))
+		if len(used) > 0 {
 			log.Debug("snmp profiles applied", "profiles", used)
+		}
+		if perVLAN != nil {
+			collectFDBPerVLAN(ctx, c, t, perVLAN, &d, ifNames)
 		}
 	}
 	// Stable identity: the chassis MAC (LLDP) or first interface MAC, else the host.
@@ -258,7 +263,47 @@ func collectInterfaces(c *client, d *model.Device) (map[string]string, error) {
 		}
 		d.Interfaces = append(d.Interfaces, iface)
 	}
+	collectLagMembers(c, d, names)
 	return names, nil
+}
+
+// collectLagMembers fills the members of each link aggregation (port-channel,
+// trunk) from IF-MIB's ifStackTable: switches learn MACs on the aggregate
+// while LLDP names its member ports.
+func collectLagMembers(c *client, d *model.Device, names map[string]string) {
+	rows, err := c.walk(oidIfStackStatus)
+	if err != nil {
+		return // optional
+	}
+	pos := map[string]int{}
+	for i, iface := range d.Interfaces {
+		pos[iface.Name] = i
+	}
+	keys := make([]string, 0, len(rows))
+	for idx := range rows {
+		keys = append(keys, idx)
+	}
+	sort.Strings(keys)
+	for _, idx := range keys {
+		if st, _ := pduInt(rows[idx]); st != 1 { // active
+			continue
+		}
+		hi, lo, ok := strings.Cut(idx, ".")
+		if !ok || hi == "0" || lo == "0" {
+			continue
+		}
+		i, known := pos[names[hi]]
+		member := names[lo]
+		if !known || member == "" {
+			continue
+		}
+		if t := d.Interfaces[i].Type; t == nil || *t != model.InterfaceTypeLag {
+			continue
+		}
+		if !slices.Contains(d.Interfaces[i].Members, member) {
+			d.Interfaces[i].Members = append(d.Interfaces[i].Members, member)
+		}
+	}
 }
 
 func collectIPs(c *client, d *model.Device) error {
@@ -328,7 +373,75 @@ func collectARP(c *client, d *model.Device, ifNames map[string]string) error {
 	return nil
 }
 
-func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
+// MaxFDBVLANs bounds the VLANs whose MAC table is read one by one.
+const MaxFDBVLANs = 64
+
+// collectFDBPerVLAN reads the MAC table of each VLAN in its own community or
+// v3 context (see FdbPerVLAN); the default context already gave VLAN 1's.
+func collectFDBPerVLAN(ctx context.Context, c *client, t Target, f *FdbPerVLAN, d *model.Device, ifNames map[string]string) {
+	rows, err := c.walk(f.VLANs)
+	if err != nil {
+		return
+	}
+	var vlans []int
+	for idx := range rows {
+		n := splitOID(idx)
+		if len(n) > 0 && n[len(n)-1] > 1 && n[len(n)-1] <= 4094 && !slices.Contains(vlans, n[len(n)-1]) {
+			vlans = append(vlans, n[len(n)-1])
+		}
+	}
+	slices.Sort(vlans)
+	if len(vlans) > MaxFDBVLANs {
+		vlans = vlans[:MaxFDBVLANs]
+	}
+	// The default context's entries are VLAN 1's.
+	for i := range d.Fdb {
+		if d.Fdb[i].Vlan == nil {
+			d.Fdb[i].Vlan = model.Ptr(uint16(1))
+		}
+	}
+	for _, v := range vlans {
+		vt := t
+		id := strconv.Itoa(v)
+		switch {
+		case t.V3 != nil && f.Context != "":
+			v3 := *t.V3
+			v3.ContextID = strings.ReplaceAll(f.Context, "{vlan}", id)
+			vt.V3 = &v3
+		case t.V3 == nil && f.Community != "":
+			vt.Community = strings.NewReplacer("{community}", t.Community, "{vlan}", id).Replace(f.Community)
+		default:
+			return
+		}
+		vc, err := vt.dial(ctx)
+		if err != nil {
+			continue
+		}
+		vlan := uint16(v)
+		_ = collectBridgeFDB(vc, d, ifNames, &vlan)
+		vc.close()
+	}
+}
+
+// collectBridgeFDB reads plain BRIDGE-MIB (dot1dTpFdbTable), tagging the
+// entries with a VLAN when the context is one's.
+func collectBridgeFDB(c *client, d *model.Device, ifNames map[string]string, vlan *uint16) error {
+	portName := bridgePorts(c, ifNames)
+	rows, err := c.walk(oidDot1dTpFdb)
+	if err != nil {
+		return err
+	}
+	t := table(rows)
+	for idx, p := range t[2] {
+		if n := splitOID(idx); len(n) == 6 {
+			addFDB(d, portName, n, p, t[3][idx], vlan)
+		}
+	}
+	return nil
+}
+
+// bridgePorts names bridge ports by their interface.
+func bridgePorts(c *client, ifNames map[string]string) func(int64) string {
 	portIf := map[string]string{} // bridge port -> ifIndex
 	if rows, err := c.walk(oidBasePortIfIndex); err == nil {
 		for port, p := range rows {
@@ -337,7 +450,7 @@ func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 			}
 		}
 	}
-	portName := func(bridgePort int64) string {
+	return func(bridgePort int64) string {
 		bp := strconv.FormatInt(bridgePort, 10)
 		ifIdx, ok := portIf[bp]
 		if !ok {
@@ -348,25 +461,27 @@ func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 		}
 		return "port" + bp
 	}
-	add := func(macOID []int, portPDU, statusPDU gosnmp.SnmpPDU, vlan *uint16) {
-		port, ok := pduInt(portPDU)
-		if !ok || port == 0 {
-			return
-		}
-		if st, ok := pduInt(statusPDU); ok && st == 4 { // self
-			return
-		}
-		b := make([]byte, 6)
-		for i, x := range macOID {
-			b[i] = byte(x)
-		}
-		mac := model.MACFromBytes(b)
-		if mac == "" {
-			return
-		}
+}
+
+func addFDB(d *model.Device, portName func(int64) string, macOID []int, portPDU, statusPDU gosnmp.SnmpPDU, vlan *uint16) {
+	port, ok := pduInt(portPDU)
+	if !ok || port == 0 {
+		return
+	}
+	if st, ok := pduInt(statusPDU); ok && st == 4 { // self
+		return
+	}
+	b := make([]byte, 6)
+	for i, x := range macOID {
+		b[i] = byte(x)
+	}
+	if mac := model.MACFromBytes(b); mac != "" {
 		d.Fdb = append(d.Fdb, model.FdbEntry{MAC: mac, Port: portName(port), Vlan: vlan})
 	}
+}
 
+func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
+	portName := bridgePorts(c, ifNames)
 	// Q-BRIDGE-MIB (VLAN aware) first, then plain BRIDGE-MIB.
 	rows, err := c.walk(oidDot1qTpFdb)
 	if err != nil {
@@ -382,24 +497,12 @@ func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 		if n[0] > 0 && n[0] <= 4095 {
 			vlan = model.Ptr(uint16(n[0]))
 		}
-		add(n[1:], p, t[3][idx], vlan)
+		addFDB(d, portName, n[1:], p, t[3][idx], vlan)
 	}
 	if len(d.Fdb) > 0 {
 		return nil
 	}
-	rows, err = c.walk(oidDot1dTpFdb)
-	if err != nil {
-		return err
-	}
-	t = table(rows)
-	for idx, p := range t[2] {
-		n := splitOID(idx)
-		if len(n) != 6 {
-			continue
-		}
-		add(n, p, t[3][idx], nil)
-	}
-	return nil
+	return collectBridgeFDB(c, d, ifNames, nil)
 }
 
 func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
@@ -478,6 +581,14 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 		default:
 			nb.RemotePort = nonEmpty(portID)
 		}
+		// A chassis named by its address (a desk phone) still gives its MAC as
+		// the port id.
+		if st, _ := pduInt(t[6][idx]); nb.RemoteMAC == nil && st == portSubtypeMAC {
+			if mac := model.MACFromBytes(pduBytes(t[7][idx])); mac != "" {
+				nb.RemoteMAC = &mac
+			}
+		}
+		nb.Capabilities = capabilities(pduBytes(t[12][idx]))
 		nb.RemoteName = nonEmpty(pduString(t[9][idx]))
 		if descr := pduString(t[10][idx]); descr != "" {
 			first, _, _ := strings.Cut(descr, "\n")
@@ -490,6 +601,18 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 	}
 	sort.Slice(d.Neighbors, func(a, b int) bool { return d.Neighbors[a].LocalPort < d.Neighbors[b].LocalPort })
 	return nil
+}
+
+// capabilities reads LLDP's capability BITS (the first bit is the first
+// byte's most significant one).
+func capabilities(bits []byte) []model.NeighborCapability {
+	var out []model.NeighborCapability
+	for i, c := range lldpCapabilities {
+		if i/8 < len(bits) && bits[i/8]&(0x80>>(i%8)) != 0 {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func collectResources(c *client, d *model.Device) error {

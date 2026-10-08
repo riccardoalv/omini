@@ -385,6 +385,15 @@ class Neighbor(BaseModel):
     """
     remote_ip: str | None = None
     remote_platform: str | None = None
+    capabilities: (
+        list[
+            Literal["other", "repeater", "bridge", "ap", "router", "telephone", "docsis", "station"]
+        ]
+        | None
+    ) = None
+    """
+    What the neighbor says it is (LLDP enabled capabilities): a desk phone announces telephone, a switch bridge.
+    """
 
 
 class WirelessClient(BaseModel):

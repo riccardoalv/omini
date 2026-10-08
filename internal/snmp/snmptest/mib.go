@@ -71,6 +71,13 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Integer, idx, "1.3.6.1.2.1.17.1.4.1.2.%d", idx)
 	}
 
+	// IF-MIB ifStackTable: a link aggregation over its member ports.
+	for _, iface := range d.Interfaces {
+		for _, m := range iface.Members {
+			add(gosnmp.Integer, 1, "1.3.6.1.2.1.31.1.2.1.3.%d.%d", ifIndex[iface.Name], ifIndex[m])
+		}
+	}
+
 	// IP-MIB addresses and ARP.
 	for _, ip := range d.IPs {
 		add(gosnmp.Integer, 1, "1.3.6.1.2.1.4.20.1.2.%s", ip)
@@ -113,6 +120,9 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.OctetString, model.Deref(nb.RemotePort), "1.0.8802.1.1.2.1.4.1.1.7.%s", idx)
 		add(gosnmp.OctetString, model.Deref(nb.RemoteName), "1.0.8802.1.1.2.1.4.1.1.9.%s", idx)
 		add(gosnmp.OctetString, model.Deref(nb.RemotePlatform), "1.0.8802.1.1.2.1.4.1.1.10.%s", idx)
+		if len(nb.Capabilities) > 0 {
+			add(gosnmp.OctetString, capBits(nb.Capabilities), "1.0.8802.1.1.2.1.4.1.1.12.%s", idx)
+		}
 		if ip := net.ParseIP(model.Deref(nb.RemoteIP)).To4(); ip != nil {
 			add(gosnmp.Integer, 2, "1.0.8802.1.1.2.1.4.2.1.3.%s.1.4.%d.%d.%d.%d", idx, ip[0], ip[1], ip[2], ip[3])
 		}
@@ -129,6 +139,20 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Integer, int(*d.MemPct*10), "1.3.6.1.2.1.25.2.3.1.6.1")
 	}
 	return out
+}
+
+// capBits encodes LLDP capabilities as BITS (other = the first byte's top bit).
+func capBits(caps []model.NeighborCapability) []byte {
+	order := []model.NeighborCapability{"other", "repeater", "bridge", "ap", "router", "telephone", "docsis", "station"}
+	b := []byte{0, 0}
+	for i, c := range order {
+		for _, x := range caps {
+			if x == c {
+				b[i/8] |= 0x80 >> (i % 8)
+			}
+		}
+	}
+	return b
 }
 
 func ianaType(t model.InterfaceType) int {

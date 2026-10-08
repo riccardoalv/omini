@@ -1,5 +1,7 @@
 package snmp
 
+import "github.com/riccardoalv/omini/internal/model"
+
 // Standard MIB objects read by the generic SNMP integration.
 const (
 	// SNMPv2-MIB
@@ -11,11 +13,12 @@ const (
 
 	// IP-MIB
 	oidIPForwarding    = "1.3.6.1.2.1.4.1.0"
-	oidIPAddrIfIndex   = "1.3.6.1.2.1.4.20.1.2" // index: IPv4 address
-	oidIPNetToMedia    = "1.3.6.1.2.1.4.22.1"   // ARP: .2 phys address, .4 type; index ifIndex.a.b.c.d
-	oidIPNetToPhysical = "1.3.6.1.2.1.4.35.1.4" // ARP (newer): index ifIndex.addrType.len.addr...
-	oidIfTable         = "1.3.6.1.2.1.2.2.1"    // IF-MIB ifEntry
-	oidIfXTable        = "1.3.6.1.2.1.31.1.1.1" // IF-MIB ifXEntry
+	oidIPAddrIfIndex   = "1.3.6.1.2.1.4.20.1.2"   // index: IPv4 address
+	oidIPNetToMedia    = "1.3.6.1.2.1.4.22.1"     // ARP: .2 phys address, .4 type; index ifIndex.a.b.c.d
+	oidIPNetToPhysical = "1.3.6.1.2.1.4.35.1.4"   // ARP (newer): index ifIndex.addrType.len.addr...
+	oidIfTable         = "1.3.6.1.2.1.2.2.1"      // IF-MIB ifEntry
+	oidIfXTable        = "1.3.6.1.2.1.31.1.1.1"   // IF-MIB ifXEntry
+	oidIfStackStatus   = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
 
 	// BRIDGE-MIB / Q-BRIDGE-MIB
 	oidBasePortIfIndex = "1.3.6.1.2.1.17.1.4.1.2"   // bridge port -> ifIndex
@@ -34,6 +37,14 @@ const (
 	oidHrStorage       = "1.3.6.1.2.1.25.2.3.1" // .2 type, .4 alloc units, .5 size, .6 used
 	oidHrStorageRAM    = ".1.3.6.1.2.1.25.2.1.2"
 )
+
+// lldpCapabilities names the bits of LLDP's system capabilities, in order
+// (LLDP-MIB LldpSystemCapabilitiesMap: other(0) ... stationOnly(7)).
+var lldpCapabilities = []model.NeighborCapability{
+	model.NeighborCapabilityOther, model.NeighborCapabilityRepeater, model.NeighborCapabilityBridge,
+	model.NeighborCapabilityAp, model.NeighborCapabilityRouter, model.NeighborCapabilityTelephone,
+	model.NeighborCapabilityDocsis, model.NeighborCapabilityStation,
+}
 
 // LLDP chassis/port id subtypes we care about.
 const (

@@ -3,11 +3,14 @@ package snmp_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gosnmp/gosnmp"
 
 	"github.com/riccardoalv/omini/internal/demo"
 	"github.com/riccardoalv/omini/internal/model"
@@ -132,5 +135,59 @@ func TestMinimalAgent(t *testing.T) {
 func TestMissingHost(t *testing.T) {
 	if _, err := snmp.Collect(context.Background(), snmp.Target{}); err == nil {
 		t.Fatal("expected error without host")
+	}
+}
+
+// TestCiscoStyleSwitch: a port-channel's members (ifStackTable), a desk
+// phone's LLDP capabilities, and a MAC table kept per VLAN (community@vlan,
+// asked for by the Cisco profile).
+func TestCiscoStyleSwitch(t *testing.T) {
+	phone := model.MACAddress("24:9a:d8:2a:eb:3a")
+	sw := model.Device{
+		Name: "core", Key: "00:11:22:33:44:55", Model: model.Ptr("Cisco IOS Software, Catalyst L3 Switch"),
+		Interfaces: []model.Interface{
+			{Name: "Gi1/0/1", Type: model.Ptr(model.InterfaceTypeEthernet)},
+			{Name: "Gi1/0/2", Type: model.Ptr(model.InterfaceTypeEthernet)},
+			{Name: "Gi1/0/3", Type: model.Ptr(model.InterfaceTypeEthernet)},
+			{Name: "Po1", Type: model.Ptr(model.InterfaceTypeLag), Members: []string{"Gi1/0/1", "Gi1/0/2"}},
+		},
+		Neighbors: []model.Neighbor{{
+			LocalPort: "Gi1/0/3", RemoteMAC: &phone, RemotePort: model.Ptr("WAN PORT"),
+			Capabilities: []model.NeighborCapability{model.NeighborCapabilityBridge, model.NeighborCapabilityTelephone},
+		}},
+	}
+	pdus := snmptest.FromDevice(sw, snmptest.Options{Enterprise: 9})
+	// CISCO-VTP-MIB vtpVlanState: VLANs 1 and 20 (operational).
+	vtp := func(v int) gosnmp.SnmpPDU {
+		return gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.4.1.9.9.46.1.3.1.1.2.1.%d", v), Type: gosnmp.Integer, Value: 1}
+	}
+	agent := snmptest.Start(t, "s3cret", append(pdus, vtp(1), vtp(20)))
+	// VLAN 20's MAC table, only in its own community: the PC on Gi1/0/3.
+	agent.AddCommunity("s3cret@20", []gosnmp.SnmpPDU{
+		{Name: ".1.3.6.1.2.1.17.1.4.1.2.3", Type: gosnmp.Integer, Value: 3},
+		{Name: ".1.3.6.1.2.1.17.4.3.1.2.176.123.37.24.27.109", Type: gosnmp.Integer, Value: 3},
+		{Name: ".1.3.6.1.2.1.17.4.3.1.3.176.123.37.24.27.109", Type: gosnmp.Integer, Value: 3},
+	})
+	got, err := snmp.Collect(context.Background(), target(agent, "s3cret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range got.Interfaces {
+		if i.Name == "Po1" && !reflect.DeepEqual(i.Members, []string{"Gi1/0/1", "Gi1/0/2"}) {
+			t.Errorf("Po1 members: %v", i.Members)
+		}
+	}
+	if len(got.Neighbors) != 1 || !reflect.DeepEqual(got.Neighbors[0].Capabilities,
+		[]model.NeighborCapability{model.NeighborCapabilityBridge, model.NeighborCapabilityTelephone}) {
+		t.Errorf("neighbors: %+v", got.Neighbors)
+	}
+	found := false
+	for _, f := range got.Fdb {
+		if f.MAC == "b0:7b:25:18:1b:6d" && f.Port == "Gi1/0/3" && model.Deref(f.Vlan) == 20 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("VLAN 20's MAC table not read: %+v", got.Fdb)
 	}
 }

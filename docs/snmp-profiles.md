@@ -39,4 +39,21 @@ to read a whole column. `scale` multiplies it (`0.1` for tenths of a degree),
 first number. Percentages can also be `used` + `total`, `free` + `total` (several
 `free` OIDs are added up) or `used` + `free`.
 
+## MAC tables kept per VLAN
+
+Some switches keep a MAC table per VLAN and show each one only in its own
+community (`public@20`) or SNMP v3 context (`vlan-20`): read in the default
+context, they list VLAN 1 only, and clients land in the wrong place. A
+profile says how to read them:
+
+```yaml
+fdb_per_vlan:
+  vlans: 1.3.6.1.4.1.9.9.46.1.3.1.1.2   # a column whose rows end with the VLAN id
+  community: "{community}@{vlan}"       # SNMP v1/v2c
+  context: "vlan-{vlan}"                # SNMP v3
+```
+
+Omini then reads BRIDGE-MIB once per VLAN (up to 64). The shipped Cisco
+profile does this with CISCO-VTP-MIB's VLAN list.
+
 Profiles only read: Omini never writes to a device.

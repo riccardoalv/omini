@@ -359,8 +359,28 @@
         },
         "remote_platform": {
           "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "What the neighbor says it is (LLDP enabled capabilities): a desk phone announces telephone, a switch bridge.",
+          "items": {
+            "$ref": "#/$defs/NeighborCapability"
+          }
         }
       }
+    },
+    "NeighborCapability": {
+      "type": "string",
+      "enum": [
+        "other",
+        "repeater",
+        "bridge",
+        "ap",
+        "router",
+        "telephone",
+        "docsis",
+        "station"
+      ]
     },
     "FdbEntry": {
       "type": "object",
