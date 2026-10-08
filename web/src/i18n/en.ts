@@ -475,6 +475,7 @@ export default {
   devices: {
     hidden: 'Hidden',
     title: 'Devices',
+    open: 'Open the list of devices',
     subtitle: 'Everything ever seen on your network. Entries are kept until you delete them.',
     name: 'Name',
     ip: 'IP',

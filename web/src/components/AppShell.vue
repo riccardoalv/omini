@@ -3,7 +3,6 @@ import {
   ArrowLeftRight,
   Bell,
   Cable,
-  LayoutGrid,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,7 +23,6 @@ const { t } = useI18n()
 
 const allItems = [
   { to: '/', icon: Network, label: 'nav.map' },
-  { to: '/devices', icon: LayoutGrid, label: 'nav.devices' },
   { to: '/alerts', icon: Bell, label: 'nav.alerts' },
   { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows', when: () => features.flows },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },

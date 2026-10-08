@@ -480,6 +480,7 @@ const ptBR: typeof en = {
   devices: {
     hidden: 'Oculto',
     title: 'Dispositivos',
+    open: 'Abrir a lista de dispositivos',
     subtitle:
       'Tudo o que já passou pela sua rede. Os registros ficam guardados até você excluí-los.',
     name: 'Nome',

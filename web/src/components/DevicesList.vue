@@ -10,6 +10,12 @@ import { displayName, filterInventory, isRandomMAC, type StatusFilter } from '@/
 import { displayName as nodeName } from '@/lib/names'
 import type { InventoryEntry } from '@/lib/types'
 
+/**
+ * The inventory: every device ever seen, with search, filters, rename, pin,
+ * hide and delete. Shown in a drawer on the map ("N devices"); a click on a
+ * name shows that device on the map.
+ */
+const emit = defineEmits<{ select: [id: string]; changed: [] }>()
 const { t, locale } = useI18n()
 
 const entries = ref<InventoryEntry[]>([])
@@ -62,6 +68,7 @@ async function rename(e: InventoryEntry) {
   if (alias === null) return
   const updated = await api.updateInventory(e.id, { alias })
   entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
+  emit('changed')
 }
 
 async function pin(e: InventoryEntry) {
@@ -72,6 +79,7 @@ async function pin(e: InventoryEntry) {
 async function toggleHidden(e: InventoryEntry) {
   const updated = await api.updateInventory(e.id, { hidden: !e.hidden })
   entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
+  emit('changed')
 }
 
 async function deleteSelected() {
@@ -80,20 +88,14 @@ async function deleteSelected() {
   await api.deleteInventory(ids)
   entries.value = entries.value.filter((e) => !selected.value.has(e.id))
   selected.value = new Set()
+  emit('changed')
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <div class="page">
-    <header class="page-header">
-      <div>
-        <h1>{{ t('devices.title') }}</h1>
-        <p class="muted">{{ t('devices.subtitle') }}</p>
-      </div>
-    </header>
-
+  <div class="devices-list">
     <div class="filters">
       <label class="search">
         <Search :size="16" />
@@ -150,7 +152,14 @@ onMounted(load)
                   :device="{ ...e, type: e.device_type || e.type, icon: e.icon }"
                   :size="18"
                 />
-                <span>{{ nameOf(e) }}</span>
+                <button
+                  class="link name-link"
+                  type="button"
+                  data-test="device-name"
+                  @click="emit('select', e.id)"
+                >
+                  {{ nameOf(e) }}
+                </button>
                 <Pin v-if="e.pinned" :size="12" class="muted" />
                 <span v-if="e.hidden" class="badge" data-test="hidden-badge">{{
                   t('devices.hidden')
@@ -253,6 +262,14 @@ onMounted(load)
 }
 .table-wrap {
   overflow-x: auto;
+}
+.name-link {
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.name-link:hover {
+  color: var(--accent);
 }
 .name {
   display: flex;

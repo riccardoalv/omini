@@ -11,8 +11,10 @@ import {
   Eye,
   EyeOff,
   LayoutGrid,
+  List,
   RefreshCw,
   SquareDashed,
+  X,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +22,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import ModalDialog from '@/components/ModalDialog.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
+import DevicesList from '@/components/DevicesList.vue'
 import AreaMenu from '@/components/map/AreaMenu.vue'
 import AreaNode from '@/components/map/AreaNode.vue'
 import LinkEdge from '@/components/map/LinkEdge.vue'
@@ -755,6 +758,21 @@ let focused: string | undefined
 function focusRequested() {
   const id = typeof route.query.node === 'string' ? route.query.node : undefined
   if (!id || id === focused || !nodeById.value.has(id)) return
+  focusNode(id)
+}
+
+// The device list: a drawer on the map ("N devices"); /devices opens it too.
+const devicesOpen = ref(route.query.devices === '1')
+if (devicesOpen.value) void router.replace({ query: { ...route.query, devices: undefined } })
+function showDevice(id: string) {
+  devicesOpen.value = false
+  focused = undefined
+  focusNode(id)
+}
+
+/** Opens a node's panel and centers the map on it (its group expanded). */
+function focusNode(id: string) {
+  if (!nodeById.value.has(id)) return
   focused = id
   const node = nodeById.value.get(id)!
   if (node.parent_id && !view.value.nodes.some((n) => n.id === id)) expand(node.parent_id)
@@ -1029,10 +1047,34 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="mapEl" class="map">
+    <aside v-if="devicesOpen" class="devices-drawer card" data-test="devices-drawer">
+      <header>
+        <h2>{{ t('devices.title') }}</h2>
+        <button
+          class="btn ghost icon small"
+          type="button"
+          :aria-label="t('common.close')"
+          @click="devicesOpen = false"
+        >
+          <X :size="16" />
+        </button>
+      </header>
+      <DevicesList @select="showDevice" @changed="load" />
+    </aside>
     <div class="toolbar">
       <div class="chips">
-        <span class="chip">{{ t('map.devices', summary.devices) }}</span>
-        <span class="chip">{{ t('map.clients', summary.clients) }}</span>
+        <button
+          type="button"
+          class="chip chip-button"
+          :class="{ active: devicesOpen }"
+          data-test="devices-chip"
+          :aria-expanded="devicesOpen"
+          :title="t('devices.open')"
+          @click="devicesOpen = !devicesOpen"
+        >
+          <List :size="12" />
+          {{ t('map.devices', summary.devices) }} · {{ t('map.clients', summary.clients) }}
+        </button>
         <RouterLink v-if="attention" to="/alerts" class="chip problem" data-test="alerts-chip">
           <Bell :size="12" />
           {{ t('map.alerts', { n: attention }, attention) }}
@@ -1292,6 +1334,39 @@ onBeforeUnmount(() => {
   font-weight: 500;
   text-decoration: none;
   color: var(--text);
+}
+.chip-button {
+  cursor: pointer;
+  font: inherit;
+  font-size: inherit;
+}
+.chip-button:hover,
+.chip-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.devices-drawer {
+  position: absolute;
+  top: 56px;
+  left: 12px;
+  bottom: 12px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  width: min(820px, calc(100% - 24px));
+  padding: 14px 16px;
+  overflow: auto;
+  box-shadow: var(--shadow);
+}
+.devices-drawer header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.devices-drawer h2 {
+  margin: 0;
+  font-size: 16px;
 }
 .chip.problem {
   background: var(--danger-soft);

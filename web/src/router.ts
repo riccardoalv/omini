@@ -4,7 +4,7 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'map', component: () => import('./views/MapView.vue') },
-    { path: '/devices', name: 'devices', component: () => import('./views/DevicesView.vue') },
+    { path: '/devices', redirect: { path: '/', query: { devices: '1' } } }, // the list is a drawer on the map
     {
       path: '/integrations',
       name: 'integrations',
