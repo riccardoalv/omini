@@ -642,3 +642,24 @@ func TestScanNode(t *testing.T) {
 		t.Fatalf("unknown node: %d", code)
 	}
 }
+
+func TestCollectionRoundInterval(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	var info struct {
+		IntervalS int `json:"interval_s"`
+		DefaultS  int `json:"default_s"`
+	}
+	if code := h.do("GET", "/api/collection", nil, &info); code != http.StatusOK || info.IntervalS != info.DefaultS {
+		t.Fatalf("get: %d %+v", code, info)
+	}
+	if code := h.do("PUT", "/api/collection", map[string]any{"interval_s": 300}, &info); code != http.StatusOK || info.IntervalS != 300 {
+		t.Fatalf("set: %d %+v", code, info)
+	}
+	if code := h.do("PUT", "/api/collection", map[string]any{"interval_s": 5}, nil); code != http.StatusBadRequest {
+		t.Fatalf("too short: %d", code)
+	}
+	if code := h.do("PUT", "/api/collection", map[string]any{"interval_s": 0}, &info); code != http.StatusOK || info.IntervalS != info.DefaultS {
+		t.Fatalf("back to the default: %d %+v", code, info)
+	}
+}

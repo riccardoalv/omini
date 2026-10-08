@@ -194,7 +194,7 @@ Without Docker: `make run` builds and starts Omini (needs Go and Node.js; plugin
 |---|---|---|
 | `OMINI_ADDR` | `:8080` | Address the web server listens on |
 | `OMINI_DATA_DIR` | `./data` | Where the SQLite database and the secret key live |
-| `OMINI_POLL_INTERVAL` | `60` | Collection interval, in seconds or as a duration (`1m30s`); minimum 10s |
+| `OMINI_POLL_INTERVAL` | `60` | Default time between collection rounds (every integration, one at a time, from the edge of the network to its center), in seconds or as a duration (`1m30s`); minimum 10s. Changeable on the Integrations screen |
 | `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
 | `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |

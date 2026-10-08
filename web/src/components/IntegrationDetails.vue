@@ -50,30 +50,6 @@ async function runNow() {
   }
 }
 
-// How often it is collected: saved as soon as it changes.
-const INTERVALS = [0, 15, 30, 60, 300, 900, 3600, 21600, 86400]
-const interval = ref(props.integration.interval_s ?? 0)
-const intervalSaved = ref(false)
-async function saveInterval() {
-  intervalSaved.value = false
-  runError.value = ''
-  try {
-    const updated = await api.updateIntegration(props.integration.id, {
-      interval_s: interval.value,
-    })
-    emit('saved', updated)
-    intervalSaved.value = true
-  } catch (e) {
-    runError.value = e instanceof ApiError ? e.message : t('common.error')
-  }
-}
-function intervalLabel(s: number) {
-  if (s === 0) return t('integrations.intervalDefault')
-  if (s < 60) return t('integrations.everySeconds', { n: s })
-  if (s < 3600) return t('integrations.everyMinutes', { n: s / 60 })
-  return t('integrations.everyHours', { n: s / 3600 })
-}
-
 // What the last collection found, per discovery method (network scan).
 const methods = ref<Record<string, number>>({})
 const hosts = ref(0)
@@ -144,19 +120,6 @@ const status = computed(() => lastRun.value ?? props.integration.status)
         }}
       </p>
       <p v-if="runError" class="alert error" role="alert">{{ runError }}</p>
-      <div class="field interval">
-        <label :for="`d${integration.id}-interval`">{{ t('integrations.interval') }}</label>
-        <select
-          :id="`d${integration.id}-interval`"
-          v-model.number="interval"
-          class="select"
-          data-test="interval"
-          @change="saveInterval"
-        >
-          <option v-for="s in INTERVALS" :key="s" :value="s">{{ intervalLabel(s) }}</option>
-        </select>
-        <span v-if="intervalSaved" class="help ok-text">{{ t('integrations.saved') }}</span>
-      </div>
       <div v-if="methodList.length" class="methods">
         <span class="muted">{{ t('integrations.foundBy') }}:</span>
         <span v-for="[m, n] in methodList" :key="m" class="badge" :data-method="m">
@@ -213,12 +176,6 @@ dd {
 }
 .run {
   margin: 4px 0 12px;
-}
-.interval {
-  margin-top: 6px;
-}
-.ok-text {
-  color: var(--ok);
 }
 .spin {
   animation: spin 0.8s linear infinite;

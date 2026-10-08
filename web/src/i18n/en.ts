@@ -417,8 +417,7 @@ export default {
     renamePrompt: 'Name for this device (empty to reset)',
   },
   integrations: {
-    interval: 'Collect every',
-    intervalDefault: 'Default (1 minute)',
+    interval: 'Every',
     everySeconds: '{n} seconds',
     everyMinutes: '{n} minute | {n} minutes',
     everyHours: '{n} hour | {n} hours',
@@ -543,6 +542,14 @@ export default {
     confirmRemove: 'Click again to remove',
     dev: 'development',
     hint: 'Plugins connect Omini to devices and software of other brands (OPNsense, routers, controllers). They run in their own Python environment.',
+  },
+  round: {
+    title: 'Collection in rounds',
+    hint: 'One integration at a time, from the edge of the network to its center (access points and servers, then switches, then the router), and the map is drawn once at the end: every round is one coherent picture. One that fails keeps its last data.',
+    default: 'default',
+    edge: 'Edge',
+    center: 'center',
+    last: 'Last round {ago}, took {s} s',
   },
   notifications: {
     title: 'Notifications',

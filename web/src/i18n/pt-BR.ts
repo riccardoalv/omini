@@ -421,8 +421,7 @@ const ptBR: typeof en = {
     renamePrompt: 'Nome para este dispositivo (vazio para voltar ao original)',
   },
   integrations: {
-    interval: 'Coletar a cada',
-    intervalDefault: 'Padrão (1 minuto)',
+    interval: 'A cada',
     everySeconds: '{n} segundos',
     everyMinutes: '{n} minuto | {n} minutos',
     everyHours: '{n} hora | {n} horas',
@@ -672,6 +671,14 @@ const ptBR: typeof en = {
     confirmRemove: 'Clique de novo para remover',
     dev: 'desenvolvimento',
     hint: 'Plugins conectam o Omini a dispositivos e softwares de outras marcas (OPNsense, roteadores, controladoras). Eles rodam no próprio ambiente Python.',
+  },
+  round: {
+    title: 'Coleta em rodadas',
+    hint: 'Uma integração por vez, da ponta da rede para o centro (access points e servidores, depois switches, depois o roteador), e o mapa é desenhado uma vez no fim: cada rodada é uma foto coerente da rede. Uma que falhar mantém os últimos dados.',
+    default: 'padrão',
+    edge: 'Ponta',
+    center: 'centro',
+    last: 'Última rodada {ago}, levou {s} s',
   },
   notifications: {
     title: 'Notificações',

@@ -80,6 +80,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PUT /api/integrations/{id}", s.updateIntegration)
 	private.HandleFunc("DELETE /api/integrations/{id}", s.deleteIntegration)
 	private.HandleFunc("POST /api/integrations/test", s.testIntegration)
+	private.HandleFunc("GET /api/collection", s.getCollection)
+	private.HandleFunc("PUT /api/collection", s.setCollection)
 	private.HandleFunc("POST /api/integrations/{id}/run", s.runIntegration)
 	private.HandleFunc("GET /api/topology", s.topology)
 	private.HandleFunc("POST /api/refresh", s.refresh)

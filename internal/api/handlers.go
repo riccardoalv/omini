@@ -193,18 +193,6 @@ type integrationInput struct {
 	Type    string             `json:"type"`
 	Config  integration.Config `json:"config"`
 	Enabled *bool              `json:"enabled"`
-	// IntervalS is the time between collections in seconds; 0 restores the default.
-	IntervalS *int `json:"interval_s"`
-}
-
-// Collection intervals the UI offers: from 15 s to a day.
-const minInterval, maxInterval = 15, 86400
-
-func validInterval(v *int) error {
-	if v != nil && *v != 0 && (*v < minInterval || *v > maxInterval) {
-		return fmt.Errorf("the collection interval must be between %d seconds and %d hours", minInterval, maxInterval/3600)
-	}
-	return nil
 }
 
 // prepare validates the input config and seals its secrets. stored is the
@@ -241,9 +229,6 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg, err := s.prepare(in.Type, in.Config, nil)
-	if err == nil {
-		err = validInterval(in.IntervalS)
-	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -264,7 +249,7 @@ func (s *Server) createIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	enabled := in.Enabled == nil || *in.Enabled
 	created, err := s.Store.CreateIntegration(r.Context(), store.Integration{
-		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled, IntervalS: model.Deref(in.IntervalS),
+		Name: impl.Info().Name, Type: in.Type, Config: cfg, Enabled: enabled,
 	})
 	if err != nil {
 		internalError(w, err)
@@ -305,13 +290,6 @@ func (s *Server) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Enabled != nil {
 		current.Enabled = *in.Enabled
-	}
-	if err := validInterval(in.IntervalS); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if in.IntervalS != nil {
-		current.IntervalS = *in.IntervalS
 	}
 	updated, err := s.Store.UpdateIntegration(r.Context(), current)
 	if err != nil {
@@ -851,4 +829,46 @@ func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// --- collection rounds ---
+
+type collectionInfo struct {
+	IntervalS int `json:"interval_s"`
+	// DefaultS is the interval used when none is set (OMINI_POLL_INTERVAL).
+	DefaultS int              `json:"default_s"`
+	Round    *collector.Round `json:"round,omitempty"`
+}
+
+func (s *Server) collectionInfo(r *http.Request) collectionInfo {
+	return collectionInfo{
+		IntervalS: int(s.Collector.RoundInterval(r.Context()) / time.Second),
+		DefaultS:  int(s.Collector.DefaultInterval() / time.Second),
+		Round:     s.Collector.State().Round,
+	}
+}
+
+func (s *Server) getCollection(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.collectionInfo(r))
+}
+
+// setCollection changes the time between collection rounds (0: the default).
+func (s *Server) setCollection(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IntervalS int `json:"interval_s"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	d := time.Duration(in.IntervalS) * time.Second
+	if in.IntervalS != 0 && (d < collector.MinRoundInterval || d > collector.MaxRoundInterval) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("the round interval must be between %d seconds and %d hours",
+			int(collector.MinRoundInterval/time.Second), int(collector.MaxRoundInterval/time.Hour)))
+		return
+	}
+	if err := s.Collector.SetRoundInterval(r.Context(), d); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.collectionInfo(r))
 }

@@ -210,6 +210,22 @@ export interface TopoEdge {
   speed_mbps?: number
 }
 
+/** The last collection round: every integration, one at a time, from the edge to the center. */
+export interface CollectionRound {
+  started_at: string
+  duration_ms: number
+  /** Integration ids in the order they were collected. */
+  order: number[]
+  interval_s: number
+}
+
+export interface CollectionInfo {
+  interval_s: number
+  /** The interval when none is set (OMINI_POLL_INTERVAL). */
+  default_s: number
+  round?: CollectionRound
+}
+
 export interface CollectionStatus {
   integration_id: number
   ok: boolean

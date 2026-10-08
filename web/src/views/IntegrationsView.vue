@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import IntegrationLogo from '@/components/IntegrationLogo.vue'
+import CollectionRound from '@/components/CollectionRound.vue'
 import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { api } from '@/lib/api'
@@ -120,6 +121,8 @@ onMounted(async () => {
         </button>
       </div>
     </header>
+
+    <CollectionRound v-if="items.length" :integrations="items" />
 
     <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
     <p v-else-if="!items.length" class="card empty muted">{{ t('integrations.empty') }}</p>

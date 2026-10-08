@@ -8,6 +8,7 @@ import type {
   TrafficPoint,
   AuthStatus,
   Config,
+  CollectionInfo,
   CollectionStatus,
   Integration,
   IntegrationType,
@@ -97,6 +98,9 @@ export const api = {
   health: () => request<{ status: string; version: string }>('GET', '/api/health'),
 
   integrationTypes: () => request<IntegrationType[]>('GET', '/api/integration-types'),
+  collection: () => request<CollectionInfo>('GET', '/api/collection'),
+  setCollection: (intervalS: number) =>
+    request<CollectionInfo>('PUT', '/api/collection', { interval_s: intervalS }),
   integrations: () =>
     request<Integration[]>('GET', '/api/integrations').then((list) => {
       noteIntegrations(list)

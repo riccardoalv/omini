@@ -40,13 +40,14 @@ type State struct {
 	Statuses    []Status          `json:"statuses"`
 	Alerts      []store.Alert     `json:"alerts"` // open alerts
 	GeneratedAt time.Time         `json:"generated_at"`
+	// Round is the last collection round (nil until one ran).
+	Round *Round `json:"round,omitempty"`
 }
 
 type Options struct {
-	Interval    time.Duration    // time between collection rounds
-	Timeout     time.Duration    // per integration
-	Concurrency int              // integrations collected in parallel
-	Now         func() time.Time // for tests
+	Interval time.Duration    // time between collection rounds
+	Timeout  time.Duration    // per integration
+	Now      func() time.Time // for tests
 	// OnAlerts is told about alerts opened and resolved (notifications).
 	OnAlerts func([]store.AlertChange)
 }
@@ -68,8 +69,10 @@ type Collector struct {
 	// Whether each device is present (presence timeline); loaded once.
 	presence map[string]bool
 
-	round   sync.Mutex // one collection round at a time
-	trigger chan struct{}
+	round      sync.Mutex // one collection round at a time
+	trigger    chan struct{}
+	reschedule chan struct{} // the round interval changed
+	lastRound  *Round
 }
 
 func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Options) *Collector {
@@ -79,17 +82,15 @@ func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Optio
 	if opts.Timeout == 0 {
 		opts.Timeout = 45 * time.Second
 	}
-	if opts.Concurrency == 0 {
-		opts.Concurrency = 8
-	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
 	return &Collector{
 		store: st, reg: reg, box: box, opts: opts,
-		snaps:   map[int64]store.Snapshot{},
-		traffic: newTrafficMeter(),
-		trigger: make(chan struct{}, 1),
+		snaps:      map[int64]store.Snapshot{},
+		traffic:    newTrafficMeter(),
+		trigger:    make(chan struct{}, 1),
+		reschedule: make(chan struct{}, 1),
 		state: State{
 			Topology: topology.Topology{Nodes: []topology.Node{}, Edges: []topology.Edge{}},
 			Statuses: []Status{}, Alerts: []store.Alert{},
@@ -97,27 +98,32 @@ func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Optio
 	}
 }
 
-// Run loads the last known state, then collects every Interval (or when
-// Refresh is called) until ctx is done.
+// Run loads the last known state, then runs a collection round every round
+// interval (or when Refresh is called) until ctx is done.
 func (c *Collector) Run(ctx context.Context) error {
 	if err := c.Load(ctx); err != nil {
 		return err
 	}
 	c.collectLogged(ctx)
-	// Each integration has its own interval: check often, collect what is due.
-	tick := min(c.opts.Interval, 10*time.Second)
-	ticker := time.NewTicker(tick)
-	defer ticker.Stop()
 	for {
+		wait := c.RoundInterval(ctx)
+		c.mu.RLock()
+		if c.lastRound != nil {
+			wait -= c.opts.Now().Sub(c.lastRound.StartedAt)
+		}
+		c.mu.RUnlock()
+		timer := time.NewTimer(max(wait, 0))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return nil
-		case <-ticker.C:
-			if err := c.CollectDue(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("collection round failed", "err", err)
-			}
-		case <-c.trigger:
+		case <-timer.C:
 			c.collectLogged(ctx)
+		case <-c.trigger:
+			timer.Stop()
+			c.collectLogged(ctx)
+		case <-c.reschedule: // wait again, with the new interval
+			timer.Stop()
 		}
 	}
 }
@@ -126,26 +132,6 @@ func (c *Collector) Run(ctx context.Context) error {
 // CollectIntegration) and rebuilds the map: e.g. after a device was scanned.
 func (c *Collector) CollectOne(ctx context.Context, id int64) error {
 	return c.collect(ctx, func(in store.Integration) bool { return in.ID == id })
-}
-
-// CollectDue collects the integrations whose interval has passed.
-func (c *Collector) CollectDue(ctx context.Context) error { return c.collect(ctx, c.due) }
-
-// interval is how often an integration is collected.
-func (c *Collector) interval(in store.Integration) time.Duration {
-	if in.IntervalS > 0 {
-		return time.Duration(in.IntervalS) * time.Second
-	}
-	return c.opts.Interval
-}
-
-// due reports whether an integration's interval has passed since its last collection.
-func (c *Collector) due(in store.Integration) bool {
-	c.mu.RLock()
-	last, ok := c.snaps[in.ID]
-	c.mu.RUnlock()
-	// A little slack so a 60 s interval checked every 10 s does not slip to 70 s.
-	return !ok || c.opts.Now().Sub(last.CollectedAt) >= c.interval(in)-time.Second
 }
 
 func (c *Collector) collectLogged(ctx context.Context) {
@@ -184,13 +170,16 @@ func (c *Collector) Load(ctx context.Context) error {
 	return c.rebuild(ctx)
 }
 
-// CollectNow runs one collection round over all enabled integrations.
+// CollectNow runs a collection round: every enabled integration, one at a
+// time, from the edge of the network to its center (see roundOrder); the map
+// is built once, at the end, from that coherent picture.
 func (c *Collector) CollectNow(ctx context.Context) error {
-	return c.collect(ctx, func(store.Integration) bool { return true })
+	return c.collect(ctx, nil)
 }
 
-// collect runs the enabled integrations selected by pick and rebuilds the map.
-// The others keep their last snapshot.
+// collect runs the enabled integrations selected by pick (nil: a whole round)
+// one at a time, from the edge to the center, and rebuilds the map once. The
+// others keep their last snapshot; one failing keeps its last good data.
 func (c *Collector) collect(ctx context.Context, pick func(store.Integration) bool) error {
 	c.round.Lock()
 	defer c.round.Unlock()
@@ -206,7 +195,7 @@ func (c *Collector) collect(ctx context.Context, pick func(store.Integration) bo
 			continue
 		}
 		active[in.ID] = true
-		if pick(in) {
+		if pick == nil || pick(in) {
 			enabled = append(enabled, in)
 		}
 	}
@@ -223,19 +212,17 @@ func (c *Collector) collect(ctx context.Context, pick func(store.Integration) bo
 		}
 	}
 
-	results := make([]store.Snapshot, len(enabled))
-	sem := make(chan struct{}, c.opts.Concurrency)
-	var wg sync.WaitGroup
-	for i, in := range enabled {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-			results[i] = c.collectOne(ctx, in)
-		}()
+	start := c.opts.Now()
+	enabled = c.roundOrder(enabled)
+	results := make([]store.Snapshot, 0, len(enabled))
+	order := make([]int64, 0, len(enabled))
+	for _, in := range enabled {
+		if ctx.Err() != nil {
+			break
+		}
+		results = append(results, c.collectOne(ctx, in))
+		order = append(order, in.ID)
 	}
-	wg.Wait()
 
 	c.mu.Lock()
 	snaps := make(map[int64]store.Snapshot, len(active))
@@ -254,6 +241,12 @@ func (c *Collector) collect(ctx context.Context, pick func(store.Integration) bo
 	}
 	c.mu.Lock()
 	c.snaps = snaps
+	if pick == nil {
+		c.lastRound = &Round{
+			StartedAt: start, DurationMs: c.opts.Now().Sub(start).Milliseconds(), Order: order,
+			IntervalS: int(c.RoundInterval(ctx) / time.Second),
+		}
+	}
 	c.mu.Unlock()
 	return c.rebuild(ctx)
 }
@@ -396,7 +389,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	alerts := c.watch(ctx, topo, inventory, statuses, now)
 
 	c.mu.Lock()
-	c.state = State{Topology: topo, Statuses: statuses, Alerts: alerts, GeneratedAt: now}
+	c.state = State{Topology: topo, Statuses: statuses, Alerts: alerts, GeneratedAt: now, Round: c.lastRound}
 	c.mu.Unlock()
 	return nil
 }

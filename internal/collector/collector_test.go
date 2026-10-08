@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -328,27 +329,124 @@ func TestCollectIntegrationRunsOneNowAndForces(t *testing.T) {
 	}
 }
 
-func TestEachIntegrationHasItsOwnInterval(t *testing.T) {
-	ctx := context.Background()
-	e := setup(t)
-	fast, _ := e.st.CreateIntegration(ctx, store.Integration{Name: "fast", Type: "demo", Enabled: true, IntervalS: 15})
-	slow, _ := e.st.CreateIntegration(ctx, store.Integration{Name: "slow", Type: "demo", Enabled: true, IntervalS: 3600})
-	start := e.clock
-	e.collect(t)
+// leveled is a plugin-like integration reporting one device; it records the
+// order integrations are collected in.
+type leveled struct {
+	typ    string
+	device model.Device
+	calls  *[]string
+	mu     *sync.Mutex
+}
 
-	e.clock = e.clock.Add(20 * time.Second)
-	if err := e.coll.CollectDue(ctx); err != nil {
+func (l *leveled) Info() integration.Info {
+	return integration.Info{Type: l.typ, Name: l.typ, Kind: integration.KindPlugin}
+}
+
+func (l *leveled) Collect(context.Context, integration.Config) ([]model.Device, error) {
+	l.mu.Lock()
+	*l.calls = append(*l.calls, l.typ)
+	l.mu.Unlock()
+	return []model.Device{l.device}, nil
+}
+
+func (*leveled) Test(context.Context, integration.Config) (string, error) { return "ok", nil }
+
+// A round collects one integration at a time, from the edge of the network to
+// its center: the access point, then the switch, then the firewall, and the
+// built-in discovery last. The map is built once, from that one picture.
+func TestRoundsGoFromTheEdgeToTheCenter(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	at := map[int64]time.Time{}
-	for _, s := range e.coll.State().Statuses {
-		at[s.IntegrationID] = s.CollectedAt
+	t.Cleanup(func() { st.Close() })
+	box, _ := secret.New(make([]byte, 32))
+	reg := integration.NewRegistry()
+	var (
+		calls []string
+		mu    sync.Mutex
+	)
+	lldp := func(remote string) []model.Neighbor {
+		return []model.Neighbor{{LocalPort: "1", Protocol: model.Ptr(model.NeighborProtocolLldp), RemoteName: model.Ptr(remote)}}
 	}
-	if !at[fast.ID].Equal(e.clock) {
-		t.Fatalf("the 15 s integration must be collected again after 20 s: %v", at[fast.ID])
+	dev := func(name string, role model.DeviceRole, mac string, up string) model.Device {
+		d := model.Device{Key: mac, Name: name, Role: model.Ptr(role), MACs: []model.MACAddress{model.MACAddress(mac)}}
+		if up != "" {
+			d.Neighbors = lldp(up)
+		}
+		return d
 	}
-	if !at[slow.ID].Equal(start) {
-		t.Fatalf("the hourly integration must wait: %v", at[slow.ID])
+	// Registered and created root first, so ID order would be wrong.
+	for _, l := range []*leveled{
+		{typ: "fwplugin", device: dev("fw", model.DeviceRoleFirewall, "aa:00:00:00:00:01", "")},
+		{typ: "swplugin", device: dev("sw", model.DeviceRoleSwitch, "aa:00:00:00:00:02", "fw")},
+		{typ: "applugin", device: dev("ap", model.DeviceRoleAp, "aa:00:00:00:00:03", "sw")},
+	} {
+		l.calls, l.mu = &calls, &mu
+		reg.Register(l)
+	}
+	core := &fake{onCollect: func(context.Context) { calls = append(calls, "scan") }}
+	reg.Register(core)
+	for _, typ := range []string{"fake", "fwplugin", "swplugin", "applugin"} {
+		if _, err := st.CreateIntegration(ctx, store.Integration{Name: typ, Type: typ, Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	coll := collector.New(st, reg, box, collector.Options{})
+
+	// The very first round knows nothing yet: plugins in the order they were
+	// added, built-in discovery last.
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"fwplugin", "swplugin", "applugin", "scan"}; !slices.Equal(calls, want) {
+		t.Fatalf("first round: %v, want %v", calls, want)
+	}
+	// From then on the map says how deep each one is.
+	want := []string{"applugin", "swplugin", "fwplugin", "scan"}
+	for round := 2; round <= 3; round++ {
+		calls = nil
+		if err := coll.CollectNow(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(calls, want) {
+			t.Fatalf("round %d: %v, want %v", round, calls, want)
+		}
+	}
+	// After a restart, the saved snapshots rebuild the map first: same order.
+	again := collector.New(st, reg, box, collector.Options{})
+	if err := again.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	calls = nil
+	if err := again.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(calls, want) {
+		t.Fatalf("after a restart: %v, want %v", calls, want)
+	}
+	r := coll.State().Round
+	if r == nil || len(r.Order) != 4 || r.IntervalS != 60 {
+		t.Fatalf("round info: %+v", r)
+	}
+}
+
+func TestRoundInterval(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	if got := e.coll.RoundInterval(ctx); got != time.Minute {
+		t.Fatalf("default: %v", got)
+	}
+	if err := e.coll.SetRoundInterval(ctx, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.coll.RoundInterval(ctx); got != 5*time.Minute {
+		t.Fatalf("set: %v", got)
+	}
+	_ = e.coll.SetRoundInterval(ctx, 0)
+	if got := e.coll.RoundInterval(ctx); got != time.Minute {
+		t.Fatalf("back to the default: %v", got)
 	}
 }
 

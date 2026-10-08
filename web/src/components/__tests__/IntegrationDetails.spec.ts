@@ -73,16 +73,7 @@ describe('IntegrationDetails run now', () => {
 })
 
 describe('IntegrationDetails interval', () => {
-  it('saves the collection interval as soon as it changes', async () => {
-    vi.mocked(api.updateIntegration).mockResolvedValue({ ...demo, interval_s: 300 })
-    const w = mountDetails()
-    const select = w.get('[data-test=interval]')
-    expect((select.element as HTMLSelectElement).value).toBe('0')
-    expect(select.text()).toContain('Default (1 minute)')
-    expect(select.text()).toContain('5 minutes')
-    await select.setValue('300')
-    await flushPromises()
-    expect(api.updateIntegration).toHaveBeenCalledWith(4, { interval_s: 300 })
-    expect(w.emitted('saved')![0]).toEqual([{ ...demo, interval_s: 300 }])
+  it('has no interval of its own: collection runs in rounds', () => {
+    expect(mountDetails().find('[data-test=interval]').exists()).toBe(false)
   })
 })
