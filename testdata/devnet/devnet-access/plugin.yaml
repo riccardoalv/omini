@@ -1,0 +1,10 @@
+id: devnet-access
+name: "Devnet: access switches"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  Three access switches: PoE, a desk switch behind a port, a port with errors and a 100 Mbps uplink.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # The devnet test (internal/collector) runs the simulated network's Python.
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Build
         run: go build ./...
       - name: Build for Raspberry Pi (arm64, armv7)
@@ -71,6 +73,8 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
+          uv run ruff check --config pyproject.toml ../../testdata/devnet
+          uv run ruff format --check --config pyproject.toml ../../testdata/devnet
       - name: Test
         run: |
           uv run pytest --cov=omini_sdk --cov-report=term --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"

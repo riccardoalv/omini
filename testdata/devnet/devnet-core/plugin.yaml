@@ -1,0 +1,10 @@
+id: devnet-core
+name: "Devnet: core switches"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  Two core switches (MLAG pair) with SFP+ uplinks, LAGs, trunks, LLDP and a big MAC table.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

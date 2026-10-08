@@ -1,0 +1,10 @@
+id: devnet-scan
+name: "Devnet: network scanner"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  A monitoring box that scans the network: open ports, web titles, banners.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

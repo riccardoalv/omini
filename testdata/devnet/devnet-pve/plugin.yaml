@@ -1,0 +1,10 @@
+id: devnet-pve
+name: "Devnet: Proxmox cluster"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  Three Proxmox hosts and their virtual machines and containers.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

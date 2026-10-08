@@ -9,7 +9,7 @@ PY_MODEL := sdk/python/src/omini_sdk/models.py
 # Python tools (ruff, pytest) come from the SDK's locked dev dependencies.
 SDK := uv run --project sdk/python
 
-.PHONY: image models generate check-generated test cover lint fmt hooks ci web run dev oui icons
+.PHONY: image models generate check-generated test cover lint fmt hooks ci web run dev oui icons devnet
 
 ## run: build the web UI and run Omini on http://localhost:8080 (scans your network)
 run: web
@@ -22,6 +22,11 @@ dev: web/node_modules
 		go run ./cmd/omini & \
 		(cd web && npm run dev) & \
 		wait
+
+## devnet: run Omini on http://localhost:8093 against a large simulated network (testdata/devnet)
+devnet: web
+	go build -o bin/omini ./cmd/omini
+	testdata/devnet/run.sh
 
 ## web: build the web UI into web/dist (embedded into the Go binary)
 web: web/node_modules
@@ -90,12 +95,16 @@ cover:
 lint: web/node_modules
 	golangci-lint run ./...
 	cd sdk/python && uv run ruff check . && uv run ruff format --check .
+	$(SDK) ruff check --config sdk/python/pyproject.toml testdata/devnet
+	$(SDK) ruff format --check --config sdk/python/pyproject.toml testdata/devnet
 	cd web && npm run lint && npm run format:check && npm run type-check
 
 ## fmt: format all code (Go + Python SDK + web)
 fmt: web/node_modules
 	golangci-lint fmt ./...
 	cd sdk/python && uv run ruff format . && uv run ruff check --fix .
+	$(SDK) ruff format --config sdk/python/pyproject.toml testdata/devnet
+	$(SDK) ruff check --fix --config sdk/python/pyproject.toml testdata/devnet
 	cd web && npm run format && npm run lint:fix
 
 ## hooks: install git hooks (format, lint, conventional commit check)

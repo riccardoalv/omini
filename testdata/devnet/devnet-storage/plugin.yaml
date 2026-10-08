@@ -1,0 +1,10 @@
+id: devnet-storage
+name: "Devnet: storage and power"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  A NAS whose volume fills up, a backup server that saturates its link, and a UPS.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

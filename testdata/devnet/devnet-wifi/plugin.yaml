@@ -1,0 +1,10 @@
+id: devnet-wifi
+name: "Devnet: Wi-Fi controller"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  Five access points (one mesh satellite) with corp, IoT and guest networks and about 60 clients.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini

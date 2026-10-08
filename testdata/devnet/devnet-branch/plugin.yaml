@@ -1,0 +1,10 @@
+id: devnet-branch
+name: "Devnet: branch office"
+version: 0.1.0
+protocol: 1
+entrypoint: main.py
+timeout_s: 30
+description: >-
+  A MikroTik branch office behind an IPsec tunnel that drops now and then.
+  Simulated for development (testdata/devnet): never touches a real device.
+author: Omini
