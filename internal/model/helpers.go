@@ -61,6 +61,13 @@ func (m MACAddress) IsGroup() bool {
 	return false
 }
 
+// IsVirtualRouter reports whether the MAC is a VRRP/CARP virtual router's
+// (00:00:5e:00:01:xx for IPv4, 00:00:5e:00:02:xx for IPv6): the address of a
+// router pair's shared gateway, not a device of its own.
+func (m MACAddress) IsVirtualRouter() bool {
+	return strings.HasPrefix(string(m), "00:00:5e:00:01:") || strings.HasPrefix(string(m), "00:00:5e:00:02:")
+}
+
 // IsRandomized reports whether the MAC has the locally administered bit set,
 // which is what phones use for private/randomized addresses.
 func (m MACAddress) IsRandomized() bool {

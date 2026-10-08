@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/classify"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/oui"
 )
@@ -156,6 +157,12 @@ type builder struct {
 	lastPort map[model.MACAddress]portKey
 	// fdbPorts lists where each MAC was learned; portMACs counts MACs per port.
 	fdbPorts map[model.MACAddress][]portKey
+	// macVLANs: the VLANs each MAC was learned in.
+	macVLANs map[model.MACAddress][]uint16
+	// wanVLANs: VLANs that carry a router's internet uplink (a WAN over a
+	// VLAN through the switches): what is learned there is that uplink's
+	// modem, under its WAN node.
+	wanVLANs map[uint16]string
 	portMACs map[portKey]int
 	// wanPorts maps a router port that belongs to a WAN (the WAN interface,
 	// its VLAN and physical port) to the WAN node: what is seen there is on
@@ -167,6 +174,10 @@ type builder struct {
 	// beside: clients seen on the port towards a device that lists its own
 	// clients without them — an unmanaged switch is on that port.
 	beside map[portKey][]string
+	// phones: switch ports with a desk phone on them (an LLDP neighbor that
+	// announces itself as a telephone). Not uplinks: what else is learned on
+	// such a port is the computer plugged into the phone.
+	phones map[portKey]string
 	// center: routers and firewalls with a real internet uplink (see centers).
 	center map[string]bool
 	// hangsBy: links an integration declared from one side only (a neighbor
@@ -204,9 +215,12 @@ func BuildWith(sources []Source, opts Options) Topology {
 		uplinks:  map[portKey]string{},
 		wanPorts: map[portKey]string{},
 		fdbPorts: map[model.MACAddress][]portKey{},
+		macVLANs: map[model.MACAddress][]uint16{},
+		wanVLANs: map[uint16]string{},
 		portMACs: map[portKey]int{},
 		sources:  map[string][]*model.Device{},
 		beside:   map[portKey][]string{},
+		phones:   map[portKey]string{},
 		hangsBy:  map[string]string{},
 	}
 	for _, src := range sources {
@@ -456,6 +470,23 @@ func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 		if target == "" || target == id {
 			continue
 		}
+		if n := b.nodes[target]; n.Kind != KindDevice {
+			if phone := isPhone(nb, n); phone || isStation(nb) {
+				// An end device that announces itself (a desk phone, a server
+				// running lldpd): a client, not infrastructure. A phone has a PC
+				// port: what else is learned on its switch port is behind it.
+				n.Kind, n.Role = KindClient, "client"
+				if n.Vendor == "" && n.MAC != "" {
+					n.Vendor = oui.Lookup(n.MAC)
+				}
+				b.addEdge(id, nb.LocalPort, target, "", EdgeLLDP, portSpeed(d, nb.LocalPort))
+				if phone {
+					n.Type = "ip_phone"
+					b.phones[portKey{id, nb.LocalPort}] = target
+				}
+				continue
+			}
+		}
 		// A router or firewall running as a virtual machine is the center of the
 		// network, not a branch of its host: no link, its host is named instead.
 		if model.Deref(nb.Protocol) == model.NeighborProtocolOther {
@@ -476,6 +507,48 @@ func (b *builder) addNeighborEdgesOf(id string, d *model.Device) {
 			b.uplinks[portKey{target, remotePort}] = id
 		}
 	}
+}
+
+// isPhone: the neighbor announces itself as a telephone (LLDP capabilities)
+// and as nothing that carries other devices' traffic but its own PC port.
+// Without capabilities (some controllers do not pass them on), what it says
+// it is: the classifier's IP phones (by model, name or maker).
+func isPhone(nb *model.Neighbor, n *Node) bool {
+	if len(nb.Capabilities) == 0 {
+		vendor := ""
+		if n.MAC != "" {
+			vendor = oui.Lookup(n.MAC)
+		}
+		return classify.Classify(classify.Input{
+			Kind: string(KindUnmanaged), Vendor: vendor, Model: n.Model, Hostname: n.Label,
+		}).Type == classify.IPPhone
+	}
+	phone := false
+	for _, c := range nb.Capabilities {
+		switch c {
+		case model.NeighborCapabilityTelephone:
+			phone = true
+		case model.NeighborCapabilityRouter, model.NeighborCapabilityAp, model.NeighborCapabilityDocsis:
+			return false
+		}
+	}
+	return phone
+}
+
+// isStation: the neighbor says it is only an end station (LLDP capabilities
+// without bridge, router, access point or repeater: a server running lldpd).
+func isStation(nb *model.Neighbor) bool {
+	if len(nb.Capabilities) == 0 {
+		return false
+	}
+	for _, c := range nb.Capabilities {
+		switch c {
+		case model.NeighborCapabilityStation, model.NeighborCapabilityOther:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (b *builder) addUnmanaged(nb *model.Neighbor) string {
@@ -567,6 +640,9 @@ func (b *builder) indexFDB(managed []string) {
 			if e.MAC.IsGroup() {
 				continue
 			}
+			if v := model.Deref(e.Vlan); v > 1 && !slices.Contains(b.macVLANs[e.MAC], v) {
+				b.macVLANs[e.MAC] = append(b.macVLANs[e.MAC], v)
+			}
 			k := portKey{id, e.Port}
 			if seen[k] == nil {
 				seen[k] = map[model.MACAddress]bool{}
@@ -598,6 +674,25 @@ func (b *builder) rememberFDB(last map[model.MACAddress]PortRef) {
 }
 
 // fdbOrLast: the ports where a MAC is learned now, else where it last was.
+// claimWANVLAN gives a VLAN to the uplink it carries. Two routers on the
+// same one (a firewall pair in HA): the uplink that is up (the master's).
+func (b *builder) claimWANVLAN(v uint16, wanID string) {
+	other, taken := b.wanVLANs[v]
+	if !taken || (!b.nodes[other].Online && b.nodes[wanID].Online) {
+		b.wanVLANs[v] = wanID
+	}
+}
+
+// wanOf: the WAN node whose VLAN a MAC was learned in ("" for none).
+func (b *builder) wanOf(m model.MACAddress) string {
+	for _, v := range b.macVLANs[m] {
+		if wan := b.wanVLANs[v]; wan != "" {
+			return wan
+		}
+	}
+	return ""
+}
+
 func (b *builder) fdbOrLast(m model.MACAddress) []portKey {
 	if ports := b.fdbPorts[m]; len(ports) > 0 {
 		return ports
@@ -909,7 +1004,8 @@ func (b *builder) placeCollected(
 	}
 	macs := make([]model.MACAddress, 0, len(present))
 	for m := range present {
-		if _, known := b.byMAC[m]; !known && !m.IsGroup() {
+		// A VRRP/CARP virtual MAC is the router pair's gateway, not a device.
+		if _, known := b.byMAC[m]; !known && !m.IsGroup() && !m.IsVirtualRouter() {
 			macs = append(macs, m)
 		}
 	}
@@ -950,9 +1046,15 @@ func (b *builder) placeCollected(
 			if w.c.RxBps != nil || w.c.TxBps != nil {
 				n.Flow = &Rate{RxBps: model.Deref(w.c.RxBps), TxBps: model.Deref(w.c.TxBps)}
 			}
+		} else if wan := b.wanOf(m); wan != "" {
+			// Learned in a router's WAN VLAN: the modem of that uplink.
+			n.ParentID, n.Port, kind = wan, "", EdgeInferred
 		} else if port, ok, uplink := b.bestPort(b.fdbOrLast(m), ""); ok {
 			n.ParentID, n.Port, kind = port.node, port.port, EdgeFDB
-			if uplink {
+			if phone, ok := b.phones[port]; ok {
+				// Plugged into the desk phone's PC port.
+				n.ParentID, n.Port, kind = phone, "", EdgeInferred
+			} else if uplink {
 				// Only seen towards other infrastructure: the client is behind it —
 				// unless that device lists its clients without this one: then both
 				// hang from an unmanaged switch on that port.
@@ -1221,6 +1323,22 @@ func (b *builder) fillDirectLinkSpeeds() {
 // its parent: several WANs give several parents.
 func (b *builder) addWANs(managed []string) {
 	nets := b.lanNets()
+	// VLANs that are a LAN somewhere: an address on them, or a subnet.
+	lanVLANs := map[uint16]bool{}
+	for _, id := range managed {
+		for _, d := range b.sources[id] {
+			for _, i := range d.Interfaces {
+				if v := model.Deref(i.Vlan); v > 0 && !model.Deref(i.Wan) && len(i.IPs) > 0 {
+					lanVLANs[v] = true
+				}
+			}
+			for _, v := range d.Vlans {
+				if v.Subnet != nil {
+					lanVLANs[v.ID] = true
+				}
+			}
+		}
+	}
 	for _, id := range managed {
 		var ifaces []model.Interface
 		var gateways []model.Gateway
@@ -1235,8 +1353,12 @@ func (b *builder) addWANs(managed []string) {
 			gateways = append(gateways, d.Gateways...)
 		}
 		byName := map[string]model.Interface{}
+		lanMAC := map[model.MACAddress]bool{}
 		for _, i := range ifaces {
 			byName[i.Name] = i
+			if !model.Deref(i.Wan) && len(i.IPs) > 0 && i.MAC != nil {
+				lanMAC[*i.MAC] = true
+			}
 		}
 		for _, i := range ifaces {
 			if !model.Deref(i.Wan) || b.nestedWAN(id, i, gateways, nets) {
@@ -1266,6 +1388,16 @@ func (b *builder) addWANs(managed []string) {
 			}
 			for _, p := range chain {
 				b.wanPorts[portKey{id, p}] = wanID
+				// The VLAN that carries it through the switches: its own tag,
+				// else the only one its port's MAC is learned in (an access port)
+				// — unless the router uses that MAC on its LAN too (many do), or
+				// the VLAN is a LAN somewhere (an uplink's VLAN is L2 only).
+				mac := model.Deref(byName[p].MAC)
+				if v := model.Deref(byName[p].Vlan); v > 1 {
+					b.claimWANVLAN(v, wanID)
+				} else if vlans := b.macVLANs[mac]; len(vlans) == 1 && !lanMAC[mac] && !lanVLANs[vlans[0]] {
+					b.claimWANVLAN(vlans[0], wanID)
+				}
 			}
 			port := link.Port
 			if port == "" {

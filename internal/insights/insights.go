@@ -464,8 +464,21 @@ func unknownNeighbor(in Input, idx index) []Insight {
 		if n.Kind != topology.KindUnmanaged {
 			continue
 		}
+		// Who announced it: the device at the other end of its LLDP link.
+		parent, port := n.ParentID, n.Port
+		for _, e := range in.Topology.Edges {
+			if parent != "" {
+				break
+			}
+			switch {
+			case e.Target == n.ID && e.Kind == topology.EdgeLLDP:
+				parent, port = e.Source, e.SourcePort
+			case e.Source == n.ID && e.Kind == topology.EdgeLLDP:
+				parent, port = e.Target, e.TargetPort
+			}
+		}
 		out = append(out, node("unknown_neighbor", Info, n, "", map[string]any{
-			"parent": idx.label(n.ParentID), "port": n.Port, "model": n.Model,
+			"parent": idx.label(parent), "port": port, "model": n.Model,
 		}))
 	}
 	return out
