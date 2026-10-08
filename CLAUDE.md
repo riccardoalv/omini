@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guide for agents (and humans) working on Omini. Read the [README](README.md) first for the product vision and MVP scope.
+Guide for agents (and humans) working on Omini. Read the [README](README.md) first for the product overview, and `docs/` for the full user and developer documentation.
 
 ## The project in one sentence
 
@@ -8,7 +8,7 @@ A self-hosted tool that reads data from network devices and software of many ven
 
 ## Status
 
-**v0.2 released.** v0.2 complete: insights and alerts, 24 h traffic history (and hourly for a year), presence timeline, Alerts screen. Network scan (with SNMP), identification (types, OS, brands, products, model names), app nodes, nmap, topology map (areas, WANs, port front view, live traffic), plugin runtime + SDK + store, OPNsense plugin, Docker image, auth, en + pt-BR. v0.2 so far: per-device nmap scan, panel redesign, port names on links, system health. Next: insights, 24h traffic history, presence timeline (full list: README → Roadmap).
+**v1.0 — first official release.** Everything in the decisions log below is implemented: zero-config discovery (with SNMP v2c/v3 and profiles), identification, nmap, traffic flows, the topology map (tidy-tree layout, strict areas, VLAN/subnet filter, folding), live traffic and history, 27 alert rules with popups and notifications, presence timeline, plugin runtime + SDK + store with nine plugins, Docker image on Docker Hub and ghcr, en + pt-BR. User and developer docs in `docs/`. Next: README → Roadmap.
 
 Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
 
@@ -17,9 +17,9 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Topic | Decision |
 |---|---|
 | Positioning | Omini has its own identity: zero-config discovery and identification, easy integrations and a traffic flow map. Docs never compare Omini to other products or define it by them |
-| MVP core | Automatic discovery + integrations screen + topology map with per-link traffic |
-| "Flow" in the MVP | Per-link bandwidth utilization from interface counters; "who talks to whom" from NetFlow/IPFIX/sFlow came after (see Flows) |
-| Writes to devices | Read-only in the MVP; write actions later, behind explicit permissions |
+| Product core | Automatic discovery + integrations + topology map with live traffic and alerts |
+| Traffic | Per-link bandwidth from interface counters; "who talks to whom" from NetFlow/IPFIX/sFlow (see Flows) |
+| Writes to devices | Read-only; write actions later, behind explicit permissions |
 | Devices without SNMP/API | Inferred from other devices' data (ARP/DHCP/FDB) **and** optional scraping plugins |
 | License | MIT |
 | Language | Everything in English (code, comments, docs, commits, issues). UI is translatable (i18n): `en` + `pt-BR` |
@@ -34,8 +34,8 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | Traffic history | Every rebuild records each interface's rate (and a Wi-Fi client's own, interface `""`): one point per minute kept **24 h** (`traffic_minutes`) and the hourly average + peak kept **a year** (`traffic_hours`, rebuilt from the minutes so a replaced minute never counts twice). `GET /api/history?node&iface&hours` (per minute up to a day, per hour beyond). Chart (`TrafficChart`, plain SVG, ranges 1 h / 24 h / 7 d / 30 d / 1 y, average and peak, gaps where data is missing; opens on 1 h while Omini has only minutes of data): click a **link** (the upstream port's history, else the device's port, else the Wi-Fi client's), a **port's card**, a Wi-Fi client or a WAN in the panel |
 | Plugin distribution | Each plugin is its own Git repository. Built-in **plugin store** with a default curated list (one-click install) + install from any GitHub URL. Reference model: Home Assistant's HACS. Installs pinned to a release |
 | Plugin trust | Publisher badge (`official` / `community`) + trust level assigned by maintainers: `plug-and-play` (fully tested, works out of the box), `stable` (tested, known issues documented), `experimental` (partially tested), `unverified` (not reviewed; always the level for URL imports). Levels belong to a release (`reviewed_version`, `reviewed_at`, `known_issues` in the index); the store says when the installed release is newer than the one reviewed. Process and criteria in `docs/plugin-review.md`; requests through the "Plugin review" issue form |
-| Firewall | **OPNsense** via its official REST API (key/secret, dedicated least-privilege user, HTTPS) as a Python plugin in its own repo (`omini-plugin-opnsense`). v0.1 reads: interfaces with status, IPs, **link speed/media** and traffic counters; ARP; DHCP leases (ISC, Kea or dnsmasq, whichever is in use); CPU, memory, uptime, version; **gateway status** (up/down, latency, loss). pfSense is post-MVP |
-| Releases | Incremental: v0.1 core + SNMP + network scan + identification + OPNsense + topology map + login; v0.2 traffic flow + 24h traffic history + insights + presence timeline; v0.3 plugin store + trust levels + YAML profiles; v0.4 Mercusys + pt-BR + refined discovery (public launch) |
+| Firewall | **OPNsense** via its official REST API (key/secret, dedicated least-privilege user, HTTPS) as a Python plugin in its own repo (`omini-plugin-opnsense`). v0.1 reads: interfaces with status, IPs, **link speed/media** and traffic counters; ARP; DHCP leases (ISC, Kea or dnsmasq, whichever is in use); CPU, memory, uptime, version; **gateway status** (up/down, latency, loss). pfSense has its own plugin |
+| Releases | release-please from Conventional Commits; the Docker image is pushed on each release. v0.1–v0.4 were the incremental pre-releases; **1.0.0** is the first official release (forced with a `Release-As: 1.0.0` footer) |
 | Test network | OPNsense (router/firewall, DHCP), managed Horaco **HC-SWTGW218AS** switch, Mercusys routers in **AP mode** (clients visible in OPNsense ARP/DHCP) |
 | Horaco HC-SWTGW218AS | No SNMP on stock firmware: Python plugin [`omini-plugin-horaco`](https://github.com/riccardoalv/omini-plugin-horaco) reads its web interface — `/info.cgi` (model, firmware V200.x, MAC, uptime, port status), `/port.cgi?page=stats` (64-bit packet and byte counters as `hi-lo`), `/panel.cgi` (RJ45/SFP from each port's `div` class) and `/mac.cgi?page=fwd_tbl` (paged with its form, `cmd=goto`). The session cookie is `md5(user+password)`: reused, login posted only when asked (the switch keeps one session). Only page navigation is ever posted. The switch now and then closes every connection at once for a few seconds: a page is tried again after a 6 s pause, and a page that still fails never fails the collection (the MAC table memory covers it) |
 | Mercusys Halo | Python plugin [`omini-plugin-mercusys`](https://github.com/riccardoalv/omini-plugin-mercusys): the units' local web interface (TP-Link Deco protocol: RSA password, AES requests signed with `h=md5(admin+password)&s=seq+len`, the login's signature also carrying `k`/`i`; the password at the top level of the login payload, unlike Deco). Each unit is an AP; clients read unit by unit (`access_host` is always "1"); no per-client signal or link rate in the local API (checked every model, controller and view of its web interface: only the Mercusys cloud app has them). Wi-Fi clients with band, network name (`/admin/wireless?form=wlan`: only the SSIDs are read — that answer also carries the Wi-Fi passwords, never kept) and **current traffic** (`rx_bps`/`tx_bps` — the units report no link rate), wired ones in the FDB (`LAN`), names as hosts; requests carry `Content-Type: application/json` like the web interface (else "no such callback"). Session kept in the state folder, 15 min pause after a refused login |
@@ -93,7 +93,7 @@ Product and architecture decisions are made by consensus with the maintainer: ra
 | VLANs and subnets | **A filter, not areas** (maintainer's decision after comparing Omada, Auvik, Cisco Catalyst, Meraki: none draws VLANs as boxes): a picker in the map toolbar (shown when the network has more than one VLAN or subnet) highlights every device in the chosen one — by its own VLAN interfaces and port membership, the upstream port carrying it, its addresses (`lib/autoAreas.ts`, inclusive mode) — and what hangs below the devices only in it (`networkHighlight`: a router also in other networks lights up alone, else the modem's network lit the whole LAN under the firewall), and dims the rest. Automatic areas were removed (migration 15 deletes them). While one is picked, a **temporary dashed frame** with its name surrounds each linked group of highlighted devices (`clusterFrames` in `lib/areas.ts`: one frame per group, never one box over the whole map); it goes away with the filter |
 | Device extras | Schema fields any integration can fill, shown in the device panel (`DeviceExtras`): `services` (stopped first, count of stopped), `vpn_peers` (WireGuard / OpenVPN / IPsec: connected, endpoint, last handshake, bytes), `dhcp_pools` and `firewall_states` (usage bars, yellow ≥ 75 %, red ≥ 90 %), `vlans`; `Interface.transceiver` (SFP vendor, part, type, temperature, voltage, bias, Tx/Rx power — Rx below the module's alarm threshold, or -20 dBm without one, in red) in the port card. OPNsense 0.3 reads them all |
 | Map export | "Export" in the map toolbar opens a dialog: format, theme (dark / light) and orientation (left-to-right / top-down) — the image is laid out in the chosen orientation and theme whatever the screen shows, then the screen is put back as it was (pan and zoom included). PNG (2× pixel ratio) or SVG of the **whole map with every group and area expanded** (laid out expanded for the capture, then folded back; every node framed with a margin, measured as drawn, scaled down past 8192 px; the framing goes on Vue Flow's transformation pane, which holds the screen's pan and zoom; `html-to-image`, MIT) on the theme's background, a **draw.io** diagram (`lib/drawio.ts`: nodes where they are drawn — laid out expanded in the chosen orientation —, areas as rectangles behind them, links with "port | speed", editable in draw.io), or the data as JSON (topology, areas, layout) |
-| Visual style | **Dark by default**, light theme available, follows the OS setting. Clean, minimal look; color reserved for status (green/yellow/red), traffic and brand icons |
+| Visual style | Follows the OS setting by default (Settings: system / dark / light). Clean, minimal look; color reserved for status (green/yellow/red), traffic and brand icons |
 
 ## Open questions
 
@@ -101,12 +101,12 @@ None right now.
 
 ## Principles
 
-1. **Read-only (MVP).** No integration may send commands that change device configuration.
+1. **Read-only.** No integration may send commands that change device configuration.
 2. **Lightweight.** One deployable unit, embedded database (SQLite), no external services (no Redis, Postgres, queues). Must run on a Raspberry Pi.
 3. **Easy to contribute.** Most new device support should be a declarative profile or an external plugin, not core code.
 4. **Vendor logic stays in integrations.** Nothing outside the integrations layer may know about specific vendors.
 5. **One device failing never breaks the rest.** An integration error becomes an "offline" status + insight; other collections continue.
-6. **MVP first.** When in doubt, leave it out and add it to the README roadmap.
+6. **Small first.** When in doubt, leave it out and add it to the README roadmap.
 
 ## Common data model (draft)
 
@@ -250,6 +250,6 @@ The collector turns them into **alerts** (`alerts` table) on every rebuild: a ne
 - Structured logging, no ad-hoc prints.
 - Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); `internal/demo` (a fictional network, not available in the product) also serves as a fixture.
 
-## Out of MVP scope
+## Out of scope (for now)
 
 Write actions, multi-tenancy.

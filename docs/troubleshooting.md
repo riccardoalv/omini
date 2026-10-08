@@ -190,8 +190,8 @@ set `OMINI_NMAP=install`.
   in. **Receiving from** lists the exporters Omini hears.
 - NetFlow v9 and IPFIX need the exporter's templates first; most exporters
   resend them every few minutes.
-- Omini stops listening when the integration has not run for 10 minutes. Keep
-  the round interval at 10 minutes or less while you use flows.
+- Omini stops listening once the integration is disabled or deleted. Check that
+  it is enabled in Integrations.
 
 ## Notifications do not arrive
 

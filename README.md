@@ -1,350 +1,144 @@
-# Omini
+<p align="center">
+  <img src="docs/assets/banner.png" alt="Omini: see your whole network, live, self-hosted" width="100%">
+</p>
 
-> **Multi-vendor**, **self-hosted**, **open source** network topology and traffic map for homelabs and small networks.
+<p align="center">
+  <a href="https://github.com/riccardoalv/omini/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/riccardoalv/omini?sort=semver"></a>
+  <a href="https://hub.docker.com/r/riccardoalv/omini"><img alt="Docker Hub" src="https://img.shields.io/docker/pulls/riccardoalv/omini?logo=docker&logoColor=white"></a>
+  <a href="https://github.com/riccardoalv/omini/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/riccardoalv/omini/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
 
-Omini connects to your routers, switches, access points and network software — from different vendors — reads what each one knows about the network, and automatically builds a **live topology map** showing **where traffic is flowing**, **which devices are connected** and **how healthy the network is**. All in a clean web UI running on your own hardware.
+**Omini** is a self-hosted, open source network map for homelabs and small networks. Start it and, within a minute, it finds every device on your network, recognizes what each one is, and draws a **live map** of what is plugged into what: ports, link speeds, traffic, Wi-Fi clients, VMs and the apps running on them. Connect your firewall, switches, access points and hypervisors in a few clicks and the map gets sharper, with health data and alerts sent to Telegram, Discord, Slack, ntfy or e-mail.
 
-> **Status:** v0.2 — for homelabs. The network scan, device identification, the map (areas, live traffic, port view), system health, the nmap integration and the plugin store with the OPNsense plugin work today; insights and traffic history are next (see the [roadmap](#roadmap)).
+It runs as one small container (amd64 and arm64, a Raspberry Pi is enough), keeps everything in an embedded database, and **only reads**: Omini never changes the configuration of your devices.
 
----
+<p align="center">
+  <img src="docs/assets/screens/map.png" alt="The network map: firewall, WANs, switches, access points, servers and clients, with port names, link speeds and live traffic" width="100%">
+</p>
 
-## Why
+## Features
 
-A homelab grows one device at a time: a firewall here, a cheap 2.5G switch there, a couple of Wi-Fi access points, a hypervisor full of VMs, smart plugs, TVs and phones. Each piece speaks a different language, and nothing shows the whole picture.
+- **Zero-config discovery.** ARP, ping, common ports, reverse DNS, NetBIOS, mDNS, SSDP/UPnP and SNMP (v2c and v3), plus optional nmap for operating systems and service versions. The networks behind your routers are scanned too.
+- **Device identification.** Type, operating system, brand, model and self-hosted apps (2,600+ recognized) with the evidence behind each guess, shown with their own icons. You can correct anything by hand.
+- **A topology map that builds itself.** LLDP neighbors, MAC tables, ARP, DHCP leases and Wi-Fi client lists are cross-referenced to work out each device's switch port or access point. Devices without an API (unmanaged switches, APs in bridge mode) are inferred from what the others see.
+- **Live traffic.** Every device shows its current download and upload, every link its port and speed. Click a link or port for its history (per minute for a day, hourly for a year). "Who talks to whom" comes from NetFlow, IPFIX or sFlow.
+- **A device panel.** CPU, memory, temperatures, disks, pending updates, a front view of the ports (RJ45 and SFP, colored by speed, with optics readings), VLANs, VPN peers, services, DHCP pools, the devices it talks to, and its presence timeline.
+- **Alerts that matter.** 27 rules: device offline, WAN gateway down, duplicate IP, links that fell to 100 Mbps or half duplex, flapping ports, low SFP signal, full disks, hot CPUs, insecure services, full DHCP pools, a burst of new devices, and more. Each comes with a hint on what to do.
+- **Notifications.** Telegram, e-mail, generic webhooks (signed with HMAC), Slack, Discord and ntfy, grouped per device and never repeated while an alert flaps.
+- **Your map, your way.** Left-to-right or top-down layout, named and colored areas, fold any node's children into a bubble, VLAN and subnet filter, hide devices. Export to PNG, SVG, draw.io or JSON.
+- **Integrations and a plugin store.** One-click plugins for OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, Proxmox (clusters included), Mercusys Halo and Horaco switches. Any GitHub repository can be installed too, and plugins are short Python scripts.
+- **Built for your server.** Single admin login, credentials encrypted at rest, dark and light themes, English and Brazilian Portuguese.
 
-Omini is that picture. Start it, and in a few seconds it finds every device on your network, recognizes what each one is — the firewall, the NAS, the Proxmox host, the Ubuntu VM and the apps running on it, the Android phone, the air conditioner — and draws it all on one map. No agents, no setup on your devices, no vendor lock-in.
+## Screenshots
 
-What makes Omini, Omini:
-
-1. **Zero configuration** — it discovers the network by itself and identifies devices, operating systems, brands and self-hosted apps, showing each with its own icon.
-2. **Integrations that are easy** — when you want more detail, connecting a device or a piece of software (SNMP switches, firewalls, vendor APIs, community plugins) takes a few clicks, including devices that have no SNMP or API at all.
-3. **Traffic flow map** — every link shows live bandwidth usage (thickness/color by load), so you see at a glance where traffic flows and where the bottlenecks are.
-
-## MVP scope
-
-- **Works with zero configuration** — on first start Omini scans the networks it is connected to and finds every device, combining ARP, ping, open ports, reverse DNS (including the router's DNS), NetBIOS, mDNS/Bonjour and SSDP/UPnP. Vendors come from an embedded MAC (OUI) database. Ports and names are checked once per new device and then every few hours, to keep the network quiet.
-- **Device identification** — type (firewall, switch, access point, NAS, hypervisor, VM, phone, TV, air conditioner...), operating system, brand and software, with the evidence behind each conclusion. Self-hosted apps (Jellyfin, qBittorrent, Home Assistant and 2,600+ others) appear as their own nodes under the machine that runs them. You can correct anything by hand.
-- **Icons** — product logos for homelab software and appliances; device-type icons with an OS or brand badge for everything else.
-- **Integrations screen** — pick an integration, enter host and credentials, test the connection, save. Forms are generated from each integration's definition.
-- **Automatic topology** — cross-reference LLDP/CDP neighbors, MAC tables (FDB), ARP, DHCP leases and Wi-Fi client tables to work out *what is plugged into what, and on which port*.
-- **Traffic flow map** — per-link utilization computed from interface counters, refreshed periodically and rendered on the map.
-- **Connected clients** — every device on the network with IP, MAC, hostname, where it is attached (switch/port or AP/SSID) and Wi-Fi signal.
-- **Devices without API** — devices that cannot be integrated (e.g. consumer routers in AP mode, unmanaged switches) are **inferred** from what other devices see, and appear as "unmanaged" nodes you can name and position.
-- **Insights** — simple, useful alerts: device offline, duplicate IP, uplink negotiated below 1 Gbps, interface errors, weak Wi-Fi signal, high CPU, hot CPU, disk almost full, firmware update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link.
-- **Interactive map** — drag nodes (positions are saved), click a node to see its ports, traffic and clients.
-- **Plugin store** — install integrations with one click from a curated list, or from any GitHub repository URL.
-- **Short traffic history** — click a link to see its traffic over the last ~24h.
-- **Device inventory and timeline** — every device ever seen is kept with first/last seen and a full join/leave timeline; devices offline for more than 1h are hidden from the map but stay in the inventory.
-- **Read-only** — the MVP **never changes device configuration**. Write actions (e.g. disable a port, change a VLAN) may come later behind explicit permissions.
-- **Translatable UI** — English and Brazilian Portuguese from day one.
-
-## Integrations
-
-Integrations are layered so that most contributions require little or no core code:
-
-| Layer | What it is | Who writes it |
-|---|---|---|
-| **SNMP profiles** | Declarative files (OIDs and mappings) describing a vendor/model | Anyone — no programming |
-| **Python plugins** | A Python script that receives its config as JSON and prints devices as JSON | Anyone who knows some Python |
-| **Core (Go)** | Standard protocols: generic SNMP, LLDP, ARP, ICMP discovery | Core contributors |
-
-### First targets (based on hardware available for real testing)
-
-| Integration | Type | Data |
-|---|---|---|
-| Network scan | Core (Go), on by default | Every device: IP, MAC, vendor, hostnames, open ports, mDNS/UPnP services and models. Devices with SNMP v2c are read in full (`SNMPv2-MIB`, `IF-MIB`, `LLDP-MIB`, `BRIDGE-MIB`/`Q-BRIDGE-MIB`, ARP): ports, traffic, neighbors, MAC tables |
-| nmap | Core (Go), optional, uses the nmap installed on the host | Operating system and service versions of every device (deeper than the network scan; runs in the background, daily) |
-| OPNsense | Python plugin ([omini-plugin-opnsense](https://github.com/riccardoalv/omini-plugin-opnsense), official REST API, key/secret) | Interfaces with link speed and traffic, ARP, DHCP leases (ISC, Kea or dnsmasq), CPU/memory/uptime, gateway status |
-| Horaco HC-SWTGW218AS | Python plugin ([omini-plugin-horaco](https://github.com/riccardoalv/omini-plugin-horaco), web interface — no SNMP on stock firmware) | Ports with speed and RJ45/SFP, traffic, MAC table, model, firmware, uptime |
-| Mercusys Halo | Python plugin ([omini-plugin-mercusys](https://github.com/riccardoalv/omini-plugin-mercusys), local web interface) | Every mesh unit, Wi-Fi and wired clients with names, band and rates, CPU/memory |
-
-Later: MikroTik (REST API), UniFi controller, TP-Link Omada, OpenWrt, Proxmox, pfSense.
-
-> Web scraping integrations are inherently fragile (they break with firmware updates), so they ship as optional plugins, never as part of the core.
-
-### Plugin store and trust levels
-
-Every plugin lives in its own Git repository. The built-in store lists a curated set of plugins (one-click install), and any GitHub repository can be imported by URL. Installs are always pinned to a release.
-
-Each plugin shows two things:
-
-**Publisher badge** — who maintains it:
-- **Official** — maintained by the Omini project
-- **Community** — maintained by a third party
-
-**Trust level** — how well it is known to work:
-
-| Level | Meaning |
+| | |
 |---|---|
-| 🟢 **Plug & Play** | Fully tested on real hardware; works out of the box |
-| 🔵 **Stable** | Tested; known issues or instabilities are documented |
-| 🟠 **Experimental** | Partially tested; expect rough edges |
-| ⚪ **Unverified** | Not reviewed by the Omini project — install at your own risk |
+| ![Device panel with CPU, memory, ports and traffic](docs/assets/screens/panel.png) | ![VLAN filter highlighting one network](docs/assets/screens/vlan-filter.png) |
+| **Device panel**: health, a front view of the ports, traffic and alerts | **VLAN and subnet filter**: what belongs to a network, framed |
+| ![Alerts screen](docs/assets/screens/alerts.png) | ![Device inventory](docs/assets/screens/devices.png) |
+| **Alerts**: with hints, popups and a presence timeline | **Inventory**: every device ever seen, where it is connected |
+| ![Integrations](docs/assets/screens/integrations.png) | ![Notifications settings](docs/assets/screens/notifications.png) |
+| **Integrations**: built-in scans and plugins from the store | **Notifications**: Telegram, e-mail, Discord, Slack, ntfy, webhooks |
 
-Trust levels are assigned by the Omini maintainers when a plugin is reviewed for the curated list — never self-declared by the plugin author. Plugins imported by URL are always **Unverified**.
+<p align="center">
+  <img src="docs/assets/screens/map-light.png" alt="The map in the light theme" width="100%">
+</p>
 
-## User interface
+## Quick start
 
-Omini opens straight into a **full-screen map** with a summary bar on top (devices, clients, alerts).
+With Docker (Docker Hub `riccardoalv/omini` or `ghcr.io/riccardoalv/omini`):
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ◉ Omini     12 devices · 47 clients · ⚠ 2                   │
-├────┬───────────────────────────────────┬────────────────────┤
-│ 🗺 │                                   │ Horaco SW1      ✕  │
-│ 💻 │          [OPNsense]               │ 192.168.1.2 · ●    │
-│ 🔌 │              │                    │ ────────────────── │
-│ ⚠  │        ▶[Horaco SW1]◀             │ Ports              │
-│ ⚙  │        /     |      \             │ ● 1 2.5G  OPNsense │
-│    │    [AP1]   [AP2]   [NAS]          │ ● 2 1G    AP1      │
-│    │      │     ┌─┼─┬─┐               │ ○ 3 —              │
-│    │   ( 20 )   📱 💻 📺               │ Clients (23)    ›  │
-└────┴───────────────────────────────────┴────────────────────┘
+```bash
+docker run -d --name omini --network host --restart unless-stopped \
+  -v omini-data:/data riccardoalv/omini:latest
 ```
 
-- **Screens:** Map (with the device inventory in a drawer: the devices chip at the top left), Integrations, Settings — plus Alerts (v0.2, called Insights before) and Flows (shown while the flows integration is on). The plugin store opens as a window from Integrations.
-- **Clients on the map:** every client is shown; when an AP or switch port has more than 8 clients, they collapse into a "N clients" bubble that expands on click (threshold configurable).
-- **Details:** clicking a node opens a side panel with its ports, traffic, clients and alerts — without leaving the map.
-- **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.
-- **Orientation:** the map is laid out left to right by default; one click switches to top down (dragged positions are kept separately for each orientation).
-- **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor (six presets or any color from the color picker: hue, hex or R/G/B, previewed live), hide or delete with a right click on the title ("Show hidden" brings a hidden one back). Areas show in both orientations.
-- **VLANs and subnets:** a picker in the map toolbar highlights everything in one VLAN or subnet and dims the rest.
-- **Expand and collapse:** the node you expand or collapse stays where it is on screen; the rest of the map makes room around it.
-- **Sidebar:** compact (icons) or expanded (icons and names).
-- **Theme:** dark by default, light available, follows your OS setting.
-
-## How it works
-
-```
- ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
- │ Switch (SNMP)│   │   OPNsense   │   │ Plugin script│   ← integrations
- └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
-        │   translate to the common data model│
-        ▼                  ▼                  ▼
- ┌─────────────────────────────────────────────────────┐
- │  Collector (periodic, concurrent polling)           │
- │  interfaces + counters, neighbors, FDB, ARP, DHCP,  │
- │  Wi-Fi clients, CPU/memory                          │
- └──────────────────────────┬──────────────────────────┘
-                            ▼
- ┌─────────────────────────────────────────────────────┐
- │  Topology engine + traffic rates + insights         │
- └──────────────────────────┬──────────────────────────┘
-                            ▼
-                  API  →  Web UI (map)
-```
-
-### How the topology is built
-
-1. **Identity** — every managed device is indexed by all its MACs, IPs and name.
-2. **Device-to-device links** — LLDP/CDP/MNDP neighbors are matched to known devices (chassis MAC, management IP or name). The same link seen from both ends becomes a single edge with both ports. Unknown neighbors become "unmanaged" nodes.
-3. **Uplink ports** — ports with an infrastructure neighbor are marked as uplinks and ignored when locating clients.
-4. **Wi-Fi clients** — AP registration tables take priority: the client is attached to the AP/SSID.
-5. **Wired clients** — for each MAC in the FDB tables, pick the *edge-most* port (non-uplink, fewest learned MACs).
-6. **Unmanaged segments** — a non-uplink port with several MACs becomes a virtual "unmanaged switch/host" node (a dumb switch, a consumer AP, or a hypervisor with VMs).
-7. **Devices without LLDP** — managed devices with no neighbors are located through the FDB like clients (edge marked as *inferred*).
-8. **Enrichment** — IP from ARP, hostname from DHCP; randomized MACs (locally administered bit) are flagged.
-
-### How traffic flow is computed
-
-Each poll reads interface byte counters; the rate is `Δbytes / Δtime` between two polls (handling counter wraps and resets). The rate of a link is taken from whichever end has an integration; utilization is the rate divided by the negotiated link speed.
-
-## Stack
-
-| Part | Technology |
-|---|---|
-| Core (discovery, SNMP, topology, traffic, API) | **Go** |
-| Vendor/software integrations | **Python** plugins |
-| Web UI | **Vue 3** + **Vue Flow** (map) with its own tree layout |
-| Database | SQLite (embedded) |
-| Deployment | One Docker image (Go binary + bundled Python runtime) |
-
-Why: Go keeps the always-on core fast and light (like Caddy, Traefik, AdGuard Home, Beszel); Python makes writing integrations easy for the community (like Home Assistant). No external services — runs on a Raspberry Pi, a small VM or a NAS.
-
-## Installation
-
-With Docker (amd64 and arm64, e.g. a Raspberry Pi 4/5), save this as `docker-compose.yml`:
+Or with Compose:
 
 ```yaml
 services:
   omini:
-    image: ghcr.io/riccardoalv/omini:latest
+    image: riccardoalv/omini:latest
     container_name: omini
-    network_mode: host   # the network scan must see your LAN (ARP, mDNS, SSDP)
+    network_mode: host # the scan must see your LAN (ARP, mDNS, SSDP)
     restart: unless-stopped
     volumes:
       - ./data:/data
     environment:
       TZ: UTC
-      # OMINI_NMAP: install   # let Omini install nmap for the nmap integration
+      # OMINI_NMAP: install   # installs nmap on start, for OS and version detection
 ```
 
-```bash
-docker compose up -d
-# open http://<your-server>:8080 — the first visit asks you to create the admin user
-```
+Open `http://<your-server>:8080`, create the admin account, and watch the map fill in. Then add your firewall, switches or hypervisor in **Integrations → Add integration**.
 
-The network scan starts by itself. Add more in **Integrations → Add integration** (the store): OPNsense, nmap, or any plugin from a GitHub address.
+Host networking matters: in a Docker bridge network Omini only sees Docker's own network. [Installation](docs/installation.md) covers building from source, systemd, upgrades and backups.
 
-Without Docker: `make run` builds and starts Omini (needs Go and Node.js; plugins need [uv](https://docs.astral.sh/uv/)).
+## Documentation
 
-### Configuration
+| For users | For developers |
+|---|---|
+| [Installation](docs/installation.md) | [Writing a plugin](docs/plugins.md) |
+| [Configuration](docs/configuration.md) | [HTTP API](docs/api.md) |
+| [Discovery](docs/discovery.md): what the scan finds and needs | [Architecture](docs/architecture.md) |
+| [The map](docs/map.md) | [Development](docs/development.md) |
+| [Alerts and notifications](docs/alerts.md) | [SNMP profiles](docs/snmp-profiles.md) |
+| [Integrations](docs/integrations.md): each plugin and its read-only account | [Plugin review](docs/plugin-review.md) |
+| [Troubleshooting](docs/troubleshooting.md) | |
 
-| Variable | Default | Description |
+## Integrations
+
+| Integration | How | What it adds |
 |---|---|---|
-| `OMINI_ADDR` | `:8080` | Address the web server listens on |
-| `OMINI_DATA_DIR` | `./data` | Where the SQLite database and the secret key live |
-| `OMINI_POLL_INTERVAL` | `60` | Default time between collection rounds (every integration, one at a time, from the edge of the network to its center), in seconds or as a duration (`1m30s`); minimum 10s. Changeable on the Integrations screen |
-| `OMINI_SECRET_KEY` | — | Base64 32-byte key to encrypt device credentials. If unset, one is generated in `<data dir>/secret.key` — back it up together with the database |
-| `OMINI_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
-| `OMINI_AUTOSCAN` | `true` | Create the network scan integration on first start |
-| `OMINI_NMAP` | — | Docker image only: `install` installs nmap on start, for the nmap integration (Omini does not ship nmap) |
-| `OMINI_NMAP_PRIVILEGED` | `false` | `true` when nmap has raw-socket permission without Omini running as root, so it detects operating systems (see below) |
-| `OMINI_PLUGIN_DIRS` | — | Comma-separated plugin folders loaded in place (plugin development) |
-| `OMINI_PLUGIN_INDEX` | this repository's `internal/plugins/catalog.json` | The plugin store's index (fetched daily); `off` keeps the list shipped with Omini |
-| `OMINI_UV` | `uv` | The uv binary used to build plugin environments |
+| Network scan | Built in, on by default | Every device: IP, MAC, vendor, names, open ports, mDNS/UPnP models, SNMP (interfaces, traffic, LLDP, MAC tables) |
+| nmap | Built in, uses the nmap on the host | Operating systems and service versions; scan one device from its panel |
+| Traffic flows | Built in, listens on UDP 2055 and 6343 | Conversations from NetFlow v5/v9, IPFIX and sFlow v5 |
+| [OPNsense](https://github.com/riccardoalv/omini-plugin-opnsense) | Plugin, REST API | Interfaces, link speed and media, ARP, DHCP, gateways, health, updates, VPN, services, firewall states, SFP optics |
+| [Proxmox VE](https://github.com/riccardoalv/omini-plugin-proxmox) | Plugin, API token | Nodes and clusters, VMs and containers on the right host, CPU, memory, disks |
+| [Horaco](https://github.com/riccardoalv/omini-plugin-horaco) | Plugin, web interface | Ports, RJ45/SFP, counters, MAC table (switches without SNMP) |
+| [Mercusys Halo](https://github.com/riccardoalv/omini-plugin-mercusys) | Plugin, local web interface | Mesh units, Wi-Fi and wired clients, bands, traffic |
+| MikroTik, UniFi, Omada, OpenWrt, pfSense | Plugins | See [Integrations](docs/integrations.md) for each one's status |
 
-## Development
+Plugins live in their own repositories and are installed from the built-in store. Each shows a publisher badge (official or community) and a trust level given by the maintainers (plug-and-play, stable, experimental or unverified), as described in [Plugin review](docs/plugin-review.md).
 
-Requirements: Go (see `go.mod`), Node.js 24, [uv](https://docs.astral.sh/uv/) and `make` — or just `nix develop`.
+## How it works
 
-```bash
-make run    # build the UI and run everything on http://localhost:8080 (scans your network)
-make dev    # backend + UI with hot reload on http://localhost:5173 (API on :8080)
-make test   # all tests (Go, Python SDK, web)
-make ci     # everything CI runs, locally
+```
+ network scan · nmap · flows        plugins (OPNsense, Proxmox, ...)
+            │                                  │
+            ▼                                  ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │ Collector: one round at a time, from the edge of the     │
+ │ network to its center; counters become traffic rates     │
+ └───────────────────────────┬──────────────────────────────┘
+                             ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │ Topology engine → alerts → notifications · SQLite        │
+ └───────────────────────────┬──────────────────────────────┘
+                             ▼
+                     HTTP API → web UI
 ```
 
-On first access, Omini asks you to create the admin user. Data (database and secret key) goes to `./data`.
-
-The data contract between the Go core and plugins is a JSON Schema in `schema/`; Go types and the Python SDK models are generated from it (`make generate`).
-
-### Writing a plugin
-
-A plugin is a Git repository with a `plugin.yaml` manifest, a `requirements.txt` and a Python entrypoint. With the `omini-sdk` package you only write two functions:
-
-```python
-from omini_sdk import plugin, Device
-
-@plugin.collect
-def collect(cfg) -> list[Device]:
-    ...  # talk to the device/API, return devices in Omini's model
-
-@plugin.test
-def test(cfg) -> str:
-    ...  # check connectivity/credentials, return a short message
-```
-
-See [`CLAUDE.md`](CLAUDE.md) for the manifest format and protocol.
-
-## Preparing your devices
-
-- **Network scan:** run Omini with **host networking** (`network_mode: host` in Docker) so it sees your LAN directly. If the host has a firewall, allow inbound **UDP 5353** (mDNS) and **UDP 1900** (SSDP) — otherwise names and models announced by devices are not received. To get hostnames from your router, enable registering DHCP leases in its DNS (OPNsense: *Services → Unbound DNS → General → Register DHCP leases*).
-- **Traffic flows:** add the "Traffic flows" integration and point your router's NetFlow/IPFIX at Omini's address, **UDP 2055** (OPNsense: *Reporting → NetFlow*, version 9, the LAN interfaces), or a switch's sFlow at **UDP 6343**. Allow those ports in the host's firewall.
-- **SNMP devices:** enable SNMP v2c (read-only community) and, if available, **LLDP**. The network scan finds them by itself and tries the community `public`; if yours is different, add it in *Integrations → Network scan → SNMP communities*. Without LLDP Omini still works, but links between switches become *inferred*.
-- **Plugins:** install them in *Settings → Plugins* from their GitHub URL (Omini installs the latest release). Plugins run in their own Python environment, created with [uv](https://docs.astral.sh/uv/) — the Docker image includes it; when running the binary directly, install uv first.
-- **OPNsense:** create a dedicated user with only the privileges Omini needs (diagnostics, DHCP leases), generate an API key/secret for it, and keep the API on HTTPS. One key per application, as recommended by the [OPNsense docs](https://docs.opnsense.org/development/how-tos/api.html).
-
-### What the network scan needs
-
-Each discovery method needs something different from the system. The official Docker image (root, `network_mode: host`) has all of it. Omini checks what works where it runs and shows it in **Integrations → Network scan → On this server**; a "Network discovery is limited" alert appears when something is missing.
-
-| Method | Needs | Without it |
-|---|---|---|
-| ARP table (MACs, vendors) | being on the LAN: `network_mode: host` in Docker | in a Docker bridge network Omini only sees Docker's own network |
-| Ping (ICMP) | unprivileged ping sockets (`sysctl net.ipv4.ping_group_range="0 2147483647"`) or root | falls back to TCP: devices with no open port are missed |
-| mDNS, SSDP (names, models) | multicast: `network_mode: host`, UDP 5353 and 1900 allowed in | names and models announced by devices are missed |
-| NetBIOS, reverse DNS, ports, web titles, SSH banners | nothing special | — |
-| nmap OS detection, traceroute | root, or `CAP_NET_RAW` on nmap | nmap still finds ports and versions |
-| Flows (NetFlow, IPFIX, sFlow) | UDP 2055 and 6343 reachable from the exporter | the router cannot send them |
-
-### nmap without root
-
-The nmap integration detects operating systems (`-O`) only with raw sockets. The Docker image runs as root, so it does. Running the binary as a normal user, give nmap the permission and tell Omini:
-
-```bash
-sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(command -v nmap)"
-OMINI_NMAP_PRIVILEGED=true ./omini
-```
-
-On NixOS, the store is read-only: use a wrapper instead (`security.wrappers.nmap = { source = "${pkgs.nmap}/bin/nmap"; capabilities = "cap_net_raw,cap_net_admin,cap_net_bind_service+eip"; owner = "root"; group = "root"; };`), which puts it in `/run/wrappers/bin`.
-
-Each device can also be scanned from its panel ("Scan (nmap)"). How is set in the integration, under "Scan one device": how many of the most common ports (default 100), service versions (off, quick — the default, `--version-intensity 0` — light or full), default scripts (`-sC`, off by default) and the operating system and route (with that permission). The defaults take about 15 seconds; 1024 ports with full versions and scripts — like `nmap -A` — can take a couple of minutes.
+The core is written in **Go**: discovery, SNMP, topology, traffic and the API in one binary with the web UI (Vue 3) embedded. Vendor-specific integrations are **Python** plugins that read their config as JSON on stdin and print devices as JSON on stdout. The data contract is a JSON Schema from which both sides are generated. See [Architecture](docs/architecture.md).
 
 ## Security
 
-- The MVP is **read-only**: no integration sends write commands.
-- The UI requires login (an admin user is created on first run).
-- Device credentials are encrypted at rest.
-- Detected devices are kept until you delete them (no automatic purge). Phones with randomized MACs can create duplicate entries; the UI offers filters and bulk cleanup.
-- Plugins run code on your server and receive the credentials you configure for them: only install plugins you trust.
+- **Read-only**: no integration sends commands that change a device. Give each integration a read-only account ([Integrations](docs/integrations.md) shows how).
+- Login is required. The admin user is created on the first visit.
+- Device credentials are encrypted at rest. Secrets are never shown again or written to logs.
+- Plugins run code on your server and receive the credentials you give them, so install only plugins you trust.
 
 ## Roadmap
 
-Omini ships in incremental releases, each one usable on its own.
+- Write actions (disable a port, change a VLAN) behind explicit permissions
+- More plugins and SNMP profiles, reviewed on real hardware
+- More languages
 
-### ✅ v0.1 — see your network
-
-- **Zero-config discovery:** network scan (ARP, ping, common ports, reverse DNS, NetBIOS, mDNS, SSDP/UPnP) with **SNMP** as one of its methods (several read-only communities; interfaces, traffic, LLDP, MAC table, ARP)
-- **Device identification:** type, OS, brand and product with the evidence behind them; MAC vendors (IEEE), Apple and Android model names, solar inverters, TVs, smart speakers, IP phones and UPSes; user overrides for type and icon
-- **App nodes** (several apps on one IP) and **Proxmox guests** drawn under their host (when the network has a single Proxmox)
-- **nmap** integration, in the background
-- **Topology map:** left-to-right or top-down layout, named **areas** that follow their devices, client groups that collapse into bubbles, saved positions, hide/delete devices
-- **WAN nodes** for each internet uplink (speed, latency, status)
-- **Live traffic** from interface counters: on the devices, with each link's maximum speed
-- **Device panel:** CPU and memory bars, front view of the ports (RJ45/SFP, colored by speed), port descriptions, link to the device's web interface
-- **Plugins:** per-plugin Python environment (uv) with the embedded SDK, install from a GitHub URL, store with a curated catalog, publisher and trust badges
-- **OPNsense plugin:** interfaces with link speed and media, ARP, DHCP leases (ISC, Kea, dnsmasq), CPU, memory, uptime, gateways, WAN/PPPoE
-- Login, `en` + `pt-BR`, dark and light themes, Docker image (amd64 + arm64)
-
-### v0.2 — see what is wrong
-
-- ✅ **Scan one device** with nmap from its panel (quick by default; ports, versions, scripts and OS configurable)
-- ✅ **Device panel redesign:** resizable, summary tiles, ports right below CPU and memory
-- ✅ **Port names on the links**, next to the speed ("LAN | 10G")
-- ✅ **System health:** pending updates, temperatures, load, swap, disks (one per ZFS pool) — in the OPNsense plugin 0.2
-- ✅ **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
-- ✅ **24h traffic history** per link and port, as a chart (hourly for a year)
-- ✅ **Presence timeline** (joined/left, debounced) and a "new device" insight
-- ✅ **Alerts screen** (alerts + timeline)
-
-### v0.3 — find integrations
-
-- ✅ Remote store index and a full store screen
-- ✅ Review process to promote a plugin between trust levels ([docs/plugin-review.md](docs/plugin-review.md))
-- ✅ YAML SNMP profiles
-
-### v0.4 — public launch
-
-- ✅ **Horaco** switch plugin (web interface: ports, counters, MAC table)
-- ✅ **Mercusys Halo** plugin (mesh units and their clients) — first version, being validated
-- ✅ Refined subnet discovery (the routers' VLANs and LANs are scanned too)
-
-### Later
-
-- ✅ Long-term traffic history (hourly average and peak, kept a year)
-- ✅ "Who talks to whom" flow analysis (NetFlow v5/v9, IPFIX and sFlow v5, e.g. from OPNsense NetFlow)
-- Write actions behind explicit permissions
-- ✅ SNMP v3
-- ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)
-- ✅ VLAN and subnet filter on the map
-- ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
-- ✅ Topology export to draw.io (and PNG, SVG, JSON)
-- ✅ Collapsing an area into a bubble
-
-### Ideas under discussion
-
-- ✅ More OPNsense data: services running/stopped, VPN peers (WireGuard, OpenVPN), firewall states, DHCP pool usage per network
-- ✅ SFP transceiver diagnostics (optical levels)
-
-### Open questions
-
-- Discovery methods and the privileges they need (ICMP/ARP without root)
+Ideas and requests are welcome in the [issues](https://github.com/riccardoalv/omini/issues).
 
 ## Contributing
 
-Contributions are very welcome — especially **SNMP profiles**, **plugins** and **real device data** (anonymized SNMP walks help a lot with testing).
-See [`CLAUDE.md`](CLAUDE.md) for project conventions.
+Contributions are very welcome, especially **SNMP profiles**, **plugins** and **anonymized device data** for tests. Start with [Development](docs/development.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
@@ -353,7 +147,7 @@ See [`CLAUDE.md`](CLAUDE.md) for project conventions.
 - MAC vendors: [IEEE registration authority](https://standards-oui.ieee.org/) (MA-L registry).
 - Device model names: [Google Play supported devices](https://support.google.com/googleplay/answer/1727131) and a [community list of Apple identifiers](https://gist.github.com/adamawolf/3048717).
 - Deep scans: [nmap](https://nmap.org), when installed on the host (not distributed with Omini).
-- Logos and trademarks belong to their respective owners; Omini is not affiliated with them.
+- Logos and trademarks belong to their respective owners. Omini is not affiliated with them.
 
 ## License
 

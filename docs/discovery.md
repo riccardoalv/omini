@@ -246,8 +246,8 @@ service and bytes each way.
 Omini only listens; it never configures an exporter. Sampling rates are
 applied, so sampled sFlow and NetFlow give estimated totals. Flows are summed
 per minute; the 300 busiest conversations of each minute are kept for 24
-hours. Listeners close 10 minutes after the integration is disabled or
-deleted.
+hours. Listeners close when the integration is disabled or deleted (after
+10 minutes, or three rounds when rounds are further apart).
 
 The **Flows** screen has ranges from 15 minutes to 24 hours, a search box,
 services named by port, and the exporters Omini is receiving from. Each

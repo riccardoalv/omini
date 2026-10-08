@@ -104,8 +104,8 @@ it is a new alert and shows again. "Show again" undoes a dismissal.
 - **Load more** for older events (kept a year).
 
 A device that disappears gets its "left" event (at the time it was last seen)
-only after it has been missing for 5 minutes or three collection intervals,
-whichever is longer, so a phone that skips one round does not flap.
+only after it has been missing for 5 minutes or three collection rounds
+(the interval set in Settings), whichever is longer, so a phone that skips one round does not flap.
 
 ## Popups and marks
 
