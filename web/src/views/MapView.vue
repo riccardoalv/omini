@@ -13,7 +13,6 @@ import {
   LayoutGrid,
   RefreshCw,
   SquareDashed,
-  Waves,
 } from 'lucide-vue-next'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -29,7 +28,6 @@ import ExportDialog, { type ExportOptions } from '@/components/map/ExportDialog.
 import NodePanel from '@/components/map/NodePanel.vue'
 import TopologyNode, { type NodeData } from '@/components/map/TopologyNode.vue'
 import { alertsState, attentionCount, worstByNode } from '@/lib/alerts'
-import { networkVlans, vlanMembers } from '@/lib/vlans'
 import { api } from '@/lib/api'
 import {
   AREA_PADDING,
@@ -44,6 +42,7 @@ import {
   regroup,
   withDescendants,
 } from '@/lib/areas'
+import { areaMembers, AUTO_AREA_COLORS, autoGroups } from '@/lib/autoAreas'
 import { formatAgo, formatSpeed } from '@/lib/format'
 import {
   clientCount,
@@ -67,23 +66,8 @@ import { displayName } from '@/lib/names'
 import { mapDrawio } from '@/lib/drawio'
 import { download, exportName, mapImage, mapJSON } from '@/lib/export'
 import { applyTheme, prefs } from '@/lib/prefs'
-import {
-  deviceFlows,
-  edgeMotion,
-  linkLabels,
-  linkSeries,
-  nodeFlow,
-  type LinkSeries,
-} from '@/lib/traffic'
-import type {
-  AreaColor,
-  Integration,
-  MapArea,
-  Point,
-  TopoEdge,
-  TopoNode,
-  TopologyResponse,
-} from '@/lib/types'
+import { deviceFlows, linkLabels, linkSeries, nodeFlow, type LinkSeries } from '@/lib/traffic'
+import type { Integration, MapArea, Point, TopoEdge, TopoNode, TopologyResponse } from '@/lib/types'
 
 const POLL_MS = 10_000
 const SIZES: Record<string, { width: number; height: number }> = {
@@ -126,8 +110,6 @@ const allNodes = computed(() => data.value?.topology.nodes ?? [])
 const allEdges = computed(() => data.value?.topology.edges ?? [])
 /** Shows the devices the user hid (to bring one back); not remembered. */
 const showHidden = ref(false)
-/** A VLAN picked in the toolbar: its devices and links stand out, the rest is dimmed. */
-const vlan = ref<number>()
 const unhidden = computed(() =>
   showHidden.value
     ? { nodes: allNodes.value, edges: allEdges.value, hidden: 0 }
@@ -152,23 +134,40 @@ const mapGraph = computed(() => withWifiNetworks(nodes.value, edges.value))
 const expandAll = ref(false)
 const exportDirection = ref<'RIGHT' | 'DOWN'>()
 const direction = computed(() => exportDirection.value ?? prefs.layoutDirection)
+const clientView = computed(() =>
+  collapseClients(
+    mapGraph.value.nodes,
+    mapGraph.value.edges,
+    prefs.collapseThreshold,
+    expanded.value,
+    forced.value,
+  ),
+)
 const view = computed(() =>
   expandAll.value
     ? collapseClients(mapGraph.value.nodes, mapGraph.value.edges, Infinity, new Set())
-    : collapseAreas(
-        collapseClients(
-          mapGraph.value.nodes,
-          mapGraph.value.edges,
-          prefs.collapseThreshold,
-          expanded.value,
-          forced.value,
-        ),
-        collapsedAreaList.value,
-      ),
+    : collapseAreas(clientView.value, collapsedAreaList.value),
 )
+/** Areas on the map: automatic ones the user removed are kept only so they are not made again. */
+const liveAreas = computed(() => areas.value.filter((a) => !a.dismissed))
+/**
+ * One automatic area per VLAN and subnet (when there are several), with the
+ * devices only in it; devices in an area the user drew stay in that one.
+ */
+const autoAreaGroups = computed(() => {
+  const drawn = liveAreas.value.filter((a) => !a.auto).flatMap((a) => a.members)
+  return autoGroups(
+    mapGraph.value.nodes,
+    mapGraph.value.edges,
+    new Set(withDescendants(drawn, mapGraph.value.edges)),
+  )
+})
+const autoMembers = computed(() => new Map(autoAreaGroups.value.map((g) => [g.key, g.members])))
 /** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
 const collapsedAreaList = computed(() =>
-  areas.value.filter((a) => prefs.collapsedAreas.includes(a.id)),
+  liveAreas.value
+    .filter((a) => prefs.collapsedAreas.includes(a.id))
+    .map((a) => ({ ...a, members: areaMembers(a, clientView.value, autoMembers.value) })),
 )
 const failedIntegrations = computed(
   () => new Set((data.value?.statuses ?? []).filter((s) => !s.ok).map((s) => s.integration_id)),
@@ -197,15 +196,8 @@ const linkInfo = computed(() => {
   return {
     labels,
     flows: deviceFlows(labels, view.value.edges),
-    motion: edgeMotion(view.value.edges, nodes.value, labels),
   }
 })
-const vlans = computed(() => networkVlans(allNodes.value))
-const inVlan = computed(() =>
-  vlan.value === undefined
-    ? undefined
-    : vlanMembers(vlan.value, view.value.nodes, view.value.edges),
-)
 /** The most severe open alert of each node: a mark on the node. */
 const alertOf = computed(() => worstByNode(alertsState.list))
 const attention = computed(() => attentionCount(alertsState.list))
@@ -236,7 +228,6 @@ const flowNodes = computed<Node[]>(() => {
     },
     width: SIZES[n.kind]!.width,
     height: SIZES[n.kind]!.height,
-    class: inVlan.value && !inVlan.value.nodes.has(n.id) ? 'vlan-dim' : undefined,
     // A Wi-Fi network has no panel or menu, but it can be moved like any node.
     ...(n.kind === 'ssid' ? { selectable: false, focusable: false } : {}),
   }))
@@ -266,15 +257,10 @@ const flowEdges = computed<Edge[]>(() => {
       source: e.source,
       target: e.target,
       type: 'link',
-      data: {
-        ...labels.get(e.id),
-        motion: linkInfo.value.motion.get(e.id),
-        animate: prefs.animateFlow,
-      },
+      data: labels.get(e.id),
       class: {
         slow: look.slow,
         offline: target ? !target.online : false,
-        'vlan-dim': !!inVlan.value && !inVlan.value.edges.has(e.id),
       },
       style: {
         strokeWidth: look.width,
@@ -313,17 +299,27 @@ async function load() {
  * lands among them. The top padding leaves room for the title.
  */
 function layoutGroups(edges: TopoEdge[]): LayoutGroup[] {
-  return areas.value.map((a) => ({
+  return liveAreas.value.map((a) => ({
     id: String(a.id),
-    children: withDescendants(a.members, edges),
+    children: withDescendants(areaMembers(a, view.value, autoMembers.value), edges),
     padding: [AREA_PADDING + AREA_TITLE, AREA_PADDING, AREA_PADDING, AREA_PADDING],
   }))
 }
 
-// Re-layout only when the visible graph or the direction changes, not on every poll.
-watch([view, direction], async ([v, direction]) => {
+/** Automatic areas and their devices: the map is laid out again when they change. */
+const autoAreaKey = computed(() =>
+  liveAreas.value
+    .filter((a) => a.auto)
+    .map((a) => `${a.id}:${areaMembers(a, view.value, autoMembers.value).join(',')}`)
+    .join(';'),
+)
+
+// Re-layout only when the visible graph, the direction or the automatic areas
+// change, not on every poll.
+watch([view, direction, autoAreaKey], async ([v, direction, autoKey]) => {
   const ids = [...v.nodes.map((n) => n.id), ...v.groups.map((g) => g.id)]
-  const key = direction + '|' + ids.join(',') + '|' + v.edges.map((e) => e.id).join(',')
+  const key =
+    direction + '|' + ids.join(',') + '|' + v.edges.map((e) => e.id).join(',') + '|' + autoKey
   if (key === lastLayout) {
     layoutsApplied.value++
     return
@@ -426,7 +422,8 @@ const nodeBoxes = computed(
 )
 
 /** A node in an area brings everything below it (apps, clients, VMs). */
-const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
+const areaNodes = (a: MapArea) =>
+  withDescendants(areaMembers(a, view.value, autoMembers.value), view.value.edges)
 
 /**
  * Areas drawn around their nodes, in both orientations. An area with none of
@@ -434,11 +431,13 @@ const areaNodes = (a: MapArea) => withDescendants(a.members, view.value.edges)
  * the orientation it was drawn in.
  */
 const visibleAreas = computed(() =>
-  areas.value
+  liveAreas.value
     .filter((a) => !prefs.collapsedAreas.includes(a.id))
-    .filter(
-      (a) => a.direction === direction.value || areaNodes(a).some((id) => nodeBoxes.value.has(id)),
-    )
+    .filter((a) => {
+      const shown = areaNodes(a).some((id) => nodeBoxes.value.has(id))
+      // An automatic area is only drawn around its devices.
+      return shown || (!a.auto && a.direction === direction.value)
+    })
     .map((a) => ({
       ...a,
       ...(frozen.value[a.id] ?? fitArea({ ...a, members: areaNodes(a) }, nodeBoxes.value)),
@@ -528,7 +527,7 @@ async function regroupDropped(ids: string[]) {
   const changes: Promise<void>[] = []
   for (const a of areas.value) {
     const rect = rects[a.id]
-    if (!rect) continue
+    if (!rect || a.auto) continue // an automatic area's members are worked out
     const members = regroup(a.members, rect, dropped)
     if (members.join() === a.members.join()) continue
     // The last member left: the area stays where it was.
@@ -568,13 +567,48 @@ async function renameArea(id: number, name: string) {
   await api.updateArea(id, { name })
 }
 
-async function colorArea(id: number, color: AreaColor) {
+async function colorArea(id: number, color: string) {
   patchArea(id, { color })
   await api.updateArea(id, { color })
 }
 
+// Automatic areas: one per VLAN and subnet, created as they appear (once:
+// removing one only dismisses it). Colors go round a palette.
+const creatingAuto = new Set<string>()
+watch(autoAreaGroups, async (groups) => {
+  if (!data.value) return
+  const known = new Set(areas.value.map((a) => a.auto).filter(Boolean))
+  let next = areas.value.filter((a) => a.auto).length
+  for (const g of groups) {
+    if (known.has(g.key) || creatingAuto.has(g.key)) continue
+    creatingAuto.add(g.key)
+    try {
+      const created = await api.createArea({
+        name: g.name,
+        color: AUTO_AREA_COLORS[next++ % AUTO_AREA_COLORS.length]!,
+        direction: prefs.layoutDirection,
+        x: 0,
+        y: 0,
+        width: MIN_AREA_SIZE,
+        height: MIN_AREA_SIZE,
+        members: [],
+        auto: g.key,
+      })
+      if (!areas.value.some((a) => a.id === created.id)) areas.value = [...areas.value, created]
+    } catch {
+      // Tried again on the next change.
+    } finally {
+      creatingAuto.delete(g.key)
+    }
+  }
+})
+
 async function deleteArea(id: number) {
-  areas.value = areas.value.filter((a) => a.id !== id)
+  // An automatic area is only dismissed (kept, so it is not created again).
+  areas.value = areas.value
+    .map((a) => (a.id === id && a.auto ? { ...a, dismissed: true } : a))
+    .filter((a) => a.id !== id || a.auto)
+  prefs.collapsedAreas = prefs.collapsedAreas.filter((x) => x !== id)
   await api.deleteArea(id)
 }
 
@@ -646,14 +680,14 @@ function expandArea(id: number) {
   selectedId.value = undefined
 }
 
-function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | AreaColor) {
+function areaMenuAction(action: 'rename' | 'delete' | 'collapse' | { color: string }) {
   const id = areaMenu.value?.id
   areaMenu.value = undefined
   if (id === undefined) return
   if (action === 'collapse') collapseArea(id)
   else if (action === 'rename') editingArea.value = id
   else if (action === 'delete') deleteArea(id)
-  else colorArea(id, action)
+  else colorArea(id, action.color)
 }
 
 function toggleDirection() {
@@ -985,30 +1019,6 @@ onBeforeUnmount(() => {
             <template v-if="offlineCount"> ({{ offlineCount }})</template>
           </span>
         </button>
-        <select
-          v-if="vlans.length"
-          v-model="vlan"
-          class="select small vlan-pick"
-          data-test="vlan"
-          :class="{ active: vlan !== undefined }"
-          :aria-label="t('map.vlan')"
-        >
-          <option :value="undefined">{{ t('map.allVlans') }}</option>
-          <option v-for="v in vlans" :key="v.id" :value="v.id">
-            VLAN {{ v.id }}<template v-if="v.name"> · {{ v.name }}</template>
-          </option>
-        </select>
-        <button
-          class="btn small"
-          :class="{ active: prefs.animateFlow }"
-          data-test="toggle-motion"
-          :aria-pressed="prefs.animateFlow"
-          :title="t('map.animateFlowHint')"
-          @click="prefs.animateFlow = !prefs.animateFlow"
-        >
-          <Waves :size="15" />
-          <span class="label">{{ t('map.animateFlow') }}</span>
-        </button>
         <button
           v-if="hiddenCount"
           class="btn small"
@@ -1140,7 +1150,7 @@ onBeforeUnmount(() => {
       :color="areaMenuArea.color"
       @rename="areaMenuAction('rename')"
       @collapse="areaMenuAction('collapse')"
-      @color="areaMenuAction"
+      @color="(color: string) => areaMenuAction({ color })"
       @delete="areaMenuAction('delete')"
       @close="areaMenu = undefined"
     />
@@ -1310,18 +1320,6 @@ onBeforeUnmount(() => {
 /* Vue Flow theming */
 .flow :deep(.vue-flow__edge-path) {
   stroke: var(--edge);
-}
-.flow :deep(.vue-flow__node.vlan-dim),
-.flow :deep(.vue-flow__edge.vlan-dim) {
-  opacity: 0.15;
-}
-.vlan-pick {
-  width: auto;
-  pointer-events: auto;
-}
-.vlan-pick.active {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 .flow :deep(.vue-flow__edge.slow .vue-flow__edge-path) {
   stroke: var(--warn);

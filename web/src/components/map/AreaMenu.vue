@@ -3,17 +3,20 @@ import { ChevronsDownUp, Pencil, Trash2 } from 'lucide-vue-next'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { AREA_COLORS, type AreaColor } from '@/lib/types'
+import { areaCss, areaHex } from '@/lib/areas'
+import { AREA_COLORS } from '@/lib/types'
 
-defineProps<{ x: number; y: number; color: AreaColor }>()
+const props = defineProps<{ x: number; y: number; color: string }>()
 const emit = defineEmits<{
   rename: []
   collapse: []
-  color: [color: AreaColor]
+  color: [color: string]
   delete: []
   close: []
 }>()
 const { t } = useI18n()
+
+const custom = () => !(AREA_COLORS as readonly string[]).includes(props.color)
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')
@@ -47,11 +50,27 @@ onBeforeUnmount(() => {
         class="swatch"
         :class="{ current: c === color }"
         :data-color="c"
+        :style="{ '--c': areaCss(c) }"
         :title="t(`map.areas.colors.${c}`)"
         :aria-label="t(`map.areas.colors.${c}`)"
         :aria-pressed="c === color"
         @click="emit('color', c)"
       />
+      <!-- Any color: the browser's RGB picker. -->
+      <label
+        class="swatch picker"
+        :class="{ current: custom() }"
+        :style="custom() ? { '--c': areaHex(color) } : undefined"
+        :title="t('map.areas.customColor')"
+      >
+        <input
+          type="color"
+          data-test="custom-color"
+          :value="areaHex(color)"
+          :aria-label="t('map.areas.customColor')"
+          @change="emit('color', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
     </div>
     <button role="menuitem" class="danger" data-test="delete" @click="emit('delete')">
       <Trash2 :size="15" />{{ t('map.areas.delete') }}
@@ -96,6 +115,7 @@ button[role='menuitem']:focus-visible {
 }
 .swatch {
   --c: var(--text-muted);
+  position: relative;
   width: 18px;
   height: 18px;
   padding: 0;
@@ -107,19 +127,18 @@ button[role='menuitem']:focus-visible {
 .swatch.current {
   border-color: var(--text);
 }
-.swatch[data-color='blue'] {
-  --c: #4c8dff;
+/* The custom color: a rainbow until one is picked. */
+.picker:not(.current) {
+  background: conic-gradient(#f85149, #d29922, #3fb950, #2dd4bf, #4c8dff, #a371f7, #f85149);
 }
-.swatch[data-color='green'] {
-  --c: #3fb950;
-}
-.swatch[data-color='yellow'] {
-  --c: #d29922;
-}
-.swatch[data-color='red'] {
-  --c: #f85149;
-}
-.swatch[data-color='purple'] {
-  --c: #a371f7;
+.picker input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>

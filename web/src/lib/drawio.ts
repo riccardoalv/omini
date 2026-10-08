@@ -44,6 +44,16 @@ const AREA_COLORS: Record<string, [string, string]> = {
   purple: ['#e1d5e7', '#9673a6'],
 }
 
+/** A custom "#rrggbb" area: the color as the border, a light tint of it as the fill. */
+function customColors(color: string): [string, string] {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return AREA_COLORS.gray!
+  const tint = [1, 3, 5]
+    .map((i) => Math.round(255 - (255 - parseInt(color.slice(i, i + 2), 16)) * 0.25))
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')
+  return [`#${tint}`, color.toLowerCase()]
+}
+
 const NODE_STYLE: Record<string, string> = {
   device: 'fillColor=#dae8fc;strokeColor=#6c8ebf;',
   wan: 'fillColor=#e1d5e7;strokeColor=#9673a6;',
@@ -76,7 +86,7 @@ export function mapDrawio(
   const cells: string[] = ['<mxCell id="0"/>', '<mxCell id="1" parent="0"/>']
   // Areas first: drawn behind the nodes.
   for (const a of areas) {
-    const [fill, stroke] = AREA_COLORS[a.color] ?? AREA_COLORS.gray!
+    const [fill, stroke] = AREA_COLORS[a.color] ?? customColors(a.color)
     const style =
       `rounded=1;arcSize=4;whiteSpace=wrap;html=1;dashed=1;fillColor=${fill};strokeColor=${stroke};` +
       'opacity=60;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;container=0;'

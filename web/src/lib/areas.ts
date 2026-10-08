@@ -148,3 +148,25 @@ export function collapseAreas(view: GraphView, areas: MapArea[]): GraphView {
   }
   return { nodes, edges, groups }
 }
+
+/** The preset colors of areas, as drawn. */
+export const AREA_PRESET_HEX: Record<string, string> = {
+  gray: '#8b949e',
+  blue: '#4c8dff',
+  green: '#3fb950',
+  yellow: '#d29922',
+  red: '#f85149',
+  purple: '#a371f7',
+}
+
+/** An area's color as "#rrggbb": a preset's, or its own. */
+export function areaHex(color: string): string {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase()
+  return AREA_PRESET_HEX[color] ?? AREA_PRESET_HEX.gray!
+}
+
+/** The CSS color an area is drawn with (gray follows the theme's muted text). */
+export const areaCss = (color: string) =>
+  color === 'gray' || !(color in AREA_PRESET_HEX || /^#[0-9a-f]{6}$/i.test(color))
+    ? 'var(--text-muted)'
+    : areaHex(color)

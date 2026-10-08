@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TopoEdge, TopoNode } from '../types'
-import {
-  deviceFlows,
-  edgeMotion,
-  formatRate,
-  linkLabels,
-  linkSeries,
-  motionSeconds,
-  nodeFlow,
-  portName,
-} from '../traffic'
+import { deviceFlows, formatRate, linkLabels, linkSeries, nodeFlow, portName } from '../traffic'
 
 const fw: TopoNode = {
   id: 'dev:fw',
@@ -224,22 +215,6 @@ describe('traffic on the links', () => {
     { id: 'e3', source: 'ap', target: 'tv', kind: 'fdb' },
   ]
 
-  it('moves along a link with its traffic, a Wi-Fi link with its client', () => {
-    const motion = edgeMotion(edges, nodes, linkLabels(edges, nodes))
-    expect(motion.get('e1')).toEqual({ down: 9e6, up: 2e6 })
-    expect(motion.get('e2')).toEqual({ down: 3e6, up: 1e5 })
-    expect(motion.has('e3')).toBe(false) // nothing measured
-  })
-
-  it('a link through a shared port moves only with what its device measures', () => {
-    const shared: TopoEdge[] = [
-      { id: 's1', source: 'fw', target: 'ap', source_port: 'igc1', kind: 'fdb' },
-      { id: 's2', source: 'fw', target: 'tv', source_port: 'igc1', kind: 'fdb' },
-    ]
-    const motion = edgeMotion(shared, nodes, linkLabels(shared, nodes))
-    expect(motion.size).toBe(0)
-  })
-
   it('finds the history of a link', () => {
     const byId = new Map(nodes.map((n) => [n.id, n]))
     expect(linkSeries(edges[0]!, byId)).toEqual({
@@ -250,11 +225,5 @@ describe('traffic on the links', () => {
     })
     expect(linkSeries(edges[1]!, byId)).toMatchObject({ node: 'phone', iface: '', swap: false })
     expect(linkSeries(edges[2]!, byId)).toBeUndefined()
-  })
-
-  it('runs faster with more traffic', () => {
-    expect(motionSeconds(500)).toBe(3)
-    expect(motionSeconds(1e6)).toBeLessThan(motionSeconds(1e4))
-    expect(motionSeconds(1e10)).toBe(0.4)
   })
 })

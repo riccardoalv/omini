@@ -67,10 +67,6 @@ const ptBR: typeof en = {
     clients: '{n} cliente | {n} clientes',
     problems: '{n} problema | {n} problemas',
     alerts: '{n} alerta | {n} alertas',
-    vlan: 'VLAN',
-    allVlans: 'Todas as VLANs',
-    animateFlow: 'Fluxo',
-    animateFlowHint: 'Animar o tráfego nos fios',
     updated: 'Atualizado {ago}',
     refresh: 'Atualizar agora',
     resetLayout: 'Reorganizar mapa',
@@ -105,6 +101,7 @@ const ptBR: typeof en = {
       rename: 'Renomear',
       delete: 'Excluir área',
       color: 'Cor',
+      customColor: 'Qualquer cor',
       resize: 'Arraste para redimensionar',
       dragHint: 'Arraste para mover a área e tudo dentro dela. Clique duas vezes para renomear.',
       colors: {

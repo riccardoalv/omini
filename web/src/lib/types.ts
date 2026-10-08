@@ -237,7 +237,8 @@ export type AreaColor = (typeof AREA_COLORS)[number]
 export interface MapArea {
   id: number
   name: string
-  color: AreaColor
+  /** A preset (AREA_COLORS) or any "#rrggbb". */
+  color: string
   direction: 'RIGHT' | 'DOWN'
   x: number
   y: number
@@ -245,6 +246,14 @@ export interface MapArea {
   height: number
   /** Node ids inside the area; it is drawn around them. */
   members: string[]
+  /**
+   * Created automatically for a VLAN ("vlan:20") or a subnet
+   * ("subnet:192.168.20.0/24"): its members are worked out on the map
+   * (`lib/autoAreas.ts`), not stored.
+   */
+  auto?: string
+  /** An automatic area the user removed: kept so it is not created again. */
+  dismissed?: boolean
 }
 
 export type FieldType = 'string' | 'secret' | 'host' | 'url' | 'int' | 'bool' | 'select'

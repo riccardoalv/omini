@@ -18,8 +18,6 @@ export interface Prefs {
   hideOffline: boolean
   /** Map areas collapsed into a bubble. */
   collapsedAreas: number[]
-  /** Traffic moves along the links. */
-  animateFlow: boolean
 }
 
 const KEY = 'omini.prefs'
@@ -42,7 +40,6 @@ function load(): Prefs {
     sidebarExpanded: false,
     hideOffline: false,
     collapsedAreas: [],
-    animateFlow: true,
   }
   try {
     const raw = localStorage.getItem(KEY)

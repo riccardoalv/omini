@@ -56,6 +56,15 @@ describe('draw.io export', () => {
     expect(cells[2]!.getAttribute('style')).toContain('fillColor=#dae8fc')
   })
 
+  it('draws an area of any color with a light tint of it', () => {
+    const xml = mapDrawio(
+      [],
+      [],
+      [{ id: '2', name: 'VLAN 20', color: '#4C8DFF', x: 0, y: 0, width: 100, height: 100 }],
+    )
+    expect(xml).toContain('fillColor=#d2e3ff;strokeColor=#4c8dff;')
+  })
+
   it('escapes attributes', () => {
     expect(xmlAttr('a"b<c>&\n')).toBe('a&quot;b&lt;c&gt;&amp;&#10;')
   })

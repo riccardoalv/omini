@@ -212,6 +212,12 @@ var migrations = []string{
 	CREATE INDEX flow_minutes_a ON flow_minutes(a, at);
 	CREATE INDEX flow_minutes_b ON flow_minutes(b, at);
 	`,
+	// 13: areas created automatically for each VLAN and subnet; removing one only dismisses it.
+	`
+	ALTER TABLE areas ADD COLUMN auto TEXT; -- "vlan:20" | "subnet:192.168.20.0/24"
+	ALTER TABLE areas ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0;
+	CREATE UNIQUE INDEX areas_auto ON areas(auto) WHERE auto IS NOT NULL;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

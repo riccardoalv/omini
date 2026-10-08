@@ -16,6 +16,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...mod.api,
       topology: vi.fn<typeof mod.api.topology>(),
+      createArea: vi.fn<typeof mod.api.createArea>(),
       integrations: vi.fn<typeof mod.api.integrations>(),
     },
   }
@@ -81,6 +82,59 @@ describe('MapView', () => {
     expect(w.find('.map').exists()).toBe(true)
     expect(w.find('.toolbar').exists()).toBe(true)
     expect(w.text()).toContain('1 device')
+    w.unmount()
+  })
+
+  it('creates an area for each subnet, once', async () => {
+    vi.mocked(api.integrations).mockResolvedValue([])
+    vi.mocked(api.createArea).mockImplementation(async (a) => ({
+      ...a,
+      id: 10 + vi.mocked(api.createArea).mock.calls.length,
+    }))
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [
+          {
+            id: 'dev:fw',
+            kind: 'device',
+            label: 'fw',
+            online: true,
+            device: {
+              key: 'fw',
+              name: 'fw',
+              interfaces: [
+                { name: 'igc1', description: 'LAN', ips: ['192.168.1.1/24'] },
+                { name: 'igc2', description: 'LAB', ips: ['10.0.5.1/24'] },
+              ],
+            },
+          },
+          { id: 'pc', kind: 'client', label: 'pc', online: true, ip: '192.168.1.20' },
+          { id: 'srv', kind: 'client', label: 'srv', online: true, ip: '10.0.5.9' },
+        ],
+        edges: [
+          { id: 'e1', source: 'dev:fw', target: 'pc', kind: 'inferred' },
+          { id: 'e2', source: 'dev:fw', target: 'srv', kind: 'inferred' },
+        ],
+      },
+      statuses: [],
+      generated_at: '2026-10-07T00:00:00Z',
+      layout: {},
+      areas: [],
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: MapView }],
+    })
+    const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const made = vi.mocked(api.createArea).mock.calls.map(([a]) => [a.auto, a.name])
+    expect(made).toEqual([
+      ['subnet:10.0.5.0/24', 'LAB · 10.0.5.0/24'],
+      ['subnet:192.168.1.0/24', 'LAN · 192.168.1.0/24'],
+    ])
+    // Each area is created once, though the map changes as they appear.
+    await flushPromises()
+    expect(api.createArea).toHaveBeenCalledTimes(2)
     w.unmount()
   })
 

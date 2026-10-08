@@ -18,7 +18,7 @@ What makes Omini, Omini:
 
 1. **Zero configuration** — it discovers the network by itself and identifies devices, operating systems, brands and self-hosted apps, showing each with its own icon.
 2. **Integrations that are easy** — when you want more detail, connecting a device or a piece of software (SNMP switches, firewalls, vendor APIs, community plugins) takes a few clicks, including devices that have no SNMP or API at all.
-3. **Traffic flow map** — every link shows live bandwidth usage (animated, with thickness/color by load), so you see at a glance where traffic flows and where the bottlenecks are.
+3. **Traffic flow map** — every link shows live bandwidth usage (thickness/color by load), so you see at a glance where traffic flows and where the bottlenecks are.
 
 ## MVP scope
 
@@ -107,7 +107,8 @@ Omini opens straight into a **full-screen map** with a summary bar on top (devic
 - **Details:** clicking a node opens a side panel with its ports, traffic, clients and alerts — without leaving the map.
 - **Open the device's web interface:** when a device has an admin page (router, NAS, Proxmox, Home Assistant...), the side panel offers to open it in a new tab. Omini detects it by checking common web ports on that device — only devices on the map, and no credentials are ever sent.
 - **Orientation:** the map is laid out left to right by default; one click switches to top down (dragged positions are kept separately for each orientation).
-- **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor or delete with a right click on the title. Areas show in both orientations.
+- **Areas:** draw named, colored rectangles on the map ("Rack", "Living room") to group devices. An area remembers its devices and follows them when the map is reorganized; moving it moves them. Drag a device in or out to change the group; resize from the corner; rename, recolor (six presets or any color from the RGB picker) or delete with a right click on the title. Areas show in both orientations.
+- **Automatic areas:** when the network has more than one VLAN or subnet, each gets an area of its own ("VLAN 20 · IOT", "LAN · 192.168.1.0/24") with the devices that are only in it — the firewall, trunk switches and access points carrying several stay between them. Rename or recolor them like any area; deleting one removes it for good.
 - **Expand and collapse:** the node you expand or collapse stays where it is on screen; the rest of the map makes room around it.
 - **Sidebar:** compact (icons) or expanded (icons and names).
 - **Theme:** dark by default, light available, follows your OS setting.
@@ -292,7 +293,6 @@ Omini ships in incremental releases, each one usable on its own.
 - ✅ **Insights:** device offline, duplicate IP, uplink below 1 Gbps, interface errors, weak Wi-Fi, high or hot CPU, disk almost full, update pending, likely unmanaged switch, unknown LLDP neighbor, saturated link
 - ✅ **24h traffic history** per link and port, as a chart (hourly for a year)
 - ✅ **Presence timeline** (joined/left, debounced) and a "new device" insight
-- ✅ **Animated traffic flow** on the links
 - ✅ **Insights screen** (alerts + timeline)
 
 ### v0.3 — find integrations
@@ -314,7 +314,7 @@ Omini ships in incremental releases, each one usable on its own.
 - Write actions behind explicit permissions
 - ✅ SNMP v3
 - ✅ More integrations: MikroTik, UniFi, Omada, OpenWrt, Proxmox, pfSense (experimental: built from the vendors' documentation)
-- ✅ VLAN view
+- ✅ VLANs and subnets as automatic map areas
 - ✅ Notifications (Telegram, e-mail, webhook — also Slack, Discord and ntfy)
 - ✅ Topology export to draw.io (and PNG, SVG, JSON)
 - ✅ Collapsing an area into a bubble

@@ -65,10 +65,6 @@ export default {
     clients: '{n} client | {n} clients',
     problems: '{n} problem | {n} problems',
     alerts: '{n} alert | {n} alerts',
-    vlan: 'VLAN',
-    allVlans: 'All VLANs',
-    animateFlow: 'Flow',
-    animateFlowHint: 'Animate the traffic along the links',
     updated: 'Updated {ago}',
     refresh: 'Refresh now',
     resetLayout: 'Reset layout',
@@ -102,6 +98,7 @@ export default {
       rename: 'Rename',
       delete: 'Delete area',
       color: 'Color',
+      customColor: 'Any color',
       resize: 'Drag to resize',
       dragHint: 'Drag to move the area and everything inside it. Double click to rename.',
       colors: {

@@ -2,7 +2,7 @@
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { MIN_AREA_SIZE } from '@/lib/areas'
+import { areaCss, MIN_AREA_SIZE } from '@/lib/areas'
 import type { MapArea } from '@/lib/types'
 
 const props = defineProps<{ area: MapArea; editing: boolean; zoom: number }>()
@@ -65,7 +65,7 @@ function onResizeEnd() {
 </script>
 
 <template>
-  <div class="area" :data-color="area.color">
+  <div class="area" :style="{ '--c': areaCss(area.color) }">
     <div class="area-title" :title="t('map.areas.dragHint')" @dblclick.stop="emit('startRename')">
       <input
         v-if="editing"
@@ -81,6 +81,7 @@ function onResizeEnd() {
       <span v-else>{{ area.name }}</span>
     </div>
     <div
+      v-if="!area.auto"
       class="resize nodrag nopan"
       data-test="resize"
       :title="t('map.areas.resize')"
@@ -102,21 +103,6 @@ function onResizeEnd() {
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--c) 7%, transparent);
   pointer-events: none; /* the inside of an area never blocks the map or its nodes */
-}
-.area[data-color='blue'] {
-  --c: #4c8dff;
-}
-.area[data-color='green'] {
-  --c: #3fb950;
-}
-.area[data-color='yellow'] {
-  --c: #d29922;
-}
-.area[data-color='red'] {
-  --c: #f85149;
-}
-.area[data-color='purple'] {
-  --c: #a371f7;
 }
 /* The title sits above the rectangle, so devices inside never cover it. */
 .area-title {

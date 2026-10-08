@@ -5,13 +5,9 @@ import { computed } from 'vue'
 
 import { formatSpeed } from '@/lib/format'
 import { speedColor } from '@/lib/speed'
-import { motionSeconds, type Flow, type LinkLabel } from '@/lib/traffic'
+import type { LinkLabel } from '@/lib/traffic'
 
-export type LinkData = Partial<LinkLabel> & {
-  /** Traffic moving along the link (animated when `animate`). */
-  motion?: Flow
-  animate?: boolean
-}
+export type LinkData = Partial<LinkLabel>
 
 /**
  * A link of the map, with its port's name and speed in the middle.
@@ -47,30 +43,10 @@ const label = computed(() => {
       : { x: cx, y: cy }
   return { speed, name: d.name, color: speedColor(d.speed), ...at }
 })
-
-// Traffic moving along the wire: dashes run towards the device for the
-// download and back for the upload, faster with more traffic.
-const motion = computed(() => {
-  const d = props.data
-  if (!d?.animate || !d.motion) return []
-  const out: { dir: 'down' | 'up'; seconds: number }[] = []
-  if (d.motion.down > 1000) out.push({ dir: 'down', seconds: motionSeconds(d.motion.down) })
-  if (d.motion.up > 1000) out.push({ dir: 'up', seconds: motionSeconds(d.motion.up) })
-  return out
-})
 </script>
 
 <template>
   <BaseEdge :id="id" :path="path[0]" :style="style" :marker-end="markerEnd" />
-  <path
-    v-for="m in motion"
-    :key="m.dir"
-    class="flow-motion"
-    :class="m.dir"
-    :d="path[0]"
-    :style="{ animationDuration: `${m.seconds}s` }"
-    data-test="link-motion"
-  />
   <EdgeLabelRenderer v-if="label">
     <div
       class="link-speed nodrag nopan"
@@ -89,46 +65,6 @@ const motion = computed(() => {
 </template>
 
 <style scoped>
-.flow-motion {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-dasharray: 1 15;
-  pointer-events: none;
-  animation: flow-down linear infinite;
-}
-.flow-motion.down {
-  stroke: #38bdf8;
-}
-.flow-motion.up {
-  stroke: #a78bfa;
-  stroke-dashoffset: 8;
-  animation-name: flow-up;
-}
-@keyframes flow-down {
-  from {
-    stroke-dashoffset: 16;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-@keyframes flow-up {
-  from {
-    stroke-dashoffset: 8;
-  }
-  to {
-    stroke-dashoffset: 24;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .flow-motion {
-    animation: none;
-  }
-}
-:global(.exporting) .flow-motion {
-  display: none;
-}
 .link-speed {
   position: absolute;
   display: inline-flex;

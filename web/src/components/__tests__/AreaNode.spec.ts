@@ -30,7 +30,16 @@ describe('AreaNode', () => {
   it('shows the name and color', () => {
     const w = mountArea()
     expect(w.text()).toContain('Rack')
-    expect(w.get('.area').attributes('data-color')).toBe('green')
+    expect(w.get('.area').attributes('style')).toContain('--c: #3fb950')
+  })
+
+  it('draws any color; an automatic area cannot be resized (it fits its devices)', () => {
+    const w = mount(AreaNode, {
+      props: { area: { ...area, color: '#123abc', auto: 'vlan:20' }, editing: false, zoom: 1 },
+      global: { plugins: plugins() },
+    })
+    expect(w.get('.area').attributes('style')).toContain('--c: #123abc')
+    expect(w.find('[data-test=resize]').exists()).toBe(false)
   })
 
   it('asks to rename on double click', async () => {
@@ -94,6 +103,18 @@ describe('AreaMenu', () => {
 
     await w.get('[data-test=delete]').trigger('click')
     expect(w.emitted('delete')).toHaveLength(1)
+  })
+
+  it('picks any color with the RGB picker', async () => {
+    const w = mount(AreaMenu, {
+      props: { x: 5, y: 6, color: '#123abc' },
+      global: { plugins: plugins() },
+    })
+    const input = w.get<HTMLInputElement>('[data-test=custom-color]')
+    expect(input.element.value).toBe('#123abc')
+    expect(w.get('.swatch.current').classes()).toContain('picker')
+    await input.setValue('#ff8800')
+    expect(w.emitted('color')).toEqual([['#ff8800']])
   })
 
   it('closes with Escape', () => {
