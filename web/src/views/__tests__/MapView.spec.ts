@@ -277,6 +277,8 @@ describe('MapView', () => {
     const w = mount(MapView, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
     await w.get('[data-test=export]').trigger('click')
+    // The dialog is loaded on demand.
+    await vi.waitFor(() => w.get('form#export-form'))
     await w.get('[data-test=format-json]').setValue(true)
     await w.get('form#export-form').trigger('submit')
     await flushPromises()
@@ -332,6 +334,8 @@ describe('MapView', () => {
       w.findAllComponents({ name: 'TopologyNode' }).filter((c) => c.props('data').group).length
     expect(bubbles()).toBe(1)
     await w.get('[data-test=export]').trigger('click')
+    // The dialog is loaded on demand.
+    await vi.waitFor(() => w.get('form#export-form'))
     await w.get('form#export-form').trigger('submit') // PNG by default
     await vi.waitFor(() => expect(vi.mocked(mapImage)).toHaveBeenCalled(), { timeout: 3000 })
     expect(drawn.filter((id) => id.startsWith('mac:'))).toHaveLength(10)
