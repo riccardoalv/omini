@@ -240,6 +240,11 @@ var migrations = []string{
 		seen_at INTEGER NOT NULL -- unix seconds
 	);
 	`,
+	// 17: integrations no longer have an interval of their own (collection
+	// runs in rounds, one interval for all).
+	`
+	ALTER TABLE integrations DROP COLUMN interval_s;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

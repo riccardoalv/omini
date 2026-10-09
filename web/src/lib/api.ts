@@ -77,7 +77,6 @@ export interface IntegrationInput {
   type?: string
   config?: Config
   enabled?: boolean
-  interval_s?: number
 }
 
 /** After an integration changes, the menu learns which screens to show. */
