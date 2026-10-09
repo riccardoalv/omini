@@ -13,7 +13,7 @@ import {
 } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
-import type { AutoGroup } from '@/lib/autoAreas'
+import type { NetworkGroup } from '@/lib/networks'
 import { formatAgo } from '@/lib/format'
 import { prefs } from '@/lib/prefs'
 
@@ -28,7 +28,7 @@ defineProps<{
   generatedAt?: string
   now: number
   offlineCount: number
-  networkGroups: AutoGroup[]
+  networkGroups: NetworkGroup[]
   hiddenCount: number
   exporting: boolean
   refreshing: boolean

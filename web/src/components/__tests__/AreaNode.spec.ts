@@ -33,13 +33,13 @@ describe('AreaNode', () => {
     expect(w.get('.area').attributes('style')).toContain('--c: #3fb950')
   })
 
-  it('draws any color; an automatic area cannot be resized (it fits its devices)', () => {
+  it('draws any color, and can be resized', () => {
     const w = mount(AreaNode, {
-      props: { area: { ...area, color: '#123abc', auto: 'vlan:20' }, editing: false, zoom: 1 },
+      props: { area: { ...area, color: '#123abc' }, editing: false, zoom: 1 },
       global: { plugins: plugins() },
     })
     expect(w.get('.area').attributes('style')).toContain('--c: #123abc')
-    expect(w.find('[data-test=resize]').exists()).toBe(false)
+    expect(w.find('[data-test=resize]').exists()).toBe(true)
   })
 
   it('asks to rename on double click', async () => {

@@ -256,6 +256,13 @@ var migrations = []string{
 		seen_at      INTEGER NOT NULL -- unix seconds
 	);
 	`,
+	// 19: automatic areas are gone (VLANs and subnets are a filter): their
+	// columns go too.
+	`
+	DROP INDEX IF EXISTS areas_auto;
+	ALTER TABLE areas DROP COLUMN auto;
+	ALTER TABLE areas DROP COLUMN dismissed;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

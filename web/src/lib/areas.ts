@@ -69,18 +69,6 @@ export function fitArea(area: MapArea, boxes: Map<string, Box>): Rect {
   }
 }
 
-/**
- * New member list after nodes were dropped: a dropped node belongs to the area
- * when its center is inside the rectangle the area had before the drag.
- */
-export function regroup(members: string[], rect: Rect, dropped: Box[]): string[] {
-  const inside = new Set(membersOf(rect, dropped))
-  const droppedIds = new Set(dropped.map((b) => b.id))
-  const kept = members.filter((id) => !droppedIds.has(id) || inside.has(id))
-  for (const id of inside) if (!kept.includes(id)) kept.push(id)
-  return kept
-}
-
 /** The given nodes plus everything below them (apps, clients, VMs, group bubbles). */
 export function withDescendants(ids: string[], edges: { source: string; target: string }[]) {
   const children = new Map<string, string[]>()

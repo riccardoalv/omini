@@ -8,7 +8,6 @@ import {
   fitArea,
   membersOf,
   rectFrom,
-  regroup,
   withDescendants,
 } from '../areas'
 
@@ -66,12 +65,6 @@ describe('area membership', () => {
 
   it('keeps the stored rectangle when no member is on the map', () => {
     expect(fitArea(area, new Map())).toEqual({ x: 0, y: 0, width: 100, height: 100 })
-  })
-
-  it('adds nodes dropped inside and removes members dropped outside', () => {
-    const rect = { x: 0, y: 0, width: 400, height: 300 }
-    const dropped = [box('a', 900, 900), box('new', 50, 50)]
-    expect(regroup(['a', 'b'], rect, dropped)).toEqual(['b', 'new'])
   })
 })
 

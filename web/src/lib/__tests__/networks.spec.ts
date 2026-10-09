@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  areaMembers,
-  autoGroups,
-  networkHighlight,
-  networkSubnets,
-  subnetOf,
-} from '@/lib/autoAreas'
-import type { MapArea, TopoEdge, TopoNode } from '@/lib/types'
+import { groupNetworks, networkHighlight, networkSubnets, subnetOf } from '@/lib/networks'
+import type { TopoEdge, TopoNode } from '@/lib/types'
 
 const fw: TopoNode = {
   id: 'fw',
@@ -72,7 +66,7 @@ const edges: TopoEdge[] = [
   { id: 'e4', source: 'fw', target: 'laptop', source_port: 'wg0', kind: 'inferred' },
 ]
 
-describe('automatic areas', () => {
+describe('network groups', () => {
   it('reads private subnets from addresses with a prefix', () => {
     expect(subnetOf('192.168.1.77/24')).toMatchObject({ cidr: '192.168.1.0/24', bits: 24 })
     expect(subnetOf('10.1.2.3/16')?.cidr).toBe('10.1.0.0/16')
@@ -90,8 +84,8 @@ describe('automatic areas', () => {
     ])
   })
 
-  it('gives each VLAN and subnet an area with the devices only in it', () => {
-    const groups = autoGroups(nodes, edges)
+  it('gives each VLAN and subnet the devices only in it', () => {
+    const groups = groupNetworks(nodes, edges)
     expect(groups.map((g) => [g.key, g.name, [...g.members].sort()])).toEqual([
       ['vlan:20', 'VLAN 20 · IOT', ['cam']],
       ['subnet:10.10.0.0/24', 'VPN · 10.10.0.0/24', ['laptop']],
@@ -103,7 +97,7 @@ describe('automatic areas', () => {
   it('brings in a node without addresses when all its children are in the area', () => {
     const net: TopoNode = { id: 'net', kind: 'device', label: 'Network', online: true }
     const hub: TopoNode = { id: 'hub', kind: 'unmanaged', label: 'hub', online: true }
-    const groups = autoGroups(
+    const groups = groupNetworks(
       [...nodes, net, hub, client('tv', '192.168.20.11')],
       [
         ...edges,
@@ -120,7 +114,9 @@ describe('automatic areas', () => {
   })
 
   it('leaves out nodes already in an area the user drew', () => {
-    const lan = autoGroups(nodes, edges, new Set(['pc'])).find((g) => g.key.includes('192.168.1.'))
+    const lan = groupNetworks(nodes, edges, new Set(['pc'])).find((g) =>
+      g.key.includes('192.168.1.'),
+    )
     expect([...lan!.members]).toEqual(['phone'])
   })
 
@@ -129,33 +125,7 @@ describe('automatic areas', () => {
       ...fw,
       device: { ...fw.device!, interfaces: [fw.device!.interfaces![1]!] },
     }
-    expect(autoGroups([flat, client('pc', '192.168.1.50')], [])).toEqual([])
-  })
-
-  it('finds the members of an automatic area on the map, bubbles included', () => {
-    const area: MapArea = {
-      id: 1,
-      name: 'LAN',
-      color: '#4c8dff',
-      direction: 'RIGHT',
-      x: 0,
-      y: 0,
-      width: 60,
-      height: 60,
-      members: ['stored'],
-      auto: 'subnet:192.168.1.0/24',
-    }
-    const auto = new Map([['subnet:192.168.1.0/24', new Set(['pc', 'phone', 'tv'])]])
-    const view = {
-      nodes: [client('pc'), client('cam')],
-      groups: [
-        { id: 'g1', parentId: 'fw', clients: [client('phone'), client('tv')], online: 2 },
-        { id: 'g2', parentId: 'fw', clients: [client('phone'), client('cam')], online: 2 },
-      ],
-    }
-    expect(areaMembers(area, view, auto)).toEqual(['pc', 'g1'])
-    expect(areaMembers({ ...area, auto: undefined }, view, auto)).toEqual(['stored'])
-    expect(areaMembers({ ...area, auto: 'vlan:99' }, view, auto)).toEqual([])
+    expect(groupNetworks([flat, client('pc', '192.168.1.50')], [])).toEqual([])
   })
 })
 
@@ -186,8 +156,8 @@ describe('networkHighlight', () => {
       { id: '1', source: 'fw', target: 'sw', kind: 'lldp' },
       { id: '2', source: 'sw', target: 'pc', kind: 'fdb' },
     ]
-    const inclusive = autoGroups(nodes, edges, new Set(), 'inclusive')
-    const exclusive = autoGroups(nodes, edges)
+    const inclusive = groupNetworks(nodes, edges, new Set(), 'inclusive')
+    const exclusive = groupNetworks(nodes, edges)
     const wan = networkHighlight('subnet:192.168.100.0/24', inclusive, exclusive, edges)!
     expect([...wan].sort()).toEqual(['fw', 'modem'])
     const lan = networkHighlight('subnet:192.168.1.0/24', inclusive, exclusive, edges)!

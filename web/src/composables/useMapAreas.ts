@@ -258,10 +258,7 @@ export function useMapAreas(options: {
   }
 
   async function deleteArea(id: number) {
-    // An automatic area is only dismissed (kept, so it is not created again).
-    areas.value = areas.value
-      .map((a) => (a.id === id && a.auto ? { ...a, dismissed: true } : a))
-      .filter((a) => a.id !== id || a.auto)
+    areas.value = areas.value.filter((a) => a.id !== id)
     prefs.collapsedAreas = prefs.collapsedAreas.filter((x) => x !== id)
     await api.deleteArea(id)
   }

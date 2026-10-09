@@ -1,14 +1,14 @@
 import { computed, ref, type Ref } from 'vue'
 
 import { type Box, clusterFrames } from '@/lib/areas'
-import { autoGroups, networkHighlight } from '@/lib/autoAreas'
+import { groupNetworks, networkHighlight } from '@/lib/networks'
 import type { GraphView } from '@/lib/graph'
 import type { TopoEdge, TopoNode } from '@/lib/types'
 
 /**
  * The VLANs and subnets of the network (when there are several), each with
  * every device in it: the toolbar's filter highlights one and dims the rest
- * (as Omada, Auvik or Catalyst do) instead of drawing them as areas.
+ * instead of drawing them as areas.
  */
 export function useNetworkFilter(
   mapGraph: Ref<{ nodes: TopoNode[]; edges: TopoEdge[] }>,
@@ -16,10 +16,10 @@ export function useNetworkFilter(
   nodeBoxes: Ref<Map<string, Box>>,
 ) {
   const networkGroups = computed(() =>
-    autoGroups(mapGraph.value.nodes, mapGraph.value.edges, new Set(), 'inclusive'),
+    groupNetworks(mapGraph.value.nodes, mapGraph.value.edges, new Set(), 'inclusive'),
   )
   // The devices only in one VLAN or subnet: what hangs below them is in it too.
-  const onlyIn = computed(() => autoGroups(mapGraph.value.nodes, mapGraph.value.edges))
+  const onlyIn = computed(() => groupNetworks(mapGraph.value.nodes, mapGraph.value.edges))
   const netFilter = ref<string>()
   /**
    * Nodes of the picked VLAN or subnet; undefined: no filter. A device only in it

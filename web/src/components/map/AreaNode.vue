@@ -81,7 +81,6 @@ function onResizeEnd() {
       <span v-else>{{ area.name }}</span>
     </div>
     <div
-      v-if="!area.auto"
       class="resize nodrag nopan"
       data-test="resize"
       :title="t('map.areas.resize')"

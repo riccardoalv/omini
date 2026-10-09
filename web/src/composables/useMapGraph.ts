@@ -24,8 +24,7 @@ export function useMapGraph(data: Ref<TopologyResponse | undefined>, areas: Ref<
   // Hidden devices and hidden areas: "Show hidden" brings both back for a while.
   const hiddenCount = computed(
     () =>
-      allNodes.value.filter((n) => n.hidden).length +
-      areas.value.filter((a) => a.hidden && !a.dismissed).length,
+      allNodes.value.filter((n) => n.hidden).length + areas.value.filter((a) => a.hidden).length,
   )
   const filtered = computed(() =>
     prefs.hideOffline ? withoutOffline(unhidden.value.nodes, unhidden.value.edges) : unhidden.value,
@@ -44,9 +43,7 @@ export function useMapGraph(data: Ref<TopologyResponse | undefined>, areas: Ref<
   const exportDirection = ref<Direction>()
   const direction = computed(() => exportDirection.value ?? prefs.layoutDirection)
   /** Areas on the map: the ones the user drew (VLANs and subnets are a filter, not areas). */
-  const liveAreas = computed(() =>
-    areas.value.filter((a) => !a.auto && !a.dismissed && (!a.hidden || showHidden.value)),
-  )
+  const liveAreas = computed(() => areas.value.filter((a) => !a.hidden || showHidden.value))
   /** Areas collapsed into a bubble (whatever the orientation they were drawn in). */
   const collapsedAreaList = computed(() =>
     liveAreas.value.filter((a) => prefs.collapsedAreas.includes(a.id)),

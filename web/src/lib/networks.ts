@@ -1,32 +1,19 @@
-import type { GraphView } from './graph'
-import type { MapArea, TopoEdge, TopoNode } from './types'
+import type { TopoEdge, TopoNode } from './types'
 import { networkVlans, portCarries } from './vlans'
 
 /**
- * Automatic areas: when the network has more than one VLAN or subnet, each
- * gets an area named after it ("VLAN 20 · IOT", "LAN · 192.168.1.0/24")
- * with the devices that are only in it. Devices in several (the firewall, a
- * trunk switch, an access point carrying many VLANs) stay outside, between
- * them; what hangs below a member comes along, like in any area.
+ * The networks of the map, for the VLAN/subnet filter: each VLAN and subnet
+ * ("VLAN 20 · IOT", "LAN · 192.168.1.0/24") with the devices in it. In
+ * exclusive mode, devices in several (the firewall, a trunk switch, an access
+ * point carrying many VLANs) belong to none; what hangs below a member comes
+ * along.
  */
-export interface AutoGroup {
-  /** "vlan:20" | "subnet:192.168.20.0/24": the area's `auto` key. */
+export interface NetworkGroup {
+  /** "vlan:20" | "subnet:192.168.20.0/24". */
   key: string
   name: string
   members: Set<string>
 }
-
-/** Colors given to new automatic areas, in turn. */
-export const AUTO_AREA_COLORS = [
-  '#4c8dff',
-  '#3fb950',
-  '#d29922',
-  '#a371f7',
-  '#f85149',
-  '#2dd4bf',
-  '#f472b6',
-  '#fb923c',
-]
 
 function parseIPv4(s: string): number | undefined {
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s.trim())
@@ -158,13 +145,13 @@ function vlansOf(vlan: number, nodes: TopoNode[], edges: TopoEdge[]): Set<string
  * Nodes in `exclude` (already in an area the user drew) are left out. None
  * when the network has a single VLAN or subnet: there is nothing to separate.
  */
-export function autoGroups(
+export function groupNetworks(
   nodes: TopoNode[],
   edges: TopoEdge[],
   exclude: Set<string> = new Set(),
   /** inclusive: a node is in every VLAN or subnet it is in (for the filter); exclusive: only in its one (for areas). */
   mode: 'exclusive' | 'inclusive' = 'exclusive',
-): AutoGroup[] {
+): NetworkGroup[] {
   const vlans = networkVlans(nodes)
   const listed = new Set(vlans.map((v) => v.id))
   const subnets = networkSubnets(nodes)
@@ -236,27 +223,6 @@ export function autoGroups(
 }
 
 /**
- * The members of an area in a view of the map: its own list, or for an
- * automatic area its nodes on the view plus the bubbles whose clients are
- * all in it.
- */
-export function areaMembers(
-  area: MapArea,
-  view: Pick<GraphView, 'nodes' | 'groups'>,
-  auto: Map<string, Set<string>>,
-): string[] {
-  if (!area.auto) return area.members
-  const set = auto.get(area.auto)
-  if (!set?.size) return []
-  return [
-    ...view.nodes.filter((n) => set.has(n.id)).map((n) => n.id),
-    ...view.groups
-      .filter((g) => !g.area && g.clients.length && g.clients.every((c) => set.has(c.id)))
-      .map((g) => g.id),
-  ]
-}
-
-/**
  * What the VLAN/subnet filter highlights: every device in the network
  * (inclusive), and below the devices only in it (exclusive) what hangs from
  * them. A router also in other networks lights up alone: else picking the
@@ -264,8 +230,8 @@ export function areaMembers(
  */
 export function networkHighlight(
   key: string | undefined,
-  inclusive: AutoGroup[],
-  exclusive: AutoGroup[],
+  inclusive: NetworkGroup[],
+  exclusive: NetworkGroup[],
   edges: { source: string; target: string }[],
 ): Set<string> | undefined {
   const g = inclusive.find((x) => x.key === key)

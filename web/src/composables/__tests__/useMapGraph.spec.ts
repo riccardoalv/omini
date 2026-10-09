@@ -19,19 +19,14 @@ describe('useMapGraph', () => {
   it('counts hidden devices and hidden areas, and shows them on demand', () => {
     const topo = star('dev:fw', 2)
     topo.topology.nodes[1]!.hidden = true
-    const areas = ref<MapArea[]>([
-      area(1, ['mac:0'], { hidden: true }),
-      area(2, [], { hidden: true, dismissed: true }),
-      area(3, [], { auto: 'vlan:20' }),
-    ])
+    const areas = ref<MapArea[]>([area(1, ['mac:0'], { hidden: true }), area(2, [])])
     const g = useMapGraph(shallowRef<TopologyResponse>(topo), areas)
     expect(g.hiddenCount.value).toBe(2) // the device and area 1
     expect(g.nodes.value.map((n) => n.id)).not.toContain('mac:0')
-    expect(g.liveAreas.value).toEqual([])
+    expect(g.liveAreas.value.map((a) => a.id)).toEqual([2])
     g.showHidden.value = true
     expect(g.nodes.value.map((n) => n.id)).toContain('mac:0')
-    // Automatic and dismissed areas are never drawn.
-    expect(g.liveAreas.value.map((a) => a.id)).toEqual([1])
+    expect(g.liveAreas.value.map((a) => a.id)).toEqual([1, 2])
   })
 
   it('folds many clients into a bubble, and unfolds everything for an export', () => {
