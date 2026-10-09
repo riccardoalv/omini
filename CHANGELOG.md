@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0](https://github.com/riccardoalv/omini/compare/v1.0.0...v1.1.0) (2026-10-09)
+
+
+### Features
+
+* **auth:** change the admin password, reset a forgotten one ([466dea9](https://github.com/riccardoalv/omini/commit/466dea97239c0a1eb3189f09acbd1adc0f30c64f))
+* **integrations:** one "Run a round now" button instead of one per integration ([bed74af](https://github.com/riccardoalv/omini/commit/bed74af5b51474aa8b54db05cacf252bf3333c60))
+* **netscan:** DHCP fingerprints tell a device's operating system ([27fd804](https://github.com/riccardoalv/omini/commit/27fd80423a0b093680d410939b39cd858f1ff59e))
+* **notify:** cards that describe the device, with what to do and a link ([a3bfb3a](https://github.com/riccardoalv/omini/commit/a3bfb3aac4ad8ec34eebe12e8e48d4bb16c46db0))
+* **snmp:** LLDP capabilities, link aggregation members and per-VLAN MAC tables ([67713f5](https://github.com/riccardoalv/omini/commit/67713f5aab6865cf42060bdb375f67af164d1923))
+* **topology:** a client stays where it was last seen for sure ([2c290d0](https://github.com/riccardoalv/omini/commit/2c290d02b9556aaf2f4683a52cf99d0fa396181d))
+
+
+### Bug Fixes
+
+* **alerts:** an update with its version but no count says just the version ([ecf7c82](https://github.com/riccardoalv/omini/commit/ecf7c82281e974e4d96a8acd138944dbe3cc502c))
+* **alerts:** no fast Ethernet alert for devices made with a 100 Mbps port ([d7ef03c](https://github.com/riccardoalv/omini/commit/d7ef03c184a885a49b7b25c99c8f1c87a417bb57))
+* **topology:** desk phones, lldpd servers, CARP MACs and modems in WAN VLANs ([96ec1ca](https://github.com/riccardoalv/omini/commit/96ec1ca77d75b4ba8f0699695380a96ff52b633e))
+
 ## [1.0.0](https://github.com/riccardoalv/omini/compare/v0.3.0...v1.0.0) (2026-10-08)
 
 
