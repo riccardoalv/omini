@@ -45,7 +45,7 @@ attention) and **info** (worth knowing).
 | Rule | Severity | Opens when |
 |---|---|---|
 | `slow_uplink` | warning | A wired link between two network devices (switches, access points, routers, segments) runs below 1 Gbps |
-| `fast_ethernet` | warning | A wired link to an end device runs at 100 Mbps or less (a Fast Ethernet port, a cable with a broken pair, a forced speed) |
+| `fast_ethernet` | warning | A wired link to an end device runs at 100 Mbps or less (a Fast Ethernet port, a cable with a broken pair, a forced speed). Not for devices made with a 100 Mbps port: cameras, UPSes, air conditioning, badge readers and other smart home gear, appliances, solar inverters, desk phones |
 | `saturated_link` | warning | A physical port uses more than 80 % of its speed, in either direction, averaged over the last collection |
 | `interface_errors` | warning | A port's receive or transmit errors grew since the last collection |
 | `link_flapping` | warning | A port went up or down 3 or more times in the last hour |

@@ -56,6 +56,13 @@ func init() {
 // fastEthernet: a wired link to a device that runs at 100 Mbps or less (a
 // Fast Ethernet port, a cable with a broken pair, a forced speed). Links
 // between network devices are slow_uplink's.
+// fastEthernetKinds are devices made with a 100 Mbps port (cameras, UPS
+// cards, air conditioners, badge readers and other smart home gear, desk
+// phones...): at that speed they are fine, not a bad cable (maintainer's rule).
+var fastEthernetKinds = []string{
+	"camera", "ups", "air_conditioner", "smart_home", "appliance", "solar_inverter", "ip_phone",
+}
+
 func fastEthernet(in Input, idx index) []Insight {
 	var out []Insight
 	for _, e := range in.Topology.Edges {
@@ -66,6 +73,9 @@ func fastEthernet(in Input, idx index) []Insight {
 		}
 		if infrastructure(src) && infrastructure(dst) {
 			continue
+		}
+		if slices.Contains(fastEthernetKinds, dst.Type) {
+			continue // made with a 100 Mbps port: nothing to fix
 		}
 		out = append(out, node("fast_ethernet", Warning, dst, e.Source+"|"+e.SourcePort, map[string]any{
 			"speed_mbps": e.SpeedMbps, "from": src.Label, "port": e.SourcePort,

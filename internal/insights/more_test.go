@@ -1,6 +1,9 @@
 package insights
 
 import (
+	"fmt"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -147,5 +150,29 @@ func TestDiscoveryLimited(t *testing.T) {
 	got := byRule(Evaluate(Input{DiscoveryLimited: []string{"host_network", "multicast"}}))
 	if l := got["discovery_limited"]; len(l) != 1 || l[0].Params["limits"] != "host_network,multicast" || l[0].Severity != Warning {
 		t.Fatalf("limited: %+v", l)
+	}
+}
+
+// Devices made with a 100 Mbps port (cameras, UPS cards, air conditioners,
+// badge readers...) raise no fast Ethernet alert; a computer or a TV does.
+func TestFastEthernetSkipsDevicesMadeFor100Mbps(t *testing.T) {
+	sw := topology.Node{ID: "dev:sw", Kind: topology.KindDevice, Role: "switch", Label: "sw", Online: true, Device: &model.Device{}}
+	nodes := []topology.Node{sw}
+	var edges []topology.Edge
+	for i, typ := range []string{"camera", "ups", "air_conditioner", "smart_home", "appliance", "solar_inverter", "ip_phone", "computer", "tv"} {
+		id := "mac:" + typ
+		nodes = append(nodes, topology.Node{ID: id, Kind: topology.KindClient, Label: typ, Type: typ, Online: true})
+		edges = append(edges, topology.Edge{
+			ID: id, Source: "dev:sw", SourcePort: fmt.Sprint("Port ", i+1), Target: id, Kind: topology.EdgeFDB, SpeedMbps: 100,
+		})
+	}
+	got := byRule(Evaluate(Input{Topology: topology.Topology{Nodes: nodes, Edges: edges}}))
+	var alerted []string
+	for _, f := range got["fast_ethernet"] {
+		alerted = append(alerted, f.NodeID)
+	}
+	sort.Strings(alerted)
+	if want := []string{"mac:computer", "mac:tv"}; !reflect.DeepEqual(alerted, want) {
+		t.Fatalf("fast Ethernet alerts on %v, want %v", alerted, want)
 	}
 }

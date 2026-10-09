@@ -205,6 +205,10 @@ var nameRules = []struct {
 	{re: regexp.MustCompile(`\bsip-[a-z]{1,2}\d|\bsep[0-9a-f]{12}\b|\bip[- ]phone\b|\bvvx[- ]?\d`), typ: IPPhone},
 	// UPSes and their network cards (APC "Smart-UPS", "Back-UPS").
 	{re: regexp.MustCompile(`\bups\b|\bsymmetra\b|\bpowerchute\b`), typ: UPS},
+	// Air conditioning and its controllers (Daikin "intelligent Touch Manager").
+	{re: regexp.MustCompile(`\bhvac\b|\bair[- ]?condition|\bintelligent touch manager\b|\bdaikin\b`), typ: AirConditioner},
+	// Access control: badge and card readers (HID iCLASS, ZKTeco, Suprema).
+	{re: regexp.MustCompile(`\bbadge\b|\bcard[- ]?reader\b|\bhid reader\b|\biclass\b|\baccess[- ]control\b`), typ: SmartHome},
 	// Mobile broadband (LTE/5G) routers: Huawei "B535-232", "E5186s-22a", HiLink.
 	{re: regexp.MustCompile(`\b(lte|4g|5g)[- ]?(cpe|router|modem)\b|\bhilink\b|\bmobile ?wi-?fi\b`), typ: Router},
 	{re: regexp.MustCompile(`\b[be]\d{3,4}[a-z]{0,2}-\d{2,3}[a-z]?\b`), typ: Router, only: "huawei"},
@@ -439,18 +443,20 @@ func brand(s *state) {
 }
 
 var (
-	phoneBrands    = []string{"samsung", "huawei", "honor", "xiaomi", "oneplus", "motorola", "oppo", "vivo", "realme"}
-	pcBrands       = []string{"intel", "realtek", "dell", "lenovo", "hp", "asus", "msi", "gigabyte", "nvidia"}
-	networkBrands  = []string{"tplink", "mercusys", "ubiquiti", "mikrotik", "netgear", "tenda", "dlink", "zte"}
-	smartHome      = []string{"espressif", "tuya", "shelly", "philipshue"}
-	cameraBrands   = []string{"hikvision", "dahua", "reolink"}
-	printerBrands  = []string{"epson", "brother", "canon"}
-	ipPhoneBrands  = []string{"yealink", "poly", "snom", "fanvil"}
-	upsBrands      = []string{"apc", "cyberpower"}
-	desktopOSes    = []string{"windows", "macos", "nixos", "ubuntu", "fedora", "archlinux", "linuxmint", "popos", "manjaro", "opensuse"}
-	serverOSes     = []string{"debian", "freebsd", "alpinelinux", "centos", "redhat", "raspberrypi"}
-	printerPorts   = []int{9100, 631, 515}
-	printerService = []string{"_ipp._tcp", "_ipps._tcp", "_printer._tcp", "_pdl-datastream._tcp"}
+	phoneBrands   = []string{"samsung", "huawei", "honor", "xiaomi", "oneplus", "motorola", "oppo", "vivo", "realme"}
+	pcBrands      = []string{"intel", "realtek", "dell", "lenovo", "hp", "asus", "msi", "gigabyte", "nvidia"}
+	networkBrands = []string{"tplink", "mercusys", "ubiquiti", "mikrotik", "netgear", "tenda", "dlink", "zte"}
+	smartHome     = []string{"espressif", "tuya", "shelly", "philipshue"}
+	cameraBrands  = []string{"hikvision", "dahua", "reolink"}
+	printerBrands = []string{"epson", "brother", "canon"}
+	ipPhoneBrands = []string{"yealink", "poly", "snom", "fanvil"}
+	upsBrands     = []string{"apc", "cyberpower"}
+	// Makers of access control only (badge readers, door controllers).
+	accessControlVendors = []string{"hid global", "zkteco", "suprema", "paxton"}
+	desktopOSes          = []string{"windows", "macos", "nixos", "ubuntu", "fedora", "archlinux", "linuxmint", "popos", "manjaro", "opensuse"}
+	serverOSes           = []string{"debian", "freebsd", "alpinelinux", "centos", "redhat", "raspberrypi"}
+	printerPorts         = []int{9100, 631, 515}
+	printerService       = []string{"_ipp._tcp", "_ipps._tcp", "_printer._tcp", "_pdl-datastream._tcp"}
 )
 
 func deviceType(s *state) {
@@ -518,8 +524,11 @@ func deviceType(s *state) {
 		s.set(&r.Type, SmartHome, "")
 	case slices.ContainsFunc(solarVendors, func(v string) bool { return strings.Contains(strings.ToLower(in.Vendor), v) }):
 		s.set(&r.Type, SolarInverter, "vendor:"+in.Vendor)
-	case strings.Contains(strings.ToLower(in.Vendor), "air-condition") || strings.Contains(strings.ToLower(in.Vendor), "air condition"):
+	case strings.Contains(strings.ToLower(in.Vendor), "air-condition") || strings.Contains(strings.ToLower(in.Vendor), "air condition") ||
+		strings.Contains(strings.ToLower(in.Vendor), "daikin"):
 		s.set(&r.Type, AirConditioner, "vendor:"+in.Vendor)
+	case slices.ContainsFunc(accessControlVendors, func(v string) bool { return strings.Contains(strings.ToLower(in.Vendor), v) }):
+		s.set(&r.Type, SmartHome, "vendor:"+in.Vendor) // badge readers and door controllers
 	case r.Brand == "midea":
 		s.set(&r.Type, Appliance, "vendor:"+in.Vendor)
 	case r.Brand == "nintendo" || r.Brand == "playstation":

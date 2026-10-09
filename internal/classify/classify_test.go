@@ -11,6 +11,22 @@ func TestClassify(t *testing.T) {
 		in   Input
 		want Result // Reasons are checked separately
 	}{
+		// Building gear made with a 100 Mbps port.
+		{
+			"Badge reader (HID, page title)",
+			Input{Kind: "client", Hostname: "badge-f1", Vendor: "HID Global", Titles: []string{"HID Reader"}},
+			Result{Type: SmartHome},
+		},
+		{
+			"Daikin air conditioning controller",
+			Input{Kind: "client", Hostname: "hvac-f1", Titles: []string{"intelligent Touch Manager"}},
+			Result{Type: AirConditioner},
+		},
+		{
+			"Access control by MAC vendor only",
+			Input{Kind: "client", Vendor: "ZKTeco Co., Ltd."},
+			Result{Type: SmartHome},
+		},
 		// Devices seen on a real homelab network.
 		{
 			"Huawei solar inverter (DHCP name)",
