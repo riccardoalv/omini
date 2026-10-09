@@ -65,6 +65,28 @@ class OpenPort(RootModel[int]):
     root: Annotated[int, Field(ge=1, le=65535)]
 
 
+class DhcpFingerprint(BaseModel):
+    """
+    What a device asks for when it requests an address (DHCP): the options it wants, in its own order, and what it says it is. Hints its operating system.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    params: str | None = None
+    """
+    Option 55, the parameter request list, e.g. "1,3,6,15,31,33,43,44,46,47,119,121,249,252".
+    """
+    vendor_class: str | None = None
+    """
+    Option 60, the vendor class identifier, e.g. "android-dhcp-14" or "MSFT 5.0".
+    """
+    hostname: str | None = None
+    """
+    Option 12, the name the device gives itself.
+    """
+
+
 class WebService(BaseModel):
     """
     A web interface found on a host.
@@ -579,6 +601,7 @@ class Host(BaseModel):
     """
     Web interfaces found on the host, one per port.
     """
+    dhcp: DhcpFingerprint | None = None
 
 
 class Device(BaseModel):

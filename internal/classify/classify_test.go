@@ -11,6 +11,37 @@ func TestClassify(t *testing.T) {
 		in   Input
 		want Result // Reasons are checked separately
 	}{
+		// DHCP fingerprints: what the device asks for when it joins.
+		{
+			"Android phone by its DHCP vendor class",
+			Input{Kind: "client", Hostname: "moto-edge-70", DHCPVendor: "android-dhcp-14", DHCPParams: "1,3,6,15,26,28,51,58,59,43,114,108"},
+			Result{Type: Phone, OS: "android"},
+		},
+		{
+			"Windows by its DHCP parameter list",
+			Input{Kind: "client", Hostname: "sala", DHCPParams: "1,3,6,15,31,33,43,44,46,47,119,121,249,252"},
+			Result{Type: Computer, OS: "windows"},
+		},
+		{
+			"Windows by its DHCP vendor class",
+			Input{Kind: "client", DHCPVendor: "MSFT 5.0"},
+			Result{Type: Computer, OS: "windows"},
+		},
+		{
+			"Apple by its DHCP parameter list, an iPhone by its port",
+			Input{Kind: "client", DHCPParams: "1,121,3,6,15,108,114,119,252,95,44,46", OpenPorts: []int{62078}},
+			Result{Type: Phone, OS: "ios", Brand: "apple"},
+		},
+		{
+			"Linux with dhcpcd",
+			Input{Kind: "client", DHCPVendor: "dhcpcd-10.0.6:Linux-6.6.31+rpt-rpi-v8:aarch64:BCM2835"},
+			Result{OS: "linux", Type: Unknown},
+		},
+		{
+			"A desk phone's DHCP vendor class names it",
+			Input{Kind: "client", DHCPVendor: "Cisco Systems, Inc. IP Phone CP-8845"},
+			Result{Type: IPPhone},
+		},
 		// Building gear made with a 100 Mbps port.
 		{
 			"Badge reader (HID, page title)",
@@ -103,7 +134,7 @@ func TestClassify(t *testing.T) {
 		{
 			"iPhone (lockdown port)",
 			Input{Kind: "client", RandomMAC: true, OpenPorts: []int{62078}},
-			Result{Type: Phone, OS: "ios"},
+			Result{Type: Phone, OS: "ios", Brand: "apple"},
 		},
 		{
 			"iPad by hostname",

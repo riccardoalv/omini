@@ -245,6 +245,17 @@ var migrations = []string{
 	`
 	ALTER TABLE integrations DROP COLUMN interval_s;
 	`,
+	// 18: DHCP fingerprints (what each device asks for when it requests an
+	// address), kept across restarts.
+	`
+	CREATE TABLE dhcp_fingerprints (
+		mac          TEXT PRIMARY KEY,
+		params       TEXT NOT NULL DEFAULT '',
+		vendor_class TEXT NOT NULL DEFAULT '',
+		hostname     TEXT NOT NULL DEFAULT '',
+		seen_at      INTEGER NOT NULL -- unix seconds
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

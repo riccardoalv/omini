@@ -558,6 +558,9 @@ func classifyWith(n *topology.Node, upstream bool) {
 		Titles: n.Titles, Banners: n.Banners, TTL: n.TTL, Self: slices.Contains(n.Services, "omini"),
 		Upstream: upstream,
 	}
+	if n.DHCP != nil {
+		in.DHCPParams, in.DHCPVendor = model.Deref(n.DHCP.Params), model.Deref(n.DHCP.VendorClass)
+	}
 	if in.Hostname == "" && n.Kind != topology.KindClient {
 		in.Hostname = n.Label // managed devices: the name reported by the integration
 	}

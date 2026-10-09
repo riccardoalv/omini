@@ -230,6 +230,20 @@ func (j *Device) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// What a device asks for when it requests an address (DHCP): the options it wants,
+// in its own order, and what it says it is. Hints its operating system.
+type DhcpFingerprint struct {
+	// Option 12, the name the device gives itself.
+	Hostname *string `json:"hostname,omitempty,omitzero" yaml:"hostname,omitempty"`
+
+	// Option 55, the parameter request list, e.g.
+	// "1,3,6,15,31,33,43,44,46,47,119,121,249,252".
+	Params *string `json:"params,omitempty,omitzero" yaml:"params,omitempty"`
+
+	// Option 60, the vendor class identifier, e.g. "android-dhcp-14" or "MSFT 5.0".
+	VendorClass *string `json:"vendor_class,omitempty,omitzero" yaml:"vendor_class,omitempty"`
+}
+
 type DhcpLease struct {
 	// ExpiresAt corresponds to the JSON schema field "expires_at".
 	ExpiresAt *time.Time `json:"expires_at,omitempty,omitzero" yaml:"expires_at,omitempty"`
@@ -547,6 +561,9 @@ func (j *Gateway) UnmarshalJSON(value []byte) error {
 type Host struct {
 	// Service banners, e.g. the SSH version string.
 	Banners []string `json:"banners,omitempty,omitzero" yaml:"banners,omitempty"`
+
+	// Dhcp corresponds to the JSON schema field "dhcp".
+	Dhcp *DhcpFingerprint `json:"dhcp,omitempty,omitzero" yaml:"dhcp,omitempty"`
 
 	// Names from DNS, mDNS, NetBIOS, DHCP...
 	Hostnames []string `json:"hostnames,omitempty,omitzero" yaml:"hostnames,omitempty"`

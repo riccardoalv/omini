@@ -57,6 +57,10 @@ type Input struct {
 	TTL       int
 	Self      bool // the Omini server itself
 	Upstream  bool // seen on an internet uplink (WAN port or gateway address): the ISP's modem or router
+	// DHCP fingerprint: the options it asks for (option 55, "1,3,6,15,...")
+	// and its vendor class (option 60, "android-dhcp-14", "MSFT 5.0").
+	DHCPParams string
+	DHCPVendor string
 }
 
 // Result is the classification. Product is set for homelab software and
@@ -99,7 +103,7 @@ func (s *state) service(prefix string) bool {
 // operating system, the brand and finally the device type.
 func Classify(in Input) Result {
 	s := &state{in: in}
-	parts := append(slices.Clone(in.Titles), in.Hostname, in.Model)
+	parts := append(slices.Clone(in.Titles), in.Hostname, in.Model, in.DHCPVendor)
 	parts = append(parts, in.Banners...)
 	s.txt = strings.ToLower(strings.Join(parts, " | "))
 
@@ -110,6 +114,9 @@ func Classify(in Input) Result {
 	products(s)
 	operatingSystem(s)
 	brand(s)
+	if slices.Contains([]string{"ios", "macos", "tvos", "apple"}, s.r.OS) {
+		s.set(&s.r.Brand, "apple", "") // an iPhone with a private MAC has no vendor
+	}
 	deviceType(s)
 	if s.r.Type == "" {
 		s.r.Type = Unknown
@@ -282,6 +289,53 @@ var osIDs = map[string]string{
 	"pop": "popos", "manjaro": "manjaro", "freebsd": "freebsd",
 }
 
+// DHCP fingerprints (public knowledge, no third-party database): the vendor
+// class a DHCP client sends names it; the options it asks for, in its own
+// order, are the client's signature.
+func dhcpVendorOS(s *state) {
+	v := strings.ToLower(s.in.DHCPVendor)
+	reason := "dhcp:" + s.in.DHCPVendor
+	switch {
+	case v == "":
+	case strings.HasPrefix(v, "android-dhcp"):
+		s.set(&s.r.OS, "android", reason)
+	case strings.HasPrefix(v, "msft"):
+		s.set(&s.r.OS, "windows", reason)
+	case strings.HasPrefix(v, "aaplbsdpc"):
+		s.set(&s.r.OS, "macos", reason)
+	case strings.HasPrefix(v, "dhcpcd") && strings.Contains(v, "linux"), strings.HasPrefix(v, "udhcp"):
+		s.set(&s.r.OS, "linux", reason)
+	}
+}
+
+// dhcpSignatures: parameter request lists of common DHCP clients.
+var dhcpSignatures = []struct{ params, os string }{
+	{"1,3,6,15,31,33,43,44,46,47,119,121,249,252", "windows"}, // Windows 10, 11
+	{"1,3,6,15,31,33,43,44,46,47,121,249,252", "windows"},     // Windows 8
+	{"1,15,3,6,44,46,47,31,33,121,249,43", "windows"},         // Windows 7
+	{"1,28,2,3,15,6,119,12,44,47,26,121,42", "linux"},         // ISC dhclient
+}
+
+func dhcpParamsOS(s *state) {
+	p := s.in.DHCPParams
+	if p == "" || s.r.OS != "" {
+		return
+	}
+	reason := "dhcp:" + p
+	for _, sig := range dhcpSignatures {
+		if p == sig.params || strings.HasPrefix(p, sig.params+",") {
+			s.set(&s.r.OS, sig.os, reason)
+			return
+		}
+	}
+	// Apple (iOS, iPadOS, macOS) asks for 95 (LDAP), 119 and 252 and sends no
+	// vendor class; refined to ios/macos below when possible.
+	opts := strings.Split(p, ",")
+	if s.in.DHCPVendor == "" && slices.Contains(opts, "95") && slices.Contains(opts, "119") && slices.Contains(opts, "252") {
+		s.set(&s.r.OS, "apple", reason)
+	}
+}
+
 var reWindowsHost = regexp.MustCompile(`^(desktop|laptop|win)-[a-z0-9]{5,}`)
 
 func operatingSystem(s *state) {
@@ -299,6 +353,7 @@ func operatingSystem(s *state) {
 			}
 		}
 	}
+	dhcpVendorOS(s)
 	host := strings.ToLower(s.in.Hostname)
 	model := strings.ToLower(s.in.Model)
 	switch {
@@ -327,6 +382,7 @@ func operatingSystem(s *state) {
 			s.set(&s.r.OS, "apple", "mdns:"+svc) // refined to ios/macos below when possible
 		}
 	}
+	dhcpParamsOS(s)
 	if s.port(62078) { // iOS lockdownd: iPhone or iPad
 		if s.r.OS == "" || s.r.OS == "apple" {
 			s.r.OS = ""

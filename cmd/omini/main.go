@@ -152,7 +152,9 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	}
 
 	reg := integration.NewRegistry()
-	reg.Register(netscan.New())
+	scan := netscan.New()
+	scan.Fingerprints = st // DHCP fingerprints survive restarts
+	reg.Register(scan)
 	reg.Register(nmapscan.New())
 	flowSvc := &flows.Service{Store: st}
 	defer flowSvc.Close()

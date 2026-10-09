@@ -39,7 +39,12 @@ type Integration struct {
 	SNMPPort    int           // default 161 (tests use a fake agent)
 	SNMPTimeout time.Duration // per SNMP request; default 2s
 	Locals      func() []localNet
+	// Fingerprints keeps the DHCP fingerprints across restarts (nil: memory only).
+	Fingerprints FingerprintStore
+	// ListenDHCP reads DHCP requests (default: a packet socket; tests replace it).
+	ListenDHCP func(ctx context.Context, packet func([]byte)) error
 
+	dhcp dhcpWatch
 	mu   sync.Mutex
 	deep map[string]deepInfo // per host (MAC, or IP when unknown)
 	now  func() time.Time
@@ -95,6 +100,7 @@ func fields() []model.FormField {
 		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players."),
 		method("web_titles", "Web page titles", "Reads the title of web interfaces to recognize apps (Proxmox, TrueNAS, Home Assistant...)."),
 		method("ssh_banners", "SSH banners", "Reads the SSH version line, which often names the operating system."),
+		method("dhcp", "DHCP fingerprints", "Watches the address requests devices send when they join the network: what they ask for tells their operating system (Android, Windows, Apple, Linux...). Only watches, never answers; sees this server's own network; needs raw sockets (root in Docker)."),
 		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP (v2c or v3) enabled. Read-only."),
 		{
 			Key: "snmp_communities", Type: model.FormFieldTypeSecret, Label: model.Ptr("SNMP communities"), Default: "public", Group: methods,
@@ -128,11 +134,11 @@ func fields() []model.FormField {
 
 // options are the scan settings of one integration instance.
 type options struct {
-	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners, snmp bool
-	communities                                                       []string
-	v3                                                                *snmp.V3
-	portList                                                          []int
-	deepEvery                                                         time.Duration
+	arp, ping, ports, dns, netbios, mdns, ssdp, titles, banners, snmp, dhcp bool
+	communities                                                             []string
+	v3                                                                      *snmp.V3
+	portList                                                                []int
+	deepEvery                                                               time.Duration
 }
 
 // Validate checks the settings before they are saved.
@@ -153,7 +159,7 @@ func (s *Integration) options(cfg integration.Config) (options, error) {
 		ports: cfg.Bool("port_scan", true), dns: cfg.Bool("dns", true), netbios: cfg.Bool("netbios", true),
 		mdns: cfg.Bool("mdns", true) && !s.NoMulticast, ssdp: cfg.Bool("ssdp", true) && !s.NoMulticast,
 		titles: cfg.Bool("web_titles", true) && !s.NoWebTitles, banners: cfg.Bool("ssh_banners", true),
-		snmp: cfg.Bool("snmp", true), portList: s.Ports, deepEvery: s.DeepEvery,
+		snmp: cfg.Bool("snmp", true), dhcp: cfg.Bool("dhcp", true), portList: s.Ports, deepEvery: s.DeepEvery,
 	}
 	for _, c := range strings.Split(cfg.String("snmp_communities"), ",") {
 		if c = strings.TrimSpace(c); c != "" && !slices.Contains(o.communities, c) {
@@ -346,6 +352,9 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	opts, err := s.options(cfg)
 	if err != nil {
 		return nil, err
+	}
+	if opts.dhcp {
+		s.watchDHCP(ctx)
 	}
 	locals := s.Locals()
 	inScope := func(ip netip.Addr) bool {
@@ -695,6 +704,12 @@ func (s *Integration) toHost(h *hostAcc) model.Host {
 		}
 	}
 	names := appendUnique(nil, d.names...)
+	if fp, ok := s.dhcp.fingerprint(h.mac); ok && h.mac != "" {
+		mh.Dhcp = &fp
+		if fp.Hostname != nil {
+			names = appendUnique(names, *fp.Hostname)
+		}
+	}
 	names = appendUnique(names, d.netbios)
 	names = appendUnique(names, h.ann.Hostnames...)
 	if h.ann.Name != "" {

@@ -73,39 +73,40 @@ type WANLink struct {
 }
 
 type Node struct {
-	ID            string            `json:"id"`
-	Kind          NodeKind          `json:"kind"`
-	Label         string            `json:"label"`
-	Role          string            `json:"role,omitempty"`
-	Online        bool              `json:"online"`
-	IntegrationID int64             `json:"integration_id,omitempty"`
-	Vendor        string            `json:"vendor,omitempty"`
-	Model         string            `json:"model,omitempty"`
-	IP            string            `json:"ip,omitempty"`
-	MAC           string            `json:"mac,omitempty"`
-	Hostname      string            `json:"hostname,omitempty"`
-	RandomMAC     bool              `json:"random_mac,omitempty"`
-	ParentID      string            `json:"parent_id,omitempty"` // where a client/segment is attached
-	RunsOn        string            `json:"runs_on,omitempty"`   // a router or firewall running as a VM: its host (no link drawn)
-	Port          string            `json:"port,omitempty"`      // port (or radio) on the parent
-	SSID          string            `json:"ssid,omitempty"`
-	SignalDBM     *int64            `json:"signal_dbm,omitempty"`
-	Band          string            `json:"band,omitempty"`        // Wi-Fi clients: 2.4ghz, 5ghz, 6ghz
-	LinkMbps      float64           `json:"link_mbps,omitempty"`   // Wi-Fi clients: link rate, when the AP reports it
-	Flow          *Rate             `json:"flow,omitempty"`        // Wi-Fi clients: current traffic (rx = download), as the AP measures it
-	MACCount      int               `json:"mac_count,omitempty"`   // segments: MACs seen behind the port
-	Device        *model.Device     `json:"device,omitempty"`      // managed devices: full collected data
-	WAN           *WANLink          `json:"wan,omitempty"`         // WAN nodes: the uplink
-	PortLabels    map[string]string `json:"port_labels,omitempty"` // the user's port descriptions
-	Traffic       map[string]Rate   `json:"traffic,omitempty"`     // current rate per interface
-	OS            string            `json:"os,omitempty"`
-	ReportedOS    string            `json:"-"`                    // OS reported by an integration (input of the classifier)
-	OpenPorts     []int             `json:"open_ports,omitempty"` // found by the network scan
-	Services      []string          `json:"services,omitempty"`   // mDNS/UPnP services
-	Titles        []string          `json:"titles,omitempty"`     // web interface titles
-	Web           []WebApp          `json:"web,omitempty"`        // web interfaces, one per port
-	Banners       []string          `json:"banners,omitempty"`    // e.g. SSH version
-	TTL           int               `json:"ttl,omitempty"`        // ICMP reply TTL
+	ID            string                 `json:"id"`
+	Kind          NodeKind               `json:"kind"`
+	Label         string                 `json:"label"`
+	Role          string                 `json:"role,omitempty"`
+	Online        bool                   `json:"online"`
+	IntegrationID int64                  `json:"integration_id,omitempty"`
+	Vendor        string                 `json:"vendor,omitempty"`
+	Model         string                 `json:"model,omitempty"`
+	IP            string                 `json:"ip,omitempty"`
+	MAC           string                 `json:"mac,omitempty"`
+	Hostname      string                 `json:"hostname,omitempty"`
+	RandomMAC     bool                   `json:"random_mac,omitempty"`
+	ParentID      string                 `json:"parent_id,omitempty"` // where a client/segment is attached
+	RunsOn        string                 `json:"runs_on,omitempty"`   // a router or firewall running as a VM: its host (no link drawn)
+	Port          string                 `json:"port,omitempty"`      // port (or radio) on the parent
+	SSID          string                 `json:"ssid,omitempty"`
+	SignalDBM     *int64                 `json:"signal_dbm,omitempty"`
+	Band          string                 `json:"band,omitempty"`        // Wi-Fi clients: 2.4ghz, 5ghz, 6ghz
+	LinkMbps      float64                `json:"link_mbps,omitempty"`   // Wi-Fi clients: link rate, when the AP reports it
+	Flow          *Rate                  `json:"flow,omitempty"`        // Wi-Fi clients: current traffic (rx = download), as the AP measures it
+	MACCount      int                    `json:"mac_count,omitempty"`   // segments: MACs seen behind the port
+	Device        *model.Device          `json:"device,omitempty"`      // managed devices: full collected data
+	WAN           *WANLink               `json:"wan,omitempty"`         // WAN nodes: the uplink
+	PortLabels    map[string]string      `json:"port_labels,omitempty"` // the user's port descriptions
+	Traffic       map[string]Rate        `json:"traffic,omitempty"`     // current rate per interface
+	OS            string                 `json:"os,omitempty"`
+	ReportedOS    string                 `json:"-"`                    // OS reported by an integration (input of the classifier)
+	OpenPorts     []int                  `json:"open_ports,omitempty"` // found by the network scan
+	Services      []string               `json:"services,omitempty"`   // mDNS/UPnP services
+	Titles        []string               `json:"titles,omitempty"`     // web interface titles
+	Web           []WebApp               `json:"web,omitempty"`        // web interfaces, one per port
+	Banners       []string               `json:"banners,omitempty"`    // e.g. SSH version
+	TTL           int                    `json:"ttl,omitempty"`        // ICMP reply TTL
+	DHCP          *model.DhcpFingerprint `json:"dhcp,omitempty"`       // what it asks for when it requests an address
 
 	// Classification (set by the collector, see internal/classify).
 	Type    string   `json:"type,omitempty"`
@@ -1199,6 +1200,9 @@ func enrich(n *Node, h model.Host) {
 	n.Banners = appendUniqueStr(n.Banners, h.Banners...)
 	if n.TTL == 0 && h.TTL != nil {
 		n.TTL = int(*h.TTL)
+	}
+	if n.DHCP == nil && h.Dhcp != nil {
+		n.DHCP = h.Dhcp
 	}
 }
 

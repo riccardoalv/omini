@@ -162,3 +162,23 @@ func TestNewerDatabaseIsRefused(t *testing.T) {
 		t.Fatalf("opening a newer database: %v", err)
 	}
 }
+
+func TestDHCPFingerprintsAreKept(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	fp := model.DhcpFingerprint{Params: model.Ptr("1,3,6"), VendorClass: model.Ptr("android-dhcp-14")}
+	if err := s.SaveDHCPFingerprint(ctx, "da:a1:19:00:00:01", fp, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	fp.Hostname = model.Ptr("moto")
+	if err := s.SaveDHCPFingerprint(ctx, "da:a1:19:00:00:01", fp, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.DHCPFingerprints(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := got["da:a1:19:00:00:01"]; len(got) != 1 || model.Deref(g.Hostname) != "moto" || model.Deref(g.Params) != "1,3,6" {
+		t.Fatalf("got %+v", got)
+	}
+}

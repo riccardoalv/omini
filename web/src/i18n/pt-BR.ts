@@ -672,6 +672,10 @@ const ptBR: typeof en = {
         label: 'Banners SSH',
         help: 'Lê a linha de versão do SSH, que costuma dizer o sistema operacional.',
       },
+      dhcp: {
+        label: 'Fingerprints de DHCP',
+        help: 'Observa os pedidos de endereço que os dispositivos enviam ao entrar na rede: o que pedem indica o sistema operacional (Android, Windows, Apple, Linux...). Só observa, nunca responde; vê a rede deste servidor; precisa de raw sockets (root no Docker).',
+      },
       snmp: {
         label: 'SNMP',
         help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Somente leitura.',

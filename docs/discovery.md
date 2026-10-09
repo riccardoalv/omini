@@ -38,6 +38,7 @@ its settings are in **Integrations → Network scan**.
 | SSDP / UPnP | SSDP / UPnP | Manufacturer and model of TVs, routers and media players, from their UPnP descriptions |
 | Web page titles | Web page titles | The title of each web interface, to recognize apps (Proxmox, TrueNAS, Home Assistant...) |
 | SSH banners | SSH banners | The SSH version line, which often names the operating system |
+| DHCP fingerprints | DHCP fingerprints | What each device asks for when it requests an address (see [DHCP fingerprints](#dhcp-fingerprints)) |
 | SNMP | SNMP | Ports, traffic, neighbors, MAC tables and ARP from managed devices. See [SNMP](#snmp) |
 
 To keep the network quiet, ports, names, banners and web titles are checked
@@ -65,6 +66,7 @@ the **Network discovery is limited** alert stays open.
 | mDNS, SSDP (names, models) | Multicast: `network_mode: host`, and UDP 5353 and 1900 allowed in by the host's firewall | Names and models announced by devices are missed |
 | NetBIOS, reverse DNS, ports, web titles, SSH banners | Nothing special | — |
 | nmap OS detection and traceroute | Root, or `CAP_NET_RAW` on the nmap binary | nmap still finds ports and versions |
+| DHCP fingerprints | Raw sockets: root (the Docker image) or `CAP_NET_RAW`; Linux; on the same network as the devices (`network_mode: host`) | Operating systems are guessed from other clues only |
 | Traffic flows (NetFlow, IPFIX, sFlow) | UDP 2055 and 6343 reachable from the exporter | The router cannot send them |
 
 "On this server" checks four things: **Host network**, **Multicast (mDNS,
@@ -193,13 +195,35 @@ security.wrappers.nmap = {
 };
 ```
 
+## DHCP fingerprints
+
+When a device joins the network (or renews its address) it broadcasts a DHCP
+request. What it asks for, in its own order (option 55), and what it says it
+is (the vendor class, option 60: `android-dhcp-14`, `MSFT 5.0`, `dhcpcd-…
+:Linux`), tell its operating system, even with a private MAC address. Omini
+**only watches** those requests: it never answers, never opens port 67, and
+never gets in the way of a DHCP server running on the same machine (it reads
+them with a packet socket filtered in the kernel to UDP port 67).
+
+- It sees the requests that reach this server: devices on its own network.
+  Devices on other VLANs reach the DHCP server through a relay, unseen.
+- A device is fingerprinted the next time it asks for an address (when it
+  joins, or halfway through its lease); fingerprints are kept across restarts.
+- The name a device gives in its request (option 12) is used too.
+- Recognized: Android (any version), Windows 7 to 11, Apple (iOS, iPadOS,
+  macOS; told apart by other clues), Linux (dhcpcd, dhclient, BusyBox udhcp),
+  and desk phones that name themselves. No third-party database is used.
+
+Turn it off in **Integrations → Network scan → Methods → DHCP fingerprints**.
+
 ## Device identification
 
 Every device gets a **type**, and when Omini can tell, an **operating
 system**, a **brand** and a **product**. The device panel's **Identification**
 section shows each conclusion with the evidence behind it: the web page title,
 an open port, mDNS, the MAC vendor, the name, the SSH banner, the TTL, the
-model, UPnP, an integration, or "this server" (the machine Omini runs on).
+DHCP fingerprint, the model, UPnP, an integration, or "this server" (the
+machine Omini runs on).
 
 | | Examples |
 |---|---|
