@@ -1,6 +1,6 @@
 # Contributing to Omini
 
-Thanks for helping! The most valuable contributions are **device support** (SNMP profiles, plugins) and **real device data** (anonymized SNMP walks). See [`CLAUDE.md`](CLAUDE.md) for architecture, decisions and conventions.
+Thanks for helping! The most valuable contributions are **device support** (SNMP profiles, plugins) and **real device data** (anonymized SNMP walks). See [Development](docs/development.md) to get started, [Decisions](docs/decisions.md) for what was decided and why, and [`CLAUDE.md`](CLAUDE.md) for the conventions.
 
 Everything in the project is in **English**: code, comments, docs, commits, issues and PRs.
 

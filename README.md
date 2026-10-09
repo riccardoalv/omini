@@ -84,7 +84,7 @@ Host networking matters: in a Docker bridge network Omini only sees Docker's own
 | [The map](docs/map.md) | [Development](docs/development.md) |
 | [Alerts and notifications](docs/alerts.md) | [SNMP profiles](docs/snmp-profiles.md) |
 | [Integrations](docs/integrations.md): each plugin and its read-only account | [Plugin review](docs/plugin-review.md) |
-| [Troubleshooting](docs/troubleshooting.md) | |
+| [Troubleshooting](docs/troubleshooting.md) | [Decisions](docs/decisions.md): what was decided and why |
 
 ## Integrations
 

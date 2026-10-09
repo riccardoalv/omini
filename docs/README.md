@@ -24,6 +24,7 @@ alerts. It only reads: it never changes the configuration of a device.
 | [Writing a plugin](plugins.md) | Repository layout, `plugin.yaml`, the Python SDK, the protocol, testing, publishing |
 | [HTTP API](api.md) | Authentication and every route |
 | [Architecture](architecture.md) | Components, data model, how the topology is built |
+| [Decisions](decisions.md) | What was decided, and why, area by area |
 | [Development](development.md) | Make targets, tests, CI, the simulated network, releases |
 | [SNMP profiles](snmp-profiles.md) | YAML files that teach Omini a vendor's SNMP data |
 | [Plugin review](plugin-review.md) | How plugins get a trust level in the store |

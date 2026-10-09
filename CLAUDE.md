@@ -1,258 +1,115 @@
 # CLAUDE.md
 
-Guide for agents (and humans) working on Omini. Read the [README](README.md) first for the product overview, and `docs/` for the full user and developer documentation.
+Guide for agents (and humans) working on Omini: a self-hosted tool that reads
+network devices and software of many vendors, normalizes what they know into
+one model, and shows a live map of the network (topology, traffic, clients,
+health and alerts) in a web UI.
 
-## The project in one sentence
+Read the [README](README.md) for the product, [docs/decisions.md](docs/decisions.md)
+for what was decided and why, and [docs/architecture.md](docs/architecture.md)
+for how it is built.
 
-A self-hosted tool that reads data from network devices and software of many vendors, normalizes it into a common model, and renders a live topology + traffic flow map, client inventory and health insights in a web UI.
+## How we work
 
-## Status
-
-**v1.0 — first official release.** Everything in the decisions log below is implemented: zero-config discovery (with SNMP v2c/v3 and profiles), identification, nmap, traffic flows, the topology map (tidy-tree layout, strict areas, VLAN/subnet filter, folding), live traffic and history, 27 alert rules with popups and notifications, presence timeline, plugin runtime + SDK + store with nine plugins, Docker image on Docker Hub and ghcr, en + pt-BR. User and developer docs in `docs/`. Next: README → Roadmap.
-
-Product and architecture decisions are made by consensus with the maintainer: raise questions and trade-offs instead of deciding unilaterally, then record agreed decisions here and in the README. Every change ships with tests that run in CI.
-
-## Decisions log
-
-| Topic | Decision |
-|---|---|
-| Positioning | Omini has its own identity: zero-config discovery and identification, easy integrations and a traffic flow map. Docs never compare Omini to other products or define it by them |
-| Product core | Automatic discovery + integrations + topology map with live traffic and alerts |
-| Traffic | Per-link bandwidth from interface counters; "who talks to whom" from NetFlow/IPFIX/sFlow (see Flows) |
-| Writes to devices | Read-only; write actions later, behind explicit permissions |
-| Devices without SNMP/API | Inferred from other devices' data (ARP/DHCP/FDB) **and** optional scraping plugins |
-| License | MIT |
-| Language | Everything in English (code, comments, docs, commits, issues). UI is translatable (i18n): `en` + `pt-BR` |
-| Core | **Go**: discovery, generic SNMP + YAML profiles, LLDP, topology engine, traffic rates, insights, API, serving the UI |
-| Integrations | **Go** for standard protocols (SNMP/LLDP/ARP/ICMP); **Python plugins** for anything vendor/software specific (OPNsense, Mercusys, UniFi, MikroTik...) |
-| Plugin runtime | uv-managed venv per plugin, SDK embedded in the core and installed into every venv, install from GitHub release tarballs, `OMINI_PLUGIN_DIRS` for development — see "Plugin runtime (core)" |
-| Docker image | `ghcr.io/riccardoalv/omini` and Docker Hub (`<DOCKERHUB_USERNAME>/omini`, when the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are set) (amd64 + arm64), built and pushed by the release workflow when release-please creates a release: Debian slim with Python 3 and uv (plugins), app icons bundled; data in `/data`; `network_mode: host` recommended; `OMINI_NMAP=install` installs nmap on start |
-| Python runtime | Always bundled in the official image, so every plugin works out of the box |
-| Plugin protocol | Exec per collection: core runs the plugin, sends config as JSON on stdin, reads devices as JSON on stdout |
-| Frontend | **Vue 3** + TypeScript (Vite); map with **Vue Flow** and its own tree layout (`lib/layout.ts`, see "Map layout"; ELK.js was dropped: its placement looked untidy) (left-to-right: firewall on the left, clients stacked on the right — top-down made wide networks unreadable); vue-i18n; built assets embedded in the Go binary. Tooling: Vitest, ESLint + oxlint, Prettier, vue-tsc. Node.js 24 |
-| Authentication | Single admin user created on first run; device credentials encrypted at rest in SQLite. **Password:** changed in Settings → Account (`POST /api/me/password`: current + new, other sessions signed out); forgotten → `omini reset-password [username]` on the host (no echo on a terminal, else the first line of stdin; every session signed out) |
-| Traffic history | Every rebuild records each interface's rate (and a Wi-Fi client's own, interface `""`): one point per minute kept **24 h** (`traffic_minutes`) and the hourly average + peak kept **a year** (`traffic_hours`, rebuilt from the minutes so a replaced minute never counts twice). `GET /api/history?node&iface&hours` (per minute up to a day, per hour beyond). Chart (`TrafficChart`, plain SVG, ranges 1 h / 24 h / 7 d / 30 d / 1 y, average and peak, gaps where data is missing; opens on 1 h while Omini has only minutes of data): click a **link** (the upstream port's history, else the device's port, else the Wi-Fi client's), a **port's card**, a Wi-Fi client or a WAN in the panel |
-| Plugin distribution | Each plugin is its own Git repository. Built-in **plugin store** with a default curated list (one-click install) + install from any GitHub URL. Reference model: Home Assistant's HACS. Installs pinned to a release |
-| Plugin trust | Publisher badge (`official` / `community`) + trust level assigned by maintainers: `plug-and-play` (fully tested, works out of the box), `stable` (tested, known issues documented), `experimental` (partially tested), `unverified` (not reviewed; always the level for URL imports). Levels belong to a release (`reviewed_version`, `reviewed_at`, `known_issues` in the index); the store says when the installed release is newer than the one reviewed. Process and criteria in `docs/plugin-review.md`; requests through the "Plugin review" issue form |
-| Firewall | **OPNsense** via its official REST API (key/secret, dedicated least-privilege user, HTTPS) as a Python plugin in its own repo (`omini-plugin-opnsense`). v0.1 reads: interfaces with status, IPs, **link speed/media** and traffic counters; ARP; DHCP leases (ISC, Kea or dnsmasq, whichever is in use); CPU, memory, uptime, version; **gateway status** (up/down, latency, loss). pfSense has its own plugin |
-| Releases | release-please from Conventional Commits; the Docker image is pushed on each release. v0.1–v0.4 were the incremental pre-releases; **1.0.0** is the first official release (forced with a `Release-As: 1.0.0` footer) |
-| Test network | OPNsense (router/firewall, DHCP), managed Horaco **HC-SWTGW218AS** switch, Mercusys routers in **AP mode** (clients visible in OPNsense ARP/DHCP) |
-| Horaco HC-SWTGW218AS | No SNMP on stock firmware: Python plugin [`omini-plugin-horaco`](https://github.com/riccardoalv/omini-plugin-horaco) reads its web interface — `/info.cgi` (model, firmware V200.x, MAC, uptime, port status), `/port.cgi?page=stats` (64-bit packet and byte counters as `hi-lo`), `/panel.cgi` (RJ45/SFP from each port's `div` class) and `/mac.cgi?page=fwd_tbl` (paged with its form, `cmd=goto`). The session cookie is `md5(user+password)`: reused, login posted only when asked (the switch keeps one session). Only page navigation is ever posted. The switch now and then closes every connection at once for a few seconds: a page is tried again after a 6 s pause, and a page that still fails never fails the collection (the MAC table memory covers it) |
-| Mercusys Halo | Python plugin [`omini-plugin-mercusys`](https://github.com/riccardoalv/omini-plugin-mercusys): the units' local web interface (TP-Link Deco protocol: RSA password, AES requests signed with `h=md5(admin+password)&s=seq+len`, the login's signature also carrying `k`/`i`; the password at the top level of the login payload, unlike Deco). Each unit is an AP; clients read unit by unit (`access_host` is always "1"); no per-client signal or link rate in the local API (checked every model, controller and view of its web interface: only the Mercusys cloud app has them). Wi-Fi clients with band, network name (`/admin/wireless?form=wlan`: only the SSIDs are read — that answer also carries the Wi-Fi passwords, never kept) and **current traffic** (`rx_bps`/`tx_bps` — the units report no link rate), wired ones in the FDB (`LAN`), names as hosts; requests carry `Content-Type: application/json` like the web interface (else "no such callback"). Session kept in the state folder, 15 min pause after a refused login |
-| Wi-Fi clients on the map | A client node carries its band, link rate (`tx/rx_rate_mbps`, when the AP reports it) and current traffic (`rx_bps`/`tx_bps` from the AP): the traffic is the ↓/↑ badge on the device (none while idle; on top of every node — compact for clients, in the gap above them), each Wi-Fi network of an AP is a **mini node** between it and its clients (AP → "IOT · 2.4 GHz" → clients; icon colored by band; no panel, not in the inventory, draggable like any node; **a click on it folds or unfolds its clients** (as do a middle click and its context menu, which has no "details"); collapsing the AP gathers its networks and their clients in one bubble — `withWifiNetworks` in `lib/graph.ts`), so Wi-Fi links have no pill; the link rate is in the client's panel. App links have no pill either (the app shows its port) |
-| Plugin order | OPNsense (v0.1), then Horaco and Mercusys (v0.3) |
-| Plugin store icons | Catalog `icon` is a logo slug (Simple Icons, or the bundled Dashboard Icons, e.g. `mercusys`) or a device type (`switch`) when the brand has no logo (Horaco) |
-| Unmanaged switch beside a device | A client seen only on the switch port towards a device is placed behind that device — unless the device's integration lists its clients (Wi-Fi or wired) and this one is not among them: then an unmanaged switch is on that port, drawn as a segment with the device and those clients under it (e.g. switch Port 5 → unmanaged switch → {Halo AP, laptop by cable}). A MAC that only the switch's table vouches for there (no ARP, no scan) is not shown at all: a stale entry, or something even the AP does not see |
-| MAC table memory | Switches age idle MACs out after ~5 min (a phone asleep), which made clients jump to wherever ARP saw them (the firewall's LAN). The collector remembers where each MAC was last learned (6 h, `collector.LastSeenTTL`; kept in the `mac_ports` table, so it survives restarts) and the topology uses it (`topology.Options.LastSeen`) for clients present by other means (ARP, DHCP, Wi-Fi) — never to make one that left look present — and to keep a switch's uplink where the router was last learned (else the uplink came and went, and what is behind the router looked like a segment) |
-| Sticky placement | Maintainer's rule: **a client stays where it was last seen for sure until it is seen elsewhere for sure** (a phone once drawn on "an unmanaged switch" because its mesh unit's list missed it for a round). For sure: on an access point's Wi-Fi client list (moves when it roams), alone on a switch access port (`portMACs == 1`, learned now, not remembered), or behind a desk phone. Not for sure: a port shared with other MACs (segments), a port towards other gear (uplinks, "unmanaged switch beside an AP"), ARP or a scan only. `topology.Options.Attached` (by MAC: node, port, Wi-Fi + SSID + band) in, `Topology.Attached` (seen for sure this round) out; the collector keeps them in the `attachments` table (migration 16; forgotten after a year without being confirmed, or ignored when that node is not on the map). Applies to clients; a modem in a WAN VLAN still goes under its WAN |
-| Detected devices | Kept **forever** (no automatic purge), with `first_seen` / `last_seen`; manual cleanup in the UI (bulk delete, filter by randomized MAC). Hidden from the map after **1h offline** (dimmed until then), always kept in the inventory |
-| Presence timeline | `presence_events` (join/leave, `first` for the first sighting ever; kept a year) for clients, devices and LLDP neighbors. A device that disappears gets its leave event (at the time it was last seen) only after missing for `max(3 × round interval, 5 min)` (the interval set in the UI) — no flapping. "New device" insight (info, 24 h) for devices first seen after tracking started (`presence_since` setting) + 15 min, so the first scans of a new install are not "new". Timeline in the Alerts screen (by day, "new devices only", paging) and the last events in the device panel |
-| UI screens | Map (home, full screen), Integrations, Settings in v0.1; the device inventory is **not a screen** (maintainer's decision): a drawer on the map opened by the "N devices · N clients" chip at the top left (search, filters, rename, pin, hide, delete; a click on a name closes it and opens the device on the map; `/devices` redirects to `/?devices=1`, which opens it); Alerts (alerts + timeline; called Insights until it was renamed by the maintainer — `/insights` redirects to `/alerts`) in v0.2; Flows only in the menu while the flows integration is on (`lib/features.ts`, fed by every `api.integrations()` call). The store is **not a screen** (maintainer's decision): a modal in Integrations (`/store` redirects there and opens it) |
-| Map clients | All clients shown as nodes; **every node can fold all its children** on demand (right-click → collapse children; a click on the bubble unfolds; maintainer's rule): switches, APs, unmanaged segments, VMs, clients, with everything below them. Automatic grouping above the threshold stays for clients, apps and devices that carry no one else's traffic; a group (AP / switch port) with **more than 8** clients collapses into a "N clients" bubble that expands on click. Threshold configurable; expanded/collapsed state persisted. Pinned devices and servers always visible |
-| Node details | Click opens a **slide-over side panel** (summary, ports with status/speed/traffic, connected clients, alerts) without leaving the map; "open full page" link |
-| Repositories | Personal GitHub account (`riccardoalv`): no organization (decided by the maintainer). Main monorepo `omini` + one repo per plugin (`omini-plugin-<id>`) |
-| Database upgrades | Migrations only go forward (`PRAGMA user_version`); an older Omini refuses a database a newer one migrated (`store.ErrNewerDatabase`) instead of running on it — going back means restoring a backup |
-| Data contract | **JSON Schema** in `schema/` is the single source of truth; Go types and Python (pydantic) models are generated from it; CI fails if generated code is stale |
-| Plugin format | `plugin.yaml` manifest (id, name, version, protocol version, entrypoint, form fields) + `requirements.txt`; Python SDK `omini-sdk` handles stdin/stdout, validation and errors so authors only write `collect()` and `test()` |
-| Dev environment | `make dev` runs the Go backend and the Vite dev server together; `make run` builds and runs the production-like binary. Optional Nix flake. (Docker Compose + SNMP simulator: later) |
-| Map areas | **Strict** (maintainer's rule: an area holds its members and nothing else): a device belongs to one area (drawing, resizing or dropping into one takes it out of the others; a drop goes to the innermost area); an area may sit wholly inside another (a member of the inner one is not taken by the outer), never partly over it; members from different branches are laid out together under the parent most of them share (their own links cross the border, the yFiles rule "a group must hold whole subtrees"); a non-member never stays inside a box (a dragged position there is dropped for its tree place). Named rectangles drawn on the map ("New area" button, then drag). An area **remembers its member nodes** (those inside when it is drawn or resized, plus devices dropped into it; dragging a device out removes it) **and everything below them** (apps, clients, VMs) and is always drawn around them, so it follows them when the map is laid out again (reset, expand, new devices). The automatic layout gives each area a band of its own (see "Map layout"), so its devices stay together and no other device lands inside it. Moving an area moves its members. **Hide** (menu: the frame leaves the map and stops grouping the layout, its devices stay; `areas.hidden`; "Show hidden (N)" in the toolbar counts hidden devices and areas and shows hidden areas dimmed, to show them again from the menu). Name, color (6 presets or any `#rrggbb` from the color picker in the menu: saturation square and hue bar from **vanilla-colorful** (MIT, web components), hex and R/G/B fields, shown live on the area and saved with "Apply"), resize from the corner (re-picks the members), right-click menu on the title (rename, color, delete). Stored in the `areas` table; shown in both orientations (drawn around the same devices). "Reset layout" keeps areas. Collapsing an area into a bubble: later |
-| UI language | Saved per user in the database (`users.locale`) and applied on login; the language picked on the setup screen becomes the user's. Before login, the browser language is used |
-| Expand/collapse | The expanded/collapsed node stays still on screen; the map is laid out again around it (no overlaps). The viewport only refits on first load, orientation change, layout reset and sidebar toggle |
-| Map layout | A **tidy tree** of our own (`treeLayout` in `lib/layout.ts`, no ELK): every level in one column (left to right) or row (top down), as wide as its widest node; each subtree in a band of its own across; a parent centered on its children (a parent wider than them: they are centered under it); a node with several parents hangs from the first, and parents with nothing else below them (a second WAN) stand next to that one. Gaps: 150 px between columns / 100 between rows (room for the pill and, top down, the traffic badge), 22 px between siblings (+6 above devices, for their badge) / 24 across top down. **Areas:** siblings entering the same area are put next to each other (where the first was); their run gets the area's padding across (and its title, left to right), and a level where an area starts gets its border (and title, top down) before it — so an area's box never takes in another node. Top-down leaf grids (packLeaves) are nodes of the tree. Saved (dragged) positions of nodes in an area are ignored unless every member of the area was dragged (the area moved as a whole): a few dragged members stretched the area over the map. Any change of an area's members (drawn or automatic) lays the map out again. A node without links in an area stands as a sibling of the area's first linked member (else it would stretch the box over everything). Saved (dragged) positions still win. **Link pills** sit at the end of the wire, just before the device (left to right: 10 px left of it; top down: above its traffic badge), moved out of the border and title of an area the link enters (`inset`); a shared port's single pill sits where the wire leaves the port. Checked in a headless browser: no node, badge, pill or area title overlaps, both orientations |
-| Sibling order | The layout keeps model order: nodes are given in a walk from the roots where each node's children are grouped by the port or Wi-Fi network they hang from ("IOT · 2.4 GHz" ones together), then by name (`modelOrder` in `lib/layout.ts`), so a link's pill sits over the devices that use it. Top-down leaf grids and area boxes take the place of their first node in that order (they used to go last, which scrambled "Reset layout"). Nothing may overlap: nodes, link pills and areas they do not belong to (checked in a headless browser on a real network's data) |
-| Map orientation | Left-to-right by default, toggle to top-down in the map toolbar (per browser). Top-down packs the leaf children of a node (4 or more, nothing below them: clients, apps) into a compact grid under it, so wide networks do not become one very long row. Saved node positions are kept per orientation (`DOWN:` prefix in the layout table) |
-| Device web UI | Side panel offers "Open web interface" (new tab) when one is detected: `internal/webui` checks common admin ports (443, 80, 8443, 8080, 8006, 5000/5001, 8123, 8096, 9443) over HTTP/HTTPS and reads the page `<title>`. Only IPs of nodes on the map; cached 10 min; no credentials sent |
-| Sidebar | Compact (icons) or expanded (icons + labels), remembered per browser |
-| Discovery privileges | Decided with the maintainer (was an open question): each method's needs are documented (README, "What the network scan needs") and **checked at start** (`netscan.DetectCapabilities`: in a container? host network — a container seeing a single interface on a Docker bridge network 172.16.0.0/12 is not —, unprivileged ping sockets, raw sockets (root or CAP_NET_RAW), joining the mDNS multicast group). `GET /api/capabilities`; the integration details of the network scan and nmap show "On this server" (works / how to fix); a "Network discovery is limited" warning (`discovery_limited`) while a network scan is set up and something is missing; logged at start |
-| Zero-config discovery | Core **network scan** integration (`internal/netscan`), created automatically on first start (`OMINI_AUTOSCAN`). Methods: UDP probe to fill the OS ARP cache + read `/proc/net/arp` (no raw sockets needed), unprivileged ICMP, TCP liveness for routed subnets, common-port scan, reverse DNS (system, then the gateway's DNS), NetBIOS NBSTAT, mDNS (legacy unicast + group listener on 5353) and SSDP/UPnP descriptions. Ports/names once per new host, then every 6h. Results are `Host` records (schema) under the gateway device. A routed network without a gateway is a "Network <cidr>" device holding its hosts; when none is left under it (all placed elsewhere, e.g. the modem under its WAN) it is not drawn **Routers' networks:** with "auto", the private IPv4 subnets other integrations report (non-WAN interface addresses, VLAN subnets; /22 to /30) are scanned too, up to 16, routed (ping + TCP, no MACs) — "Also scan the routers' networks", on by default; the collector hands them to every integration (`integration.KnownSubnets`) |
-| MAC vendors | IEEE MA-L registry embedded gzipped (`internal/oui`, refresh with `make oui`) |
-| Device identification | `internal/classify` (rules + evidence) → type, OS, brand, product. Icons: homelab software shows its logo alone; other devices show the type icon with an OS/brand badge; a device whose type is unknown shows its brand's (else OS's) logo alone instead of a question mark. Consumer devices are also recognized by name patterns (`nameRules`: TVs by OS or model code, streaming sticks, smart speakers and displays, IP phones, UPSes, LTE routers), and a device seen on a WAN port or at a gateway address is the ISP's modem or router. Brands match the MAC vendor by whole words. A web title names an app only by a distinctive phrase: catalog names beat aliases, and names or aliases made only of generic words ("Network Management") never match; a title naming the device's own brand ("APC | Network Management Card" on an APC UPS) is its own interface, not an app. Users can override type and icon |
-| Solar inverters | Type `solar_inverter` (solar panel icon): Huawei SUN2000/SUN5000/SDongle, Fronius, SolarEdge, SMA, Growatt, GoodWe, Enphase, Sungrow, Deye/Solarman, Solis — by name (hostname, page title, model) or by a MAC vendor that only makes solar equipment |
-| Icon/device lists | IEEE OUI and Simple Icons; **Dashboard Icons** (Apache-2.0, homelab apps, bundled for offline use); **model names** (`internal/models`, `make models`): Apple identifiers (community list + `extra.tsv` for Apple TV, HomePod, Macs) and Google Play's official list of Android devices — "iPhone14,2" → iPhone 13 Pro, "SM-S911B" → Samsung Galaxy S23, applied to models and to DHCP names that are model codes. Not used: Fingerbank (sends data to a third party), nmap databases (NPSL) |
-| Proxmox guests | Any device with a Proxmox MAC (OUI) — VM or container, whatever it runs (Ubuntu, TrueNAS...) — is drawn under the Proxmox host **only when the network has exactly one Proxmox host**; with several hosts no inference is made. The **Proxmox plugin** places them for real: each running guest is a device with a neighbor of protocol `other` towards its host (`net0` → `vmbr0`); then no inference is made at all, and devices reported by any integration (a firewall running as a VM) are never moved. A link declared from one side (`other` neighbor: a VM, a mesh satellite) only places the side that reported it — the host is still placed on its switch port. A **cluster** works the same: every node is read through one address, each guest names its node (name, address and, once known, MAC) and hangs under it, each node on its own switch port (tested end to end in `TestProxmoxClusterGuestsUnderTheirNode`); clicking a node or a guest shows its CPU, memory, disks and uptime. A Proxmox integration that sees no guests (its token lacks VM.Audit: Proxmox returns empty lists) does not stop the inference; the plugin says so in its test. A **double-NAT router** (its WAN address or gateway inside another managed device's LAN: a lab router, an ISP router behind the firewall) is not the center: no WAN node, its uplink is placed like any device's, and as a VM it hangs from its host. The **center router or firewall running as a VM** (a real WAN; whichever integration declared the `other` link — its own, or the hypervisor's, which sees it as one more VM) draws no link to the host (it is the center of the network, and the host already hangs from its LAN): `runs_on` names the host, shown as "Runs on" in the panel. A machine seen before by MAC (e.g. as a client) that an integration starts reporting under a new node id is not a "new device" (first sighting is by MAC). A device reported by an integration but placed by nothing now stays on the switch port its MAC was last learned on (the MAC table memory), else hangs from the router or firewall interface whose network has its address (`subnetRouter`), never floating apart. A **port-channel** (an interface with `members`) is an uplink when one of its members is (switches learn MACs on Trk1/Po11 while LLDP names the member ports). A router whose **site-to-site VPN** peer names another managed router (endpoint is one of its addresses, or the peer network holds it) gets a `vpn` link to it (dashed violet; not a tree link: the other site keeps its own WAN). A client known by MAC takes what a **routed scan** found at its address (names, ports, titles). An **LLDP neighbor that is a phone** (by its type or platform) is not infrastructure for the alerts. **One machine, one node** (maintainer's rule: whenever a node is added, updated or brought back, check whether a node with the same MAC or IP exists and merge into it): a device reported without an address takes the one its MAC has in a scan or ARP (a VM without guest agent); a client that left is not drawn again (dimmed) when its MAC or address belongs to a node on the map under another id. A device reported **without any MAC** (the Proxmox API exposes none) takes the MAC its address has in ARP tables, DHCP leases or scans (`adoptMACs`), so it is the machine already seen on a switch port, not a second node |
-| End devices on LLDP | Found with the realistic devnet: a neighbor that announces itself as a **telephone** (LLDP capability; without capabilities, as some controllers pass none: the classifier's IP phones by model, name or maker) is a client of type `ip_phone`, not network gear: its switch port is not an uplink, and the computer learned on that port hangs from the phone (its PC port). A neighbor that is only a **station** (a server running lldpd) is a client too. No "unknown neighbor" alerts for either. **VRRP/CARP virtual MACs** (`00:00:5e:00:01:xx`, `…:02:xx`) are a router pair's gateway, never clients (they made a fake segment on the port to the firewalls). A **modem in a WAN VLAN** (the firewall's WAN port on a switch access port, the ONT next to it): a MAC learned in a VLAN that carries a router's uplink (its WAN interface's own tag, else the only VLAN its WAN port's MAC is learned in — unless the router uses that MAC on its LAN too, or the VLAN is a LAN anywhere) hangs from that WAN node; two routers on one (an HA pair): the uplink that is up |
-| Several apps on one IP | One node per app (e.g. Jellyfin + qBittorrent on a VM), attached to the device and collapsed above the threshold like clients |
-| SNMP | Not a separate integration: an option (method) of the network scan, on by default. Every host found is probed with the configured read-only communities (default `public`, secret field, comma-separated) once per deep scan; hosts that answer are read in full (interfaces, traffic, LLDP, FDB, ARP) on every run. Older standalone SNMP integrations are converted on start (their community is added to the scan). **SNMP v3** (one user in the scan's "SNMP v3" settings: auth none/MD5/SHA-1/224/256/384/512, privacy none/DES/AES-128/192/256) is tried before the communities; the probe remembers which credential each host answered to. **SNMP profiles** (YAML, `internal/snmp/profiles/*.yaml` shipped, `<data>/profiles/*.yaml` added or replacing by `id`; format in `docs/snmp-profiles.md`): `match` by sysObjectID prefix, sysDescr regex or an OID that exists; set vendor, role, model, OS version, serial, CPU / memory / swap % (scalar or walked column with avg/max/min/sum, scale, invert, used/free/total), load average, temperatures and firmware (current, latest, update available with a value map); every matching profile applies, by ascending `priority`. A profile can ask for **MAC tables kept per VLAN** (`fdb_per_vlan`: a column listing the VLANs, and the community `{community}@{vlan}` / v3 context `vlan-{vlan}`; up to 64 VLANs): the shipped Cisco profile does (CISCO-VTP-MIB), else a Catalyst showed VLAN 1's table only and clients landed on the wrong switch. The standard MIBs also give **link aggregation members** (IF-MIB `ifStackTable`, for ifType ieee8023adLag) and the neighbors' **LLDP capabilities** (`lldpRemSysCapEnabled` → `Neighbor.capabilities`); a chassis named by its address (a desk phone) gives its MAC as the port id. Shipped: Net-SNMP (UCD-SNMP-MIB, lm-sensors), MikroTik, Cisco IOS, Juniper, FortiGate, Synology, QNAP, HPE Aruba |
-| Device panel | CPU and memory as bars (green < 60%, yellow < 85%, red). **Front view of the ports** (2D, like a switch): one jack per physical port colored by link speed (10G purple, 5G blue, 2.5G teal, 1G green, ≤100M amber, down empty), all in one row in order (they shrink to fit), hover for details, **click opens the port's card** (details, name it, open the connected device). No port table |
-| WAN nodes | Each internet uplink of a router/firewall (an interface with gateways, flagged `wan` by the integration) is a **WAN node, parent of the firewall** — several WANs, several parents. It shows the uplink's name, speed (of the physical port, following PPPoE → VLAN → port), gateway latency and a status dot (green / yellow if a gateway is degraded / red when down). Devices seen on the WAN port (the ISP modem) hang under it. Not stored in the inventory |
-| Port connector | Integrations report `connector` (rj45 / sfp / qsfp). OPNsense: from the current media (`1000baseT` = RJ45; `SR/LR/SX/LX/CX/CR/Twinax` = SFP), or from the supported media when the port is down and they all agree; virtual NICs (virtio...) have none and are not drawn. The front view draws SFP cages and names the generation by speed (SFP, SFP+, SFP28, QSFP+) |
-| System health | Vendor-neutral fields on `Device`, ready for insights: `cpu_count` (logical CPUs; a guest's vCPUs), `mem_total_bytes` / `mem_used_bytes` (shown next to the CPU and memory bars: "4 CPUs", "3.0 GiB of 8.0 GiB"; memory % worked out from them when only they are known), `swap_pct`, `load_avg` (1/5/15 min), `temperatures[]` (sensor, kind cpu/disk/board/other, °C), `storage[]` (mount, fs, total/used bytes) and `firmware` (current, latest, update_available, updates, needs_reboot, checked_at — what the device knows from **its own last check**: Omini never starts a check, read-only). Device panel: tiles for updates (yellow when pending, "Not checked" when the device never checked), hottest CPU temperature (yellow ≥ 70 °C, red ≥ 85 °C) and load; bars for swap and each disk (disks yellow ≥ 80 %, red ≥ 90 %). OPNsense reads them from the dashboard endpoints and `core/firmware/status` (privilege *System: Firmware*); plugins built for an older SDK still run without them |
-| Port descriptions | The user can describe any port ("Uplink to the rack"): pencil next to the port in the device panel; stored in Omini (`port_labels`, never written to the device), shown instead of the device's description; empty restores it |
-| Live traffic (early v0.2) | The collector turns interface byte counters into rates: difference between two collections ÷ time (average of the polling interval; counter resets skip a round; a failed collection clears them). Nodes carry `traffic` per interface. Map: links show only their **maximum speed**; **traffic is shown on the devices** as a ↓/↑ badge: routers/firewalls and WAN nodes show internet traffic, a device reached by a link of its own shows that link's traffic. A port shared by several devices (e.g. a LAN bridge with a switch behind it) gets one speed pill at the port (its traffic stays in the port view). A bridge runs at its fastest physical member's speed |
-| Link speed on the map | Shown as a colored pill at the end of each link whose speed is known: LLDP/switch-port links, and a device port with a single link (e.g. WAN → modem). A port shared through ARP (switch behind it) has no per-device speed. The pill also names the port: the name the user gave it, else the interface's own name (`mlxen0`, `Port 1`) — never the device's description; a bridge shows the physical port behind it (its fastest member up, from `members`; without them, the only physical port up at the bridge's speed): "Porta LAN | 10G" |
-| Hide / delete devices | The device panel has **Hide** (a per-device `hidden` flag in the inventory: the device and everything below it leave the map; "Show hidden (N)" in the map toolbar brings them back temporarily; Devices lists them with a badge and an unhide action) and **Delete** (removes it from the inventory after a second click; a device still on the network returns on the next scan). App nodes have neither (they are not in the inventory) |
-| Adding integrations | "Add integration" opens the **store**: built-in integrations (Network scan, marked "Built in"), installed plugins and the catalog; picking one opens its form. Types can be **single** (`Info.Single`): the **network scan is single** — the API refuses a second one (409), the store shows "Already added", and duplicates left by older versions are removed on start (the oldest is kept) |
-| Collection rounds | Decided by the maintainer to stop devices landing in the wrong place from data of different ages: collection runs in **rounds**, **one integration at a time, from the edge of the network to its center** (`internal/collector/round.go`): an integration's level is the depth, on the last map, of its device closest to the root (deepest first: access points and servers, then switches, then the router); without a map, its devices' roles (AP/server 3, switch 2, router/firewall 1); never collected yet: the order they were added; built-in discovery (network scan, nmap, flows) always last. The map is built **once, at the end of the round**, from that coherent picture. An integration that fails keeps its last good data (its devices shown offline, as before) and never stops the round. **One interval for every round** (`round_interval_s` setting; default `OMINI_POLL_INTERVAL`; 15 s … 24 h; `GET/PUT /api/collection` → interval, default and the last round: start, duration, order); a round that takes longer than the interval is followed by the next at once. No per-integration interval any more (the `interval_s` column stays, unused). No "Run now" per integration (maintainer's decision): the "Collection in rounds" card on the Integrations screen has **"Run a round now"** (`POST /api/collection/run`): a whole round in which every integration skips its caches (`integration.WithForce`: the network scan's deep scan, an nmap scan), followed in the card until it ends; the map's "Refresh now" runs an ordinary round (`POST /api/refresh`). The card also shows the interval, the order of the last round (numbered, edge → center) and when it ran |
-| Integration names | Not editable: an integration is named after its type ("Network scan", "OPNsense") |
-| Integration settings | Clicking an integration expands it inline with its settings and status. The network scan exposes each method (ARP, ping, ports, DNS, NetBIOS, mDNS, SSDP, web titles, SSH banners), ports and intervals |
-| Demo network | Removed from the product; `internal/demo` is only a test fixture. Leftover demo integrations are deleted on start |
-| Dev network | `testdata/devnet`: **Acme**, a mid-size company designed in `testdata/devnet/DESIGN.md` (HQ with an OPNsense HA pair, Cisco core, Aruba/UniFi/Juniper/MikroTik/Horaco switches, UniFi and Mercusys Wi-Fi, 3-node Proxmox + Ceph, NAS, ~400 devices; a branch with MikroTik + Omada over WireGuard; a store with OpenWrt over IPsec; a pfSense lab) whose device **APIs are emulated** (`emulator/`, Python: OPNsense, Proxmox, UniFi, RouterOS REST, Omada Open API, OpenWrt ubus, pfSense REST, Horaco pages, Mercusys Halo, SNMP v1/v2c/v3 agents, plus what the network scan probes), so the **real plugins** (sibling repos, unmodified) and the built-in scan run against it. A deterministic weekly scenario (office hours, roaming, backups, fiber failover, tunnel drops, reboots, a failing fiber and disk) on a simulated clock (`DEVNET_SPEED`, default 60). `make devnet` runs Omini on :8093 inside a rootless network namespace where every device has its real address (`unshare`), data in `data-devnet/`, generated credentials in `data-devnet/devnet-*.json`. No core code knows about it; tests in `testdata/devnet/tests` (each emulator against its real plugin) and `internal/collector/devnet_test.go` (the map built from every real integration) |
-| nmap | Built-in, **single** integration (`internal/nmapscan`) that runs the nmap installed on the host (NPSL: Omini never ships nmap, to stay MIT). Runs **in the background** (Collect returns the last results at once; a /24 takes about a minute) every `every_hours` (default 24 h) or on "Run a round now": `-sV --version-light --top-ports 100`, plus `-O` when Omini runs as root (Docker). Hosts merge with the network scan's under the gateway (same MAC; without root nmap sees no MACs, so they come from the system ARP cache, and a device without MACs merges by IP); versions become banners and OS guesses (≥ 90 % accuracy) the OS. **Scan one device:** with nmap added and enabled, the device panel has "Scan (nmap)" (`POST /api/nodes/{id}/scan`, only nodes on the map): a scan of that IP set in the integration's "Scan one device" group — ports (`--top-ports`, default 100), service versions (off / quick = `--version-intensity 0` (default) / light / full), default scripts (`-sC`, off) and OS + route (`-O --traceroute`, on) with raw-socket permission (root, or `OMINI_NMAP_PRIVILEGED=true` with nmap's capabilities set: then `--privileged`); quick by default (~15 s on a firewall; full versions took ~100 s), up to `-A`-like depth — the result shown in the panel and kept until the next full scan, the map updated right away. Not installed → a message saying how to install it. The Docker image installs it on start when `OMINI_NMAP=install` |
-| Traffic flow animation | **Removed** (maintainer's decision): links no longer animate; traffic stays on the devices (↓/↑ badge) and in the link's chart |
-| Flows (who talks to whom) | Built-in **single** integration "Traffic flows" (`internal/flows`): while enabled, Omini listens on UDP 2055 (NetFlow v5/v9, IPFIX: templates per exporter and observation domain, sampling applied) and 6343 (sFlow v5: raw packet headers, Ethernet/802.1Q/IPv4/IPv6/TCP/UDP, scaled by the sampling rate); it reports no devices. Flows are summed per minute into **conversations** (the two IPs, protocol and service port = the lower port; bytes each way), the busiest 300 per minute kept 24 h (`flow_minutes`). Listeners close when the integration stops asking (disabled or deleted): after `max(10 min, 3 × round interval)`. `GET /api/flows?minutes&node|ip&limit` (addresses mapped to map nodes). UI: **Flows** screen (range 15 min–24 h, search, services named, exporters, "how to turn it on") and "Talks to" (top 5, last hour) in the device panel. Omini only listens: exporters are configured by the user |
-| Settings screen | A menu of sections on the left (General: theme, language; Map; Notifications; Account; About), the section on the right, `?section=` in the address; full width, a row per setting (label + hint on the left, control on the right). **No plugin list** (the store lives in Integrations) |
-| Notifications | Channels in Settings → Notifications (`notifiers` table, secrets sealed like integrations'): one **accordion per way to be told** — Telegram, e-mail, Slack, Discord, ntfy, webhook (Slack, Discord and ntfy are webhooks in their own format; their forms hide the format, the plain webhook alone has the signing secret) — each with a step-by-step "how to set it up", its channels (on/off, last sent, last error) and the add form; the ones in use start open. A Slack, Discord or ntfy.sh address saved as "json" gets its service's format anyway (Discord refused "an empty message"). Kinds: **webhook** (format json = Omini's events, slack, discord, ntfy; optional HMAC signature `X-Omini-Signature: sha256=…`), **Telegram** bot (token + chat id) and **e-mail** (SMTP: STARTTLS / TLS / none, optional login). Each has a minimum severity (default warning), "tell when resolved" and an on/off switch; "Send a test". The collector hands each round's opened/resolved alerts to `notify.Dispatcher` (in the background): one message per channel per round, most severe first, in the admin's language, **grouped**: a card per device with each of its alerts on a line ("Memory almost full: 98.3%"), the new devices together, what was resolved; the subject sums it up ("Omini: 1 critical, 3 warnings, 4 new devices"). **Each card describes its device** (maintainer asked for polished, informative messages; `notify/cards.go`, from the current map: `Dispatcher.Topology`): type, make and model, IP, MAC, where it is connected (switch · port, or AP · Wi-Fi network), system, offline since; then "What to do" (the UI's tip) and "Open in Omini" (`/?node=<id>` on **Omini's address**: setting `public_url`, `GET/PUT /api/notifier-settings`, taken from the browser's `Origin` when a channel is added or tested, editable in Settings → Notifications; no links without it). Rendering per service (`notify/render.go`; no emoji — the maintainer asked: the color says the severity): Discord an embed per card (author = severity, title linking to the device, details as inline fields, "Offline since" as a Discord timestamp in the reader's zone, footer + timestamp; at most 10), Slack an attachment per card with fields, Telegram HTML (bold, monospace addresses, a link per device), e-mail multipart (plain text + an HTML card per device with a button), ntfy Markdown with `Click` to the device (or the map); the JSON webhook carries `groups[].items/device/tip/url`. "Send a test" sends an **example** (a NAS offline with a full disk, a new phone; `test: true`, no events) so the look can be checked. Texts in `internal/notify/messages.go` and `cards.go`, kept in step with the UI. A flapping alert (opened again within 30 min of its last notice) is not sent again, nor its resolution. Delivery outcome kept per channel (last sent, last error) |
-| VLAN view | Schema: `Interface.vlan` (a VLAN interface's id), `Interface.vlans` (switch port: untagged + tagged), `Device.vlans` (id, name, interface, subnet), FDB `vlan`. VLANs are shown as **automatic areas** (see that row; the toolbar VLAN picker that dimmed the rest was replaced by them). Port cards show the port's VLANs |
-| VLANs and subnets | **A filter, not areas** (maintainer's decision after comparing Omada, Auvik, Cisco Catalyst, Meraki: none draws VLANs as boxes): a picker in the map toolbar (shown when the network has more than one VLAN or subnet) highlights every device in the chosen one — by its own VLAN interfaces and port membership, the upstream port carrying it, its addresses (`lib/autoAreas.ts`, inclusive mode) — and what hangs below the devices only in it (`networkHighlight`: a router also in other networks lights up alone, else the modem's network lit the whole LAN under the firewall), and dims the rest. Automatic areas were removed (migration 15 deletes them). While one is picked, a **temporary dashed frame** with its name surrounds each linked group of highlighted devices (`clusterFrames` in `lib/areas.ts`: one frame per group, never one box over the whole map); it goes away with the filter |
-| Device extras | Schema fields any integration can fill, shown in the device panel (`DeviceExtras`): `services` (stopped first, count of stopped), `vpn_peers` (WireGuard / OpenVPN / IPsec: connected, endpoint, last handshake, bytes), `dhcp_pools` and `firewall_states` (usage bars, yellow ≥ 75 %, red ≥ 90 %), `vlans`; `Interface.transceiver` (SFP vendor, part, type, temperature, voltage, bias, Tx/Rx power — Rx below the module's alarm threshold, or -20 dBm without one, in red) in the port card. OPNsense 0.3 reads them all |
-| Map export | "Export" in the map toolbar opens a dialog: format, theme (dark / light) and orientation (left-to-right / top-down) — the image is laid out in the chosen orientation and theme whatever the screen shows, then the screen is put back as it was (pan and zoom included). PNG (2× pixel ratio) or SVG of the **whole map with every group and area expanded** (laid out expanded for the capture, then folded back; every node framed with a margin, measured as drawn, scaled down past 8192 px; the framing goes on Vue Flow's transformation pane, which holds the screen's pan and zoom; `html-to-image`, MIT) on the theme's background, a **draw.io** diagram (`lib/drawio.ts`: nodes where they are drawn — laid out expanded in the chosen orientation —, areas as rectangles behind them, links with "port | speed", editable in draw.io), or the data as JSON (topology, areas, layout) |
-| Visual style | Follows the OS setting by default (Settings: system / dark / light). Clean, minimal look; color reserved for status (green/yellow/red), traffic and brand icons |
-
-## Open questions
-
-None right now.
+- **Decisions are made by consensus with the maintainer.** Raise questions
+  and trade-offs instead of deciding alone; record what was agreed in
+  [docs/decisions.md](docs/decisions.md) (and the README when users see it).
+- **Every change ships with tests** that run in CI; run `make ci` before
+  saying something is done.
+- **Never push** to GitHub unless the maintainer asks.
+- **Docs follow the code**: a change that users or contributors notice
+  updates the guide in `docs/` it touches.
 
 ## Principles
 
-1. **Read-only.** No integration may send commands that change device configuration.
-2. **Lightweight.** One deployable unit, embedded database (SQLite), no external services (no Redis, Postgres, queues). Must run on a Raspberry Pi.
-3. **Easy to contribute.** Most new device support should be a declarative profile or an external plugin, not core code.
-4. **Vendor logic stays in integrations.** Nothing outside the integrations layer may know about specific vendors.
-5. **One device failing never breaks the rest.** An integration error becomes an "offline" status + insight; other collections continue.
-6. **Small first.** When in doubt, leave it out and add it to the README roadmap.
+1. **Read-only.** No integration may send commands that change a device's
+   configuration.
+2. **Lightweight.** One binary, SQLite, no external services. It must run on
+   a Raspberry Pi.
+3. **Easy to contribute.** New device support is a YAML SNMP profile or a
+   plugin, not core code.
+4. **Vendor logic stays in integrations** (plugins and SNMP profiles). The
+   topology, insights and UI know no vendor.
+5. **One device failing never breaks the rest.** An integration error is an
+   "offline" status and an alert; the round goes on with its last good data.
+6. **Small first.** When in doubt, leave it out and put it on the roadmap.
 
-## Common data model (draft)
+## Where things are
 
-Every integration returns a list of devices in this vendor-neutral shape:
+| Path | What |
+|---|---|
+| `cmd/omini` | Entry point: configuration, wiring, `omini reset-password` |
+| `internal/collector` | Collection rounds (edge to center), rates, history, presence, alerts, memories (MAC ports, attachments) |
+| `internal/topology` | Pure function: devices → nodes and edges (where everything hangs) |
+| `internal/classify` | Type, OS, brand and product from evidence |
+| `internal/insights` | Alert rules (pure functions of the topology) |
+| `internal/netscan`, `nmapscan`, `flows`, `snmp` | Built-in discovery: the network scan (ARP, ping, ports, names, mDNS, SSDP, DHCP fingerprints, SNMP), nmap, NetFlow/IPFIX/sFlow |
+| `internal/plugins`, `sdk/python` | Plugin runtime and store; the Python SDK (embedded in the binary) |
+| `internal/notify` | Notification channels and message cards |
+| `internal/store` | SQLite and its migrations (forward only) |
+| `internal/api`, `internal/auth` | HTTP API and the admin login |
+| `schema/` | JSON Schema: the data contract (Go and Python models are generated from it) |
+| `web/` | Vue 3 UI (map in `views/MapView.vue`, layout in `lib/layout.ts`) |
+| `testdata/devnet` | Acme, an emulated company network for the real plugins (`make devnet`) |
+| `docs/` | User and developer guides |
 
-- **Device**: `key` (stable id within the integration), `name`, `host`, `role` (`router|switch|ap|firewall|server|unknown`), `vendor`, `model`, `os_version`, `uptime`, `cpu_pct`, `mem_pct`, `macs[]`, `ips[]`, plus:
-  - `interfaces[]` — name, description, MAC, up/down, speed, rx/tx bytes (counters), rx/tx errors
-  - `neighbors[]` — local port, remote name/port/MAC/IP/platform, protocol (`lldp|cdp|mndp`)
-  - `fdb[]` — MAC, port, VLAN
-  - `arp[]` — IP, MAC, interface
-  - `dhcp_leases[]` — IP, MAC, hostname
-  - `wireless_clients[]` — MAC, interface, SSID, signal (dBm)
-  - health: `swap_pct`, `load_avg[]`, `temperatures[]`, `storage[]`, `firmware` (pending updates)
+## Rules that are easy to break
 
-Rules:
-- **MACs are always normalized** to `aa:bb:cc:dd:ee:ff`.
-- **Ports are always referenced by readable name** (`ifName` / interface name), never by numeric index. Index → name translation is the integration's job.
-- Unknown fields are null — never invent values.
-- Integrations may return **multiple devices** (e.g. a controller returns all the APs it manages).
+The full list, with the reasons, is in [docs/decisions.md](docs/decisions.md).
 
-## Integration contract (draft)
-
-Each integration declares:
-- `name`, `label`, and the **form fields** it needs (host, community, username, password, verify TLS...). The UI renders the "add integration" form from these fields, so a new integration needs no frontend changes.
-- `collect(config) -> devices[]`
-- `test(config) -> short success message | error`
-
-Guidelines:
-- Optional endpoints/tables (e.g. a Wi-Fi table missing on some firmware) are tried and skipped on error — never fail the whole collection because of them.
-- Short timeouts (~5s per request); the collector applies a global per-device timeout.
-- Credentials never appear in logs or API responses (password fields are masked).
-
-### Python plugins
-
-Each plugin is its own repository:
-
-```
-omini-plugin-opnsense/
-├── plugin.yaml        # manifest
-├── requirements.txt   # dependencies (installed into a per-plugin venv)
-├── main.py            # entrypoint
-└── README.md
-```
-
-```yaml
-# plugin.yaml
-id: opnsense
-name: OPNsense
-version: 0.1.0
-protocol: 1            # plugin protocol version
-entrypoint: main.py
-fields:                # rendered as the "add integration" form
-  - {key: url, type: url, required: true}
-  - {key: api_key, type: string, required: true}
-  - {key: api_secret, type: secret, required: true}
-  - {key: verify_tls, type: bool, default: true}
-```
-
-```python
-# main.py
-from omini_sdk import plugin, Device
-
-@plugin.collect
-def collect(cfg) -> list[Device]: ...
-
-@plugin.test
-def test(cfg) -> str: ...
-
-if __name__ == "__main__":
-    plugin.run()
-```
-
-Protocol: the core executes the plugin once per collection (or per connection test), writes a request (`{protocol, action: "collect" | "test", config, state_dir}`) as JSON to stdin and reads the response (`{devices: [...]}`, `{message}` or `{error}`) as JSON from stdout. Logs go to stderr. Fields of type `secret` are decrypted only when passed to the plugin and never logged. The SDK hides all of this: a plugin raises `PluginError("message")` for errors the user should read (wrong key, host unreachable); any other exception becomes "unexpected error" with the traceback in the logs.
-
-### Plugin runtime (core)
-
-- **Install:** from a GitHub repository URL. The version is resolved to a commit through the GitHub API: the one asked for (tag, branch or commit), else the latest release, else the newest commit of the default branch (repositories without releases work, shown as `main@1a2b3c4`). The core downloads that commit's tarball (no `git` needed) into `<data>/plugins/<id>/src`, next to `install.json` (URL, version, commit, date). "Update" installs again from the same URL.
-- **Index (store):** `internal/plugins/catalog.json` (id, name, description, URL, icon, publisher, trust, categories, reviewed version/date, known issues) is embedded in the binary **and** fetched from this repository's main branch once a day (`OMINI_PLUGIN_INDEX`: another URL, or `off`), cached in `<data>/plugins/index.json` for offline starts; entries of the shipped list missing from the remote one are kept. An invalid index (unknown trust, non-GitHub URL, duplicates) is ignored whole. The **plugin store** is a modal (Integrations → "Plugin store", and the last card of "Add integration"; Settings has no plugin list (maintainer's decision)): search bar, All / Installed / Available tabs, cards with logo, publisher and trust badges, repository and actions (install; installed: add integration, update, remove), and a "+" button to add any GitHub repository. Plugins installed from any other URL are `community` / `unverified`. The modal also has categories, a trust-level filter, the review of each plugin and where the index came from ("Update now"); there is no Store screen (`/store` opens the modal in Integrations).
-- **Python environment:** created with **uv** (`<data>/plugins/<id>/.venv`), installing the plugin's `requirements.txt` plus **the SDK embedded in the Omini binary** — a plugin always gets the SDK of the core running it, so the protocol never drifts. uv must be on PATH (`OMINI_UV` to point to it); it downloads a Python when the system has none. The official image ships uv and Python.
-- **Run:** `<venv>/bin/python <entrypoint>` with the request on stdin, a timeout (manifest `timeout_s`, default 60s, max 300s) and stdout limited to 32 MB; stderr goes to Omini's log (debug).
-- **State:** `state_dir` is `<data>/plugins/<id>/state/<integration id>`, kept between runs (e.g. a session cookie).
-- **Protocol version:** the manifest declares `protocol`; the core runs plugins whose protocol it supports (today: 1) and refuses others with a clear message.
-- **Development:** `OMINI_PLUGIN_DIRS` (comma-separated folders) loads plugins in place, without installing them — edit the code and the next collection uses it.
-
-## Repository layout (planned)
-
-```
-omini/
-├── cmd/omini/         # Go entrypoint
-├── internal/          # collector, snmp, discovery, topology, insights, store, api, plugins, auth
-├── web/               # Vue 3 + Vue Flow (built assets embedded into the Go binary)
-├── schema/            # JSON Schema — source of truth for the data contract
-├── sdk/python/        # omini-sdk (published to PyPI)
-├── profiles/          # YAML SNMP profiles (v0.3)
-├── testdata/          # anonymized real device data + SNMP simulator records
-├── docs/
-├── Makefile
-├── docker-compose.dev.yml
-└── Dockerfile
-```
+- **MACs** are always `aa:bb:cc:dd:ee:ff`; **ports** are named (`ifName`),
+  never by index; unknown fields stay empty, never invented.
+- **One machine, one node**: whatever reports it, a device is merged by MAC
+  or address into the node that already exists.
+- **A client stays where it was last seen for sure** (an access point's list,
+  alone on a switch port, behind a desk phone) until it is seen elsewhere for
+  sure; shared ports, uplinks and ARP never move it.
+- **Collection runs in rounds**, edge to center, one interval for all; the
+  map is built once per round. No per-integration "Run now".
+- **Nothing on the map may overlap**: nodes, link pills, areas they are not
+  in. Areas are strict (members and what hangs below them, nothing else).
+- **Alert texts are translated in the UI** (`insights.rules.<rule>`) and in
+  `internal/notify` for messages; rules return keys and parameters only.
+- **No emoji in notifications**; the color says the severity.
+- **The device list is a drawer on the map, the store a modal**; Settings has
+  no plugin list.
+- **No third-party lookups**: identification uses embedded lists only (no
+  Fingerbank, no cloud APIs); Omini never ships nmap.
 
 ## Commands
 
 ```bash
-make run         # build the UI and run everything on :8080 (scans your network)
-make icons       # refresh the app icon catalog and download the icon bundle
+make run         # build the UI and run on :8080 (scans your network)
 make dev         # backend on :8080 + Vite with hot reload on :5173
-make generate    # regenerate Go types and Python models from schema/
-make test        # Go + SDK + web tests
-make ci          # everything CI runs, locally (run before pushing)
-make lint        # golangci-lint + ruff + eslint/oxlint/prettier/vue-tsc
+make devnet      # run on :8093 against Acme's emulated network
+make test        # Go, Python SDK, devnet emulator and web tests
+make ci          # everything CI runs (run before pushing)
+make lint        # golangci-lint, ruff, oxlint/eslint, prettier, vue-tsc
 make fmt         # format Go, Python and web
-make hooks       # install git hooks (lefthook)
-make image       # build the Docker image locally (omini:dev)
+make generate    # Go types and Python models from schema/
+make icons       # refresh the app icon catalog
 make models      # refresh the device model names
-make devnet      # run Omini on :8093 with the real integrations against Acme's emulated network (testdata/devnet)
+make oui         # refresh the MAC vendor registry
+make image       # build the Docker image (omini:dev)
+make hooks       # install the git hooks (lefthook)
 ```
-
-## Topology engine
-
-A pure function: `devices[] -> topology` (nodes, edges, clients). No I/O — testable with fixtures. Algorithm steps are described in the README ("How the topology is built").
-
-Node types: `device`, `unmanaged`, `segment`, `client`. Edge types: `lldp`, `fdb`, `wifi`, `inferred`.
-
-Traffic: rate = Δbytes / Δtime between consecutive polls, handling counter wraps (32/64-bit) and resets (uptime decreased). Utilization = rate / link speed.
-
-## Insights
-
-`internal/insights`: each rule is a pure function of the topology (plus integration statuses and new devices) returning insights with a stable `key` (rule + subject), `rule`, `severity` (`critical|warning|info`), optional `node_id` and `params` — **texts are translated in the UI** (`insights.rules.<rule>`), never built on the server. Rules: device offline (with its integration's error), integration failing with nothing on the map, WAN gateway down / degraded, duplicate IP (online nodes, different MACs), update pending, disk ≥ 80 % / ≥ 90 %, hottest CPU sensor ≥ 70 / ≥ 85 °C, CPU > 80 % / ≥ 95 %, memory ≥ 90 %, uplink < 1 Gbps between network devices, interface errors grown since the last poll (the traffic meter keeps the deltas), Wi-Fi signal < -75 dBm, physical port > 80 % used, likely unmanaged switch (info), unknown LLDP neighbor (info), new device (info); and (chosen with the maintainer) a wired link to a device at 100 Mbps or less (`fast_ethernet`, warning — a popup, the maintainer asked; between network devices it is slow_uplink; not for devices made with a 100 Mbps port, maintainer's rule: types camera, ups, air_conditioner, smart_home (badge readers too), appliance, solar_inverter, ip_phone), a device identified as something an integration of the store reads while none of that type is set up (`integration_available`, warning — a popup: the catalog's `detect` lists products/brands/OS per plugin — the Proxmox host by its product, never its VMs by their MAC's brand), a port that went down and up 3+ times in an hour (`link_flapping`), a half-duplex port up (`half_duplex`), a device whose uptime went back (`device_rebooted`, kept an hour), an SFP receiving below its module's threshold or -20 dBm (`sfp_low_rx`), a DHCP pool or the firewall state table ≥ 90 % (`dhcp_pool_full`, `firewall_states_full`), Telnet/FTP open or a network device's admin page only over HTTP (`insecure_service`), and 5+ new devices within 10 minutes (`new_devices_burst`); flaps and restarts come from what the collector remembers between rounds (`collector/changes.go`)
-
-The collector turns them into **alerts** (`alerts` table) on every rebuild: a new key opens one, a known key refreshes it, a missing key resolves it (kept 90 days). Users can **dismiss** an open alert (hidden until it resolves and comes back). `GET /api/alerts[?resolved_hours]`, `POST /api/alerts/{id}/dismiss`; open alerts also ride along `/api/topology`. UI: **Alerts** screen (`/alerts`; alerts: severity filter, dismissed, resolved in 7 days, "show on the map" = `/?node=<id>` opens and centers it; Timeline), a badge on the menu (critical + warning not dismissed), **popups** (bottom right of every screen but Alerts: open critical and warning alerts not dismissed, at most 3 + "N more", each with its tip — `insights.tips.<rule>` —, "show on the map" and a close button remembered per browser until the alert resolves and opens again), an "N alerts" chip on the map, a mark on the node (critical / warning) and the node's alerts in its panel.
 
 ## Conventions
 
-- **Everything in English**: code, identifiers, comments, docs, commit messages, issues, PRs. User-facing UI strings go through i18n (`en`, `pt-BR`).
-- **Conventional Commits** for every commit and PR title (`feat(snmp): ...`, `fix(topology): ...`); scopes and rules in [CONTRIBUTING.md](CONTRIBUTING.md). PRs are squash-merged; release-please builds the changelog and versions from them.
-- Formatting/linting: Go with gofumpt + goimports + golangci-lint v2 (`.golangci.yml`); Python with ruff; web with Prettier + ESLint + oxlint + vue-tsc. Run `make fmt lint test` before committing; lefthook runs them as git hooks (`make hooks`).
-- Never edit generated files (`internal/model/model_gen.go`, `sdk/python/src/omini_sdk/models.py`): change `schema/omini.schema.json` and run `make generate`.
-- **Never push** to GitHub unless the maintainer asks; verify with `make ci` locally instead.
-- All network I/O is async/concurrent.
-- Structured logging, no ad-hoc prints.
-- Topology and insights tests use JSON fixtures in `testdata/` (anonymized real device data); `internal/demo` (a fictional network, not available in the product) also serves as a fixture.
+- **Everything in English**: code, comments, docs, commits, issues. UI texts
+  go through i18n (`en`, `pt-BR`).
+- **Conventional Commits** for commits and PR titles; scopes in
+  [CONTRIBUTING.md](CONTRIBUTING.md). release-please makes the releases.
+- **Formatting**: gofumpt + goimports + golangci-lint v2; ruff; Prettier +
+  ESLint + oxlint + vue-tsc. The git hooks run them.
+- **Never edit generated files** (`internal/model/model_gen.go`,
+  `sdk/python/src/omini_sdk/models.py`): change the schema and run
+  `make generate`.
+- **Structured logging** (`slog`), no prints. Credentials never reach logs or
+  API responses.
+- **Fixtures**: anonymized real data in `testdata/`; the devnet for anything
+  that needs the real plugins.
 
 ## Out of scope (for now)
 
-Write actions, multi-tenancy.
+Write actions to devices, multi-tenancy.
