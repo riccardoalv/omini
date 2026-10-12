@@ -673,6 +673,11 @@ export default {
         title: 'The configuration of {node} changed',
         detail: 'It changed outside Omini: see the differences in its panel, under Configuration.',
       },
+      dhcp_no_offer_omini: {
+        title: 'No DHCP answer to Omini on {iface}',
+        detail:
+          "{server}'s DHCP server runs and hands out addresses, but did not answer Omini's request.",
+      },
       infra_dynamic_ip: {
         title: '{node} has no fixed IP',
         detail: 'It gets {ip} by DHCP: the address can change.',
@@ -758,6 +763,8 @@ export default {
         'A new switch may have won the election, or the old root or its link went down: set the root priority on your core switch.',
       config_changed:
         'If nobody you know made it, compare the versions and check who has access to the device.',
+      dhcp_no_offer_omini:
+        "Devices still get addresses. Check the DHCP server's log for Omini's MAC: a reservation, a client class or a filter may ignore it, or its answer does not reach Omini's host.",
       infra_dynamic_ip:
         "Fix its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       firewall_states_full:

@@ -241,7 +241,9 @@ become alerts.
   (DHCPDISCOVER, broadcast) and collects the offers. It never sends a
   REQUEST, so no address is taken, and it asks with its own MAC: the server
   offers the address Omini already has, not one of its pool. No offer is the
-  `dhcp_no_offer` alert; a second server answering that is not a router or
+  `dhcp_no_offer` alert (a warning, `dhcp_no_offer_omini`, when a router that
+  serves DHCP reports its DHCP server running: then only Omini goes
+  unanswered); a second server answering that is not a router or
   a device known to serve DHCP is `dhcp_rogue` (often a home router plugged
   in by a LAN port), with its address and MAC. Needs raw sockets (root in
   Docker) and host networking.

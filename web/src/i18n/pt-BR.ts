@@ -680,6 +680,11 @@ const ptBR: typeof en = {
         title: 'A configuração de {node} mudou',
         detail: 'Ela mudou fora do Omini: veja as diferenças no painel dele, em Configuração.',
       },
+      dhcp_no_offer_omini: {
+        title: 'Sem resposta de DHCP para o Omini em {iface}',
+        detail:
+          'O servidor DHCP de {server} está rodando e entregando endereços, mas não respondeu ao pedido do Omini.',
+      },
       infra_dynamic_ip: {
         title: '{node} não tem IP fixo',
         detail: 'Ele recebe {ip} por DHCP: o endereço pode mudar.',
@@ -766,6 +771,8 @@ const ptBR: typeof en = {
         'Um switch novo pode ter vencido a eleição, ou a raiz antiga ou o link dela caiu: defina a prioridade de raiz no switch principal.',
       config_changed:
         'Se ninguém que você conhece fez isso, compare as versões e veja quem tem acesso ao equipamento.',
+      dhcp_no_offer_omini:
+        'Os dispositivos continuam recebendo endereço. Veja no log do servidor DHCP o MAC do Omini: uma reserva, uma classe de cliente ou um filtro podem estar ignorando o pedido, ou a resposta não chega ao host do Omini.',
       infra_dynamic_ip:
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       firewall_states_full:

@@ -2,6 +2,7 @@ package insights
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -22,15 +23,51 @@ func init() {
 // (a check that could not run says nothing).
 func dhcpNoOffer(in Input, _ index) []Insight {
 	var out []Insight
+	server := runningDHCP(in.Topology)
 	for _, c := range in.Topology.DhcpChecks {
-		if c.Error == nil && len(c.Offers) == 0 {
-			out = append(out, Insight{
-				Key: "dhcp_no_offer|" + c.Interface, Rule: "dhcp_no_offer", Severity: Critical,
-				Params: map[string]any{"iface": c.Interface},
-			})
+		if c.Error != nil || len(c.Offers) > 0 {
+			continue
 		}
+		if server != nil {
+			// A router serves DHCP and its server runs: the devices get their
+			// addresses, only Omini's request goes unanswered.
+			out = append(out, node("dhcp_no_offer_omini", Warning, server, c.Interface, map[string]any{
+				"iface": c.Interface, "server": server.Label,
+			}))
+			continue
+		}
+		out = append(out, Insight{
+			Key: "dhcp_no_offer|" + c.Interface, Rule: "dhcp_no_offer", Severity: Critical,
+			Params: map[string]any{"iface": c.Interface},
+		})
 	}
 	return out
+}
+
+// dhcpService is a DHCP server's name or description (Kea, ISC dhcpd,
+// dnsmasq, odhcpd...), not a client or a gateway monitor.
+var (
+	dhcpService   = regexp.MustCompile(`(?i)dhcp|kea|dnsmasq`)
+	notDHCPServer = regexp.MustCompile(`(?i)gateway|dpinger|dhcp6c|client|relay`)
+)
+
+// runningDHCP is a device that serves DHCP (it reports leases or pools) and
+// reports its DHCP server running.
+func runningDHCP(topo topology.Topology) *topology.Node {
+	for i := range topo.Nodes {
+		n := &topo.Nodes[i]
+		d := n.Device
+		if d == nil || !n.Online || (len(d.DhcpLeases) == 0 && len(d.DhcpPools) == 0) {
+			continue
+		}
+		for _, s := range d.Services {
+			text := s.Name + " " + model.Deref(s.Description)
+			if model.Deref(s.Running) && dhcpService.MatchString(text) && !notDHCPServer.MatchString(text) {
+				return n
+			}
+		}
+	}
+	return nil
 }
 
 // dhcpRogue: more than one server answered, and one is not a router or a
