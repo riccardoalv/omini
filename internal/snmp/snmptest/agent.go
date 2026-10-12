@@ -5,6 +5,7 @@ package snmptest
 import (
 	"errors"
 	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -199,7 +200,12 @@ func compareOID(a, b []int) int {
 	return len(a) - len(b)
 }
 
-// set changes existing variables, with the write community only.
+// vlanRowStatus is Q-BRIDGE-MIB dot1qVlanStaticRowStatus: setting it creates
+// (createAndGo 4, createAndWait 5) or destroys (6) a VLAN's row.
+const vlanRowStatus = ".1.3.6.1.2.1.17.7.1.4.3.1.5."
+
+// set changes existing variables, with the write community only; a VLAN's
+// row status also creates or destroys the row.
 func (a *Agent) set(req *gosnmp.SnmpPacket) (gosnmp.SNMPError, uint8) {
 	if a.write == "" || req.Community != a.write {
 		return gosnmp.NoAccess, 1
@@ -207,13 +213,52 @@ func (a *Agent) set(req *gosnmp.SnmpPacket) (gosnmp.SNMPError, uint8) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	vars := a.views[a.Community]
-	for i, v := range req.Variables {
-		name := "." + strings.TrimPrefix(v.Name, ".")
+	find := func(name string) int {
 		k := sort.Search(len(vars), func(j int) bool { return compareOID(vars[j].oid, parseOID(name)) >= 0 })
 		if k == len(vars) || vars[k].pdu.Name != name {
+			return -1
+		}
+		return k
+	}
+	put := func(name string, typ gosnmp.Asn1BER, value any) {
+		if b, ok := value.([]byte); ok {
+			value = slices.Clone(b) // the request's buffer is reused for the next one
+		}
+		if k := find(name); k >= 0 {
+			vars[k].pdu.Type, vars[k].pdu.Value = typ, value
+			return
+		}
+		vars = append(vars, variable{oid: parseOID(name), pdu: gosnmp.SnmpPDU{Name: name, Type: typ, Value: value}})
+		sort.Slice(vars, func(i, j int) bool { return compareOID(vars[i].oid, vars[j].oid) < 0 })
+	}
+	for i, v := range req.Variables {
+		name := "." + strings.TrimPrefix(v.Name, ".")
+		if vid, ok := strings.CutPrefix(name, vlanRowStatus); ok {
+			status, _ := v.Value.(int)
+			base := strings.TrimSuffix(vlanRowStatus, "5.")
+			switch status {
+			case 4, 5:
+				for _, col := range []string{"1.", "2.", "4."} {
+					if find(base+col+vid) < 0 {
+						put(base+col+vid, gosnmp.OctetString, []byte{})
+					}
+				}
+				put(name, gosnmp.Integer, map[int]int{4: 1, 5: 3}[status])
+			case 6:
+				vars = slices.DeleteFunc(vars, func(x variable) bool {
+					return strings.HasPrefix(x.pdu.Name, base) && strings.HasSuffix(x.pdu.Name, "."+vid)
+				})
+			default:
+				put(name, gosnmp.Integer, status)
+			}
+			continue
+		}
+		if find(name) < 0 {
 			return gosnmp.NotWritable, uint8(i + 1) //nolint:gosec // a handful of variables
 		}
-		vars[k].pdu.Type, vars[k].pdu.Value = v.Type, v.Value
+		put(name, v.Type, v.Value)
 	}
+	a.views[a.Community] = vars
+	a.views[a.write] = vars
 	return gosnmp.NoError, 0
 }

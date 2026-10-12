@@ -12,6 +12,12 @@ the package's envelope `{code, status, response_id, message, data, _links}`.
 Plural endpoints take `limit` (0 = all), `offset`, `sort_by`/`sort_order` and
 field filters (`?name=wan`), like the package. The WireGuard package is not
 installed (424), and no OpenVPN or IPsec is configured (empty lists).
+
+The key's user also has the write privileges Omini's network changes need:
+VLANs, interface assignments, DHCP servers and static mappings, firewall rules
+and aliases are kept in a configuration of the service (pfsense_config.py)
+that starts from the design, so network.set, network.delete, reservation.set
+and reservation.delete can be applied and read back.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from typing import Any
 from .. import acme
 from ..server import HttpService, Request, Response
 from ..world import Snapshot, h01
+from . import pfsense_config as config
 
 NODE = "lab-fw01"
 DOMAIN = "lab.acme.local"
@@ -96,18 +103,16 @@ class PfSense(HttpService):
                 return Response.html_title("pfSense - Login")
             return Response.text(NOT_FOUND_HTML, 404)
         route = ROUTES.get(path)
-        if route is None:
+        if route is None and path not in WRITES:
             return Response.text(NOT_FOUND_HTML, 404)
         if req.method == "OPTIONS":
-            return Response(200, b"", [("Allow", "GET, OPTIONS")])
+            allow = "GET, POST, PATCH, DELETE, OPTIONS" if path in WRITES else "GET, OPTIONS"
+            return Response(200, b"", [("Allow", allow)])
         key = req.headers.get("x-api-key", "")
         if not key or key != self.secrets.get("api_key"):
             return envelope([], 401, "unauthorized", "AUTH_AUTHENTICATION_FAILED", "Authentication failed.")
-        if req.method not in ("GET", "HEAD"):
-            # The key belongs to a read-only user: every write privilege is missing.
-            return envelope(
-                [], 403, "forbidden", "FORBIDDEN", f"User does not have required privileges for {req.method} {path}."
-            )
+        if req.method not in ("GET", "HEAD") or route is None:
+            return self.write(req, snap, path)
         fn, plural = route
         try:
             out = fn(self, snap)
@@ -116,6 +121,67 @@ class PfSense(HttpService):
         if not plural:
             return envelope(out)
         return self.page(req, out)
+
+    # -- configuration changes --
+    def config(self, snap: Snapshot) -> config.Config:
+        """The router's configuration: from the design the first time, then what the API wrote."""
+        cfg = getattr(self, "_cfg", None)
+        if cfg is None:
+            n = self.lab_node(snap)
+            cfg = config.Config()
+            for name, descr, nic in IFACES:
+                p = n.ports[nic]
+                ip, _, prefix = (p.ips[0] if p.ips else "").partition("/")
+                cfg.interfaces[name] = {
+                    "if": nic,
+                    "descr": descr,
+                    "enable": True,
+                    "typev4": "static",
+                    "ipaddr": ip,
+                    "subnet": int(prefix) if prefix.isdigit() else None,
+                    "gateway": "WANGW" if name == "wan" else "",
+                    "typev6": "none",
+                }
+            [lan] = self.design_dhcp_servers(snap)
+            lan = {k: v for k, v in lan.items() if k not in ("id", "interface")}
+            lan["staticmap"] = [{k: v for k, v in m.items() if k not in ("parent_id", "id")} for m in lan["staticmap"]]
+            cfg.dhcp["lan"] = lan
+            cfg.rules = config.default_rules()
+            self._cfg = cfg
+        return cfg
+
+    def write(self, req: Request, snap: Snapshot, path: str) -> Response:
+        if req.method not in ("POST", "PATCH", "DELETE") or path not in WRITES:
+            return envelope(
+                [],
+                405,
+                "method not allowed",
+                "ENDPOINT_METHOD_NOT_ALLOWED",
+                f"Resource at {path} does not support the `{req.method}` method.",
+            )
+        try:
+            body = req.json() if req.body else {}
+        except ValueError:
+            return envelope([], 400, "bad request", "INVALID_JSON", "The request body is not valid JSON.")
+        query = {k: v[0] for k, v in req.query.items() if v}
+        try:
+            data = config.write(self.config(snap), req.method, path, query, body if isinstance(body, dict) else {})
+        except config.Refused as e:
+            word = {400: "bad request", 404: "not found", 405: "method not allowed", 409: "conflict"}
+            return envelope([], e.code, word.get(e.code, "error"), e.response_id, e.message)
+        return envelope(data)
+
+    def assigned(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.interfaces(self.config(snap))
+
+    def vlans(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.vlans(self.config(snap))
+
+    def rules(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.rules(self.config(snap))
+
+    def aliases(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.aliases(self.config(snap))
 
     # -- plural endpoints: filters, sorting, pagination --
     def page(self, req: Request, rows: list[dict[str, Any]]) -> Response:
@@ -249,6 +315,36 @@ class PfSense(HttpService):
                     "gatewayv6": None,
                 }
             )
+        # Interfaces assigned through the API (VLANs on the LAN bridge): up, no traffic of their own.
+        known = {name for name, _, _ in IFACES}
+        for name, a in self.config(snap).interfaces.items():
+            if name in known:
+                continue
+            parent = str(a["if"]).split(".")[0]
+            mac = n.ports[parent].mac if parent in n.ports else ""
+            out.append(
+                {
+                    "id": len(out),
+                    "name": name,
+                    "descr": a.get("descr") or name.upper(),
+                    "hwif": a["if"],
+                    "macaddr": mac,
+                    "mtu": "1500",
+                    "enable": a.get("enable") is not False,
+                    "status": "up" if a.get("enable") is not False else "down",
+                    "ipaddr": a.get("ipaddr") or "",
+                    "subnet": str(a.get("subnet") or ""),
+                    "ipaddrv6": "",
+                    "subnetv6": "",
+                    "inerrs": 0,
+                    "outerrs": 0,
+                    "inbytes": 0,
+                    "outbytes": 0,
+                    "media": "",
+                    "gateway": None,
+                    "gatewayv6": None,
+                }
+            )
         return out
 
     def gateways(self, snap: Snapshot) -> list[dict[str, Any]]:
@@ -379,6 +475,9 @@ class PfSense(HttpService):
         return [{"id": i, **r} for i, r in enumerate(out)]
 
     def dhcp_servers(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.servers(self.config(snap))
+
+    def design_dhcp_servers(self, snap: Snapshot) -> list[dict[str, Any]]:
         return [
             {
                 "id": "lan",
@@ -445,10 +544,26 @@ ROUTES: dict[str, tuple[Any, bool]] = {
     "/api/v2/status/dhcp_server/leases": (PfSense.leases, True),
     "/api/v2/services/dhcp_servers": (PfSense.dhcp_servers, True),
     "/api/v2/status/services": (PfSense.services, True),
-    "/api/v2/interface/vlans": (PfSense.empty, True),
+    "/api/v2/interface/vlans": (PfSense.vlans, True),
+    "/api/v2/interfaces": (PfSense.assigned, True),
+    "/api/v2/firewall/rules": (PfSense.rules, True),
+    "/api/v2/firewall/aliases": (PfSense.aliases, True),
     "/api/v2/firewall/states/size": (PfSense.states, False),
     "/api/v2/status/openvpn/servers": (PfSense.empty, True),
     "/api/v2/status/openvpn/clients": (PfSense.empty, True),
     "/api/v2/status/ipsec/sas": (PfSense.empty, True),
     "/api/v2/status/wireguard/tunnels": (PfSense.wireguard, True),
+}
+
+# Endpoints that change the configuration (POST, PATCH, DELETE); see pfsense_config.write.
+WRITES = {
+    "/api/v2/interface",
+    "/api/v2/interface/apply",
+    "/api/v2/interface/vlan",
+    "/api/v2/services/dhcp_server",
+    "/api/v2/services/dhcp_server/apply",
+    "/api/v2/services/dhcp_server/static_mapping",
+    "/api/v2/firewall/rule",
+    "/api/v2/firewall/alias",
+    "/api/v2/firewall/apply",
 }

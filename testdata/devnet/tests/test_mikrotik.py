@@ -298,3 +298,127 @@ def test_disable_and_enable_a_port() -> None:
         # A port the router does not have: an error, nothing changed.
         out = emu.collect(BR, "apply", change=dict(change, port="ether42"))
         assert "ether42" in out["error"]
+
+
+# --------------------------------------------------------------------------- VLAN and network changes
+
+
+def network(d: dict, vlan: int) -> dict | None:
+    return next((n for n in d.get("networks") or [] if n["vlan"] == vlan), None)
+
+
+def test_branch_networks_are_read(runs: dict) -> None:
+    d = device(runs["br"])
+    assert [n["vlan"] for n in d["networks"]] == [10, 30, 32, 40, 80]  # never the WAN nor wg-hq
+    users = network(d, 30)
+    assert users == {
+        "vlan": 30,
+        "name": "USERS",
+        "interface": "vlan30",
+        "device": "vlan30",
+        "parent": "bridge",
+        "gateway": "10.20.30.1/24",
+        "dhcp": {"enabled": True, "from": "10.20.30.100", "to": "10.20.30.200"},
+        "access": "custom",  # defconf firewall, no rule of its own
+        "mdns": False,
+    }
+    assert network(d, 10)["dhcp"] == {"enabled": False}
+    # The storage switch has a default route too, but through its own management VLAN: no networks.
+    assert "networks" not in device(runs["stor"])
+
+
+def test_branch_network_set_and_delete() -> None:
+    with Emulator(at=TUESDAY_10_30, apis=[BR], world=World()) as emu:
+        key = device(emu.collect(BR))["key"]
+        want = {
+            "vlan": 50,
+            "name": "CAMERAS",
+            "gateway": "10.20.50.1/24",
+            "dhcp": {"enabled": True, "from": "10.20.50.100", "to": "10.20.50.199"},
+            "access": "internet",
+            "mdns": True,
+            "parent": "",
+        }
+        out = emu.collect(BR, "apply", change={"device": key, "kind": "network.set", "value": want})
+        d = device(out)
+        assert network(d, 50) == {
+            **{k: v for k, v in want.items() if k != "parent"},
+            "interface": "vlan50",
+            "device": "vlan50",
+            "parent": "bridge",
+        }
+        assert {"id": 50, "name": "CAMERAS", "interface": "vlan50", "subnet": "10.20.50.0/24"} in d["vlans"]
+        # What RouterOS now has: the bridge tagged in VLAN 50, the DHCP server, Omini's rules before defconf's drops.
+        entry = next(e for e in rest(emu, BR, "/rest/interface/bridge/vlan") if e["vlan-ids"] == "50")
+        assert entry["tagged"] == "bridge"
+        server = next(s for s in rest(emu, BR, "/rest/ip/dhcp-server") if s["interface"] == "vlan50")
+        assert server["address-pool"] == "omini-vlan50"
+        comments = [r["comment"] for r in rest(emu, BR, "/rest/ip/firewall/filter")]
+        drop_lan = comments.index("defconf: drop all not coming from LAN")
+        assert comments[drop_lan - 3 : drop_lan] == [
+            "Omini: CAMERAS DNS",
+            "Omini: CAMERAS DNS",
+            "Omini: CAMERAS not to the router",
+        ]
+        assert rest(emu, BR, "/rest/ip/dns")["mdns-repeat-ifaces"] == "vlan50"
+
+        # In place: a network already there changes access and DHCP range, its rules are replaced.
+        users = dict(network(d, 30), access="local", dhcp={"enabled": True, "from": "10.20.30.50", "to": "10.20.30.99"})
+        d = device(emu.collect(BR, "apply", change={"device": key, "kind": "network.set", "value": users}))
+        assert network(d, 30)["access"] == "local" and network(d, 30)["dhcp"]["from"] == "10.20.30.50"
+
+        out = emu.collect(BR, "apply", change={"device": key, "kind": "network.delete", "value": {"vlan": 50}})
+        d = device(out)
+        assert network(d, 50) is None
+        assert not any(r.get("in-interface") == "vlan50" for r in rest(emu, BR, "/rest/ip/firewall/filter"))
+        assert rest(emu, BR, "/rest/ip/dns")["mdns-repeat-ifaces"] == ""
+        # A network that is not there cannot be removed.
+        out = emu.collect(BR, "apply", change={"device": key, "kind": "network.delete", "value": {"vlan": 50}})
+        assert "serves no network on VLAN 50" in out["error"]
+
+
+def test_branch_port_vlans_and_reservations() -> None:
+    with Emulator(at=TUESDAY_10_30, apis=[BR], world=World()) as emu:
+        key = device(emu.collect(BR))["key"]
+        trunk = {"device": key, "kind": "port.vlans", "port": "ether2", "value": {"untagged": 30, "tagged": [40]}}
+        d = device(emu.collect(BR, "apply", change=trunk))
+        assert iface(d, "ether2")["vlans"] == {"untagged": 30, "tagged": [40]}
+        port = next(p for p in rest(emu, BR, "/rest/interface/bridge/port") if p["interface"] == "ether2")
+        assert port["frame-types"] == "admit-all"
+        access = dict(trunk, value={"untagged": 32})
+        d = device(emu.collect(BR, "apply", change=access))
+        assert iface(d, "ether2")["vlans"] == {"untagged": 32}
+        assert iface(d, "sfp-sfpplus1")["vlans"] == {"untagged": 10, "tagged": [30, 32, 40, 80]}  # untouched
+
+        res = {"mac": "02:00:00:aa:bb:01", "ip": "10.20.30.250", "name": "printer-2"}
+        d = device(emu.collect(BR, "apply", change={"device": key, "kind": "reservation.set", "value": res}))
+        assert res in d["dhcp_reservations"]
+        lease = next(r for r in rest(emu, BR, "/rest/ip/dhcp-server/lease") if r["mac-address"] == "02:00:00:AA:BB:01")
+        assert lease["server"] == "dhcp-vlan30" and lease["dynamic"] == "false"
+        d = device(
+            emu.collect(BR, "apply", change={"device": key, "kind": "reservation.delete", "value": {"mac": res["mac"]}})
+        )
+        assert res not in (d.get("dhcp_reservations") or [])
+
+
+def test_storage_switch_vlans() -> None:
+    with Emulator(at=TUESDAY_10_30, apis=[STOR], world=World()) as emu:
+        key = device(emu.collect(STOR))["key"]
+        add = {"device": key, "kind": "vlan.set", "value": {"id": 130, "name": "BACKUP"}}
+        d = device(emu.collect(STOR, "apply", change=add))
+        assert {"id": 130, "name": "BACKUP"} in d["vlans"]
+        trunk = {
+            "device": key,
+            "kind": "port.vlans",
+            "port": "sfp28-8",
+            "value": {"untagged": None, "tagged": [100, 130]},
+        }
+        d = device(emu.collect(STOR, "apply", change=trunk))
+        assert iface(d, "sfp28-8")["vlans"] == {"tagged": [100, 130]}
+        out = emu.collect(STOR, "apply", change={"device": key, "kind": "vlan.delete", "value": {"id": 10}})
+        assert "has an interface on this device (vlan10)" in out["error"]  # its management VLAN
+        back = dict(trunk, value={"untagged": 100, "tagged": None})
+        emu.collect(STOR, "apply", change=back)
+        d = device(emu.collect(STOR, "apply", change={"device": key, "kind": "vlan.delete", "value": {"id": 130}}))
+        assert 130 not in {v["id"] for v in d["vlans"]}
+        assert iface(d, "sfp28-8")["vlans"] == {"untagged": 100}

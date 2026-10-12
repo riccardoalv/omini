@@ -264,8 +264,10 @@ button where the thing is, not a configuration screen.
   network (an access point, a server, another switch) is an ordinary change.
   Settings has **Allow destructive changes** (off by default); with it on, a
   destructive change asks twice.
-- **SNMP devices** are changed through IF-MIB `ifAdminStatus` with a write
-  community (or the v3 user). SNMP has no standard save: the change lasts as
+- **SNMP devices** are changed through IF-MIB `ifAdminStatus` (ports on and
+  off) and Q-BRIDGE-MIB (VLANs: `dot1qVlanStaticTable` names, egress and
+  untagged port lists, row status; `dot1qPvid`) with a write community (or
+  the v3 user). A port joins its new VLANs before it leaves the old ones. SNMP has no standard save: the change lasts as
   the device keeps it (most switches save on their own); a vendor save through
   SNMP profiles waits until a profile needs it.
 - **Where Omini runs** is detected, never asked (maintainer's rule): the node
@@ -311,7 +313,19 @@ access point and router alike.
   is.
 - **Phases**: first the catalog and the switches (Horaco, the maintainer's,
   tested for real; then MikroTik, UniFi, Omada, OpenWrt and SNMP), then the
-  router (below).
+  router (below). Done: `port.vlans`, `vlan.set` and `vlan.delete` on SNMP
+  (Q-BRIDGE-MIB), Horaco, MikroTik, UniFi, Omada and OpenWrt; only Horaco is
+  tested on real hardware, the others against the devnet and the vendors'
+  documented APIs.
+- **A switch mode is never turned on by Omini**: when VLAN changes need the
+  device's VLAN filtering (MikroTik, OpenWrt) and it is off, the change is
+  refused with where to turn it on in the device's own interface.
+- **Vendor shapes stay in the plugin**: VLANs that belong to a whole site
+  (UniFi, Omada) change every switch of the site at once; Omada ports take
+  VLANs through port profiles (an equal one is reused, else an "Omini …" one
+  is created; existing profiles are never edited) and always have a native
+  VLAN; UniFi and Omada networks with a gateway are deleted in the
+  controller itself.
 
 ### Phase 2: a VLAN is a whole network
 
@@ -336,7 +350,10 @@ does the rest on every device.
   rules. It is applied, verified and saved like any change; `network.delete`
   undoes all of it. OPNsense first, through its API: 26.7 or later (interface
   assignments came to the API in 26.7); an older one gets a note to do it by
-  hand, as phase 1 does today.
+  hand, as phase 1 does today. Then pfSense (REST API package v2), MikroTik
+  (RouterOS REST) and OpenWrt (uci with rollback), with the same three access
+  choices written as each one's rules, marked "Omini:". A plugin with no
+  undo of its own (MikroTik) undoes its writes itself when the check fails.
 - **What exists is imported and can be changed** (maintainer's rule, over
   "only what Omini created"): the router's networks (each VLAN's interface,
   gateway, DHCP range and mDNS) come into the catalog the first time, and
@@ -362,7 +379,8 @@ does the rest on every device.
   on the router), **moving a device to a VLAN** (its panel: the port it is on
   changes, with the plan), **discovery between VLANs** (the router's mDNS
   repeater for the VLANs that ask for it; OPNsense needs its os-mdns-repeater
-  plugin) and **Wi-Fi per VLAN** (a network name per VLAN on the access points
+  plugin, MikroTik RouterOS 7.16; pfSense and OpenWrt have none Omini can
+  drive, so their networks report it unknown and the form hides the switch) and **Wi-Fi per VLAN** (a network name per VLAN on the access points
   that can: UniFi, Omada, OpenWrt; Mercusys cannot).
 - **VMs and containers in VLANs**: a guest's virtual NIC is a port whose
   VLANs (Proxmox's tag and trunks) Omini changes like a switch port's; the

@@ -79,7 +79,9 @@ func (*Integration) Info() integration.Info {
 		Single: true, // one scan covers every subnet: two would compete
 		Fields: fields(),
 		// Ports of SNMP devices, with a write community or a v3 user allowed to write.
-		Changes: []model.ChangeKind{model.ChangeKindPortEnabled},
+		Changes: []model.ChangeKind{
+			model.ChangeKindPortEnabled, model.ChangeKindPortVlans, model.ChangeKindVlanSet, model.ChangeKindVlanDelete,
+		},
 	}
 }
 

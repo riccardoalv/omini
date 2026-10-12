@@ -136,7 +136,7 @@ def test_api_shapes(run: dict[str, Any]) -> None:
     assert ports[23]["portStatus"]["poe"] is True and ports[23]["portStatus"]["poePower"] > 10  # EAP670
     assert ports[2]["portStatus"]["poe"] is True  # a Yealink phone
     assert ports[20]["portStatus"]["poe"] is False  # the printer has its own power supply
-    assert ports[28]["type"] == 3 and ports[28]["profileName"] == "All" and ports[28]["pvid"] == 10
+    assert ports[28]["type"] == 3 and ports[28]["profileName"] == "Trunk 10 30,32,40,80" and ports[28]["pvid"] == 10
     assert ports[20]["profileName"] == "USERS" and ports[2]["profileName"] == "VOICE"
     assert d["stat"]["result"]["uplink"]["port"] == 28
     assert d["unknown"][0] == 404 and d["unknown"][1]["errorCode"] == -1600
@@ -271,3 +271,51 @@ def test_a_vlans_wifi() -> None:
         assert wifi(emu.collect("omada", "apply", change=change))["Filial-Lab"]["enabled"] is False
         change = {"device": "x", "kind": "wifi.delete", "value": {"ssid": "Filial-Lab"}}
         assert "Filial-Lab" not in wifi(emu.collect("omada", "apply", change=change))
+
+
+def test_vlans_of_the_site_and_its_switch_ports() -> None:
+    with Emulator(at=TUE, apis=["omada"], world=World()) as emu:
+
+        def switch(res: dict) -> dict:
+            return devices(res)["br-sw01"]
+
+        def vlans(dev: dict) -> dict[int, str]:
+            return {v["id"]: v.get("name") for v in dev.get("vlans") or []}
+
+        def port(dev: dict, name: str) -> tuple[int | None, list[int]]:
+            v = iface(dev, name).get("vlans") or {}
+            return v.get("untagged"), v.get("tagged") or []
+
+        sw = switch(emu.collect("omada"))
+        assert vlans(sw) == {1: "Default", 10: "MGMT", 30: "USERS", 32: "WIFI-CORP", 40: "VOICE", 80: "GUEST"}
+        assert port(sw, "Port 20") == (30, [])
+        assert port(sw, "Port 23") == (10, [32, 80])
+        assert port(sw, "Port 28") == (10, [30, 32, 40, 80])
+        assert port(sw, "Port 25") == (1, [])
+
+        def apply(kind: str, value: dict, port: str | None = None) -> dict:
+            change = {"device": sw["key"], "kind": kind, "value": value}
+            if port:
+                change["port"] = port
+            return emu.collect("omada", "apply", change=change)
+
+        # A new VLAN-only network, then renamed.
+        assert vlans(switch(apply("vlan.set", {"id": 50, "name": "LAB"})))[50] == "LAB"
+        assert vlans(switch(apply("vlan.set", {"id": 50, "name": "IOT"})))[50] == "IOT"
+
+        # The printer's port to the new VLAN (the controller's own profile for it).
+        assert port(switch(apply("port.vlans", {"untagged": 50, "tagged": None}, "Port 20")), "Port 20") == (50, [])
+        # A trunk the site has no profile for: one made by Omini.
+        sw2 = switch(apply("port.vlans", {"untagged": 30, "tagged": [40, 50]}, "Port 21"))
+        assert port(sw2, "Port 21") == (30, [40, 50])
+        assert port(sw2, "Port 22") == (30, []) and port(sw2, "Port 23") == (10, [32, 80])  # untouched
+
+        # A VLAN still the native network of a port cannot go; once free, it can.
+        assert "native network" in apply("vlan.delete", {"id": 50})["error"]
+        assert port(switch(apply("port.vlans", {"untagged": 30}, "Port 20")), "Port 20") == (30, [])
+        assert port(switch(apply("port.vlans", {"untagged": 30}, "Port 21")), "Port 21") == (30, [])
+        assert 50 not in vlans(switch(apply("vlan.delete", {"id": 50})))
+
+        # The Default LAN is not a VLAN-only network: refused.
+        assert "gateway network" in apply("vlan.delete", {"id": 1})["error"]
+        assert "always has a native" in apply("port.vlans", {"untagged": None, "tagged": [30]}, "Port 20")["error"]

@@ -240,3 +240,54 @@ def test_a_vlans_wifi() -> None:
         assert got["ACME-LAB"]["vlan"] == 77
         change = {"device": "x", "kind": "wifi.delete", "value": {"ssid": "ACME-LAB"}}
         assert "ACME-LAB" not in wifi(emu.collect("unifi", "apply", change=change))
+
+
+def test_a_switch_port_s_vlans_and_the_site_s_vlans() -> None:
+    with Emulator(at=TUE_1030, apis=["unifi"], world=World()) as emu:
+
+        def switch(res: dict) -> dict:
+            assert "error" not in res, res.get("error")
+            return next(d for d in res["devices"] if d["name"] == "sw-f3-01")
+
+        def vlans(res: dict) -> dict[str, dict | None]:
+            return {i["name"]: i.get("vlans") for i in switch(res)["interfaces"]}
+
+        def apply(kind: str, value: dict, port: str | None = None) -> dict:
+            change = {"device": key, "kind": kind, "value": value}
+            if port:
+                change["port"] = port
+            return emu.collect("unifi", "apply", change=change)
+
+        before = emu.collect("unifi")
+        key = switch(before)["key"]
+        site = {v["id"]: v["name"] for v in switch(before)["vlans"]}
+        assert site[1] == "Default" and site[60] == "CAMERAS"
+        got = vlans(before)
+        assert got["Port 1"] == {"untagged": 30, "tagged": [40]}  # desk phone and PC
+        assert got["Port 45"] == {"untagged": 1, "tagged": [32, 50, 80]}  # an AP
+        assert got["Port 49"] is None  # the LAG to the core
+
+        # An access port, then a trunk with no native VLAN; the others stay.
+        after = vlans(apply("port.vlans", {"untagged": 60, "tagged": []}, "Port 48"))
+        assert after["Port 48"] == {"untagged": 60, "tagged": []}
+        assert after["Port 47"] == got["Port 47"]
+        after = vlans(apply("port.vlans", {"untagged": None, "tagged": [30, 40]}, "Port 48"))
+        assert after["Port 48"] == {"tagged": [30, 40]}  # no untagged VLAN
+        assert vlans(emu.collect("unifi"))["Port 48"] == {"tagged": [30, 40]}
+
+        # A new VLAN, renamed, carried by the port, then deleted.
+        res = apply("vlan.set", {"id": 90, "name": "LAB"})
+        assert {v["id"]: v["name"] for v in switch(res)["vlans"]}[90] == "LAB"
+        res = apply("vlan.set", {"id": 90, "name": "LAB-2"})
+        assert {v["id"]: v["name"] for v in switch(res)["vlans"]}[90] == "LAB-2"
+        after = vlans(apply("port.vlans", {"untagged": 30, "tagged": [90]}, "Port 48"))
+        assert after["Port 48"] == {"untagged": 30, "tagged": [90]}
+        apply("port.vlans", {"untagged": 30, "tagged": []}, "Port 48")
+        res = apply("vlan.delete", {"id": 90})
+        assert 90 not in {v["id"] for v in switch(res)["vlans"]}
+
+        # Refused: a VLAN with no network, the LAN, a network a Wi-Fi uses.
+        assert "no network for VLAN 99" in apply("port.vlans", {"untagged": 99}, "Port 48")["error"]
+        assert "site's LAN" in apply("vlan.delete", {"id": 1})["error"]
+        assert "the Wi-Fi" in apply("vlan.delete", {"id": 50})["error"]
+        assert "aggregate" in apply("port.vlans", {"untagged": 30}, "Port 49")["error"]

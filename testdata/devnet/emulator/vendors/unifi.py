@@ -20,9 +20,16 @@ What is emulated, as the self-hosted application answers it:
   ``rest/networkconf``, ``rest/wlanconf``, ``rest/portconf``; anything else →
   404 ``api.err.NotFound``.
 - ``PUT /api/s/<site>/rest/device/<_id>`` with ``{"port_overrides": [...]}``
-  (the plugin's port.enabled change): the controller keeps the overrides and
-  provisions the switch at once, so a port whose override has ``"forward":
-  "disabled"`` goes down (``enable: false`` in its port table). The account is
+  (the plugin's port.enabled and port.vlans changes): the controller keeps the
+  overrides and provisions the switch at once, so a port whose override has
+  ``"forward": "disabled"`` goes down (``enable: false`` in its port table),
+  and a port's ``native_networkconf_id`` / ``tagged_vlan_mgmt`` /
+  ``excluded_networkconf_ids`` show in its port table (an unknown network →
+  400 ``api.err.InvalidNetwork``). Each port of the switch reports its VLANs
+  there (from the design until an override sets them).
+- ``POST rest/networkconf``, ``PUT``/``DELETE rest/networkconf/<_id>``: the
+  site's networks (kept here from the first write; deleting the LAN or a
+  network a WLAN uses → 400). ``POST``/``PUT``/``DELETE rest/wlanconf``. The account is
   a Site Admin; with ``read_only`` in its secrets it is View Only and every write answers
   403 ``api.err.NoPermission``.
 
@@ -116,7 +123,8 @@ class UniFi(HttpService):
         # The site's WLANs once one is written (else the design's), and the
         # networks added for them ("VLAN only").
         self.wlans: list[dict[str, Any]] | None = None
-        self.added_networks: list[dict[str, Any]] = []
+        self.networks: list[dict[str, Any]] | None = None  # rest/networkconf once written
+        self.added = 0  # networks created (for their ids)
 
     @property
     def read_only(self) -> bool:
@@ -227,6 +235,11 @@ class UniFi(HttpService):
             isinstance(o, dict) and isinstance(o.get("port_idx"), int) for o in overrides
         ):
             return err("api.err.Invalid", 400)
+        known = {x["_id"] for x in self.networkconf(self.ctx.snapshot())}
+        for o in overrides:
+            ids = [o.get("native_networkconf_id") or "", *(o.get("excluded_networkconf_ids") or [])]
+            if any(i and i not in known for i in ids):
+                return err("api.err.InvalidNetwork", 400)
         by_idx = {o["port_idx"]: o for o in overrides}
         for p in n.ports.values():
             if p.kind in ("ethernet", "sfp"):
@@ -235,8 +248,8 @@ class UniFi(HttpService):
         return ok([{"_id": _id, "mac": n.mac, "port_overrides": overrides}])
 
     def write_wifi(self, req: Request, endpoint: str) -> Response:
-        """POST/PUT/DELETE rest/wlanconf[/<_id>] and POST rest/networkconf: the
-        site's Wi-Fi networks (kept here; the password is never shown back)."""
+        """POST/PUT/DELETE rest/wlanconf[/<_id>] and rest/networkconf[/<_id>]: the
+        site's Wi-Fi networks and networks (kept here; a password is never shown back)."""
         try:
             body = req.json() or {}
         except ValueError:
@@ -244,10 +257,29 @@ class UniFi(HttpService):
         snap = self.ctx.snapshot()
         if self.wlans is None:
             self.wlans = self.wlanconf(snap)
+        if self.networks is None:
+            self.networks = self.networkconf(snap)
         if endpoint == "rest/networkconf" and req.method == "POST":
-            made = {"_id": oid("network", "added", len(self.added_networks)), "site_id": SITE["_id"], **body}
-            self.added_networks.append(made)
+            if not body.get("name") or any(x.get("name") == body["name"] for x in self.networks):
+                return err("api.err.NetworkNameExisted", 400)
+            made = {"_id": oid("network", "added", self.added), "site_id": SITE["_id"], **body}
+            self.added += 1
+            self.networks.append(made)
             return ok([made])
+        if endpoint.startswith("rest/networkconf/"):
+            _id = endpoint.rsplit("/", 1)[1]
+            net = next((x for x in self.networks if x["_id"] == _id), None)
+            if net is None:
+                return err("api.err.NotFound", 404)
+            if req.method == "DELETE":
+                if net.get("attr_no_delete") or any(w.get("networkconf_id") == _id for w in self.wlans):
+                    return err("api.err.NetworkInUse", 400)
+                self.networks.remove(net)
+                return ok([])
+            if req.method == "PUT":
+                net.update(body)
+                return ok([net])
+            return err("api.err.NotFound", 404)
         if endpoint == "rest/wlanconf" and req.method == "POST":
             if not body.get("name") or not body.get("x_passphrase") or not body.get("networkconf_id"):
                 return err("api.err.Invalid", 400)
@@ -502,6 +534,11 @@ class UniFi(HttpService):
                 e["excluded_networkconf_ids"] = [
                     nid for v, nid in nets.items() if v not in p.tagged and v != p.untagged
                 ]
+            # The VLANs an override gives the port (the switch is provisioned at once).
+            o = next((o for o in self.port_overrides(n) if o.get("port_idx") == idx), {})
+            for k in ("native_networkconf_id", "tagged_vlan_mgmt", "excluded_networkconf_ids"):
+                if k in o:
+                    e[k] = o[k]
             if p.poe:
                 e["port_poe"] = True
                 e["poe_caps"] = 7
@@ -961,6 +998,8 @@ class UniFi(HttpService):
         ]
 
     def networkconf(self, snap: Snapshot) -> list[dict[str, Any]]:
+        if self.networks is not None:
+            return self.networks
         out = []
         for vid in self.vlans(snap):
             v = snap.design.vlans[("hq", vid)]
@@ -997,7 +1036,7 @@ class UniFi(HttpService):
                     "site_id": SITE["_id"],
                 }
             )
-        return out + self.added_networks
+        return out
 
     def wlanconf(self, snap: Snapshot) -> list[dict[str, Any]]:
         if self.wlans is not None:

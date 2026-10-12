@@ -168,3 +168,76 @@ def test_wrong_key_and_raw_api(world: World) -> None:
         assert [r["hwif"] for r in json.loads(body)["data"]] == ["vtnet1"]
         assert get("/api/v2/status/wireguard/tunnels", key)[0] == 424
         assert get("/api/v2/status/nothing", key)[0] == 404
+
+
+def networks_of(d: dict) -> dict[int, dict]:
+    return {n["vlan"]: n for n in d.get("networks") or []}
+
+
+def test_reads_the_lab_network(runs: dict) -> None:
+    d = device(runs["first"])
+    nets = networks_of(d)
+    assert list(nets) == [1]  # the WAN is never a network
+    lan = nets[1]
+    assert (lan["interface"], lan["device"], lan["gateway"], lan["access"]) == (
+        "lan",
+        "vtnet1",
+        "192.168.200.1/24",
+        "all",  # pfSense's default LAN rules
+    )
+    assert lan["dhcp"] == {"enabled": True, "from": "192.168.200.100", "to": "192.168.200.199"}
+    names = {r["name"] for r in d["dhcp_reservations"]}
+    assert {"lab-k3s-01", "lab-k3s-02", "lab-k3s-03"} <= names
+
+
+def test_creates_changes_and_removes_a_network(world: World) -> None:
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        want = {
+            "vlan": 77,
+            "name": "LABNET",
+            "gateway": "10.77.0.1/24",
+            "dhcp": {"enabled": True, "from": "10.77.0.100", "to": "10.77.0.199"},
+            "access": "internet",
+        }
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "network.set", "value": want})
+        assert "error" not in out, out.get("error")
+        d = device(out)
+        got = networks_of(d)[77]
+        assert (got["interface"], got["device"], got["parent"]) == ("opt1", "vtnet1.77", "vtnet1")
+        assert (got["gateway"], got["access"], got["dhcp"]["from"]) == ("10.77.0.1/24", "internet", "10.77.0.100")
+        assert [(v["id"], v["interface"]) for v in d["vlans"]] == [(77, "vtnet1.77")]
+        assert iface(d, "vtnet1.77")["ips"] == ["10.77.0.1/24"]
+
+        want["access"] = "local"
+        want["dhcp"] = {"enabled": False}
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "network.set", "value": want})
+        assert "error" not in out, out.get("error")
+        got = networks_of(device(out))[77]
+        assert (got["access"], got["dhcp"]["enabled"]) == ("local", False)
+
+        out = emu.collect(
+            "pfsense", "apply", change={"device": "x", "kind": "network.set", "value": {**want, "mdns": True}}
+        )
+        assert "Avahi" in out["error"]
+
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "network.delete", "value": {"vlan": 77}})
+        assert "error" not in out, out.get("error")
+        d = device(out)
+        assert 77 not in networks_of(d) and not d.get("vlans")
+        assert networks_of(d)[1]["access"] == "all"  # the LAN's rules were never touched
+
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "network.delete", "value": {"vlan": 1}})
+        assert "LAN" in out["error"]
+
+
+def test_fixes_an_address(world: World) -> None:
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        value = {"mac": "02:00:00:00:77:01", "ip": "192.168.200.77", "name": "printer"}
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "reservation.set", "value": value})
+        assert "error" not in out, out.get("error")
+        assert value in device(out)["dhcp_reservations"]
+        out = emu.collect(
+            "pfsense", "apply", change={"device": "x", "kind": "reservation.delete", "value": {"mac": value["mac"]}}
+        )
+        assert "error" not in out, out.get("error")
+        assert not any(r["mac"] == value["mac"] for r in device(out)["dhcp_reservations"])

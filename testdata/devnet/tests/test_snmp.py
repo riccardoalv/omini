@@ -464,3 +464,56 @@ def test_set_disables_a_port_with_the_write_community_only() -> None:
         assert c.get(f"1.3.6.1.2.1.2.2.1.8.{idx}")[0] == (s.INTEGER, 2)  # the link goes down
         assert v2_pdu(send(addr, set_message(rw, admin, 1))).a == 0
         assert c.get(admin)[0] == (s.INTEGER, 1)
+
+
+def set_values(community: str, varbinds: list[tuple[str, tuple[int, object]]]) -> bytes:
+    pdu = s.enc_pdu(s.SET, next(_reqid), 0, 0, [s.enc_varbind(s.OI(oid), v) for oid, v in varbinds])
+    return s.tlv(s.SEQUENCE, s.enc_int(1) + s.tlv(s.OCTETS, community.encode()) + pdu)
+
+
+def test_qbridge_vlans_and_their_writes() -> None:
+    """An Aruba switch lists each VLAN's egress and untagged ports and each
+    port's PVID, and takes Q-BRIDGE writes: a VLAN created, a port moved into
+    it, the VLAN deleted once no port uses it."""
+    with Emulator(at=WED_11, apis=["snmp-sw-f1-01"], world=World()) as emu:
+        addr = emu.addrs["snmp-sw-f1-01"]
+        c = v2(emu, "snmp-sw-f1-01")
+        rw = configs.write_community(emu.secrets)
+        pvids = c.walk(s.QBRIDGE_PVID)
+        assert pvids, "PVIDs listed"
+        bp = max(oid[-1] for oid in pvids)  # the last port
+        egress1 = c.get(f"{s.QBRIDGE_STATIC}.2.1")[0][1]
+        assert isinstance(egress1, bytes)
+
+        assert (
+            v2_pdu(
+                send(
+                    addr,
+                    set_values(
+                        rw,
+                        [
+                            (f"{s.QBRIDGE_STATIC}.5.77", (s.INTEGER, 4)),
+                            (f"{s.QBRIDGE_STATIC}.1.77", (s.OCTETS, b"LAB")),
+                        ],
+                    ),
+                )
+            ).a
+            == 0
+        )
+        assert c.get(f"{s.QBRIDGE_STATIC}.1.77")[0] == (s.OCTETS, b"LAB")
+        member = s.port_list([bp])
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_STATIC}.2.77", (s.OCTETS, member))]))).a == 0
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_STATIC}.4.77", (s.OCTETS, member))]))).a == 0
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_PVID}.{bp}", (s.GAUGE32, 77))]))).a == 0
+        assert s.in_list(c.get(f"{s.QBRIDGE_STATIC}.4.77")[0][1], bp)
+        assert c.get(f"{s.QBRIDGE_PVID}.{bp}")[0][1] == 77
+        # In use: not deleted.
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_STATIC}.5.77", (s.INTEGER, 6))]))).a == 12
+        # Back to VLAN 1, then deleted.
+        one = c.get(f"{s.QBRIDGE_STATIC}.2.1")[0][1]
+        back = bytes(one) if s.in_list(one, bp) else s.port_list([bp])
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_PVID}.{bp}", (s.GAUGE32, 1))]))).a == 0
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_STATIC}.2.77", (s.OCTETS, b""))]))).a == 0
+        assert not s.in_list(c.get(f"{s.QBRIDGE_STATIC}.2.1")[0][1], bp) or back
+        assert v2_pdu(send(addr, set_values(rw, [(f"{s.QBRIDGE_STATIC}.5.77", (s.INTEGER, 6))]))).a == 0
+        assert not c.get(f"{s.QBRIDGE_STATIC}.1.77")[0][1]

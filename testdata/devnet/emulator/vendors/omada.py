@@ -20,6 +20,10 @@ What is emulated, as the controller answers it:
 - ``PUT .../sites/{siteId}/switches/{switchMac}/ports/{port}/status`` with
   ``{"status": 0 | 1}`` (Set port status for given port): turns the switch
   port off or on; the statistics show it as ``disable``.
+- The site's LAN networks (v2 and v1) and port profiles, the switch's
+  ``portList`` (Get switch info) and ``PUT .../ports/{port}/profile`` (Set
+  profile for given port): see ``omada_lan``. The statistics show each port's
+  profile name and PVID from them.
 
 Error codes: -44106 wrong client id / secret, -44111 bad grant type, -44112
 expired token, -44113 invalid token, -1001 invalid parameters, -1600 unknown
@@ -35,6 +39,7 @@ from typing import Any
 from .. import acme
 from ..server import HttpService, Request, Response
 from ..world import Snapshot, h01
+from .omada_lan import Lan
 
 CONTROLLER_VER = "5.15.20.18"
 TOKEN_TTL = 7200
@@ -87,6 +92,8 @@ class Omada(HttpService):
         # The site's SSIDs once the Wi-Fi API is used (else from the design).
         self.ssids: list[dict[str, Any]] | None = None
         self.ssid_ids = 0
+        # The site's LAN networks and port profiles, once first asked for.
+        self._lan: Lan | None = None
 
     # -- identity -----------------------------------------------------------
 
@@ -132,7 +139,8 @@ class Omada(HttpService):
                 return err(-1, "Request method not supported.", 405)
             return self.authorize(req, snap)
         prefix = "/openapi/v1/"
-        if path.startswith(prefix):
+        if path.startswith(("/openapi/v1/", "/openapi/v2/")):
+            v2 = path.startswith("/openapi/v2/")
             rest = path[len(prefix) :].split("/")
             if rest[0] != self.omadac_id:
                 return err(-1001, "Invalid request parameters.")
@@ -149,6 +157,10 @@ class Omada(HttpService):
                     "The access token has expired. Please re-initiate the refreshToken process "
                     "to obtain the access token.",
                 )
+            if "lan-networks" in rest or "lan-profiles" in rest:
+                return self.lan_api(rest[1:], req, v2)
+            if v2:
+                return err(-1600, "Unsupported request path.", 404)
             if "wireless-network" in rest:
                 return self.wireless(rest[1:], req)
             if req.method == "PUT":
@@ -237,7 +249,7 @@ class Omada(HttpService):
             if p[2:] == ["ddm", "info"]:
                 return gone or ok(self.ddm(sw, snap))
             if p[2:] == []:
-                return gone or ok(self.device_row(sw, snap))
+                return gone or ok({**self.device_row(sw, snap), "portList": self.lan.port_list(self.switch_ports(sw))})
         if len(p) >= 2 and p[0] == "aps":
             ap = self.find(p[1], "ap")
             gone = self.online(ap, snap)
@@ -326,8 +338,59 @@ class Omada(HttpService):
             return ok(dict(row))
         return err(-1, "Request method not supported.", 405)
 
+    @property
+    def lan(self) -> Lan:
+        if self._lan is None:
+            vlans = [v for (site, _), v in self.ctx.world.d.vlans.items() if site == self.site]
+            sw = next(n for n in self.managed() if n.kind == "switch")
+            self._lan = Lan(vlans, self.switch_ports(sw))
+        return self._lan
+
+    def switch_ports(self, sw: Any) -> list[Any]:
+        ports = [p for p in sw.ports.values() if p.kind in ("ethernet", "sfp")]
+        return sorted(ports, key=lambda p: p.index)
+
+    def lan_api(self, parts: list[str], req: Request, v2: bool) -> Response:
+        """LAN networks (v1 and v2) and LAN profiles (v1) of the site."""
+        if len(parts) < 3 or parts[0] != "sites" or parts[2] not in ("lan-networks", "lan-profiles"):
+            return err(-1600, "Unsupported request path.", 404)
+        if v2 and (parts[2] != "lan-networks" or (req.method == "DELETE")):
+            return err(-1600, "Unsupported request path.", 404)  # v2 has list, create and modify only
+        if parts[1] != self.site_id:
+            return err(-1005, "Operation forbidden.")
+        try:
+            body = req.json() if req.method in ("POST", "PATCH") else None
+        except ValueError:
+            return err(-1001, "Invalid request parameters.")
+        if parts[2] == "lan-networks":
+            answer = self.lan.networks(req.method, parts[3:], body)
+            rows = self.lan.nets
+        else:
+            answer = self.lan.lan_profiles(req.method, parts[3:], body)
+            rows = self.lan.profiles
+        if answer is None:
+            return self.page(req, [dict(r) for r in rows])
+        code, msg, result = answer
+        if code:
+            return err(code, msg)
+        return ok(result) if result is not None else Response.json({"errorCode": 0, "msg": msg})
+
     def write(self, parts: list[str], req: Request, snap: Snapshot) -> Response:
-        """The one write emulated: Set port status for given port."""
+        """Set port status / Set profile for given port."""
+        if len(parts) == 7 and parts[0] == "sites" and parts[2] == "switches" and parts[4:7:2] == ["ports", "profile"]:
+            if parts[1] != self.site_id:
+                return err(-1005, "Operation forbidden.")
+            sw = self.find(parts[3], "switch")
+            gone = self.online(sw, snap)
+            if gone:
+                return gone
+            try:
+                body = req.json() or {}
+                index = int(parts[5])
+            except ValueError:
+                return err(-1001, "Invalid request parameters.")
+            code, msg, _ = self.lan.set_port_profile(index, body)
+            return err(code, msg) if code else Response.json({"errorCode": 0, "msg": msg})
         if not (
             len(parts) == 7 and parts[0] == "sites" and parts[2] == "switches" and parts[4:7:2] == ["ports", "status"]
         ):
@@ -476,8 +539,8 @@ class Omada(HttpService):
                 "operation": "SWITCHING",
                 "disable": not p.admin_up,
                 "maxSpeed": SPEED_CODE.get(p.speed or 1000, 3),
-                "pvid": p.untagged or 1,
-                "profileName": self.profile(p),
+                "pvid": self.lan.port_info(p.index)[1],
+                "profileName": self.lan.port_info(p.index)[0],
                 "portStatus": {
                     "linkStatus": 1 if st.up else 0,
                     "linkSpeed": SPEED_CODE.get(st.speed or 0, 0) if st.up else 0,
@@ -527,12 +590,6 @@ class Omada(HttpService):
                 "model": gw.model,
             }
         return out
-
-    def profile(self, p: Any) -> str:
-        if p.tagged:
-            return "All"
-        vlan = self.ctx.world.d.vlans.get((self.site, p.untagged or 0))
-        return vlan.name if vlan else "Default"
 
     def ddm(self, sw: Any, snap: Snapshot) -> list[dict[str, Any]]:
         out = []

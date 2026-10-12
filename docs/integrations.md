@@ -3,9 +3,23 @@
 An integration is a source of data: the built-in network scan, or a plugin
 that reads a firewall, a switch, a Wi-Fi system or a hypervisor through its
 own API. Collecting only reads. The integrations that support it can also
-**change** their devices from the map (today: enable and disable ports on
-the network scan's SNMP devices, MikroTik, UniFi, Omada, OpenWrt and Horaco);
-see [Configuration changes](decisions.md#configuration-changes). Their guides
+**change** their devices from the map; see
+[Configuration changes](decisions.md#configuration-changes):
+
+| Integration | Ports on/off | Switch VLANs (ports, create, delete) | VLAN networks (gateway, DHCP, access) and fixed addresses | Wi-Fi per VLAN |
+|---|---|---|---|---|
+| Network scan (SNMP) | yes | yes (Q-BRIDGE-MIB) | | |
+| OPNsense | | | yes (26.7+) | |
+| pfSense | | | yes | |
+| MikroTik RouterOS | yes | yes | yes | |
+| UniFi Network | yes | yes | | yes |
+| TP-Link Omada | yes | yes | | yes |
+| OpenWrt | yes | yes | yes | yes |
+| Proxmox VE | | a guest's network device | | |
+| Horaco switch | yes | yes | | |
+
+Switch VLAN changes need the device's VLAN filtering (or 802.1Q mode) on:
+Omini never turns a global switch mode on by itself, and says where to do it. Their guides
 below ask for an account allowed to make those changes; a read-only account
 still draws the map, and a change then fails with a message saying which
 permission is missing.
@@ -142,7 +156,12 @@ check); gateways with status, latency and loss; VLANs; SFP modules; services;
 VPN peers (WireGuard, OpenVPN, IPsec); DHCP pool usage (Kea, dnsmasq);
 firewall states.
 
-**Read-only account.**
+On 26.7 and later it also **manages each VLAN's network** (the VLAN on the
+port toward your switches, the interface and gateway, Kea or dnsmasq DHCP,
+access rules marked "Omini:", the os-mdns-repeater plugin for discovery) and
+**fixed addresses**. Rules set by hand show as *Custom* and are left alone.
+
+**Account.**
 
 1. **System → Access → Users → Add**: user `omini`, a random password (it is
    never used). Give it these privileges:
@@ -162,7 +181,10 @@ firewall states.
    | Status: Services | services |
    | Diagnostics: Firewall statistics | state table |
    | VPN: WireGuard: Status, Status: OpenVPN, Status: IPsec | VPN peers, if you use them |
-   | **System: Deny config write** | **recommended**: blocks configuration writes |
+   | **System: Deny config write** | only if Omini should **not** manage networks: it blocks every write |
+
+   Managing networks needs the write privileges the plugin's README lists
+   (interfaces, VLANs, Kea or dnsmasq, firewall rules and aliases).
 
 2. Edit the user again and, under **API keys**, click **+**. OPNsense
    downloads a file with the key and the secret.
@@ -179,9 +201,12 @@ Reads pfSense CE 2.7.2+ or Plus 24.03+ through the
 [REST API package](https://pfrest.org/) v2: interfaces with link speed and
 counters, WANs and gateways (status, latency, loss), ARP, DHCP leases (ISC or
 Kea) and pool usage, system health, VLANs, services, VPN peers (OpenVPN,
-WireGuard, IPsec) and firewall states.
+WireGuard, IPsec) and firewall states. It also **manages each VLAN's
+network** (VLAN, interface and gateway, DHCP server, access rules marked
+"Omini:") and **fixed addresses** (static mappings); discovery between VLANs
+(Avahi) has no API and stays in **Services → Avahi**.
 
-**Read-only account.**
+**Account.**
 
 1. Install the REST API package from the pfSense shell, with the build for
    your version (see the plugin's README; reinstall it after every pfSense
@@ -189,7 +214,9 @@ WireGuard, IPsec) and firewall states.
    authentication.
 2. **System → User Manager → Users → Add** user `omini` with a long random
    password, and give it the `REST API - /api/v2/... GET` privileges the plugin
-   lists (at least `status/system`), plus **User - Config: Deny Config Write**.
+   lists (at least `status/system`). To manage networks, also give it the
+   write privileges the plugin's README lists; for the map alone, add
+   **User - Config: Deny Config Write** instead.
    Temporarily add `REST API - /api/v2/auth/key POST`.
 3. Create the key as that user:
 
@@ -201,7 +228,7 @@ WireGuard, IPsec) and firewall states.
    Copy `data.key` from the answer, then remove the *auth/key POST* privilege.
 4. In Omini, enter the address and the key.
 
-Do not give the user *WebCfg - All pages*: it allows changes.
+Do not give the user *WebCfg - All pages*: it allows every change.
 
 ## MikroTik RouterOS
 
@@ -211,8 +238,8 @@ last check), interfaces with link rate and SFP diagnostics, bridges, bonds,
 bridge VLANs and host table, ARP, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi
 clients and default-route gateways.
 
-**Account** (in a RouterOS terminal). The `write` policy lets Omini enable
-and disable Ethernet ports; leave it out for the map alone:
+**Account** (in a RouterOS terminal). The `write` policy lets Omini change
+the device; leave it out for the map alone:
 
 ```routeros
 /user group add name=omini policy=read,write,api,rest-api comment="Omini"
@@ -225,8 +252,19 @@ and disable Ethernet ports; leave it out for the map alone:
 
 In Omini: address `https://<router>`, user `omini` and its password.
 Collecting sends one `POST`: the Ethernet `monitor` command with `once`,
-which only reads the link state. A change is a `PATCH` of the port's
-`disabled` property (kept across reboots by RouterOS).
+which only reads the link state. Changes (kept across reboots by RouterOS):
+
+- **ports**: the port's `disabled` property;
+- **switch VLANs** on a bridge with **VLAN Filtering** on (Bridge → bridge →
+  VLAN; Omini never turns it on): a port's PVID, frame types and tagged
+  lists, and `/interface/bridge/vlan` entries named by their comment;
+- **VLAN networks** on a router: the VLAN interface, gateway address, pool,
+  DHCP server and network, firewall rules marked "Omini:" (before the
+  default drops) and, on 7.16+, the DNS mDNS repeater;
+- **fixed addresses**: static DHCP leases.
+
+A change is read back; if it does not come back as asked, Omini undoes its
+writes, newest first.
 
 ## UniFi Network
 
@@ -236,7 +274,7 @@ speed, LLDP and uplinks; Wi-Fi and wired clients with band, signal and
 traffic; VLANs; WAN status; CPU, memory, temperatures and pending firmware.
 
 **Account:** a **local** account (not a UI.com account, no two-factor
-authentication) that can manage devices, to enable and disable switch ports
+authentication) that can manage devices, to change ports, VLANs and Wi-Fi
 (**View Only** is enough for the map alone):
 
 - UniFi OS: **Admins & Users → Create New**, **Restrict to local access
@@ -244,8 +282,14 @@ authentication) that can manage devices, to enable and disable switch ports
 - Self-hosted: **Settings → Admins & Users → Add Admin**, a local admin with
   the **Site Admin** role ("Administrator" on older versions).
 
-A change sets the port's override to "disabled" (`forward`) on the
-controller, which provisions the switch; the other overrides stay as they are.
+Changes go to the controller, which provisions the devices:
+
+- **ports**: the port's override (`forward` "disabled");
+- **switch VLANs**: the port's override (native network and tagged
+  networks; its profile and other settings stay); a VLAN is a site network
+  ("VLAN only"), so creating or deleting one applies to every UniFi switch.
+  Networks with a gateway are deleted in UniFi itself;
+- **Wi-Fi per VLAN**: the site's WLANs.
 
 In Omini: the console (`https://192.168.1.1`) or application
 (`https://controller:8443`) address, the account, and the **site** (the part
@@ -265,13 +309,19 @@ controller is not supported.
 1. As an administrator, in the **Global** view: **Settings → Platform
    Integration → Open API → Add New App**.
 2. App name `Omini`, mode **Client**, role **Administrator** (or a custom
-   role with **Modify** permission on devices) to enable and disable switch
-   ports (**Viewer** is enough for the map alone), and only the sites Omini
-   should map.
+   role with **Modify** permission on devices and networks) to change ports,
+   VLANs and Wi-Fi (**Viewer** is enough for the map alone), and only the
+   sites Omini should map.
 3. Copy the **Client ID**, the **Client Secret** and the **Interface Access
    Address**.
 4. In Omini: the controller address (e.g. `https://192.168.1.10:8043`), the
    client ID and secret, and the site name (empty: the default site).
+
+Changes: **ports** on and off; **switch VLANs** as site networks ("VLAN"
+purpose) and port profiles: a port gets an existing profile with exactly the
+asked VLANs and the same other settings, or a new one named "Omini …"
+(profiles are never edited); **Wi-Fi per VLAN** (SSIDs). Every Omada port has
+a native VLAN, LAG ports and ports with Profile Override are not changed.
 
 ## OpenWrt
 
@@ -281,13 +331,13 @@ bridge VLANs, WANs and gateways, host hints, DHCP leases, Wi-Fi clients with
 signal and rates, ARP and temperatures.
 
 **Account:** an rpcd login with an ACL that allows only the methods and files
-Omini reads, plus changes to `/etc/config/network` to enable and disable
-ports. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.json`:
+Omini reads, plus changes to `network`, `wireless`, `dhcp` and `firewall`
+in `/etc/config`. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.json`:
 
 ```json
 {
   "omini": {
-    "description": "Omini: reads for the network map, enables and disables ports",
+    "description": "Omini: reads for the network map, changes ports, VLANs, networks and Wi-Fi",
     "read": {
       "ubus": {
         "system": ["board", "info"],
@@ -298,7 +348,7 @@ ports. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.json`:
         "file": ["read", "list"],
         "uci": ["get"]
       },
-      "uci": ["network"],
+      "uci": ["network", "wireless", "dhcp", "firewall"],
       "file": {
         "/proc/net/arp": ["read"],
         "/sys/class/thermal": ["list"],
@@ -310,7 +360,7 @@ ports. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.json`:
       "ubus": {
         "uci": ["set", "add", "delete", "revert", "apply", "confirm", "rollback"]
       },
-      "uci": ["network"]
+      "uci": ["network", "wireless", "dhcp", "firewall"]
     }
   }
 }
@@ -330,8 +380,12 @@ uci commit rpcd
 
 In Omini: the LuCI address (`https://192.168.1.1`), user `omini` and its
 password. For the map alone, leave out the `"write"` block and the
-`write` line. A change sets the port's `enabled` option in
-`/etc/config/network` and applies it with rollback: unless Omini sees the port
+`write` line. Changes: **ports** (the `enabled` option); **switch VLANs**
+(`bridge-vlan` sections of a bridge with **Bridge VLAN filtering** on, in
+LuCI's Network → Interfaces → Devices; Omini never turns it on); **VLAN
+networks** (interface, gateway, dnsmasq range and a firewall zone with rules
+marked "Omini:") and **fixed addresses** (`config host`); **Wi-Fi per
+VLAN**. Each is applied with rollback: unless Omini sees the port
 change and confirms it within 30 seconds, the router restores the old
 configuration by itself. Routers with an old switch chip (swconfig) are not
 supported for changes.

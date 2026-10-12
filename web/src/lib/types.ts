@@ -534,7 +534,8 @@ export interface Network {
   gateway?: string
   dhcp?: { enabled: boolean; from?: string; to?: string }
   access?: NetworkAccess
-  mdns?: boolean
+  /** Discovery between networks; null: the router has no mDNS repeater. */
+  mdns?: boolean | null
 }
 
 /**

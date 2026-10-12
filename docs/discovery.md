@@ -129,11 +129,14 @@ To use it:
    and privacy (none, DES, AES-128, AES-192 or AES-256) with its password. v3
    is tried before the communities. Omini remembers which credential each host
    answered to.
-4. To **enable and disable ports** of SNMP devices from the map, set the
-   **SNMP write community** (the device's "read-write" community). A device
-   that answered to the v3 user is written with that user, when its view
-   allows writing. Omini sets the port's `ifAdminStatus` (IF-MIB) and reads it
-   back. SNMP has no standard "save": most switches keep the change on their
+4. To **enable and disable ports** and **change VLANs** of SNMP devices from
+   the map, set the **SNMP write community** (the device's "read-write"
+   community). A device that answered to the v3 user is written with that
+   user, when its view allows writing. Omini sets the port's `ifAdminStatus`
+   (IF-MIB), and a switch's VLANs and its ports' membership through the
+   standard Q-BRIDGE-MIB (create, rename and delete a VLAN; a port's native
+   and tagged VLANs), and reads them back. Switches that do not implement
+   Q-BRIDGE writes refuse them, and Omini says so. SNMP has no standard "save": most switches keep the change on their
    own; some (Cisco IOS among them) need "write memory" on the device for it
    to survive a reboot.
 

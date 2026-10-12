@@ -113,6 +113,9 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err := collectFDB(c, &d, ifNames); err != nil {
 		log.Debug("fdb unavailable", "err", err)
 	}
+	if err := collectVlans(c, &d, ifNames); err != nil {
+		log.Debug("vlans unavailable", "err", err)
+	}
 	if err := collectLLDP(c, &d, ifNames); err != nil {
 		log.Debug("lldp unavailable", "err", err)
 	}

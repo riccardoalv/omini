@@ -8,12 +8,20 @@ request (no session); a wrong username or password answers 401
 object for singleton menus like /system/resource); `GET /rest/<menu>/<id>`
 reads one item by `.id` or name; query parameters filter (`?type=ether`) and
 `.proplist` picks fields. POST runs a command: only `print` and the
-read-only `/interface/ethernet/monitor` with `once` are accepted. PATCH
-`/rest/interface/ethernet/<id>` (or `/rest/interface/<id>`, by `.id` or name)
-with `{"disabled": "true"|"false"}` disables or enables a physical port (the
-console's `set`): it sets the design port's admin_up, so the port reads
-`disabled=true`, `running=false` and its link drops in the world. Any other
-command, property, PUT or DELETE answers 403 "not enough permissions". A menu this RouterOS lacks (no `wifi`/`wireless`
+read-only `/interface/ethernet/monitor` with `once` are accepted, plus `<menu>/add`
+and `/ip/dns/set` below. PATCH `/rest/interface/ethernet/<id>` (or
+`/rest/interface/<id>`, by `.id` or name) with `{"disabled": "true"|"false"}`
+disables or enables a physical port (the console's `set`): it sets the design
+port's admin_up, so the port reads `disabled=true`, `running=false` and its link
+drops in the world. The configuration Omini's VLAN and network changes write (bridge
+ports' PVID and frame types, the bridge VLAN table, VLAN interfaces, addresses,
+DHCP pools, servers, networks and static leases, firewall filter rules and address
+lists, /ip/dns) is kept per box in mikrotik_config.RouterConfig, built from the
+design on first use: PUT adds, PATCH sets, DELETE removes, POST `<menu>/add` adds
+with `place-before`; a bad write answers 400 "failure: ...". These writes change
+what the API answers, not the world (its traffic, MAC tables and leases still
+follow the design). Any other command, property, PUT or DELETE answers 403 "not
+enough permissions". A menu this RouterOS lacks (no `wifi`/`wireless`
 package on these boxes) answers 400 "no such command or directory".
 
 All topology data comes from the world snapshot: port state and counters,
@@ -38,6 +46,7 @@ from .. import acme
 from ..model import Node, Port
 from ..server import HttpService, Request, Response
 from ..world import Snapshot, h01
+from .mikrotik_config import PROPS, Failure, RouterConfig
 
 VERSION = "7.16.2"
 LATEST = "7.16.3"
@@ -144,6 +153,19 @@ class MikroTik(HttpService):
         # Bond slaves are not bridge ports in RouterOS: their bond is.
         self.bridge_ports = [m for m in (bridge.members if bridge else ()) if not self.box.ports[m].lag]
         self.bridge = bridge.name if bridge else None
+        self._cfg: RouterConfig | None = None
+
+    @property
+    def cfg(self) -> RouterConfig:
+        """The configuration changes write, built from the design on first use."""
+        if self._cfg is None:
+            self._cfg = RouterConfig(self)
+        return self._cfg
+
+    def interface_names(self) -> set[str]:
+        """Every interface the box has now (VLAN interfaces as the configuration has them)."""
+        out = {p.name for p in self.box.ports.values() if p.kind != "vlan"} | {"lo"}
+        return out | {r["name"] for r in self.cfg.rows("/interface/vlan")}
 
     # -- HTTP --
     def handle(self, req: Request, snap: Snapshot) -> Response:
@@ -167,19 +189,77 @@ class MikroTik(HttpService):
                 return self.monitor(body, snap)
             if sub.endswith("/print"):
                 return self.get(sub[: -len("/print")], req, snap, body.get(".proplist"))
+            if sub == "/ip/dns/set":
+                return self.write(lambda: self.cfg.set_dns(body) or [])
+            if sub.endswith("/add") and sub[: -len("/add")] in PROPS:
+                menu = sub[: -len("/add")]
+                before = body.pop("place-before", None)
+                return self.write(lambda: {"ret": self.add(menu, body, before)[".id"]})
             return Response.json(FORBIDDEN, 403)
-        if req.method == "PATCH":
+        if req.method in ("PATCH", "PUT"):
             body = self.body(req)
             if body is None:
                 return Response.json({"error": 400, "message": "Bad Request", "detail": "JSON parse error"}, 400)
+            if req.method == "PUT":
+                if sub not in PROPS:
+                    return Response.json(FORBIDDEN, 403)
+                return self.write(lambda: self.add(sub, body, None))
             return self.patch(sub, body, snap)
-        if req.method in ("PUT", "DELETE"):
-            return Response.json(FORBIDDEN, 403)
+        if req.method == "DELETE":
+            menu, _, item = sub.rpartition("/")
+            if menu not in PROPS:
+                return Response.json(FORBIDDEN, 403)
+            if menu == "/ip/dhcp-server/lease" and self.lease_change(item, None, snap):
+                return Response(204, b"", [])
+            if not self.cfg.remove(menu, item):
+                return Response.json({"error": 404, "message": "Not Found", "detail": "no such item"}, 404)
+            return Response(204, b"", [])
         return Response.json({"error": 405, "message": "Method Not Allowed"}, 405)
 
+    def write(self, fn: Any) -> Response:
+        try:
+            return Response.json(fn())
+        except Failure as e:
+            return Response.json({"error": 400, "message": "Bad Request", "detail": f"failure: {e}"}, 400)
+
+    def add(self, menu: str, body: dict[str, Any], before: str | None) -> dict[str, str]:
+        row = self.cfg.add(menu, body, before)
+        if menu == "/interface/vlan":
+            self.ids[row["name"]] = row[".id"]
+        return row
+
+    def lease_change(self, item: str, body: dict[str, Any] | None, snap: Snapshot) -> dict[str, str] | None:
+        """A set (body) or remove (None) of a lease the world hands out: kept as an overlay by MAC.
+        None when item is not one of those (an added static lease, or nothing)."""
+        hit = next((r for r in self.world_leases(snap) if r[".id"] == item), None)
+        if hit is None:
+            return None
+        m = hit["mac-address"]
+        if body is None:
+            self.cfg.lease_gone.add(m)
+            return hit
+        clean = self.cfg.clean("/ip/dhcp-server/lease", body)
+        self.cfg.lease_set.setdefault(m, {}).update(clean)
+        return {**hit, **clean}
+
     def patch(self, sub: str, body: dict[str, Any], snap: Snapshot) -> Response:
-        """`set` of one port: only `disabled` of a physical port is modelled."""
+        """`set` of one item: a physical port's `disabled`, or the configuration changes write."""
         menu, _, item = sub.rpartition("/")
+        if menu in PROPS:
+            if menu == "/ip/dhcp-server/lease":
+                try:
+                    hit = self.lease_change(item, body, snap)
+                except Failure as e:
+                    return Response.json({"error": 400, "message": "Bad Request", "detail": f"failure: {e}"}, 400)
+                if hit is not None:
+                    return Response.json(hit)
+            try:
+                row = self.cfg.set(menu, item, body)
+            except Failure as e:
+                return Response.json({"error": 400, "message": "Bad Request", "detail": f"failure: {e}"}, 400)
+            if row is None:
+                return Response.json({"error": 404, "message": "Not Found", "detail": "no such item"}, 404)
+            return Response.json(row)
         if menu not in ("/interface", "/interface/ethernet") or set(body) != {"disabled"}:
             return Response.json(FORBIDDEN, 403)
         value = str(body["disabled"]).lower()
@@ -275,6 +355,10 @@ class MikroTik(HttpService):
             "/ip/dhcp-server": self.dhcp_servers,
             "/ip/dhcp-server/lease": self.leases,
             "/ip/pool": self.pools,
+            "/ip/dhcp-server/network": lambda s: [dict(r) for r in self.cfg.rows("/ip/dhcp-server/network")],
+            "/ip/firewall/filter": self.filter_rules,
+            "/ip/firewall/address-list": self.address_lists,
+            "/ip/dns": lambda s: dict(self.cfg.dns),
         }
 
     # -- system --
@@ -436,7 +520,10 @@ class MikroTik(HttpService):
         out = []
         boot = snap.boot(self.node)
         bonded = {m for p in self.box.ports.values() if p.kind == "lag" for m in p.members}
+        vlan_cfg = {r["name"]: r for r in self.cfg.rows("/interface/vlan")}
         for p in self.box.ports.values():
+            if p.kind == "vlan" and p.name not in vlan_cfg:
+                continue  # removed by a change
             c = self.counters(snap, p)
             kind = {
                 "ethernet": "ether",
@@ -487,8 +574,29 @@ class MikroTik(HttpService):
                     "disabled": b(not p.admin_up),
                 }
             )
-            if p.descr:
-                row["comment"] = p.descr
+            comment = vlan_cfg[p.name].get("comment", "") if p.kind == "vlan" else p.descr
+            if comment:
+                row["comment"] = comment
+            out.append(row)
+        for name, v in vlan_cfg.items():
+            if name in self.box.ports:
+                continue
+            row = {
+                ".id": v[".id"],
+                "name": name,
+                "type": "vlan",
+                "mtu": v.get("mtu", "1500"),
+                "actual-mtu": v.get("mtu", "1500"),
+                "l2mtu": "1584",
+                "mac-address": ros_mac(self.box.mac),
+                **{k: "0" for k in ("rx-byte", "tx-byte", "rx-packet", "tx-packet", "rx-drop", "tx-drop")},
+                **{k: "0" for k in ("tx-queue-drop", "rx-error", "tx-error")},
+                "running": b(v.get("disabled") != "true"),
+                "slave": "false",
+                "disabled": v.get("disabled", "false"),
+            }
+            if v.get("comment"):
+                row["comment"] = v["comment"]
             out.append(row)
         out.append(
             {
@@ -679,26 +787,13 @@ class MikroTik(HttpService):
         ]
 
     def bridge_port_rows(self, snap: Snapshot) -> list[dict[str, str]]:
+        """The configuration's PVID and frame types, with the port's live state."""
         out = []
-        for k, name in enumerate(self.bridge_ports):
-            p = self.box.ports[name]
-            pvid = p.untagged or 1
-            frames = (
-                "admit-only-vlan-tagged"
-                if not p.untagged and p.tagged
-                else "admit-only-untagged-and-priority-tagged"
-                if not p.tagged
-                else "admit-all"
-            )
-            up = snap.port(self.node, name).up
+        for row in self.cfg.rows("/interface/bridge/port"):
+            up = snap.port(self.node, row["interface"]).up
             out.append(
                 {
-                    ".id": f"*{k:X}",
-                    "interface": name,
-                    "bridge": self.bridge or "bridge",
-                    "pvid": str(pvid),
-                    "frame-types": frames,
-                    "ingress-filtering": "true",
+                    **row,
                     "hw": "true",
                     "hw-offload": "true",
                     "edge": "auto",
@@ -708,38 +803,13 @@ class MikroTik(HttpService):
                     "status": "in-bridge" if up else "inactive",
                     "role": "designated-port" if up else "disabled-port",
                     "inactive": b(not up),
-                    "disabled": "false",
                     "trusted": "false",
                 }
             )
         return out
 
     def bridge_vlans(self, snap: Snapshot) -> list[dict[str, str]]:
-        vids: dict[int, dict[str, list[str]]] = {}
-        for name in self.bridge_ports:
-            p = self.box.ports[name]
-            vids.setdefault(p.untagged or 1, {"tagged": [], "untagged": []})["untagged"].append(name)
-            for v in p.tagged:
-                vids.setdefault(v, {"tagged": [], "untagged": []})["tagged"].append(name)
-        cpu = {q.vlan for q in self.box.ports.values() if q.kind == "vlan" and q.parent == self.bridge}
-        out = []
-        for k, vid in enumerate(sorted(vids)):
-            tagged = (["bridge"] if vid in cpu else []) + vids[vid]["tagged"]
-            untagged = vids[vid]["untagged"] + (["bridge"] if vid == 1 else [])
-            out.append(
-                {
-                    ".id": f"*{k + 1:X}",
-                    "bridge": self.bridge or "bridge",
-                    "vlan-ids": str(vid),
-                    "tagged": "" if vid == 1 else ",".join(tagged),
-                    "untagged": "" if vid == 1 else ",".join(untagged),
-                    "current-tagged": ",".join(tagged),
-                    "current-untagged": ",".join(untagged),
-                    "dynamic": b(vid == 1),
-                    "disabled": "false",
-                }
-            )
-        return out
+        return self.cfg.bridge_vlans()
 
     def bridge_hosts(self, snap: Snapshot) -> list[dict[str, str]]:
         out = []
@@ -782,26 +852,25 @@ class MikroTik(HttpService):
 
     def vlan_ifaces(self, snap: Snapshot) -> list[dict[str, str]]:
         out = []
-        for p in self.box.ports.values():
-            if p.kind != "vlan":
-                continue
+        for v in self.cfg.rows("/interface/vlan"):
+            p = self.box.ports.get(v["name"])
             row = {
-                ".id": self.ids[p.name],
-                "name": p.name,
-                "interface": p.parent or "bridge",
-                "vlan-id": str(p.vlan),
-                "mtu": str(p.mtu),
+                ".id": v[".id"],
+                "name": v["name"],
+                "interface": v["interface"],
+                "vlan-id": v["vlan-id"],
+                "mtu": v.get("mtu", "1500"),
                 "l2mtu": "1584",
-                "mac-address": ros_mac(p.mac or self.box.mac),
+                "mac-address": ros_mac((p.mac if p else None) or self.box.mac),
                 "arp": "enabled",
                 "arp-timeout": "auto",
                 "loop-protect": "default",
                 "use-service-tag": "false",
-                "running": "true",
-                "disabled": "false",
+                "running": b(v.get("disabled") != "true"),
+                "disabled": v.get("disabled", "false"),
             }
-            if p.descr:
-                row["comment"] = p.descr
+            if v.get("comment"):
+                row["comment"] = v["comment"]
             out.append(row)
         return out
 
@@ -882,24 +951,22 @@ class MikroTik(HttpService):
     # -- IP --
     def addresses(self, snap: Snapshot) -> list[dict[str, str]]:
         out = []
-        k = 0
-        for p in self.box.ports.values():
-            for a in p.ips:
-                k += 1
-                net = ipaddress.ip_interface(a).network
-                row = {
-                    ".id": f"*{k:X}",
-                    "address": a,
-                    "network": str(net.network_address),
-                    "interface": p.name,
-                    "actual-interface": p.name,
-                    "invalid": "false",
-                    "dynamic": "false",
-                    "disabled": "false",
-                }
-                if p.descr:
-                    row["comment"] = p.descr
-                out.append(row)
+        ifaces = self.interface_names()
+        for a in self.cfg.rows("/ip/address"):
+            net = ipaddress.ip_interface(a["address"]).network
+            row = {
+                ".id": a[".id"],
+                "address": a["address"],
+                "network": a.get("network") or str(net.network_address),
+                "interface": a["interface"],
+                "actual-interface": a["interface"],
+                "invalid": b(a["interface"] not in ifaces),  # its interface was removed
+                "dynamic": "false",
+                "disabled": a.get("disabled", "false"),
+            }
+            if a.get("comment"):
+                row["comment"] = a["comment"]
+            out.append(row)
         return out
 
     def routes(self, snap: Snapshot) -> list[dict[str, str]]:
@@ -1069,30 +1136,47 @@ class MikroTik(HttpService):
         return out
 
     def dhcp_servers(self, snap: Snapshot) -> list[dict[str, str]]:
+        ifaces = self.interface_names()
         return [
             {
-                ".id": f"*{k + 1:X}",
-                "name": f"dhcp-{iface}",
-                "interface": iface,
-                "address-pool": f"pool-{iface}",
-                "lease-time": "1h" if vid == 80 else "8h" if vid == 32 else "1d",
-                "authoritative": "yes",
                 "use-radius": "no",
                 "lease-script": "",
-                "invalid": "false",
+                "invalid": b(s["interface"] not in ifaces),
                 "dynamic": "false",
-                "disabled": "false",
+                **s,
             }
-            for k, (vid, iface, _) in enumerate(self.dhcp_scopes())
+            for s in self.cfg.rows("/ip/dhcp-server")
         ]
 
     def pools(self, snap: Snapshot) -> list[dict[str, str]]:
+        return [dict(p) for p in self.cfg.rows("/ip/pool")]
+
+    def filter_rules(self, snap: Snapshot) -> list[dict[str, str]]:
         return [
-            {".id": f"*{k + 1:X}", "name": f"pool-{iface}", "ranges": f"{lo}-{hi}"}
-            for k, (_, iface, (lo, hi)) in enumerate(self.dhcp_scopes())
+            {"bytes": "0", "packets": "0", "log": "false", "log-prefix": "", "invalid": "false", **r}
+            for r in self.cfg.rows("/ip/firewall/filter")
+        ]
+
+    def address_lists(self, snap: Snapshot) -> list[dict[str, str]]:
+        return [
+            {"creation-time": local_time(snap.t), "dynamic": "false", **r}
+            for r in self.cfg.rows("/ip/firewall/address-list")
         ]
 
     def leases(self, snap: Snapshot) -> list[dict[str, str]]:
+        """The world's leases (less the static ones a change removed, with what a change set
+        on them), then the static leases changes added."""
+        out = []
+        for row in self.world_leases(snap):
+            m = row["mac-address"]
+            if m in self.cfg.lease_gone:
+                continue
+            out.append({**row, **self.cfg.lease_set.get(m, {})})
+        for r in self.cfg.rows("/ip/dhcp-server/lease"):
+            out.append({"address-lists": "", "dhcp-option": "", "status": "waiting", "dynamic": "false", **r})
+        return out
+
+    def world_leases(self, snap: Snapshot) -> list[dict[str, str]]:
         if self.node != "br-gw01":
             return []
         out = []

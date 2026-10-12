@@ -3,6 +3,7 @@ package snmptest
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/gosnmp/gosnmp"
@@ -103,6 +104,49 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Integer, 3, "1.3.6.1.2.1.17.7.1.2.2.1.3.%s", idx) // learned
 	}
 
+	// Q-BRIDGE-MIB VLANs: each VLAN's egress and untagged ports (bitmaps of
+	// bridge ports, which are ifIndexes here) and each port's PVID.
+	vlanIDs := map[uint16]string{}
+	for _, v := range d.Vlans {
+		vlanIDs[v.ID] = model.Deref(v.Name)
+	}
+	for _, iface := range d.Interfaces {
+		if iface.Vlans == nil {
+			continue
+		}
+		if u := iface.Vlans.Untagged; u != nil {
+			if _, ok := vlanIDs[*u]; !ok {
+				vlanIDs[*u] = ""
+			}
+			add(gosnmp.Gauge32, uint32(*u), "1.3.6.1.2.1.17.7.1.4.5.1.1.%d", ifIndex[iface.Name])
+		}
+		for _, t := range iface.Vlans.Tagged {
+			if _, ok := vlanIDs[t]; !ok {
+				vlanIDs[t] = ""
+			}
+		}
+	}
+	for id, name := range vlanIDs {
+		var egress, untagged []byte
+		for _, iface := range d.Interfaces {
+			if iface.Vlans == nil {
+				continue
+			}
+			bp := ifIndex[iface.Name]
+			isUntagged := model.Deref(iface.Vlans.Untagged) == id
+			if isUntagged || slices.Contains(iface.Vlans.Tagged, id) {
+				egress = setBit(egress, bp)
+			}
+			if isUntagged {
+				untagged = setBit(untagged, bp)
+			}
+		}
+		add(gosnmp.OctetString, name, "1.3.6.1.2.1.17.7.1.4.3.1.1.%d", id)
+		add(gosnmp.OctetString, egress, "1.3.6.1.2.1.17.7.1.4.3.1.2.%d", id)
+		add(gosnmp.OctetString, untagged, "1.3.6.1.2.1.17.7.1.4.3.1.4.%d", id)
+		add(gosnmp.Integer, 1, "1.3.6.1.2.1.17.7.1.4.3.1.5.%d", id)
+	}
+
 	// LLDP-MIB: local chassis/ports and remote systems.
 	if mac := model.NormMAC(d.Key); mac != "" {
 		add(gosnmp.Integer, 4, "1.0.8802.1.1.2.1.3.1.0")
@@ -143,6 +187,15 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Integer, int(*d.MemPct*10), "1.3.6.1.2.1.25.2.3.1.6.1")
 	}
 	return out
+}
+
+// setBit sets a bridge port in a Q-BRIDGE port list (port 1 = first byte's top bit).
+func setBit(list []byte, port int) []byte {
+	for len(list) <= (port-1)/8 {
+		list = append(list, 0)
+	}
+	list[(port-1)/8] |= 0x80 >> ((port - 1) % 8)
+	return list
 }
 
 // capBits encodes LLDP capabilities as BITS (other = the first byte's top bit).

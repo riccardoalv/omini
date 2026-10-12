@@ -344,7 +344,7 @@ each linked group of highlighted devices gets a **temporary dashed frame**
 with the network's name; the frames go away when the filter is cleared.
 
 VLAN 1 is listed only when it has a name. VLANs come from the integrations
-(OPNsense, MikroTik, UniFi, SNMP switches...).
+(OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, SNMP switches...).
 
 ## The networks' areas
 

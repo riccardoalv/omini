@@ -59,6 +59,10 @@ const from = ref(range0?.from ?? '')
 const to = ref(range0?.to ?? '')
 const access = ref<NetworkAccess>(current?.access ?? 'internet')
 const mdns = ref(!!current?.mdns)
+/** The router reports no mDNS repeater (null) for its networks: no toggle. */
+const canMdns = computed(
+  () => current?.mdns !== null && !props.vlans.some((v) => v.network && v.network.mdns === null),
+)
 
 // A new VLAN follows its id and gateway until the user types their own.
 let gatewayTouched = !isNew
@@ -145,7 +149,7 @@ function value(): Network | undefined {
       ? { enabled: true, from: from.value.trim(), to: to.value.trim() }
       : { enabled: false },
     access: access.value,
-    mdns: mdns.value,
+    mdns: canMdns.value ? mdns.value : undefined,
   }
 }
 
@@ -307,7 +311,7 @@ async function save(confirm = false) {
             {{ t('vlans.net.replacesRules') }}
           </p>
         </div>
-        <label class="inline mdns">
+        <label v-if="canMdns" class="inline mdns">
           <ToggleSwitch v-model="mdns" :label="t('vlans.net.mdns')" data-test="mdns" />
           <span>
             {{ t('vlans.net.mdns') }}

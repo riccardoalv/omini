@@ -36,7 +36,7 @@ import itertools
 import os
 import re
 import struct
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -765,14 +765,36 @@ def engine_section(agent: SnmpAgent, snap: Snapshot) -> Callable[[], dict[Oid, V
     return build
 
 
+QBRIDGE_STATIC = "1.3.6.1.2.1.17.7.1.4.3.1"  # .1 name, .2 egress, .4 untagged, .5 row status
+QBRIDGE_PVID = "1.3.6.1.2.1.17.7.1.4.5.1.1"
+
+
+def port_list(ports: Iterable[int]) -> bytes:
+    """A Q-BRIDGE PortList: bridge port 1 is the first byte's top bit."""
+    out = bytearray()
+    for bp in ports:
+        while len(out) <= (bp - 1) // 8:
+            out.append(0)
+        out[(bp - 1) // 8] |= 0x80 >> ((bp - 1) % 8)
+    return bytes(out)
+
+
+def in_list(data: bytes, bp: int) -> bool:
+    i = (bp - 1) // 8
+    return i < len(data) and bool(data[i] & (0x80 >> ((bp - 1) % 8)))
+
+
 def bridge_section(
     base_mac: str | None,
     ports: list[tuple[int, int]],
     fdb: list[tuple[str, int, int]],
     qbridge: bool,
     vlan_names: dict[int, str] | None = None,
+    members: list[tuple[int, int | None, tuple[int, ...]]] | None = None,
 ) -> Callable[[], dict[Oid, Value]]:
-    """BRIDGE-MIB base ports (ports = [(bridge port, ifIndex)]) and the FDB [(mac, bridge port, fdb id)]."""
+    """BRIDGE-MIB base ports (ports = [(bridge port, ifIndex)]) and the FDB [(mac, bridge port, fdb id)].
+    members [(bridge port, untagged VLAN, tagged VLANs)]: the Q-BRIDGE static table's egress and
+    untagged port lists and each port's PVID (else names only)."""
 
     def build() -> dict[Oid, Value]:
         d: dict[Oid, Value] = {
@@ -792,6 +814,14 @@ def bridge_section(
             for vid, name in (vlan_names or {}).items():
                 d[(*OI("1.3.6.1.2.1.17.7.1.4.3.1.1"), vid)] = Str(name)
                 d[(*OI("1.3.6.1.2.1.17.7.1.4.3.1.5"), vid)] = Int(1)
+                if members is not None:
+                    egress = port_list(bp for bp, u, t in members if u == vid or vid in t)
+                    untagged = port_list(bp for bp, u, _ in members if u == vid)
+                    d[(*OI("1.3.6.1.2.1.17.7.1.4.3.1.2"), vid)] = Str(egress)
+                    d[(*OI("1.3.6.1.2.1.17.7.1.4.3.1.4"), vid)] = Str(untagged)
+            for bp, u, _ in members or []:
+                if u:
+                    d[(*OI(QBRIDGE_PVID), bp)] = G32(u)
         else:
             put_table(
                 d, OI("1.3.6.1.2.1.17.4.3.1"), [(mac_oid(m), {1: Mac(m), 2: Int(bp), 3: Int(3)}) for m, bp, _ in fdb]
@@ -979,6 +1009,19 @@ class Device:
     def __init__(self, agent: SnmpAgent, node: Node) -> None:
         self.agent = agent
         self.node = node
+        # Q-BRIDGE writes (Aruba): VLANs created or renamed, and deleted ones.
+        self.vlan_names: dict[int, str] = {}
+        self.deleted: set[int] = set()
+
+    # Q-BRIDGE writes are emulated on the switches that list their port VLANs.
+    qbridge_writes = False
+
+    def vlan_name(self, snap: Snapshot, vid: int) -> str:
+        """A VLAN's name: as written over SNMP, else the design's."""
+        if self.vlan_names.get(vid):
+            return self.vlan_names[vid]
+        v = snap.design.vlans.get(("hq", vid))
+        return v.name if v else f"VLAN{vid}"
 
     def sys_name(self) -> str:
         return self.node.hostname or self.node.name
@@ -1260,6 +1303,8 @@ class CiscoIOSXE(Device):
 
 
 class ArubaOS(Device):
+    qbridge_writes = True
+
     """ArubaOS-Switch 2930F (WC.16.11)."""
 
     objid = "1.3.6.1.4.1.11.2.3.7.11.181.18"  # hpSwitchJL256A
@@ -1277,7 +1322,7 @@ class ArubaOS(Device):
         vlans = sorted({v for p in n.ports.values() for v in (p.untagged, *p.tagged) if v})
         mgmt = next(p for p in n.ports.values() if p.kind == "vlan")
         for vid in vlans:
-            name = "DEFAULT_VLAN" if vid == 1 else snap.design.vlans[("hq", vid)].name
+            name = "DEFAULT_VLAN" if vid == 1 else self.vlan_name(snap, vid)
             kw: dict[str, Any] = {"descr": name, "type": 53, "mac": n.mac, "speed": 0}
             if vid == mgmt.vlan:
                 kw.update(port=mgmt.name, ips=mgmt.ips)
@@ -1294,7 +1339,16 @@ class ArubaOS(Device):
         for p in n.ports.values():
             for v in (p.untagged, *p.tagged):
                 if v and v != 1:
-                    names[v] = snap.design.vlans[("hq", v)].name
+                    names[v] = self.vlan_name(snap, v)
+        names.update(self.vlan_names)
+        for v in self.deleted:
+            names.pop(v, None)
+        members = [
+            (bp, n.ports[r.port].untagged, n.ports[r.port].tagged)
+            for bp, _ in bports
+            for r in rows
+            if r.index == bp and r.port
+        ]
         cpu = snap.cpu(n.name)
         mem = snap.mem(n.name)
         total = 337_985_536
@@ -1338,7 +1392,7 @@ class ArubaOS(Device):
         ]
         local = [(int(p.name), p.name) for p in n.ports.values() if p.kind in ("ethernet", "sfp")]
         return [
-            (OI("1.3.6.1.2.1.17"), bridge_section(n.mac, bports, fdb, qbridge=True, vlan_names=names)),
+            (OI("1.3.6.1.2.1.17"), bridge_section(n.mac, bports, fdb, qbridge=True, vlan_names=names, members=members)),
             (OI("1.3.6.1.2.1.47"), entity_section(ent)),
             (OI("1.0.8802.1.1.2"), lldp_section(snap, n, local, by_port)),
             (OI("1.3.6.1.4.1.11"), vendor),
@@ -2308,11 +2362,18 @@ class SnmpAgent(UdpService):
         return None
 
     def set(self, pdu: Pdu, snap: Snapshot, write: bool, v1: bool = False) -> bytes:
-        """A SET: only ifAdminStatus is writable (up 1, down 2), and only with the
-        write community or the v3 user; the port goes down in the world."""
+        """A SET: ifAdminStatus (up 1, down 2) and, on switches that list their
+        port VLANs, Q-BRIDGE-MIB's static VLANs (name, egress and untagged port
+        lists, row status) and PVIDs; only with the write community or the v3
+        user, and the world's ports follow."""
         if not write:
             return self._error(pdu, 2 if v1 else 6, 1)  # noSuchName / noAccess
         rows = {r.index: r for r in self.dev.rows(snap)}
+        if self.dev.qbridge_writes and any(
+            oid[: len(OI(QBRIDGE_STATIC))] == OI(QBRIDGE_STATIC) or oid[: len(OI(QBRIDGE_PVID))] == OI(QBRIDGE_PVID)
+            for oid, _ in pdu.varbinds
+        ):
+            return self.set_vlans(pdu, rows, v1)
         admin = OI(IF_ADMIN_STATUS)
         changes = []
         for k, (oid, (tag, value)) in enumerate(pdu.varbinds, start=1):
@@ -2324,6 +2385,58 @@ class SnmpAgent(UdpService):
             changes.append((row.port, value == 1))
         for port, up in changes:
             self.dev.node.ports[port].admin_up = up
+        self._cache.clear()
+        vbs = [enc_varbind(oid, v) for oid, v in pdu.varbinds]
+        return enc_pdu(RESPONSE, pdu.reqid, 0, 0, vbs)
+
+    def set_vlans(self, pdu: Pdu, rows: dict[int, IfRow], v1: bool) -> bytes:
+        """Q-BRIDGE writes: a bridge port is its ifIndex (Aruba)."""
+        dev, ports = self.dev, self.dev.node.ports
+        by_bp = {i: r.port for i, r in rows.items() if r.port and r.type in (6, 161)}
+        static, pvid = OI(QBRIDGE_STATIC), OI(QBRIDGE_PVID)
+        for k, (oid, (tag, value)) in enumerate(pdu.varbinds, start=1):
+            if oid[: len(pvid)] == pvid and len(oid) == len(pvid) + 1:
+                port = by_bp.get(oid[-1])
+                if port is None or tag not in NUMERIC:
+                    return self._error(pdu, 2 if v1 else 17, k)
+                p = ports[port]
+                p.untagged = int(value)
+                p.tagged = tuple(t for t in p.tagged if t != int(value))
+                continue
+            if oid[: len(static)] != static or len(oid) != len(static) + 2:
+                return self._error(pdu, 2 if v1 else 17, k)
+            col, vid = oid[-2], oid[-1]
+            if col == 1:
+                dev.vlan_names[vid] = value.decode() if isinstance(value, bytes) else str(value)
+            elif col == 5:
+                if value in (4, 5):
+                    dev.deleted.discard(vid)
+                    dev.vlan_names.setdefault(vid, "")
+                elif value == 6:
+                    if any(p.untagged == vid or vid in p.tagged for p in ports.values()):
+                        return self._error(pdu, 3 if v1 else 12, k)  # inconsistentValue: in use
+                    dev.deleted.add(vid)
+                    dev.vlan_names.pop(vid, None)
+            elif col in (2, 4):
+                if not isinstance(value, bytes):
+                    return self._error(pdu, 3 if v1 else 7, k)  # wrongType
+                for bp, name in by_bp.items():
+                    p, on = ports[name], in_list(value, bp)
+                    if col == 2:  # egress: member or not (tagged until made untagged)
+                        if not on:
+                            p.tagged = tuple(t for t in p.tagged if t != vid)
+                            if p.untagged == vid:
+                                p.untagged = None
+                        elif p.untagged != vid and vid not in p.tagged:
+                            p.tagged = tuple(sorted((*p.tagged, vid)))
+                    elif on:  # untagged
+                        p.untagged = vid
+                        p.tagged = tuple(t for t in p.tagged if t != vid)
+                    elif p.untagged == vid:
+                        p.untagged = None
+                        p.tagged = tuple(sorted((*p.tagged, vid)))
+            else:
+                return self._error(pdu, 2 if v1 else 17, k)
         self._cache.clear()
         vbs = [enc_varbind(oid, v) for oid, v in pdu.varbinds]
         return enc_pdu(RESPONSE, pdu.reqid, 0, 0, vbs)

@@ -15,12 +15,15 @@ Objects served: system (board, info), network.device (status),
 network.interface (dump), iwinfo (devices, info, assoclist), luci-rpc
 (getHostHints, getDHCPLeases), file (read, list: /proc/net/arp and the
 thermal zones), hostapd.<ifname> (get_clients), session (login, access) and
-uci on the network and wireless configs (get, set, add, delete, revert,
-changes, apply with rollback, confirm, rollback), like rpcd: changes are staged per session,
-`apply` saves them and reloads the network (a port whose `config device`
-section has `enabled '0'` goes down: netifd shows it `"present": false` and
-leaves it out of the full status), and with rollback the previous file comes
-back unless `confirm` arrives within the timeout. The ports' administrative
+uci on the network, wireless, dhcp and firewall configs (get, set, add, delete,
+revert, changes, apply with rollback, confirm, rollback), like rpcd: changes are
+staged per session, `apply` saves them and reloads the network (a port whose
+`config device` section has `enabled '0'` goes down: netifd shows it
+`"present": false` and leaves it out of the full status; `config bridge-vlan`
+sections turn the bridge's VLAN filtering on and show in its "bridge-vlans"),
+and with rollback the previous files come back unless `confirm` arrives within
+the timeout. The configs are built from the design on first use and then kept
+in the service instance. The ports' administrative
 state lives in the world design (Port.admin_up); everything else that changes
 comes from the world snapshot.
 """
@@ -65,7 +68,12 @@ ACL: dict[str, dict[str, list[str]]] = {
         "uci": ["get", "set", "add", "delete", "revert", "apply", "confirm", "rollback"],
     },
     # rpcd's "uci" scope: which configs the login may read and write.
-    "uci": {"network": ["read", "write"], "wireless": ["read", "write"]},
+    "uci": {
+        "network": ["read", "write"],
+        "wireless": ["read", "write"],
+        "dhcp": ["read", "write"],
+        "firewall": ["read", "write"],
+    },
     "file": {
         "/proc/net/arp": ["read"],
         "/sys/class/thermal": ["list"],
@@ -224,6 +232,8 @@ class OpenWrt(HttpService):
         # and the pending apply with rollback: (session, the files before, deadline).
         self.network: dict[str, dict[str, Any]] | None = None
         self.wireless: dict[str, dict[str, Any]] | None = None
+        self.dhcp: dict[str, dict[str, Any]] | None = None
+        self.firewall: dict[str, dict[str, Any]] | None = None
         self.staged: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
         self.pending: tuple[str, dict[str, dict[str, dict[str, Any]]], float] | None = None
         self.sections = 0
@@ -543,6 +553,7 @@ class OpenWrt(HttpService):
         off = {p for p in PORTS if not n.ports[p].admin_up}
         for p in off:
             del out[p]
+        vlans = self._bridge_vlans(snap)
         for br in ("br-lan", "br-guest"):
             p = n.ports[br]
             d = self._base("bridge", p.mac, True, True)
@@ -555,9 +566,11 @@ class OpenWrt(HttpService):
                 "ageing_time": 300,
                 "hello_time": 2,
                 "max_age": 20,
-                "vlan_filtering": False,
+                "vlan_filtering": br in vlans,
                 "multicast_querier": False,
             }
+            if br in vlans:
+                d["bridge-vlans"] = vlans[br]
             d["statistics"] = self._stats(snap, br)
             out[br] = d
         for w in WIFI_IFACES:
@@ -575,7 +588,25 @@ class OpenWrt(HttpService):
             return (OK, out[name]) if name in out else (NOT_FOUND, None)
         return OK, out
 
-    # uci (rpcd-mod-uci), the network config only
+    def _bridge_vlans(self, snap: Snapshot) -> dict[str, list[dict[str, Any]]]:
+        """netifd's view of the saved bridge-vlan sections, per bridge: ports
+        read "lan1" (untagged), "lan1:t" (tagged), "*" the PVID; "local" the
+        bridge itself (the router's CPU)."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for sec in self._network(snap).values():
+            if sec[".type"] != "bridge-vlan" or not str(sec.get("vlan", "")).isdigit():
+                continue
+            ports = sec.get("ports") or []
+            shown = []
+            for entry in ports.split() if isinstance(ports, str) else ports:
+                name, _, flags = str(entry).partition(":")
+                tagged, pvid = "t" in flags, "*" in flags
+                shown.append(name + (":" if tagged or pvid else "") + ("t" if tagged else "") + ("*" if pvid else ""))
+            local = str(sec.get("local", "1")) not in ("0", "false", "off", "no")
+            out.setdefault(str(sec.get("device")), []).append({"id": int(sec["vlan"]), "local": local, "ports": shown})
+        return out
+
+    # uci (rpcd-mod-uci): network, wireless, dhcp and firewall
 
     def _network(self, snap: Snapshot) -> dict[str, dict[str, Any]]:
         """/etc/config/network as saved: the bridges, the interfaces and a
@@ -629,8 +660,98 @@ class OpenWrt(HttpService):
             self.wireless = wl
         return self.wireless
 
+    def _dhcp(self, snap: Snapshot) -> dict[str, dict[str, Any]]:
+        """/etc/config/dhcp as saved: dnsmasq, a pool per network (the design's
+        range as start/limit) and a `config host` per static lease."""
+        if self.dhcp is None:
+            n = snap.node(self.node)
+            dh: dict[str, dict[str, Any]] = {
+                self._new_section(): {
+                    ".type": "dnsmasq",
+                    "domainneeded": "1",
+                    "localise_queries": "1",
+                    "local": "/lan/",
+                    "domain": "lan",
+                    "leasefile": "/tmp/dhcp.leases",
+                },
+            }
+            for name, dev, vid in (("lan", "br-lan", 1), ("guest", "br-guest", 3)):
+                net = ipaddress.ip_interface(n.ports[dev].ips[0]).network
+                pool = snap.design.vlans[("store", vid)].dhcp or (str(net[100]), str(net[249]))
+                first, last = (int(ipaddress.ip_address(a)) for a in pool)
+                dh[name] = {
+                    ".type": "dhcp",
+                    "interface": name,
+                    "start": str(first - int(net.network_address)),
+                    "limit": str(last - first + 1),
+                    "leasetime": "12h",
+                }
+            dh["wan"] = {".type": "dhcp", "interface": "wan", "ignore": "1"}
+            for node in snap.design.nodes.values():
+                if node.site == "store" and node.dhcp and node.static_lease and node.ip and node.mac:
+                    dh[self._new_section()] = {
+                        ".type": "host",
+                        "name": node.hostname or node.name,
+                        "mac": node.mac,
+                        "ip": node.ip,
+                    }
+            self.dhcp = dh
+        return self.dhcp
+
+    def _firewall(self, snap: Snapshot) -> dict[str, dict[str, Any]]:
+        """/etc/config/firewall as saved: OpenWrt's lan and wan zones and a guest
+        zone that reaches the internet and the router's DNS and DHCP only."""
+        if self.firewall is None:
+            fw: dict[str, dict[str, Any]] = {}
+
+            def add(**options: Any) -> None:
+                fw[self._new_section()] = options
+
+            add(**{".type": "defaults"}, syn_flood="1", input="REJECT", output="ACCEPT", forward="REJECT")
+            add(**{".type": "zone"}, name="lan", network=["lan"], input="ACCEPT", output="ACCEPT", forward="ACCEPT")
+            add(
+                **{".type": "zone"},
+                name="wan",
+                network=["wan", "wan6"],
+                input="REJECT",
+                output="ACCEPT",
+                forward="REJECT",
+                masq="1",
+                mtu_fix="1",
+            )
+            add(**{".type": "zone"}, name="guest", network=["guest"], input="REJECT", output="ACCEPT", forward="REJECT")
+            add(**{".type": "forwarding"}, src="lan", dest="wan")
+            add(**{".type": "forwarding"}, src="guest", dest="wan")
+            add(
+                **{".type": "rule"},
+                name="Allow-DHCP-Renew",
+                src="wan",
+                proto="udp",
+                dest_port="68",
+                target="ACCEPT",
+                family="ipv4",
+            )
+            add(
+                **{".type": "rule"},
+                name="Allow-Ping",
+                src="wan",
+                proto="icmp",
+                icmp_type="echo-request",
+                family="ipv4",
+                target="ACCEPT",
+            )
+            add(**{".type": "rule"}, name="Guest-DNS", src="guest", dest_port="53", target="ACCEPT")
+            add(**{".type": "rule"}, name="Guest-DHCP", src="guest", proto="udp", dest_port="67-68", target="ACCEPT")
+            self.firewall = fw
+        return self.firewall
+
     def _saved(self, snap: Snapshot) -> dict[str, dict[str, dict[str, Any]]]:
-        return {"network": self._network(snap), "wireless": self._wireless(snap)}
+        return {
+            "network": self._network(snap),
+            "wireless": self._wireless(snap),
+            "dhcp": self._dhcp(snap),
+            "firewall": self._firewall(snap),
+        }
 
     def _new_section(self) -> str:
         self.sections += 1
@@ -653,7 +774,7 @@ class OpenWrt(HttpService):
         config = args.get("config")
         if func in ("get", "set", "add", "delete", "revert", "changes"):
             if config not in files:
-                # Only the network and wireless configs exist here.
+                # Only the network, wireless, dhcp and firewall configs exist here.
                 return (PERMISSION_DENIED, None) if not self._uci_allowed(config, "read") else (NOT_FOUND, None)
             if not self._uci_allowed(config, "read" if func in ("get", "changes") else "write"):
                 return PERMISSION_DENIED, None

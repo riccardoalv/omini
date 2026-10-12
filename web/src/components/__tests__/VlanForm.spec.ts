@@ -90,6 +90,19 @@ describe('VlanForm', () => {
     expect(w.emitted('saved')).toHaveLength(1)
   })
 
+  it('has no discovery toggle when the router has no mDNS repeater', async () => {
+    vi.mocked(api.createVlan).mockResolvedValue({
+      vlan: { id: 10, name: 'IOT', devices: [] },
+      changes: [],
+    })
+    const w = form({ vlans: [{ ...lan, network: { ...lan.network!, mdns: null } }] })
+    expect(w.find('[data-test=mdns]').exists()).toBe(false)
+    await w.get('[data-test=vlan-name]').setValue('IOT')
+    await w.get('[data-test=vlan-form]').trigger('submit')
+    await flushPromises()
+    expect(vi.mocked(api.createVlan).mock.calls[0]![0].network).not.toHaveProperty('mdns', false)
+  })
+
   it('refuses a DHCP range outside the network', async () => {
     const w = form()
     await w.get('[data-test=dhcp-to]').setValue('192.168.11.20')

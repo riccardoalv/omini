@@ -228,7 +228,7 @@ def test_raw_api(world: World) -> None:
         }
         # Outside the ACL: other uci configs (rpcd's uci check), other ubus methods and any other file (rpcd's path
         # check).
-        assert rpc(url, sid, "uci", "get", {"config": "dhcp"})["result"] == [openwrt.PERMISSION_DENIED]
+        assert rpc(url, sid, "uci", "get", {"config": "rpcd"})["result"] == [openwrt.PERMISSION_DENIED]
         assert rpc(url, sid, "uci", "commit", {"config": "network"})["error"]["code"] == -32002
         assert rpc(url, sid, "uci", "get", {"config": "network", "section": "lan", "option": "proto"})["result"] == [
             0,
@@ -312,3 +312,136 @@ def test_a_wifi_on_the_lan() -> None:
         assert "Loja-Lab" in got and got["Loja-Lab"].get("vlan") is None  # the LAN
         change = {"device": "x", "kind": "wifi.delete", "value": {"ssid": "Loja-Lab"}}
         assert "Loja-Lab" not in wifi(emu.collect(API, "apply", change=change))
+
+
+def apply(emu: Emulator, kind: str, value: Any, port: str | None = None) -> dict[str, Any]:
+    change: dict[str, Any] = {"device": "x", "kind": kind, "value": value}
+    if port:
+        change["port"] = port
+    return emu.collect(API, "apply", change=change)
+
+
+def test_vlans_need_bridge_vlan_filtering() -> None:
+    # The store router's bridges do not filter VLANs: the plugin says how to turn it on, and changes nothing.
+    with Emulator(at=SAT_15, apis=[API], world=World()) as emu:
+        before = device(emu.collect(API))
+        assert "vlans" not in before and all("vlans" not in i for i in before["interfaces"])
+        for kind, value, port in (
+            ("vlan.set", {"id": 30, "name": "Cameras"}, None),
+            ("port.vlans", {"untagged": 1, "tagged": [30]}, "lan4"),
+            ("network.set", {"vlan": 30, "gateway": "10.30.30.1/24", "access": "local"}, None),
+        ):
+            out = apply(emu, kind, value, port)
+            assert "bridge br-lan does not filter VLANs" in out["error"]
+            assert "Network → Interfaces → Devices → br-lan" in out["error"]
+        after = device(emu.collect(API))
+        assert (after["networks"], after["interfaces"][0]) == (before["networks"], before["interfaces"][0])
+        assert "vlans" not in after
+
+
+def test_the_lan_and_its_fixed_addresses() -> None:
+    world = World()
+    snap = world.at(SAT_15)
+    with Emulator(at=SAT_15, apis=[API], world=world) as emu:
+        dev = device(emu.collect(API))
+        [lan] = dev["networks"]  # the guest bridge has no VLAN; the WAN is not a network
+        assert lan == {
+            "vlan": 1,
+            "name": "lan",
+            "interface": "lan",
+            "device": "br-lan",
+            "parent": "br-lan",
+            "gateway": "10.30.1.1/24",
+            "dhcp": {"enabled": True, "from": "10.30.1.100", "to": "10.30.1.200"},
+            "access": "custom",
+        }
+        fixed = {r["mac"]: r for r in dev["dhcp_reservations"]}
+        for name in ("pos-01", "pos-02"):
+            n = snap.node(name)
+            assert fixed[n.mac]["ip"] == n.ip
+
+        lan["dhcp"] = {"enabled": True, "from": "10.30.1.50", "to": "10.30.1.99"}
+        got = device(apply(emu, "network.set", lan))["networks"][0]
+        assert got["dhcp"] == {"enabled": True, "from": "10.30.1.50", "to": "10.30.1.99"}
+        assert got["access"] == "custom"  # custom: the firewall is left alone
+
+        res = {"mac": "02:00:00:aa:bb:01", "ip": "10.30.1.40", "name": "Label printer 2"}
+        fixed = {r["mac"]: r for r in device(apply(emu, "reservation.set", res))["dhcp_reservations"]}
+        assert fixed["02:00:00:aa:bb:01"] == {"mac": "02:00:00:aa:bb:01", "ip": "10.30.1.40", "name": "label-printer-2"}
+        # Confirmed: rpcd's rollback timer does not undo it.
+        emu.set_time(SAT_15 + 120)
+        dev = device(emu.collect(API))
+        assert dev["networks"][0]["dhcp"]["from"] == "10.30.1.50"
+        assert "02:00:00:aa:bb:01" in {r["mac"] for r in dev["dhcp_reservations"]}
+        fixed = device(apply(emu, "reservation.delete", {"mac": "02:00:00:aa:bb:01"}))["dhcp_reservations"]
+        assert "02:00:00:aa:bb:01" not in {r["mac"] for r in fixed}
+        assert "discovery between VLANs" in apply(emu, "network.set", {**lan, "mdns": True})["error"]
+        assert "LAN cannot be removed" in apply(emu, "network.delete", {"vlan": 1})["error"]
+
+
+def test_a_vlan_from_the_switch_port_to_the_router() -> None:
+    with Emulator(at=SAT_15, apis=[API], world=World()) as emu:
+        # The admin turns bridge VLAN filtering on in LuCI: VLAN 1 untagged on every LAN port, the LAN on br-lan.1.
+        url, sec = emu.urls[API], emu.secrets[API]
+        sid = rpc(
+            url, openwrt.NULL_SESSION, "session", "login", {"username": sec["username"], "password": sec["password"]}
+        )["result"][1]["ubus_rpc_session"]
+        ports = [f"lan{k}:u*" for k in range(1, 6)]
+        rpc(
+            url,
+            sid,
+            "uci",
+            "add",
+            {"config": "network", "type": "bridge-vlan", "values": {"device": "br-lan", "vlan": "1", "ports": ports}},
+        )
+        rpc(url, sid, "uci", "set", {"config": "network", "section": "lan", "values": {"device": "br-lan.1"}})
+        assert rpc(url, sid, "uci", "apply", {"rollback": True, "timeout": 30})["result"] == [0]
+        assert rpc(url, sid, "uci", "confirm", {})["result"] == [0]
+
+        dev = device(emu.collect(API))
+        assert [v["id"] for v in dev["vlans"]] == [1]
+        assert ifaces(dev)["lan4"]["vlans"] == {"untagged": 1}
+        assert "vlans" not in ifaces(dev)["eth1"]  # the WAN is no bridge port
+
+        dev = device(apply(emu, "vlan.set", {"id": 30, "name": "Cameras"}))
+        assert {"id": 30, "name": "Cameras"}.items() <= next(v for v in dev["vlans"] if v["id"] == 30).items()
+        dev = device(apply(emu, "port.vlans", {"untagged": 30, "tagged": None}, "lan4"))
+        assert ifaces(dev)["lan4"]["vlans"] == {"untagged": 30}
+        assert ifaces(dev)["lan5"]["vlans"] == {"untagged": 1}  # the other ports as they were
+        dev = device(apply(emu, "port.vlans", {"untagged": 1, "tagged": [30]}, "lan5"))
+        assert ifaces(dev)["lan5"]["vlans"] == {"untagged": 1, "tagged": [30]}
+
+        cams = {
+            "vlan": 30,
+            "name": "Cameras",
+            "gateway": "10.30.30.1/24",
+            "dhcp": {"enabled": True, "from": "10.30.30.100", "to": "10.30.30.200"},
+            "access": "local",
+        }
+        nets = {n["vlan"]: n for n in device(apply(emu, "network.set", cams))["networks"]}
+        assert nets[30] == {
+            **cams,
+            "name": "cameras",
+            "interface": "cameras",
+            "device": "br-lan.30",
+            "parent": "br-lan",
+        }
+        assert nets[1]["device"] == "br-lan.1"
+        nets = {n["vlan"]: n for n in device(apply(emu, "network.set", {**cams, "access": "internet"}))["networks"]}
+        assert nets[30]["access"] == "internet"
+        assert "uses VLAN 30: delete its network first" in apply(emu, "vlan.delete", {"id": 30})["error"]
+
+        emu.set_time(SAT_15 + 120)  # confirmed: nothing comes back
+        dev = device(apply(emu, "network.delete", {"vlan": 30}))
+        assert [n["vlan"] for n in dev["networks"]] == [1]
+        assert 30 in [v["id"] for v in dev["vlans"]]  # its ports still use it: the VLAN stays
+        apply(emu, "port.vlans", {"untagged": 1}, "lan4")
+        apply(emu, "port.vlans", {"untagged": 1}, "lan5")
+        dev = device(apply(emu, "vlan.delete", {"id": 30}))
+        assert [v["id"] for v in dev["vlans"]] == [1]
+        assert all(ifaces(dev)[f"lan{k}"]["vlans"] == {"untagged": 1} for k in range(1, 6))
+        # The firewall and DHCP are back as they were.
+        fw = rpc(url, sid, "uci", "get", {"config": "firewall"})["result"][1]["values"]
+        assert not [s for s in fw.values() if "cameras" in (s.get("name"), s.get("src"))]
+        dhcp = rpc(url, sid, "uci", "get", {"config": "dhcp"})["result"][1]["values"]
+        assert "cameras" not in dhcp
