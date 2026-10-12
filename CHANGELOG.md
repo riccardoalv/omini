@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/riccardoalv/omini/compare/v1.2.0...v1.3.0) (2026-10-12)
+
+
+### Features
+
+* homelab tools: fixed IPs, DNS names, wake, pause, STP, LAGs and backups ([c5f7381](https://github.com/riccardoalv/omini/commit/c5f73818d7eb06cedb89daed3460237ee1a7d349))
+* VLAN changes on every switch and router plugin ([77488f4](https://github.com/riccardoalv/omini/commit/77488f435522e6fe5f668996b0e33d3971acc98e))
+
 ## [1.2.0](https://github.com/riccardoalv/omini/compare/v1.1.0...v1.2.0) (2026-10-12)
 
 
