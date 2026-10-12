@@ -19,7 +19,7 @@ func fakeDHCP(t *testing.T) string {
 	const script = `req=$(cat)
 res=''
 case "$req" in
-  *'"action":"backup"'*) echo '{"backups":[{"device":"58:9c:fc:00:00:01","format":"text","content":"hostname fw\nsecret-free\n"}]}'; exit 0 ;;
+  *'"action":"backup"'*) printf '%s\n' '{"backups":[{"device":"58:9c:fc:00:00:01","format":"text","content":"hostname fw\nsecret-free\n"}]}'; exit 0 ;;
   *'"action":"apply"'*'"ip":"192.168.1.2"'*) res='{"mac":"00:11:22:00:00:20","ip":"192.168.1.2","name":"tv"}' ;;
   *'"action":"apply"'*'"kind":"pause.set"'*) ;;
   *'"action":"apply"'*'"kind":"wol.send"'*) ;;

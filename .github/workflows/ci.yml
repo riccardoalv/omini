@@ -59,6 +59,14 @@ jobs:
         with:
           repository: riccardoalv/omini-plugin-mercusys
           path: plugins/omini-plugin-mercusys
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-adguard
+          path: plugins/omini-plugin-adguard
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-pihole
+          path: plugins/omini-plugin-pihole
       - name: Build
         run: go build ./...
       - name: Build for Raspberry Pi (arm64, armv7)
@@ -161,6 +169,14 @@ jobs:
         with:
           repository: riccardoalv/omini-plugin-mercusys
           path: plugins/omini-plugin-mercusys
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-adguard
+          path: plugins/omini-plugin-adguard
+      - uses: actions/checkout@v7
+        with:
+          repository: riccardoalv/omini-plugin-pihole
+          path: plugins/omini-plugin-pihole
       - uses: astral-sh/setup-uv@v10.2.0
       - name: Lint
         run: |
