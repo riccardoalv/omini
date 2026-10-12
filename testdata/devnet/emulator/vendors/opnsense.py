@@ -129,6 +129,9 @@ class OPNsense(HttpService):
         # What the API changes (26.7: assignments, VLANs, Kea, rules) lives in a
         # configuration of its own, started from the design.
         path = req.path.rstrip("/")
+        if path == "/api/core/backup/download/this" and req.method == "GET":
+            xml = config.backup_xml(self._config(snap), FQDN.format(name=self.fw), snap.t)
+            return Response.text(xml, ctype="application/octet-stream")
         if req.method == "POST":
             status, out = config.post(self._config(snap), path, req.json() or {})
             return Response.json(out, status)
@@ -451,6 +454,21 @@ class OPNsense(HttpService):
                     "vlanif": p.name,
                 }
             )
+        return {"total": len(rows), "rowCount": len(rows), "current": 1, "rows": rows}
+
+    def lagg_settings(self, snap: Snapshot) -> dict[str, Any]:
+        """Interfaces → Devices → LAGG: every member, also those that are down."""
+        rows = [
+            {
+                "uuid": _uuid("lagg", p.name),
+                "laggif": p.name,
+                "members": ",".join(p.members),
+                "proto": "lacp",
+                "descr": "",
+            }
+            for p in self._n(snap).ports.values()
+            if p.kind == "lag"
+        ]
         return {"total": len(rows), "rowCount": len(rows), "current": 1, "rows": rows}
 
     def traffic(self, snap: Snapshot) -> dict[str, Any]:
@@ -1019,6 +1037,7 @@ ROUTES: dict[str, Callable[[OPNsense, Snapshot], Any]] = {
     "/api/interfaces/overview/interfaces_info/1": OPNsense.interfaces_info,
     "/api/interfaces/overview/interfaces_info": OPNsense.interfaces_info,
     "/api/interfaces/vlan_settings/search_item": OPNsense.vlan_settings,
+    "/api/interfaces/lagg_settings/search_item": OPNsense.lagg_settings,
     "/api/diagnostics/traffic/interface": OPNsense.traffic,
     "/api/diagnostics/interface/search_arp": OPNsense.arp,
     "/api/kea/leases4/search": OPNsense.kea_leases,

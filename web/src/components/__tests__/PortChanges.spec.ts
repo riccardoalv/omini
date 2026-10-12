@@ -138,8 +138,15 @@ describe('Changes in the device panel', () => {
   it('lists the changes made from Omini, failed ones included', async () => {
     vi.mocked(api.webServices).mockResolvedValue([])
     vi.mocked(api.presence).mockResolvedValue([])
-    vi.mocked(api.changeSettings).mockResolvedValue({ allow_destructive: false })
+    vi.mocked(api.changeSettings).mockResolvedValue({ allow_destructive: false, dns_domain: '' })
     vi.mocked(api.configChanges).mockResolvedValue([
+      {
+        id: 3,
+        node_id: 'dev:sw',
+        kind: 'dns.set',
+        after: { name: 'nas.lan', ip: '192.168.1.20' },
+        at: '2026-10-10T12:10:00Z',
+      },
       {
         id: 2,
         node_id: 'dev:sw',
@@ -173,9 +180,10 @@ describe('Changes in the device panel', () => {
     })
     await flushPromises()
     const items = w.findAll('[data-test=node-changes] li')
-    expect(items).toHaveLength(2)
-    expect(items[0]!.text()).toContain('Port 5: enabled: not applied: the switch did not answer')
-    expect(items[0]!.classes()).toContain('failed')
-    expect(items[1]!.text()).toContain('Port 5: disabled')
+    expect(items).toHaveLength(3)
+    expect(items[0]!.text()).toContain('DNS name nas.lan → 192.168.1.20')
+    expect(items[1]!.text()).toContain('Port 5: enabled: not applied: the switch did not answer')
+    expect(items[1]!.classes()).toContain('failed')
+    expect(items[2]!.text()).toContain('Port 5: disabled')
   })
 })

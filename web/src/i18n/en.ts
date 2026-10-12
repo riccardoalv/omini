@@ -136,6 +136,14 @@ export default {
     tagged: 'tagged {ids}',
     module: 'Module',
     optics: 'Optics',
+    stp: {
+      forwarding: 'Forwarding',
+      blocking: 'Blocked (redundant link on standby)',
+      listening: 'Listening',
+      learning: 'Learning',
+      disabled: 'Off',
+    },
+    stpRole: '{role} port',
     trafficNow: 'Traffic now',
     band: 'Wi-Fi band',
     linkRate: '{rate} Mbps link',
@@ -297,6 +305,62 @@ export default {
     server: 'Server',
     unknown: 'Unknown',
     client: 'Client',
+  },
+  fixIp: {
+    title: 'Fix IP addresses',
+    intro:
+      'Each device keeps the address it has today, as a reservation on its router. Checked: switches, access points, servers, NAS, hypervisors, VMs, printers and UPS.',
+    none: 'Every device on DHCP already has a fixed address.',
+    on: 'on {router}',
+    proposed:
+      'Its router does not fix addresses inside the DHCP range: it gets this one at its next lease renewal.',
+    others: 'Show {n} other device on DHCP | Show {n} other devices on DHCP',
+    apply: 'Fix {n} address | Fix {n} addresses',
+    banner:
+      '{n} infrastructure device has no fixed IP. | {n} infrastructure devices have no fixed IP.',
+    bannerOthers: '{n} device on DHCP has no fixed IP. | {n} devices on DHCP have no fixed IP.',
+    open: 'Fix IPs',
+  },
+  backups: {
+    title: 'Configuration',
+    summary: '{n} versions · last {when}',
+    hint: 'Read every day and after each change Omini makes; kept when it changed. Secrets are left out where the device allows. Omini never restores it.',
+    from: 'From',
+    to: 'To',
+    byOmini: 'by Omini',
+    outside: 'outside Omini',
+    download: 'Download',
+    only: 'One version so far ({size}): differences show from the next change.',
+    same: 'The two versions are the same.',
+    skipped: '… {n} unchanged line … | … {n} unchanged lines …',
+  },
+  host: {
+    wake: 'Wake',
+    wakeHint: {
+      omini: 'Sends a Wake-on-LAN packet from Omini (same network)',
+      router: 'Asks its router to send a Wake-on-LAN packet',
+    },
+    woken: 'Wake-on-LAN packet sent. It shows online when it answers.',
+    pause: 'Pause internet',
+    pauseHint: 'The router cuts its internet; your network stays reachable.',
+    pausedNow: 'Internet paused: the router blocks it.',
+    resume: 'Resume internet',
+    resumed: 'Internet back.',
+    paused: 'Internet paused',
+  },
+  dnsName: {
+    label: 'Name',
+    on: 'on {server}',
+    edit: 'Change the name',
+    off: 'No DNS name (turned off)',
+    turnOff: 'Remove name',
+    turnOn: 'Give it a name',
+    other: 'Also {name} ({ip})',
+    missing: {
+      no_fixed_ip: 'Fix its IP and it gets a DNS name.',
+      no_server: 'No DNS server Omini manages answers for this network.',
+      no_name: 'It has no name of its own: give it one to have a DNS name.',
+    },
   },
   place: {
     title: 'Network',
@@ -593,6 +657,26 @@ export default {
         title: 'Weak optical signal on {iface} of {node}',
         detail: 'Receiving {rx_dbm} dBm, below {limit_dbm} dBm.',
       },
+      sfp_hot: {
+        title: 'Hot optical module on {iface} of {node}',
+        detail: 'At {temp_c} °C, the limit is {limit_c} °C.',
+      },
+      lag_member_down: {
+        title: '{iface} of {lag} on {node} is down',
+        detail: 'The LAG runs on fewer links: less bandwidth and no redundancy.',
+      },
+      stp_root_changed: {
+        title: 'The spanning tree root changed for {node}',
+        detail: 'It was {from}, now {to}.',
+      },
+      config_changed: {
+        title: 'The configuration of {node} changed',
+        detail: 'It changed outside Omini: see the differences in its panel, under Configuration.',
+      },
+      infra_dynamic_ip: {
+        title: '{node} has no fixed IP',
+        detail: 'It gets {ip} by DHCP: the address can change.',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -666,6 +750,16 @@ export default {
       sfp_low_rx:
         'Clean the fiber connectors and check the fiber is not bent; check the module on the other end.',
       dhcp_pool_full: 'Widen the DHCP range or shorten the lease time.',
+      sfp_hot:
+        'Check the airflow around the switch, and that the module suits the fiber and distance.',
+      lag_member_down:
+        'Check the cable and both ends of that port; a LAG member must match on both switches.',
+      stp_root_changed:
+        'A new switch may have won the election, or the old root or its link went down: set the root priority on your core switch.',
+      config_changed:
+        'If nobody you know made it, compare the versions and check who has access to the device.',
+      infra_dynamic_ip:
+        "Fix its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',
@@ -777,6 +871,7 @@ export default {
       wifi: 'Wi-Fi',
       hypervisor: 'Hypervisors',
       nas: 'NAS',
+      dns: 'DNS servers',
     },
     trust: 'Trust level',
     anyTrust: 'Any trust level',
@@ -1011,6 +1106,9 @@ export default {
       destructive: 'Allow destructive changes',
       destructiveHint:
         "Changes that cut Omini off, or the network off the internet (a switch's uplink, the router's port). Each one asks twice.",
+      domain: 'Domain of local names',
+      domainHint:
+        'Devices with a fixed IP get <name>.<domain> on your DNS server. Empty: the one your router or DNS server uses, else home.arpa.',
     },
   },
   changes: {
@@ -1033,6 +1131,22 @@ export default {
     historyEmpty: 'No changes made from Omini yet.',
     portEnabled: '{port}: enabled',
     portDisabled: '{port}: disabled',
+    done: {
+      port_vlans: '{port}: VLANs changed',
+      vlan_set: 'VLAN {id} created or renamed {name}',
+      vlan_delete: 'VLAN {id} deleted',
+      network_set: "VLAN {vlan}'s network set",
+      network_delete: "VLAN {vlan}'s network removed",
+      reservation_set: 'Fixed {ip} for {mac}',
+      reservation_delete: 'Freed the fixed address of {mac}',
+      wifi_set: 'Wi-Fi {ssid} set',
+      wifi_delete: 'Wi-Fi {ssid} removed',
+      dns_set: 'DNS name {name} → {ip}',
+      dns_delete: 'DNS name {name} removed',
+      wol_send: 'Wake-on-LAN sent to {mac}',
+      pause_set: 'Internet of {mac} paused',
+      pause_delete: 'Internet of {mac} given back',
+    },
     failed: 'not applied: {error}',
   },
 }

@@ -31,6 +31,8 @@ type Info struct {
 	Fields []model.FormField `json:"fields"`
 	// Changes it can apply to its devices (see Applier).
 	Changes []model.ChangeKind `json:"changes,omitempty"`
+	// Backup: it reads its devices' configuration (see Backuper).
+	Backup bool `json:"backup,omitempty"`
 }
 
 // Config is the user-provided configuration of one integration instance:
@@ -72,6 +74,12 @@ type Integration interface {
 	Collect(ctx context.Context, cfg Config) ([]model.Device, error)
 	// Test checks connectivity and credentials, returning a short message.
 	Test(ctx context.Context, cfg Config) (string, error)
+}
+
+// Backuper is an integration that reads each of its devices' configuration
+// as readable text, for history and differences (never restored).
+type Backuper interface {
+	Backup(ctx context.Context, cfg Config) ([]model.ConfigBackup, error)
 }
 
 // Applier is an integration that changes its devices' configuration, for the

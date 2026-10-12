@@ -178,6 +178,15 @@ def test_switch_ports(run: dict[str, Any], world: World) -> None:
     assert iface(sun, "Port 23")["tx_bytes"] > iface(sw, "Port 23")["tx_bytes"]
 
 
+def test_stp_and_no_lag(run: dict[str, Any]) -> None:
+    sw = devices(run["tue"])["br-sw01"]
+    assert iface(sw, "Port 28")["stp"] == {"state": "forwarding"}  # no port discarding: no loop
+    assert iface(sw, "Port 22")["stp"] == {"state": "disabled"}  # its link is down
+    assert "stp_root" not in sw  # the controller does not say which bridge is the root
+    # The branch switch has no LAG.
+    assert not any(i.get("lag") or i["type"] == "lag" for i in sw["interfaces"])
+
+
 def test_lldp_and_uplinks(run: dict[str, Any]) -> None:
     devs = devices(run["tue"])
     nb = {n["local_port"]: n for n in devs["br-sw01"]["neighbors"]}
@@ -319,3 +328,36 @@ def test_vlans_of_the_site_and_its_switch_ports() -> None:
         # The Default LAN is not a VLAN-only network: refused.
         assert "gateway network" in apply("vlan.delete", {"id": 1})["error"]
         assert "always has a native" in apply("port.vlans", {"untagged": None, "tagged": [30]}, "Port 20")["error"]
+
+
+def test_backup() -> None:
+    with Emulator(at=TUE, apis=["omada"], world=World()) as emu:
+        first = emu.collect("omada", "backup")
+        assert "error" not in first, first.get("error")
+        devs = devices(emu.collect("omada"))
+        backups = {b["device"]: b for b in first["backups"]}
+        assert set(backups) == {d["key"] for d in devs.values()}
+        assert {b["format"] for b in backups.values()} == {"json"}
+        content = {k: json.loads(b["content"]) for k, b in backups.items()}
+        # The site's settings go with the switch (the gateway is a MikroTik).
+        sw = devs["br-sw01"]["key"]
+        assert [k for k, c in content.items() if "site" in c] == [sw]
+        site = content[sw]["site"]
+        assert {"networks", "port_profiles", "wifi_networks"} <= set(site)
+        assert "Acme" in {w["name"] for w in site["wifi_networks"]}
+        ports = content[sw]["device"]["portList"]
+        assert [p["port"] for p in ports] == list(range(1, 29))
+        text = "".join(b["content"] for b in first["backups"])
+        assert "securityKey" not in text and "uptime" not in text and "cpuUtil" not in text
+
+        # Hours later, traffic and uptime changed, the configuration did not.
+        emu.set_time(SUN)
+        assert emu.collect("omada", "backup")["backups"] == first["backups"]
+
+        # A port's VLANs changed through Omini: the switch's backup changes, the APs' do not.
+        emu.set_time(TUE)
+        change = {"device": sw, "kind": "port.vlans", "port": "Port 20", "value": {"untagged": 40, "tagged": []}}
+        assert "error" not in emu.collect("omada", "apply", change=change)
+        after = {b["device"]: b["content"] for b in emu.collect("omada", "backup")["backups"]}
+        assert after[sw] != backups[sw]["content"]
+        assert all(after[k] == b["content"] for k, b in backups.items() if k != sw)

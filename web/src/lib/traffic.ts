@@ -15,6 +15,8 @@ export interface LinkLabel {
   at: 'middle' | 'shared'
   /** Links sharing a port show one pill for all (on the first of them). */
   hidden?: boolean
+  /** A LAG of that many ports: the pill says "2 × 10G". */
+  lag?: number
 }
 
 /** "45.2 Mbps", "1.2 Gbps", "800 kbps" */
@@ -133,6 +135,7 @@ export function linkLabels(edges: TopoEdge[], nodes: TopoNode[]): Map<string, Li
       name: portName(source, e.source_port) ?? portName(target, e.target_port),
       flow,
       at: 'middle',
+      ...(e.lag && e.lag > 1 ? { lag: e.lag } : {}),
     })
   }
   return out

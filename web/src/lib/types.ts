@@ -35,6 +35,10 @@ export interface Interface {
   vlans?: { untagged?: number; tagged?: number[] }
   /** Pluggable module (SFP...) and its readings. */
   transceiver?: Transceiver
+  /** Spanning tree state and role, when the device reports them. */
+  stp?: { state?: 'forwarding' | 'blocking' | 'listening' | 'learning' | 'disabled'; role?: string }
+  /** The LAG (bond, aggregate) this port is a member of. */
+  lag?: string
 }
 
 export interface Transceiver {
@@ -160,6 +164,13 @@ export interface Device {
   vpn_peers?: VpnPeer[]
   dhcp_pools?: { network: string; total?: number; used?: number }[]
   firewall_states?: { current?: number; limit?: number }
+  /** Local DNS names it answers (a DNS server or router). */
+  dns_records?: { name: string; ip: string }[]
+  dns_domain?: string
+  /** Devices whose internet it cuts (a router). */
+  paused?: PausedDevice[]
+  /** The spanning tree root bridge as it sees it. */
+  stp_root?: string
 }
 
 export interface TopoNode {
@@ -222,6 +233,10 @@ export interface TopoEdge {
   target_port?: string
   kind: EdgeKind
   speed_mbps?: number
+  /** A LAG of that many ports (speed_mbps is their sum). */
+  lag?: number
+  /** Spanning tree blocks one of its ports: a redundant link on standby. */
+  standby?: boolean
 }
 
 /** What the network scan can do where Omini runs (see the README). */
@@ -519,6 +534,11 @@ export type ChangeKind =
   | 'reservation.delete'
   | 'wifi.set'
   | 'wifi.delete'
+  | 'dns.set'
+  | 'dns.delete'
+  | 'wol.send'
+  | 'pause.set'
+  | 'pause.delete'
 
 /** What a network reaches through the router; custom: rules set by hand (reported only). */
 export type NetworkAccess = 'internet' | 'all' | 'local' | 'custom'
@@ -632,4 +652,72 @@ export interface VlanPlan {
   }[]
   /** Devices on the way Omini does not manage (or the router, later): by hand. */
   notes: { node_id: string; reason: 'unmanaged' | 'router' | 'unknown_port'; vlans?: number[] }[]
+}
+
+/** A device on DHCP without a reservation, on a router that can make one. */
+export interface FixCandidate {
+  node_id: string
+  label: string
+  type?: string
+  mac: string
+  ip: string
+  router: string
+  /** A switch, access point, server, NAS...: checked by default. */
+  infra: boolean
+  /** The address used instead of ip: the router refuses one inside its DHCP range. */
+  proposed?: string
+}
+
+/** One device's result when fixing many addresses. */
+export interface FixResult {
+  node_id: string
+  change?: ConfigChange
+  error?: string
+}
+
+/** What Omini may change, and the domain local names go under ('' automatic). */
+export interface ChangeSettings {
+  allow_destructive: boolean
+  dns_domain: string
+}
+
+/** A device's local DNS name, as its panel shows it. */
+export interface DnsName {
+  /** The full name Omini keeps ('' none). */
+  name?: string
+  /** Its first part: the user's, or from the device's name. */
+  label?: string
+  custom?: boolean
+  off?: boolean
+  /** The DNS server that answers it. */
+  server?: string
+  missing?: 'no_fixed_ip' | 'no_server' | 'no_name'
+  /** The names any DNS server has for the device's address. */
+  others?: { name: string; ip: string }[]
+}
+
+/** What a device's panel can do: wake it (from Omini or its router), pause its internet. */
+export interface HostActions {
+  wake: { via?: 'omini' | 'router'; router?: string }
+  can_pause: boolean
+  pause_router?: string
+}
+
+/** A device whose internet a router cuts. */
+export interface PausedDevice {
+  mac: string
+  ips?: string[]
+  name?: string
+}
+
+/** One version of a device's configuration (its content is read apart). */
+export interface Backup {
+  id: number
+  node_id: string
+  integration_id: number
+  taken_at: string
+  format: 'text' | 'json' | 'xml'
+  size: number
+  /** Omini changed the device since the version before. */
+  by_omini: boolean
 }

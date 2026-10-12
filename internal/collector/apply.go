@@ -128,6 +128,9 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 		return rec, applyErr
 	}
 	c.replaceDevices(ctx, n.IntegrationID, devices)
+	if req.Kind != model.ChangeKindWolSend {
+		c.markBackupDue(n.IntegrationID)
+	}
 	return rec, c.rebuild(ctx)
 }
 
@@ -162,6 +165,16 @@ func checkChange(n topology.Node, req ChangeRequest) (json.RawMessage, any, erro
 		return wifiSet(n, req.Value)
 	case model.ChangeKindWifiDelete:
 		return wifiDelete(n, req.Value)
+	case model.ChangeKindDnsSet:
+		return dnsSet(n, req.Value)
+	case model.ChangeKindDnsDelete:
+		return dnsDelete(n, req.Value)
+	case model.ChangeKindWolSend:
+		return wolSend(n, req.Value)
+	case model.ChangeKindPauseSet:
+		return pauseSet(n, req.Value)
+	case model.ChangeKindPauseDelete:
+		return pauseDelete(n, req.Value)
 	}
 	i := slices.IndexFunc(n.Device.Interfaces, func(i model.Interface) bool { return i.Name == req.Port })
 	if i < 0 {
@@ -471,6 +484,11 @@ func offers(d *model.Device, k model.ChangeKind) bool {
 		return len(d.Networks) > 0
 	case model.ChangeKindWifiSet, model.ChangeKindWifiDelete:
 		return len(d.WifiNetworks) > 0
+	case model.ChangeKindDnsSet, model.ChangeKindDnsDelete:
+		// A DNS server reports its names (an empty list too) or its domain.
+		return d.DnsRecords != nil || d.DnsDomain != nil
+	case model.ChangeKindWolSend, model.ChangeKindPauseSet, model.ChangeKindPauseDelete:
+		return len(d.Networks) > 0
 	}
 	return false
 }

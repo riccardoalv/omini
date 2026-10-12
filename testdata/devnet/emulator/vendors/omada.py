@@ -24,6 +24,11 @@ What is emulated, as the controller answers it:
   ``portList`` (Get switch info) and ``PUT .../ports/{port}/profile`` (Set
   profile for given port): see ``omada_lan``. The statistics show each port's
   profile name and PVID from them.
+- Each switch port's ``portStatus.stpDiscarding`` (spanning tree: none
+  discarding, the branch has no loop) and ``lagPort`` in its port list (the
+  branch switch has no LAG). The SSIDs carry their WPA password
+  (``pskSetting.securityKey``), as the controller shows it to an
+  administrator application.
 
 Error codes: -44106 wrong client id / secret, -44111 bad grant type, -44112
 expired token, -44113 invalid token, -1001 invalid parameters, -1600 unknown
@@ -279,7 +284,11 @@ class Omada(HttpService):
                         "security": 2 if s.security == "wpa2-enterprise" else 3,
                         "broadcast": True,
                         "vlanSetting": {"mode": 1, "customConfig": {"vlanId": s.vlan}},
-                        "pskSetting": {"versionPsk": 2, "encryptionPsk": 3},
+                        "pskSetting": {
+                            "versionPsk": 2,
+                            "encryptionPsk": 3,
+                            "securityKey": f"{s.name.lower()}-{hashlib.sha256(s.name.encode()).hexdigest()[:8]}",
+                        },
                         "ssidEnable": True,
                     }
                 )
@@ -287,7 +296,8 @@ class Omada(HttpService):
 
     def wireless(self, parts: list[str], req: Request) -> Response:
         """Wireless network: the site's WLAN group and its SSIDs (list, create,
-        update-basic-config, enable, delete). The password is never shown back."""
+        update-basic-config, enable, delete). The password is shown back, as
+        the controller does to an administrator application."""
         if len(parts) < 3 or parts[0] != "sites" or parts[2] != "wireless-network":
             return err(-1600, "Unsupported request path.", 404)
         if parts[1] != self.site_id:
@@ -311,8 +321,8 @@ class Omada(HttpService):
                 ):
                     return err(-1001, "Invalid request parameters.")
                 self.ssid_ids += 1
-                made = {k: v for k, v in body.items() if k != "pskSetting"}
-                made.update({"ssidId": f"ssid{self.ssid_ids:04d}", "ssidEnable": True, "pskSetting": {"versionPsk": 2}})
+                made = dict(body)
+                made.update({"ssidId": f"ssid{self.ssid_ids:04d}", "ssidEnable": True})
                 rows.append(made)
                 return ok(None)
         m = None
@@ -329,7 +339,7 @@ class Omada(HttpService):
             rows.remove(row)
             return ok(None)
         if req.method == "PATCH" and m[1] == ["update-basic-config"]:
-            row.update({k: v for k, v in body.items() if k != "pskSetting"})
+            row.update(body)
             return ok(None)
         if req.method == "PATCH" and m[1] == ["enable"]:
             row["ssidEnable"] = bool(body.get("ssidEnable"))

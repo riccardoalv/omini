@@ -30,6 +30,15 @@ choices and the reasons behind them.
   maps the network and changes the configuration of the devices whose
   integration supports it. Changes are added one at a time, simplest
   first; see [Configuration changes](#configuration-changes).
+- **Omini does not replace a device's own interface** (maintainer's rule,
+  2026-10-12): a change belongs in Omini when it spans several devices at
+  once (a VLAN on the router, the switches and the access points) or is
+  easier centralized (it needs what only Omini knows: the topology, the
+  catalog, every vendor at once). A setting of one device that its own
+  interface already does well (a service restart, a port's speed, an access
+  point's channel) stays there. Features are for a **simple homelab** (a
+  router, a switch or two, access points, a hypervisor): simple to use and
+  to build, not niche or enterprise.
 - **Devices without an API** are inferred from what other devices see (ARP,
   DHCP, MAC tables), or read by an optional scraping plugin.
 - **License** MIT. Nothing that would change that is shipped: nmap (NPSL) is
@@ -80,7 +89,10 @@ choices and the reasons behind them.
   documented and **checked at start**; the scan shows it ("On this server")
   and a "discovery is limited" alert says what is missing.
 - **nmap** is a separate, single, built-in integration that runs the host's
-  nmap in the background; it can also scan one device from its panel.
+  nmap in the background; it can also scan one device from its panel. The
+  README's and the installation guide's examples set `OMINI_NMAP=install`
+  (maintainer's choice, 2026-10-12): the container installs Debian's nmap on
+  start, so Omini still does not ship it.
 - **Flows** (NetFlow v5/v9, IPFIX, sFlow) are a single built-in integration:
   Omini only listens; exporters are configured by the user.
 
@@ -214,6 +226,11 @@ tested with fixtures). The rules that are easy to break:
 - **Rules are pure functions of the topology** returning keys and
   parameters; **texts are translated in the UI**, never built on the server.
   An alert opens, refreshes and resolves by its key.
+- **Offline after two failed rounds** (maintainer's choice, 2026-10-12): a
+  device whose integration failed once shows offline on the map at once, but
+  `device_offline` (and `integration_failed`) opens only when it fails a
+  second round in a row: a device busy for a moment (a Mercusys unit cutting
+  an answer short) is no critical alert.
 - **Popups** (maintainer's rule) for open critical and warning alerts, each
   with what to do; closing one hides it until it comes back.
 - **Fast Ethernet** warns about wired end devices at 100 Mbps, but not about
@@ -279,9 +296,11 @@ button where the thing is, not a configuration screen.
 - **A disabled port** shows as "Disabled" (not "No link") with an **Enable**
   button; the client that was on it stays there, offline.
 - **Not planned** (maintainer's rule): jumbo frames, port mirroring, rate
-  limits, QoS, IGMP snooping and DHCP snooping. Risky changes (creating VLANs
-  and trunks, LAGs, global STP, management IP, password, firmware, restoring
-  a backup, factory reset) wait for a later decision.
+  limits, QoS, IGMP snooping and DHCP snooping; and, decided 2026-10-11,
+  **firmware updates, factory reset, device passwords, the management IP and
+  HA pairs** (OPNsense/pfSense CARP sync): Omini does not change them, they
+  stay in the device's own interface. Other risky changes (LAGs, global STP,
+  restoring a backup) wait for a later decision.
 - **Order**: enable/disable a port (done: SNMP, Horaco, MikroTik, UniFi,
   Omada, OpenWrt), then VLANs (below), the port's name, rebooting a device,
   configuration backups with history, then reading STP, LAGs and SFP modules
@@ -395,6 +414,139 @@ does the rest on every device.
   the devnet's OPNsense taking writes), the VLAN's port panel, reservations
   and moving a device, mDNS, then Wi-Fi per VLAN; the other switch plugins'
   `port.vlans` in between as they come.
+
+## Homelab tools
+
+Features the maintainer chose (2026-10-11 and 12) for a simple homelab, all
+built on 2026-10-12: each spans several devices or is easier centralized (see
+[Product](#product)). Order of work: fixing addresses, DNS names,
+Wake-on-LAN, pausing the internet, STP and LAGs, then backups. Only Horaco is
+tested on real hardware; the plugins' READMEs list what was taken from the
+vendors' documentation. Each follows [Configuration changes](#configuration-changes):
+declared by the plugin, confirmed, applied, verified, saved and kept in the
+device's history. **Fix IP, Wake and Pause internet are buttons on the
+device's panel** (maintainer's rule); fixing addresses also has a button
+for many devices at once.
+
+### Fix the infrastructure's addresses
+
+- **On the device's panel**, the **Network** section's "Fix IP" (there since
+  phase 2) keeps the current address and, with it, the DNS name below.
+- **One button for many**, "Fix infrastructure IPs", in the map menu's **DNS & DHCP**
+  tab, opens a list of the devices that still get their address by DHCP
+  (their MAC is in a router's leases and has no reservation) and whose type
+  is infrastructure: switch, access point, server, NAS, hypervisor, virtual
+  machine, printer and UPS. Each has a checkbox (all on); other devices can
+  be added from the same list. Applying makes one `reservation.set` per
+  device on the router that serves it, each its own change in the history.
+- **The current address is kept** (maintainer's choice, over "always outside
+  the pool"): nothing changes for the device. When the router refuses a
+  reservation inside its DHCP range (pfSense with ISC), Omini proposes a free
+  address outside the range, shown in the list before applying, and says the
+  device takes it at its next lease renewal.
+- **Alert** `infra_dynamic_ip` (info): an infrastructure device on DHCP with
+  no reservation, with the same button.
+- Needs nothing new from the plugins: OPNsense, pfSense, MikroTik and OpenWrt
+  already have `reservation.set`.
+
+### Local DNS names
+
+- **A device with a fixed address gets a name** (maintainer's choice, over
+  every named device): `<name>.<domain>`, the name as Omini shows it in
+  lowercase with spaces as dashes (`nas`, `living-room-ap`). Fixing an
+  address creates it, renaming the device changes it, freeing the address
+  removes it. The device's panel shows the name next to the address, and the
+  name can be edited or turned off per device.
+- **The domain** is the one the router already hands out (its system or DHCP
+  domain); without one, `home.arpa` (RFC 8375). Settings can change it.
+- **Where the record goes**: the DNS server the device's network hands out
+  by DHCP, which Omini already reads. If it is **AdGuard Home** or
+  **Pi-hole** (new plugins, maintainer's requirement), the record goes there;
+  if it is the router, to the router. One server per network; Omini never
+  writes the same name to two.
+- **Changes** `dns.set` `{name, ip}` and `dns.delete` `{name}`; integrations
+  report `Device.dns_records` `[{name, ip}]`. Records set by hand are
+  imported and shown, and changed only when the user edits them in Omini.
+- **Integrations**: AdGuard Home (rewrites: `/control/rewrite/list|add|delete`,
+  basic auth), Pi-hole v6 (`/api/config/dns/hosts`, an application
+  password), OPNsense (Unbound host overrides, or dnsmasq hosts),
+  pfSense (DNS resolver host overrides), MikroTik (`/ip/dns/static`), OpenWrt
+  (`dhcp` `domain` sections). AdGuard Home's and Pi-hole's DHCP leases and
+  query counts per client are read too, as their plugins' collection.
+
+### Wake-on-LAN
+
+- **A "Wake" button** on the panel of an offline device that has a MAC.
+- **On Omini's own networks** Omini sends the magic packet itself (UDP
+  broadcast to port 9 on the interface in that network). **On another
+  network** (maintainer's choice) it asks the router of that network: change
+  `wol.send` `{mac, ip}` (the router picks the interface whose network holds
+  `ip`) on OPNsense (its os-wol plugin), pfSense,
+  MikroTik (`/tool/wol`) and OpenWrt (etherwake). Without either, there is
+  no button.
+- It is not a configuration change: nothing to verify or save. The history
+  of the device records it, and the panel shows when the device comes back
+  online.
+
+### Pause a device's internet
+
+- **A "Pause internet" button** on a client's panel; "Resume" undoes it. The
+  device still reaches its own network (the NAS, the printer); only the
+  internet is cut. Paused devices show a pause mark on the map and are listed
+  in the device drawer.
+- **On the router that serves the device**: one list of paused addresses
+  (OPNsense and pfSense alias `omini_paused`, MikroTik address list, OpenWrt
+  ipset) and one rule blocking it toward the WANs, both marked "Omini".
+  Changes `pause.set` `{mac, ips, name}` and `pause.delete` `{mac}`;
+  routers report `Device.paused` `[{mac, ips, name}]`. When a paused device
+  gets another address, Omini updates the list in the next round. Open
+  connections are cut where the router can (firewall states).
+- **Protected**: Omini's own host, the router and network devices cannot be
+  paused.
+
+### STP and LAGs on the map
+
+- **Read-only** (creating LAGs and changing STP stay out). SFP modules are
+  already read (`sfp_low_rx`); a hot module is added: `sfp_hot` (warning)
+  above the module's own high alarm, or 70 °C without one.
+- **STP**: each port reports its state and role (`Interface.stp`
+  `{state: forwarding|blocking|learning|disabled, role: root|designated|alternate|backup}`)
+  from BRIDGE-MIB (SNMP), MikroTik, UniFi, Omada and OpenWrt. A link whose
+  port is blocking is drawn as **standby** (dashed, no traffic) with its
+  reason (the map is a tree: a redundant cable that is not a device's uplink
+  is not drawn; its port shows "blocked" in the port's card). Alert
+  `stp_root_changed` (warning, an hour): the root bridge a switch sees changed.
+- **LAGs**: a member port reports its LAG (`Interface.lag`, the LAG's name);
+  from IEEE8023-LAG-MIB (SNMP), MikroTik bonds, UniFi and Omada aggregates,
+  OPNsense lagg and OpenWrt bonds. The cables of a LAG between two devices
+  are one link whose pill shows its ports and their speed ("2 × 1G"); the
+  port keeps its name, so the link's traffic is its counters. Alert
+  `lag_member_down` (warning): a member is down while the LAG is up.
+
+### Configuration backups with history
+
+- **What**: each device's configuration as readable text, for history and
+  differences, never for restoring (restoring stays out). The plugin builds
+  it: the device's own text export where there is one (OPNsense
+  `config.xml`, MikroTik `/export` without sensitive values, OpenWrt's uci
+  files), else its settings as sorted JSON (UniFi, Omada, Proxmox guests and
+  networks, Horaco). Plugin method `backup`, declared in the manifest; SNMP
+  devices have none.
+- **When**: once a day, and after every change Omini makes on the device. A
+  version is kept only when it differs from the last one.
+- **Not every integration can**: pfSense's REST API has no configuration
+  export (only through its shell command endpoint, which Omini does not ask
+  for), and SNMP devices have none; UniFi and Omada keep the site's settings
+  in one device's backup (the gateway's, else the lowest MAC), so a site
+  change is one change.
+- **Kept**: in SQLite, compressed and encrypted like credentials (a
+  configuration holds secrets); the last 50 versions per device. Only the
+  admin sees and downloads them; they never reach logs.
+- **Where**: a **Configuration** section in the device's panel with the
+  versions (date, "by Omini" or "outside Omini"), the differences between
+  any two, and a download.
+- **Alert** `config_changed` (info): a version differs from the previous
+  one and Omini made no change on that device in between.
 
 ## DNS and DHCP
 

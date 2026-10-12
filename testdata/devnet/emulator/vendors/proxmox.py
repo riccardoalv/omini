@@ -777,6 +777,17 @@ class Proxmox(HttpService):
             )
         if g.name.startswith("lab-"):
             cfg["tags"] = "lab"
+            # Lab VMs come from the cloud-init template: PVE keeps the password
+            # hashed and the SSH keys URL-encoded in the config.
+            salt = f"{int(h01('salt', g.name) * 2**48):012x}"
+            cfg.update(
+                {
+                    "ide2": f"ceph-vm:vm-{g.vmid}-cloudinit,media=cdrom",
+                    "ciuser": "acme",
+                    "cipassword": f"$5${salt}$" + f"{int(h01('pw', g.name) * 2**160):040x}",
+                    "sshkeys": "ssh-ed25519%20AAAAC3NzaC1lZDI1NTE5AAAAIAcmeLab%20it%40acme.example",
+                }
+            )
         for nic in nics:
             parts = [f"virtio={nic['mac'].upper()}", f"bridge={nic['bridge']}", "firewall=1"]
             if nic["tag"]:

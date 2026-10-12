@@ -2253,6 +2253,9 @@ APIS: dict[str, dict[str, Any]] = {
         "tls": True,
         "units": ["halo-wh-01", "halo-wh-02", "halo-wh-03"],
     },
+    # DNS servers with local names: AdGuard Home (the Home Assistant add-on) and Pi-hole (Docker on docker01).
+    "adguard": {"kind": "adguard", "node": "homeassistant", "ip": "10.10.50.10", "port": 3000, "tls": False},
+    "pihole": {"kind": "pihole", "node": "docker01", "ip": "10.10.20.50", "port": 8089, "tls": False},
     # SNMP agents (UDP 161).
     "snmp-core-sw01": {"kind": "snmp", "node": "core-sw01", "ip": "10.10.10.5", "port": 161, "v3": True},
     "snmp-sw-f1-01": {"kind": "snmp", "node": "sw-f1-01", "ip": "10.10.10.21", "port": 161},

@@ -61,8 +61,12 @@ type Change struct {
 
 type ChangeKind string
 
+const ChangeKindDnsDelete ChangeKind = "dns.delete"
+const ChangeKindDnsSet ChangeKind = "dns.set"
 const ChangeKindNetworkDelete ChangeKind = "network.delete"
 const ChangeKindNetworkSet ChangeKind = "network.set"
+const ChangeKindPauseDelete ChangeKind = "pause.delete"
+const ChangeKindPauseSet ChangeKind = "pause.set"
 const ChangeKindPortEnabled ChangeKind = "port.enabled"
 const ChangeKindPortVlans ChangeKind = "port.vlans"
 const ChangeKindReservationDelete ChangeKind = "reservation.delete"
@@ -71,6 +75,7 @@ const ChangeKindVlanDelete ChangeKind = "vlan.delete"
 const ChangeKindVlanSet ChangeKind = "vlan.set"
 const ChangeKindWifiDelete ChangeKind = "wifi.delete"
 const ChangeKindWifiSet ChangeKind = "wifi.set"
+const ChangeKindWolSend ChangeKind = "wol.send"
 
 var enumValues_ChangeKind = []interface{}{
 	"port.enabled",
@@ -83,6 +88,11 @@ var enumValues_ChangeKind = []interface{}{
 	"reservation.delete",
 	"wifi.set",
 	"wifi.delete",
+	"dns.set",
+	"dns.delete",
+	"wol.send",
+	"pause.set",
+	"pause.delete",
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -129,6 +139,75 @@ func (j *Change) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// A device's configuration as readable text, for history and differences (never
+// restored).
+type ConfigBackup struct {
+	// Content corresponds to the JSON schema field "content".
+	Content string `json:"content" yaml:"content"`
+
+	// Key of the device it belongs to, as collect reports it.
+	Device string `json:"device" yaml:"device"`
+
+	// Format corresponds to the JSON schema field "format".
+	Format ConfigBackupFormat `json:"format" yaml:"format"`
+}
+
+type ConfigBackupFormat string
+
+const ConfigBackupFormatJson ConfigBackupFormat = "json"
+const ConfigBackupFormatText ConfigBackupFormat = "text"
+const ConfigBackupFormatXml ConfigBackupFormat = "xml"
+
+var enumValues_ConfigBackupFormat = []interface{}{
+	"text",
+	"json",
+	"xml",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *ConfigBackupFormat) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_ConfigBackupFormat {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_ConfigBackupFormat, v)
+	}
+	*j = ConfigBackupFormat(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *ConfigBackup) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["content"]; raw != nil && !ok {
+		return fmt.Errorf("field content in ConfigBackup: required")
+	}
+	if _, ok := raw["device"]; raw != nil && !ok {
+		return fmt.Errorf("field device in ConfigBackup: required")
+	}
+	if _, ok := raw["format"]; raw != nil && !ok {
+		return fmt.Errorf("field format in ConfigBackup: required")
+	}
+	type Plain ConfigBackup
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = ConfigBackup(plain)
+	return nil
+}
+
 // Vendor-neutral snapshot of one network device, as collected by an integration.
 type Device struct {
 	// Arp corresponds to the JSON schema field "arp".
@@ -154,6 +233,14 @@ type Device struct {
 
 	// DNS checks of the servers of this network (network scan).
 	DnsChecks []DnsCheck `json:"dns_checks,omitempty,omitzero" yaml:"dns_checks,omitempty"`
+
+	// The local domain the device hands out or answers for (e.g. "home.arpa"), when
+	// it has one.
+	DnsDomain *string `json:"dns_domain,omitempty,omitzero" yaml:"dns_domain,omitempty"`
+
+	// Local DNS names the device (a DNS server or router) answers, set by hand or by
+	// Omini.
+	DnsRecords []DnsRecord `json:"dns_records,omitempty,omitzero" yaml:"dns_records,omitempty"`
 
 	// Fdb corresponds to the JSON schema field "fdb".
 	Fdb []FdbEntry `json:"fdb,omitempty,omitzero" yaml:"fdb,omitempty"`
@@ -215,6 +302,9 @@ type Device struct {
 	// OSVersion corresponds to the JSON schema field "os_version".
 	OSVersion *string `json:"os_version,omitempty,omitzero" yaml:"os_version,omitempty"`
 
+	// Devices whose internet the router cuts (pause.set).
+	Paused []PausedDevice `json:"paused,omitempty,omitzero" yaml:"paused,omitempty"`
+
 	// Role corresponds to the JSON schema field "role".
 	Role *DeviceRole `json:"role,omitempty,omitzero" yaml:"role,omitempty"`
 
@@ -226,6 +316,10 @@ type Device struct {
 
 	// Mounted file systems / volumes.
 	Storage []Storage `json:"storage,omitempty,omitzero" yaml:"storage,omitempty"`
+
+	// Bridge ID of the spanning tree root as the device sees it (e.g.
+	// "32768.aa:bb:cc:dd:ee:ff").
+	StpRoot *string `json:"stp_root,omitempty,omitzero" yaml:"stp_root,omitempty"`
 
 	// Swap in use.
 	SwapPct *float64 `json:"swap_pct,omitempty,omitzero" yaml:"swap_pct,omitempty"`
@@ -599,6 +693,36 @@ func (j *DnsQuery) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// A local DNS name.
+type DnsRecord struct {
+	// IP corresponds to the JSON schema field "ip".
+	IP string `json:"ip" yaml:"ip"`
+
+	// Fully qualified, e.g. "nas.home.arpa".
+	Name string `json:"name" yaml:"name"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *DnsRecord) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["ip"]; raw != nil && !ok {
+		return fmt.Errorf("field ip in DnsRecord: required")
+	}
+	if _, ok := raw["name"]; raw != nil && !ok {
+		return fmt.Errorf("field name in DnsRecord: required")
+	}
+	type Plain DnsRecord
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = DnsRecord(plain)
+	return nil
+}
+
 // Switch forwarding table entry: this MAC was learned on this port.
 type FdbEntry struct {
 	// MAC corresponds to the JSON schema field "mac".
@@ -935,6 +1059,9 @@ type Interface struct {
 	// Addresses assigned to the interface, with prefix length (192.168.1.1/24).
 	IPs []string `json:"ips,omitempty,omitzero" yaml:"ips,omitempty"`
 
+	// Name of the LAG (bond, aggregate) this port is a member of.
+	Lag *string `json:"lag,omitempty,omitzero" yaml:"lag,omitempty"`
+
 	// MAC corresponds to the JSON schema field "mac".
 	MAC *MACAddress `json:"mac,omitempty,omitzero" yaml:"mac,omitempty"`
 
@@ -958,6 +1085,9 @@ type Interface struct {
 
 	// SpeedMbps corresponds to the JSON schema field "speed_mbps".
 	SpeedMbps *uint64 `json:"speed_mbps,omitempty,omitzero" yaml:"speed_mbps,omitempty"`
+
+	// Stp corresponds to the JSON schema field "stp".
+	Stp *PortStp `json:"stp,omitempty,omitzero" yaml:"stp,omitempty"`
 
 	// Transceiver corresponds to the JSON schema field "transceiver".
 	Transceiver *Transceiver `json:"transceiver,omitempty,omitzero" yaml:"transceiver,omitempty"`
@@ -1326,6 +1456,10 @@ type NetworkDhcp struct {
 	// First address of the range.
 	From *string `json:"from,omitempty,omitzero" yaml:"from,omitempty"`
 
+	// false: the router refuses a reservation (fixed address) inside the range;
+	// absent: it accepts one.
+	ReserveInRange *bool `json:"reserve_in_range,omitempty,omitzero" yaml:"reserve_in_range,omitempty"`
+
 	// Last address of the range.
 	To *string `json:"to,omitempty,omitzero" yaml:"to,omitempty"`
 }
@@ -1372,9 +1506,40 @@ func (j *Network) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// A device whose internet the router cuts.
+type PausedDevice struct {
+	// Its current addresses, which the router blocks.
+	IPs []string `json:"ips,omitempty,omitzero" yaml:"ips,omitempty"`
+
+	// MAC corresponds to the JSON schema field "mac".
+	MAC MACAddress `json:"mac" yaml:"mac"`
+
+	// Name corresponds to the JSON schema field "name".
+	Name *string `json:"name,omitempty,omitzero" yaml:"name,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PausedDevice) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["mac"]; raw != nil && !ok {
+		return fmt.Errorf("field mac in PausedDevice: required")
+	}
+	type Plain PausedDevice
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = PausedDevice(plain)
+	return nil
+}
+
 type PluginAction string
 
 const PluginActionApply PluginAction = "apply"
+const PluginActionBackup PluginAction = "backup"
 const PluginActionCollect PluginAction = "collect"
 const PluginActionTest PluginAction = "test"
 
@@ -1382,6 +1547,7 @@ var enumValues_PluginAction = []interface{}{
 	"collect",
 	"test",
 	"apply",
+	"backup",
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -1408,6 +1574,10 @@ func (j *PluginAction) UnmarshalJSON(value []byte) error {
 type PluginManifest struct {
 	// Author corresponds to the JSON schema field "author".
 	Author *string `json:"author,omitempty,omitzero" yaml:"author,omitempty"`
+
+	// The plugin answers the backup action: each device's configuration as readable
+	// text.
+	Backup *bool `json:"backup,omitempty,omitzero" yaml:"backup,omitempty"`
 
 	// Configuration changes the plugin can apply (action apply).
 	Changes []ChangeKind `json:"changes,omitempty,omitzero" yaml:"changes,omitempty"`
@@ -1531,9 +1701,13 @@ func (j *PluginRequest) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// Written by the plugin as JSON to stdout. Exactly one of devices (collect),
-// message (test) or error is set.
+// Written by the plugin as JSON to stdout. Exactly one of devices (collect,
+// apply), message (test), backups (backup) or error is set.
 type PluginResponse struct {
+	// The backup action: one per device the integration reads (a controller has
+	// several).
+	Backups []ConfigBackup `json:"backups,omitempty,omitzero" yaml:"backups,omitempty"`
+
 	// Devices corresponds to the JSON schema field "devices".
 	Devices []Device `json:"devices,omitempty,omitzero" yaml:"devices,omitempty"`
 
@@ -1542,6 +1716,87 @@ type PluginResponse struct {
 
 	// Message corresponds to the JSON schema field "message".
 	Message *string `json:"message,omitempty,omitzero" yaml:"message,omitempty"`
+}
+
+// A port's spanning tree state and role.
+type PortStp struct {
+	// Role corresponds to the JSON schema field "role".
+	Role *PortStpRole `json:"role,omitempty,omitzero" yaml:"role,omitempty"`
+
+	// State corresponds to the JSON schema field "state".
+	State *PortStpState `json:"state,omitempty,omitzero" yaml:"state,omitempty"`
+}
+
+type PortStpRole string
+
+const PortStpRoleAlternate PortStpRole = "alternate"
+const PortStpRoleBackup PortStpRole = "backup"
+const PortStpRoleDesignated PortStpRole = "designated"
+const PortStpRoleDisabled PortStpRole = "disabled"
+const PortStpRoleRoot PortStpRole = "root"
+
+var enumValues_PortStpRole = []interface{}{
+	"root",
+	"designated",
+	"alternate",
+	"backup",
+	"disabled",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PortStpRole) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_PortStpRole {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_PortStpRole, v)
+	}
+	*j = PortStpRole(v)
+	return nil
+}
+
+type PortStpState string
+
+const PortStpStateBlocking PortStpState = "blocking"
+const PortStpStateDisabled PortStpState = "disabled"
+const PortStpStateForwarding PortStpState = "forwarding"
+const PortStpStateLearning PortStpState = "learning"
+const PortStpStateListening PortStpState = "listening"
+
+var enumValues_PortStpState = []interface{}{
+	"forwarding",
+	"blocking",
+	"listening",
+	"learning",
+	"disabled",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PortStpState) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_PortStpState {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_PortStpState, v)
+	}
+	*j = PortStpState(v)
+	return nil
 }
 
 // VLAN membership of a switch port.
@@ -1726,6 +1981,9 @@ type Transceiver struct {
 
 	// Module temperature.
 	TemperatureC *float64 `json:"temperature_c,omitempty,omitzero" yaml:"temperature_c,omitempty"`
+
+	// Module temperature alarm threshold (high), when the module reports it.
+	TemperatureHighC *float64 `json:"temperature_high_c,omitempty,omitzero" yaml:"temperature_high_c,omitempty"`
 
 	// Transmitted optical power.
 	TxPowerDBM *float64 `json:"tx_power_dbm,omitempty,omitzero" yaml:"tx_power_dbm,omitempty"`

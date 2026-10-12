@@ -17,8 +17,14 @@ What is emulated, as the self-hosted application answers it:
 - ``GET /api/s/<site>/...`` (session required, else 401 ``api.err.LoginRequired``;
   an unknown site → 400 ``api.err.NoSiteContext``): ``stat/device``,
   ``stat/device-basic``, ``stat/sta``, ``stat/health``, ``stat/sysinfo``,
-  ``rest/networkconf``, ``rest/wlanconf``, ``rest/portconf``; anything else →
-  404 ``api.err.NotFound``.
+  ``rest/networkconf``, ``rest/wlanconf`` (with each WPA2 personal network's
+  ``x_passphrase``, as the controller shows it to an admin), ``rest/portconf``,
+  ``get/setting`` (the site's settings, the SSH password and SNMP community
+  among them); anything else → 404 ``api.err.NotFound``.
+- The switch's port table has each port's ``stp_state`` (RSTP, all
+  forwarding: the core runs the tree) and the LAG to the core as an aggregate
+  (``op_mode: "aggregate"``: the first member ``aggregate_num_ports``, the
+  other ``aggregated_by`` the first's index).
 - ``PUT /api/s/<site>/rest/device/<_id>`` with ``{"port_overrides": [...]}``
   (the plugin's port.enabled and port.vlans changes): the controller keeps the
   overrides and provisions the switch at once, so a port whose override has
@@ -199,6 +205,7 @@ class UniFi(HttpService):
             "rest/networkconf": self.networkconf,
             "rest/wlanconf": self.wlanconf,
             "rest/portconf": self.portconf,
+            "get/setting": self.settings,
             "rest/usergroup": lambda _snap: [{"_id": oid("usergroup", "default"), "name": "Default"}],
         }.get(endpoint)
         if fn is None:
@@ -249,7 +256,8 @@ class UniFi(HttpService):
 
     def write_wifi(self, req: Request, endpoint: str) -> Response:
         """POST/PUT/DELETE rest/wlanconf[/<_id>] and rest/networkconf[/<_id>]: the
-        site's Wi-Fi networks and networks (kept here; a password is never shown back)."""
+        site's Wi-Fi networks and networks (kept here; the passphrase is shown
+        back to an admin, as the controller does)."""
         try:
             body = req.json() or {}
         except ValueError:
@@ -284,7 +292,6 @@ class UniFi(HttpService):
             if not body.get("name") or not body.get("x_passphrase") or not body.get("networkconf_id"):
                 return err("api.err.Invalid", 400)
             made = {"_id": oid("wlan", body["name"]), "site_id": SITE["_id"], **body}
-            made.pop("x_passphrase", None)
             self.wlans.append(made)
             return ok([made])
         _, _, _id = endpoint.partition("rest/wlanconf/")
@@ -295,7 +302,7 @@ class UniFi(HttpService):
             self.wlans.remove(w)
             return ok([])
         if req.method == "PUT":
-            w.update({k: v for k, v in body.items() if k != "x_passphrase"})
+            w.update(body)
             return ok([w])
         return err("api.err.NotFound", 404)
 
@@ -322,6 +329,26 @@ class UniFi(HttpService):
             }
             for name, forward in (("All", "all"), ("Disabled", "disabled"))
         ]
+
+    def settings(self, snap: Snapshot) -> list[dict[str, Any]]:
+        """The site's settings (get/setting), secrets included, as an admin sees them."""
+        rows: list[dict[str, Any]] = [
+            {"key": "country", "code": 76},
+            {"key": "locale", "timezone": "America/Sao_Paulo"},
+            {
+                "key": "mgmt",
+                "led_enabled": True,
+                "x_ssh_enabled": True,
+                "x_ssh_username": "acme-admin",
+                "x_ssh_password": "Ub1-ssh-Acme!",
+                "advanced_feature_enabled": True,
+                "alert_enabled": True,
+            },
+            {"key": "ntp", "ntp_server_1": "a.ntp.br", "ntp_server_2": "b.ntp.br", "setting_preference": "manual"},
+            {"key": "snmp", "enabled": True, "community": "acme-ro-2026", "enabledV3": False},
+            {"key": "connectivity", "enabled": True, "uplink_type": "gateway"},
+        ]
+        return [{"_id": oid("setting", r["key"]), "site_id": SITE["_id"], **r} for r in rows]
 
     def login(self, req: Request, snap: Snapshot) -> Response:
         try:
@@ -1063,4 +1090,6 @@ class UniFi(HttpService):
                     "site_id": SITE["_id"],
                 }
             )
+            if ssid.security in ("wpa2", "wpa3") and not ssid.guest:
+                out[-1]["x_passphrase"] = f"{s.lower()}-{oid('psk', s)[:8]}"
         return out

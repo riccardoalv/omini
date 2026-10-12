@@ -8,6 +8,7 @@ import { inNetwork } from '@/lib/networks'
 import type { TopoNode } from '@/lib/types'
 import { describeVlans } from '@/lib/vlans'
 
+import DnsNameRow from './DnsNameRow.vue'
 import PanelSection from './PanelSection.vue'
 import PortVlansEditor from './PortVlansEditor.vue'
 
@@ -44,10 +45,23 @@ const reservation = computed(() => {
   return undefined
 })
 
+/** An address outside the DHCP range, when the router refuses one inside. */
+const proposed = ref('')
 const ip = ref('')
 watch(
-  () => [props.node.id, reservation.value?.ip, props.node.ip],
-  () => (ip.value = reservation.value?.ip ?? props.node.ip ?? ''),
+  () => [props.node.id, reservation.value?.ip, props.node.ip, !!router.value],
+  async () => {
+    proposed.value = ''
+    ip.value = reservation.value?.ip ?? props.node.ip ?? ''
+    if (reservation.value || !router.value) return
+    const id = props.node.id
+    const list = await api.fixCandidates().catch(() => [])
+    const c = list.find((x) => x.node_id === id)
+    if (c?.proposed && props.node.id === id && !reservation.value) {
+      proposed.value = c.proposed
+      ip.value = c.proposed
+    }
+  },
   { immediate: true },
 )
 const busy = ref(false)
@@ -148,7 +162,14 @@ const shown = computed(() => !!place.value || !!router.value || !!reservation.va
       </div>
       <p v-if="router && !reservation" class="muted small">
         {{ t('place.fixHint', { router: nameOf(router.id) }) }}
+        <template v-if="proposed && ip === proposed">{{ t('fixIp.proposed') }}</template>
       </p>
+      <DnsNameRow
+        v-if="router || reservation"
+        :key="node.id + (reservation?.ip ?? '') + node.label"
+        :node-id="node.id"
+        :name-of="nameOf"
+      />
 
       <template v-if="place">
         <div class="row" data-test="port-vlan">

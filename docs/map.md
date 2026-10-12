@@ -96,8 +96,11 @@ Marks on a node:
 | Line | Meaning |
 |---|---|
 | Solid | Confirmed: LLDP/CDP/MNDP neighbors, a switch's MAC table, or a link an integration declared (a VM on its host) |
-| Dashed | Inferred (ARP, a MAC seen behind an uplink), or a site-to-site VPN tunnel between two routers |
+| Dashed | Inferred (ARP, a MAC seen behind an uplink), a site-to-site VPN tunnel between two routers, or a link spanning tree keeps on standby (one of its ports is blocked) |
 | Dotted | Wi-Fi |
+
+A link made of a LAG (bond, aggregate) shows its number of ports and their
+speed on its pill: "2 × 10G".
 
 ### Where a device stays
 
@@ -165,7 +168,8 @@ named by generation (SFP, SFP+, SFP28, QSFP+). Hover for details; **click a
 port** to open its card:
 
 - interface, status, speed, duplex, media, connector, traffic and errors,
-- its VLANs (untagged and tagged),
+- its VLANs (untagged and tagged), the LAG it belongs to and its spanning tree
+  state (in red when blocked: a redundant link on standby),
 - the SFP module, when reported: vendor, part, type, temperature, voltage,
   bias, Tx and Rx power (Rx in red below the module's alarm threshold, or
   below -20 dBm when it has none),
@@ -193,6 +197,38 @@ the reason, unless **Settings → Changes → Allow destructive changes** is on,
 and then it asks twice. Omini finds where it runs by itself (the device with
 one of its machine's MACs or addresses); in a container with a network of its
 own it cannot, and then only the way to the internet is protected.
+
+**Buttons for the device** (next to Pin), when its network allows them:
+
+- **Wake** (an offline device with a MAC): a Wake-on-LAN packet, sent by
+  Omini on its own networks, or by the router of the device's network
+  (OPNsense with os-wol, pfSense, MikroTik, OpenWrt with etherwake). It is
+  kept in the device's **Changes**; the device shows online when it answers.
+- **Pause internet** / **Resume internet** (a client on a network whose router
+  Omini manages: OPNsense 26.7+, pfSense, MikroTik, OpenWrt): the router blocks
+  its addresses toward the internet; your own networks stay reachable. If the
+  device gets another address, Omini blocks the new one after the next round.
+  Omini's own host and network devices are never paused. A paused device has
+  a pause mark on the map and is listed at the top of the device list.
+
+**Network**, for a device a managed router serves: **Fix this address** (a
+DHCP reservation on the router, keeping its address; a router that refuses
+reservations inside its DHCP range, like pfSense, gets a free address outside
+it, proposed in the field) and its **DNS name**: with a fixed address the
+device gets `<name>.<domain>` on the DNS server its network uses (AdGuard
+Home or Pi-hole when the network's DHCP hands them out, else the router). The
+name comes from the device's name ("Living Room TV" → `living-room-tv`) and
+follows it when you rename the device; the pencil sets another, **Remove
+name** takes it away. The domain is the one the router or DNS server uses,
+else `home.arpa`; **Settings → Changes → Domain of local names** sets one.
+Other names the DNS servers have for the address are listed below.
+
+**Configuration**, folded, for a device whose integration keeps backups: the
+versions of its configuration, read every day and after each change Omini
+makes, kept when they changed (the last 50), each marked **by Omini** or
+**outside Omini**. Pick two to see the lines removed and added; **Download**
+saves one. Secrets are left out where the device allows it. Omini never
+restores a configuration.
 
 **Extras**, folded, when an integration reports them: services (stopped ones first),
 VPN peers (WireGuard, OpenVPN, IPsec: connected, endpoint, last handshake,
@@ -236,7 +272,8 @@ then takes it out, showing the plan before applying. Each VLAN can have a **Wi-F
 name (the VLAN's by default), password and on or off, created on every access
 point or controller Omini manages (UniFi, Omada, OpenWrt); the password goes
 to them only. From a device's panel (**Network**) you can **fix its address**
-(a DHCP reservation on the router) and **move it to another VLAN** (its
+(a DHCP reservation on the router; many at once with **Fix IPs** in the DNS &
+DHCP tab) and **move it to another VLAN** (its
 switch port changes, with the plan; others on the same port move too). A
 Proxmox VM or container moves by its own network device (its tag), with the
 switch port of its host tagged on the way; the host's bridge must be VLAN
@@ -374,7 +411,8 @@ network:
 - a search box and filters: all, online, offline, only randomized MACs,
 - rename, pin, hide or unhide,
 - select several and **Delete selected** (phones with randomized MACs can
-  leave many entries behind).
+  leave many entries behind),
+- above it, the devices whose internet is paused (click one to open it).
 
 Click a name to close the drawer and open that device on the map, centered,
 its group unfolded.

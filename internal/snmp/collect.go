@@ -116,6 +116,12 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err := collectVlans(c, &d, ifNames); err != nil {
 		log.Debug("vlans unavailable", "err", err)
 	}
+	if err := collectStp(c, &d, ifNames); err != nil {
+		log.Debug("spanning tree unavailable", "err", err)
+	}
+	if err := collectLag(c, &d, ifNames); err != nil {
+		log.Debug("link aggregation unavailable", "err", err)
+	}
 	if err := collectLLDP(c, &d, ifNames); err != nil {
 		log.Debug("lldp unavailable", "err", err)
 	}

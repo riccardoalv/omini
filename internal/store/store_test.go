@@ -182,3 +182,17 @@ func TestDHCPFingerprintsAreKept(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestSettingsWithPrefix(t *testing.T) {
+	s := open(t)
+	ctx := context.Background()
+	for k, v := range map[string]string{"dns_name:aa": "nas", "dns_name:bb": "-", "dns_domain": "lan"} {
+		if err := s.SetSetting(ctx, k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.SettingsWithPrefix(ctx, "dns_name:")
+	if err != nil || len(got) != 2 || got["dns_name:aa"] != "nas" || got["dns_name:bb"] != "-" {
+		t.Fatalf("%v %v", got, err)
+	}
+}

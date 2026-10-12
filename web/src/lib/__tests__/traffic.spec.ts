@@ -56,6 +56,14 @@ describe('traffic', () => {
     expect(nodeFlow(client('x'), byId)).toBeUndefined()
   })
 
+  it('tells a LAG by its number of ports', () => {
+    const labels = linkLabels(
+      [edge(fw.id, 'a', { source_port: 'igb3', speed_mbps: 2000, lag: 2 })],
+      [fw, client('a')],
+    )
+    expect(labels.get(`${fw.id}>a`)?.lag).toBe(2)
+  })
+
   it('gives one pill to a shared port and its own pill to a direct link', () => {
     const nodes = [fw, wan, client('a'), client('b'), client('modem')]
     const edges = [

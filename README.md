@@ -24,12 +24,13 @@ It runs as one small container (amd64 and arm64, a Raspberry Pi is enough) and k
 - **A topology map that builds itself.** LLDP neighbors, MAC tables, ARP, DHCP leases and Wi-Fi client lists are cross-referenced to work out each device's switch port or access point. Devices without an API (unmanaged switches, APs in bridge mode) are inferred from what the others see.
 - **Live traffic.** Every device shows its current download and upload, every link its port and speed. Click a link or port for its history (per minute for a day, hourly for a year). "Who talks to whom" comes from NetFlow, IPFIX or sFlow.
 - **A device panel.** CPU, memory, temperatures, disks, pending updates, a front view of the ports (RJ45 and SFP, colored by speed, with optics readings), VLANs, VPN peers, services, DHCP pools, the devices it talks to, and its presence timeline.
-- **Alerts that matter.** 33 rules: device offline, WAN gateway down, duplicate IP, links that fell to 100 Mbps or half duplex, flapping ports, low SFP signal, full disks, hot CPUs, insecure services, full DHCP pools, a burst of new devices, and more. Each comes with a hint on what to do.
+- **Alerts that matter.** 39 rules: device offline, WAN gateway down, duplicate IP, links that fell to 100 Mbps or half duplex, flapping ports, low SFP signal or a hot module, a LAG member down, a new spanning tree root, full disks, hot CPUs, insecure services, full DHCP pools, a burst of new devices, infrastructure without a fixed IP, a configuration changed outside Omini, and more. Each comes with a hint on what to do.
 - **VLANs for the whole network.** Omini keeps the network's VLANs and applies them to your switches: put a port in a VLAN and it creates the VLAN and tags it on every switch up to the router, showing first what changes on each.
 - **DNS & DHCP.** A tab in the map's menu with the DHCP servers, pools and leases and each DNS server's answers, checked every round: no DHCP answer, a rogue DHCP server, a DNS server down, slow or not resolving local names are alerts.
 - **Notifications.** Telegram, e-mail, generic webhooks (signed with HMAC), Slack, Discord and ntfy, grouped per device and never repeated while an alert flaps.
 - **Your map, your way.** Left-to-right or top-down layout, named and colored areas, fold any node's children into a bubble, VLAN and subnet filter, hide devices. Export to PNG, SVG, draw.io or JSON.
-- **Integrations and a plugin store.** One-click plugins for OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, Proxmox (clusters included), Mercusys Halo and Horaco switches. Any GitHub repository can be installed too, and plugins are short Python scripts.
+- **Homelab tools on every device.** Fix the IP of every switch, access point and server in one click; each device with a fixed IP gets a local DNS name on your router, AdGuard Home or Pi-hole; wake a device (Wake-on-LAN) or pause its internet from its panel; every device's configuration is backed up daily and after each change, with the differences between versions.
+- **Integrations and a plugin store.** One-click plugins for OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, Proxmox (clusters included), Mercusys Halo, Horaco switches, AdGuard Home and Pi-hole. Any GitHub repository can be installed too, and plugins are short Python scripts.
 - **Built for your server.** Single admin login, credentials encrypted at rest, dark and light themes, English and Brazilian Portuguese.
 
 ## Screenshots
@@ -53,7 +54,7 @@ With Docker (Docker Hub `riccardoalv/omini` or `ghcr.io/riccardoalv/omini`):
 
 ```bash
 docker run -d --name omini --network host --restart unless-stopped \
-  -v omini-data:/data riccardoalv/omini:latest
+  -v omini-data:/data -e OMINI_NMAP=install riccardoalv/omini:latest
 ```
 
 Or with Compose:
@@ -69,8 +70,10 @@ services:
       - ./data:/data
     environment:
       TZ: UTC
-      # OMINI_NMAP: install   # installs nmap on start, for OS and version detection
+      OMINI_NMAP: install # installs nmap on start, for OS and version detection
 ```
+
+`OMINI_NMAP=install` installs [nmap](https://nmap.org) from Debian's packages when the container starts, for operating systems and service versions; leave it out to run without nmap (Omini does not ship it: its license is not MIT).
 
 Open `http://<your-server>:8080`, create the admin account, and watch the map fill in. Then add your firewall, switches or hypervisor in **Integrations → Add integration**.
 
@@ -99,7 +102,7 @@ Host networking matters: in a Docker bridge network Omini only sees Docker's own
 | [Proxmox VE](https://github.com/riccardoalv/omini-plugin-proxmox) | Plugin, API token | Nodes and clusters, VMs and containers on the right host, CPU, memory, disks |
 | [Horaco](https://github.com/riccardoalv/omini-plugin-horaco) | Plugin, web interface | Ports, RJ45/SFP, counters, MAC table (switches without SNMP) |
 | [Mercusys Halo](https://github.com/riccardoalv/omini-plugin-mercusys) | Plugin, local web interface | Mesh units, Wi-Fi and wired clients, bands, traffic |
-| MikroTik, UniFi, Omada, OpenWrt, pfSense | Plugins | See [Integrations](docs/integrations.md) for each one's status |
+| MikroTik, UniFi, Omada, OpenWrt, pfSense, AdGuard Home, Pi-hole | Plugins | See [Integrations](docs/integrations.md) for each one's status |
 
 Plugins live in their own repositories and are installed from the built-in store. Each shows a publisher badge (official or community) and a trust level given by the maintainers (plug-and-play, stable, experimental or unverified), as described in [Plugin review](docs/plugin-review.md).
 
@@ -132,9 +135,7 @@ The core is written in **Go**: discovery, SNMP, topology, traffic and the API in
 
 ## Roadmap
 
-- VLANs on the router: the VLAN's interface and subnet, its DHCP pool and basic firewall rules (OPNsense first); VLANs on MikroTik, UniFi, Omada, OpenWrt and SNMP switches
-- A "DNS and DHCP" screen with checks every round
-- More configuration changes, one at a time: a port's name, reboot, configuration backups with history
+- More configuration changes, one at a time: a port's name, reboot
 - More plugins and SNMP profiles, reviewed on real hardware
 - More languages
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass, field
 from typing import Any
+from xml.sax.saxutils import escape
 
 from ..model import Node
 from ..world import Snapshot
@@ -31,6 +32,21 @@ class Config:
     aliases: dict[str, dict[str, Any]] = field(default_factory=dict)
     reservations: dict[str, dict[str, Any]] = field(default_factory=dict)
     mdns: dict[str, str] = field(default_factory=lambda: {"enabled": "0", "interfaces": "lan"})
+    # Unbound is the DNS server; its host overrides start with one set by hand.
+    overrides: dict[str, dict[str, Any]] = field(
+        default_factory=lambda: {
+            "override-00000000-0000-4000-8000-000000000001": {
+                "enabled": "1",
+                "hostname": "intranet",
+                "domain": "acme.local",
+                "rr": "A",
+                "server": "10.10.20.10",
+                "description": "Intranet (IT)",
+            }
+        }
+    )
+    woken: list[dict[str, str]] = field(default_factory=list)  # os-wol packets sent
+    killed: list[str] = field(default_factory=list)  # state kills asked
     ids: Any = field(default_factory=lambda: itertools.count(1))
 
     def uuid(self, kind: str) -> str:
@@ -190,6 +206,41 @@ def post(cfg: Config, path: str, body: dict[str, Any]) -> tuple[int, dict[str, A
         uid = cfg.uuid("alias")
         cfg.aliases[uid] = dict(body.get("alias") or {})
         return 200, {**ok, "uuid": uid}
+    if path == "/api/unbound/settings/add_host_override":
+        h = body.get("host") or {}
+        if not h.get("hostname") or not h.get("domain"):
+            return 200, {"result": "failed", "validations": {"host.hostname": "A host name and domain are required."}}
+        uid = cfg.uuid("override")
+        cfg.overrides[uid] = dict(h)
+        return 200, {**ok, "uuid": uid}
+    if path.startswith("/api/unbound/settings/set_host_override/"):
+        if last not in cfg.overrides:
+            return 200, {"result": "failed"}
+        cfg.overrides[last].update(body.get("host") or {})
+        return 200, ok
+    if path.startswith("/api/unbound/settings/del_host_override/"):
+        cfg.overrides.pop(last, None)
+        return 200, {"result": "deleted"}
+    if path == "/api/wol/wol/set":
+        wake = body.get("wake") or {}
+        if wake.get("interface") not in cfg.assigned or not wake.get("mac"):
+            return 200, {"result": "failed", "validations": {"wake.interface": "Unknown interface."}}
+        cfg.woken.append(dict(wake))
+        return 200, {"status": "OK"}
+    if path.startswith("/api/firewall/alias/set_item/"):
+        if last not in cfg.aliases:
+            return 200, {"result": "failed"}
+        cfg.aliases[last].update(body.get("alias") or {})
+        return 200, ok
+    if path.startswith("/api/firewall/alias/del_item/"):
+        name = (cfg.aliases.get(last) or {}).get("name")
+        if any(name in (r.get("source_net"), r.get("destination_net")) for r in cfg.rules.values()):
+            return 200, {"result": "failed", "validations": {"alias.name": "Alias in use."}}
+        cfg.aliases.pop(last, None)
+        return 200, {"result": "deleted"}
+    if path == "/api/diagnostics/firewall/kill_states":
+        cfg.killed.append(str(body.get("filter") or ""))
+        return 200, {"result": "ok", "dropped_states": 0}
     if last in ("reconfigure", "apply"):
         return 200, {"status": "ok"}
     return 404, {"errorMessage": "Endpoint not found", "errorTitle": "Error"}
@@ -212,4 +263,46 @@ def get(cfg: Config, path: str) -> dict[str, Any] | None:
         return rows(cfg.reservations)
     if path == "/api/mdnsrepeater/settings/get":
         return {"mdnsrepeater": dict(cfg.mdns)}
+    if path == "/api/unbound/settings/get":
+        return {"unbound": {"general": {"enabled": "1", "port": "53"}}}
+    if path == "/api/unbound/settings/search_host_override":
+        return rows(cfg.overrides)
+    if path == "/api/dnsmasq/settings/get":  # installed, but DNS and DHCP are Unbound's and Kea's
+        return {"dnsmasq": {"enable": "0", "port": "0", "domain": ""}}
+    if path == "/api/dnsmasq/settings/search_host":
+        return rows({})
     return None
+
+
+def _xml(tag: str, value: Any, indent: str) -> str:
+    if isinstance(value, dict):
+        inner = "".join(_xml(k, v, indent + "  ") for k, v in value.items())
+        return f"{indent}<{tag}>\n{inner}{indent}</{tag}>\n"
+    return f"{indent}<{tag}>{escape(str(value))}</{tag}>\n"
+
+
+def backup_xml(cfg: Config, hostname: str, now: float) -> str:
+    """config.xml as /api/core/backup/download/this answers it: the configuration
+    the API changed, and the revision stamp of the last save (which moves)."""
+    host, _, domain = hostname.partition(".")
+    doc = {
+        "version": "26.7",
+        "system": {"hostname": host, "domain": domain},
+        "interfaces": cfg.assigned,
+        "vlans": {f"vlan{i}": v for i, v in enumerate(cfg.vlans.values())},
+        "Kea": {"general": cfg.kea, "subnets": {f"subnet{i}": s for i, s in enumerate(cfg.subnets.values())}},
+        "reservations": {f"reservation{i}": r for i, r in enumerate(cfg.reservations.values())},
+        "filter": {f"rule{i}": r for i, r in enumerate(cfg.rules.values())},
+        "aliases": {f"alias{i}": a for i, a in enumerate(cfg.aliases.values())},
+        "unbound": {f"host{i}": h for i, h in enumerate(cfg.overrides.values())},
+        "mdnsrepeater": cfg.mdns,
+    }
+    body = "".join(_xml(k, v, "  ") for k, v in doc.items())
+    revision = (
+        "  <revision>\n"
+        "    <username>root@10.10.10.50</username>\n"
+        f"    <time>{now:.4f}</time>\n"
+        "    <description>/api/core/backup/download/this</description>\n"
+        "  </revision>\n"
+    )
+    return f'<?xml version="1.0"?>\n<opnsense>\n{body}{revision}</opnsense>\n'

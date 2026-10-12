@@ -16,6 +16,8 @@ vi.mock('@/lib/api', async (orig) => {
       ...mod.api,
       reserve: vi.fn<typeof mod.api.reserve>(),
       unreserve: vi.fn<typeof mod.api.unreserve>(),
+      fixCandidates: vi.fn<typeof mod.api.fixCandidates>(),
+      dnsName: vi.fn<typeof mod.api.dnsName>().mockResolvedValue({ missing: 'no_fixed_ip' }),
       vlans: vi.fn<typeof mod.api.vlans>().mockResolvedValue([]),
     },
   }
@@ -63,6 +65,7 @@ describe('NetworkPlace', () => {
     prefs.openSections = ['place']
     vi.mocked(api.reserve).mockResolvedValue({} as never)
     vi.mocked(api.unreserve).mockResolvedValue({} as never)
+    vi.mocked(api.fixCandidates).mockResolvedValue([])
   })
 
   it('fixes the address the router serves', async () => {
@@ -71,6 +74,27 @@ describe('NetworkPlace', () => {
     await flushPromises()
     expect(api.reserve).toHaveBeenCalledWith('mac:tv', '192.168.1.50')
     expect(w.emitted('applied')).toHaveLength(1)
+  })
+
+  it('proposes an address outside the DHCP range when the router needs one', async () => {
+    vi.mocked(api.fixCandidates).mockResolvedValue([
+      {
+        node_id: 'mac:tv',
+        label: 'tv',
+        mac: 'aa:bb:cc:00:00:01',
+        ip: '192.168.1.50',
+        router: 'dev:fw',
+        infra: false,
+        proposed: '192.168.1.2',
+      },
+    ])
+    const w = mountPlace([fw(), sw, tv])
+    await flushPromises()
+    expect(w.get('[data-test=fixed-ip] input').element).toHaveProperty('value', '192.168.1.2')
+    expect(w.text()).toContain('inside the DHCP range')
+    await w.get('[data-test=fix-ip]').trigger('click')
+    await flushPromises()
+    expect(api.reserve).toHaveBeenCalledWith('mac:tv', '192.168.1.2')
   })
 
   it('shows a fixed address and frees it', async () => {

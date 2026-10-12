@@ -155,6 +155,10 @@ describe('edgeLook', () => {
     expect(edgeLook(edge('a', 'b', { kind: 'wifi' })).dotted).toBe(true)
     expect(edgeLook(edge('a', 'b', { kind: 'lldp' })).dashed).toBe(false)
   })
+
+  it('dashes a link spanning tree keeps on standby', () => {
+    expect(edgeLook(edge('a', 'b', { kind: 'lldp', standby: true })).dashed).toBe(true)
+  })
 })
 
 describe('graph helpers', () => {

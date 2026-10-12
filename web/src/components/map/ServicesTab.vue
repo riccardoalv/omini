@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { CircleAlert, CircleCheck, CircleHelp, Search } from 'lucide-vue-next'
+import { CircleAlert, CircleCheck, CircleHelp, Lock, Search } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api } from '@/lib/api'
 import { formatAgo, formatUptime } from '@/lib/format'
 import { displayName } from '@/lib/names'
-import type { DhcpOffer, DnsQuery, ServicesView, TopoNode } from '@/lib/types'
+import type { DhcpOffer, DnsQuery, FixCandidate, ServicesView, TopoNode } from '@/lib/types'
 import { DNS_SLOW_MS } from '@/lib/services'
+
+import FixIpDialog from './FixIpDialog.vue'
 
 /**
  * DNS and DHCP: what the network scan's checks found every round (who answers
@@ -23,14 +25,23 @@ const loading = ref(true)
 const query = ref('')
 
 const tab = ref<'dhcp' | 'dns'>('dhcp')
+/** Devices on DHCP without a reservation; the infrastructure ones get a button. */
+const candidates = ref<FixCandidate[]>([])
+const infraCount = computed(() => candidates.value.filter((c) => c.infra).length)
+const fixing = ref(false)
 function go(t: 'dhcp' | 'dns') {
   tab.value = t
 }
 
 async function load() {
   try {
-    const [view, topo] = await Promise.all([api.services(), api.topology()])
+    const [view, topo, fix] = await Promise.all([
+      api.services(),
+      api.topology(),
+      api.fixCandidates().catch(() => []),
+    ])
     data.value = view
+    candidates.value = fix
     nodes.value = new Map(topo.topology.nodes.map((n) => [n.id, n]))
   } finally {
     loading.value = false
@@ -155,6 +166,26 @@ function errorText(e?: string) {
     <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
 
     <template v-else-if="tab === 'dhcp'">
+      <div v-if="candidates.length" class="card fix" data-test="fix-ip">
+        <Lock :size="18" />
+        <span>
+          {{
+            infraCount
+              ? t('fixIp.banner', { n: infraCount }, infraCount)
+              : t('fixIp.bannerOthers', { n: candidates.length }, candidates.length)
+          }}
+        </span>
+        <button class="btn" type="button" data-test="fix-open" @click="fixing = true">
+          {{ t('fixIp.open') }}
+        </button>
+      </div>
+      <FixIpDialog
+        v-if="fixing"
+        :candidates="candidates"
+        :name-of="name"
+        @close="fixing = false"
+        @applied="load"
+      />
       <div v-if="!checks.length && !pools.length" class="card empty" data-test="dhcp-empty">
         <p>{{ t('services.dhcp.none') }}</p>
         <p class="muted small">{{ t('services.dhcp.noneHint') }}</p>
@@ -369,6 +400,15 @@ function errorText(e?: string) {
 }
 .status .ok svg {
   color: var(--ok);
+}
+.fix {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.fix span {
+  flex: 1;
 }
 .status .bad {
   border-color: var(--danger);

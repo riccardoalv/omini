@@ -17,6 +17,10 @@ A plugin registers its functions and calls ``plugin.run()``::
         ...  # apply, check, save
         return collect(cfg)
 
+    @plugin.backup  # optional: only with ``backup: true`` in plugin.yaml
+    def backup(cfg):
+        return [ConfigBackup(device="key", format="text", content="...")]
+
     if __name__ == "__main__":
         plugin.run()
 
@@ -37,7 +41,7 @@ from typing import Any, TextIO
 
 from pydantic import ValidationError
 
-from omini_sdk.models import Change, Device, PluginRequest
+from omini_sdk.models import Change, ConfigBackup, Device, PluginRequest
 
 PROTOCOLS = (1,)
 
@@ -75,6 +79,7 @@ class Config(dict[str, Any]):
 CollectFn = Callable[[Config], Iterable[Device | dict[str, Any]]]
 TestFn = Callable[[Config], str]
 ApplyFn = Callable[[Config, Change], Iterable[Device | dict[str, Any]]]
+BackupFn = Callable[[Config], Iterable[ConfigBackup | dict[str, Any]]]
 
 
 def _devices(items: Iterable[Device | dict[str, Any]]) -> dict[str, Any]:
@@ -84,11 +89,17 @@ def _devices(items: Iterable[Device | dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _backups(items: Iterable[ConfigBackup | dict[str, Any]]) -> dict[str, Any]:
+    backups = [b if isinstance(b, ConfigBackup) else ConfigBackup.model_validate(b) for b in items]
+    return {"backups": [b.model_dump(mode="json", exclude_none=True) for b in backups]}
+
+
 class Plugin:
     def __init__(self) -> None:
         self._collect: CollectFn | None = None
         self._test: TestFn | None = None
         self._apply: ApplyFn | None = None
+        self._backup: BackupFn | None = None
 
     def collect(self, fn: CollectFn) -> CollectFn:
         """Registers the function that returns the devices."""
@@ -106,6 +117,15 @@ class Plugin:
         save it to the startup configuration, and return the device as read
         after the change."""
         self._apply = fn
+        return fn
+
+    def backup(self, fn: BackupFn) -> BackupFn:
+        """Registers the function that returns each device's configuration as
+        readable text (``backup: true`` in the manifest): the device's own
+        text export where it has one, else its settings as sorted JSON. Omini
+        keeps the versions and shows their differences; it never restores
+        them. Leave out what the device marks as secret when it can."""
+        self._backup = fn
         return fn
 
     def handle(self, raw: str) -> tuple[dict[str, Any], int]:
@@ -131,6 +151,10 @@ class Plugin:
                 if req.change is None:
                     raise PluginError("no change to apply")
                 return _devices(self._apply(cfg, req.change)), 0
+            if action == "backup":
+                if self._backup is None:
+                    raise PluginError("this plugin has no @plugin.backup function")
+                return _backups(self._backup(cfg)), 0
             if self._test is None:
                 raise PluginError("this plugin has no @plugin.test function")
             return {"message": str(self._test(cfg))}, 0

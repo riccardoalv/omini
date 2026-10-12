@@ -291,6 +291,21 @@ var migrations = []string{
 	`,
 	// 22: a VLAN's network on the router (gateway, DHCP, access, mDNS).
 	`ALTER TABLE vlans ADD COLUMN network TEXT NOT NULL DEFAULT ''; -- JSON model.Network ('' when none)`,
+	// 23: each device's configuration, kept when it changes (sealed: it holds secrets).
+	`
+	CREATE TABLE config_backups (
+		id             INTEGER PRIMARY KEY,
+		node_id        TEXT NOT NULL,
+		integration_id INTEGER NOT NULL,
+		taken_at       INTEGER NOT NULL, -- unix seconds
+		format         TEXT NOT NULL,    -- text, json, xml
+		sha256         TEXT NOT NULL,    -- of the plain configuration
+		size           INTEGER NOT NULL,
+		by_omini       INTEGER NOT NULL, -- Omini changed the device since the last version
+		content        TEXT NOT NULL     -- sealed (secret.Box)
+	);
+	CREATE INDEX config_backups_node ON config_backups (node_id, taken_at);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

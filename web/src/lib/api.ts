@@ -16,7 +16,13 @@ import type {
   MapArea,
   CatalogEntry,
   ChangeKind,
+  Backup,
+  ChangeSettings,
   ConfigChange,
+  DnsName,
+  HostActions,
+  FixCandidate,
+  FixResult,
   PluginIndexStatus,
   Network,
   NetworkVlan,
@@ -180,9 +186,28 @@ export const api = {
   ) => request<ConfigChange>('POST', `/api/nodes/${encodeURIComponent(nodeId)}/changes`, change),
   configChanges: (nodeId: string) =>
     request<ConfigChange[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/changes`),
-  changeSettings: () => request<{ allow_destructive: boolean }>('GET', '/api/change-settings'),
-  setChangeSettings: (input: { allow_destructive: boolean }) =>
-    request<{ allow_destructive: boolean }>('PUT', '/api/change-settings', input),
+  changeSettings: () => request<ChangeSettings>('GET', '/api/change-settings'),
+  setChangeSettings: (input: Partial<ChangeSettings>) =>
+    request<ChangeSettings>('PUT', '/api/change-settings', input),
+  /** What the device's panel can do: wake it, pause its internet. */
+  hostActions: (nodeId: string) =>
+    request<HostActions>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/actions`),
+  wake: (nodeId: string) =>
+    request<ConfigChange>('POST', `/api/nodes/${encodeURIComponent(nodeId)}/wake`),
+  pause: (nodeId: string) =>
+    request<ConfigChange>('PUT', `/api/nodes/${encodeURIComponent(nodeId)}/pause`),
+  resume: (nodeId: string) =>
+    request<ConfigChange>('DELETE', `/api/nodes/${encodeURIComponent(nodeId)}/pause`),
+  /** A device's configuration versions, newest first. */
+  backups: (nodeId: string) =>
+    request<Backup[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/backups`),
+  backup: (id: number) => request<Backup & { content: string }>('GET', `/api/backups/${id}`),
+  /** A device's local DNS name. */
+  dnsName: (nodeId: string) =>
+    request<DnsName>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/dns-name`),
+  /** Sets it: a label, '' for the device's own, '-' for none. */
+  setDnsName: (nodeId: string, name: string) =>
+    request<DnsName>('PUT', `/api/nodes/${encodeURIComponent(nodeId)}/dns-name`, { name }),
   webServices: (nodeId: string) =>
     request<WebService[]>('GET', `/api/nodes/${encodeURIComponent(nodeId)}/web`),
 
@@ -248,6 +273,11 @@ export const api = {
     request<ConfigChange>('PUT', `/api/nodes/${encodeURIComponent(nodeId)}/reservation`, { ip }),
   unreserve: (nodeId: string) =>
     request<ConfigChange>('DELETE', `/api/nodes/${encodeURIComponent(nodeId)}/reservation`),
+  /** Devices on DHCP without a reservation, with the address each would keep. */
+  fixCandidates: () => request<FixCandidate[]>('GET', '/api/fix-ip'),
+  /** Fixes many addresses at once; each device has its own result. */
+  fixMany: (items: { node_id: string; ip: string }[]) =>
+    request<FixResult[]>('POST', '/api/fix-ip', { items }),
   /** What putting a port in VLANs changes on every device on the way to the router. */
   planVlans: (nodeId: string, port: string, value: PortVlans) =>
     request<VlanPlan>('POST', `/api/nodes/${encodeURIComponent(nodeId)}/vlan-plan`, {

@@ -150,6 +150,11 @@ type Edge struct {
 	TargetPort string   `json:"target_port,omitempty"`
 	Kind       EdgeKind `json:"kind"`
 	SpeedMbps  uint64   `json:"speed_mbps,omitempty"`
+	// Lag: the link is a LAG of that many ports (its ports are the LAGs'
+	// names, its speed their sum).
+	Lag int `json:"lag,omitempty"`
+	// Standby: spanning tree blocks one of its ports (a redundant link).
+	Standby bool `json:"standby,omitempty"`
 }
 
 type Topology struct {
@@ -293,6 +298,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 			t.DnsChecks = append(t.DnsChecks, d.DnsChecks...)
 		}
 	}
+	markLinks(&t)
 	return t
 }
 

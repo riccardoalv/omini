@@ -53,7 +53,17 @@ type Integration struct {
 	Name  string
 	OK    bool
 	Error string
+	// Failures is how many rounds in a row it failed: one failed round (a
+	// device busy for a moment) is no alert yet.
+	Failures int
 }
+
+// FailedRounds is how many rounds in a row an integration fails before its
+// devices are reported offline (they show offline on the map at once).
+const FailedRounds = 2
+
+// failing reports whether an integration failed long enough to be told.
+func (it Integration) failing() bool { return !it.OK && it.Failures >= FailedRounds }
 
 // NewDevice is a device seen for the first time recently.
 type NewDevice struct {
@@ -74,6 +84,9 @@ type Input struct {
 	Configured map[string]bool
 	// DiscoveryLimited: what the network scan cannot do where Omini runs.
 	DiscoveryLimited []string
+	// ConfigChanged: devices whose configuration changed without Omini
+	// recently (a new backup version Omini did not cause), and when.
+	ConfigChanged map[string]time.Time
 	// Vlans is the network's VLAN catalog, by id (nil before it exists).
 	Vlans map[uint16]string
 	// Core are the built-in integrations (network scan, nmap...): a device only
@@ -162,14 +175,17 @@ func devices(in Input) []*topology.Node {
 
 func deviceOffline(in Input, _ index) []Insight {
 	errs := map[int64]string{}
+	waiting := map[int64]bool{} // failed, but not for long enough yet
 	for _, it := range in.Integrations {
-		if !it.OK {
+		if it.failing() {
 			errs[it.ID] = it.Error
+		} else if !it.OK {
+			waiting[it.ID] = true
 		}
 	}
 	var out []Insight
 	for _, n := range devices(in) {
-		if n.Online {
+		if n.Online || waiting[n.IntegrationID] {
 			continue
 		}
 		p := map[string]any{}
@@ -190,7 +206,7 @@ func integrationFailed(in Input, _ index) []Insight {
 	}
 	var out []Insight
 	for _, it := range in.Integrations {
-		if it.OK || shown[it.ID] {
+		if !it.failing() || shown[it.ID] {
 			continue
 		}
 		out = append(out, Insight{

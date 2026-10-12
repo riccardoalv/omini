@@ -6,17 +6,24 @@ own API. Collecting only reads. The integrations that support it can also
 **change** their devices from the map; see
 [Configuration changes](decisions.md#configuration-changes):
 
-| Integration | Ports on/off | Switch VLANs (ports, create, delete) | VLAN networks (gateway, DHCP, access) and fixed addresses | Wi-Fi per VLAN |
-|---|---|---|---|---|
-| Network scan (SNMP) | yes | yes (Q-BRIDGE-MIB) | | |
-| OPNsense | | | yes (26.7+) | |
-| pfSense | | | yes | |
-| MikroTik RouterOS | yes | yes | yes | |
-| UniFi Network | yes | yes | | yes |
-| TP-Link Omada | yes | yes | | yes |
-| OpenWrt | yes | yes | yes | yes |
-| Proxmox VE | | a guest's network device | | |
-| Horaco switch | yes | yes | | |
+| Integration | Ports on/off | Switch VLANs (ports, create, delete) | VLAN networks (gateway, DHCP, access) and fixed addresses | Wi-Fi per VLAN | DNS names | Wake-on-LAN | Pause internet | Backups |
+|---|---|---|---|---|---|---|---|---|
+| Network scan (SNMP) | yes | yes (Q-BRIDGE-MIB) | | | | | | |
+| OPNsense | | | yes (26.7+) | | yes | yes (os-wol) | yes (26.7+) | yes |
+| pfSense | | | yes | | yes | yes | yes | |
+| MikroTik RouterOS | yes | yes | yes | | yes | yes | yes | yes |
+| UniFi Network | yes | yes | | yes | | | | yes |
+| TP-Link Omada | yes | yes | | yes | | | | yes |
+| OpenWrt | yes | yes | yes | yes | yes | yes (etherwake) | yes | yes |
+| Proxmox VE | | a guest's network device | | | | | | yes |
+| Horaco switch | yes | yes | | | | | | yes |
+| AdGuard Home | | | | | yes | | | yes |
+| Pi-hole | | | | | yes | | | yes |
+
+Omini also wakes devices on its own networks by itself. Spanning tree and
+LAGs are read (never changed) from SNMP (BRIDGE-MIB, IEEE8023-LAG-MIB),
+MikroTik, UniFi and Omada (spanning tree and LAGs), OPNsense, pfSense,
+OpenWrt and Proxmox (LAGs).
 
 Switch VLAN changes need the device's VLAN filtering (or 802.1Q mode) on:
 Omini never turns a global switch mode on by itself, and says where to do it. Their guides
@@ -31,6 +38,7 @@ permission is missing.
 - Plugins: [OPNsense](#opnsense) · [pfSense](#pfsense) · [MikroTik RouterOS](#mikrotik-routeros)
   · [UniFi Network](#unifi-network) · [TP-Link Omada](#tp-link-omada) · [OpenWrt](#openwrt)
   · [Proxmox VE](#proxmox-ve) · [Horaco switch](#horaco-switch) · [Mercusys Halo](#mercusys-halo)
+  · [AdGuard Home](#adguard-home) · [Pi-hole](#pi-hole)
 
 ## Adding an integration
 
@@ -139,6 +147,8 @@ hardware; reports from users are welcome.
 | Proxmox VE | [omini-plugin-proxmox](https://github.com/riccardoalv/omini-plugin-proxmox) | Hypervisor |
 | Horaco switch | [omini-plugin-horaco](https://github.com/riccardoalv/omini-plugin-horaco) | Switch |
 | Mercusys Halo | [omini-plugin-mercusys](https://github.com/riccardoalv/omini-plugin-mercusys) | Wi-Fi |
+| AdGuard Home | [omini-plugin-adguard](https://github.com/riccardoalv/omini-plugin-adguard) | DNS server |
+| Pi-hole | [omini-plugin-pihole](https://github.com/riccardoalv/omini-plugin-pihole) | DNS server |
 
 When the network scan identifies one of these devices and its integration is
 not set up, the **Integration available** alert says so.
@@ -184,7 +194,9 @@ access rules marked "Omini:", the os-mdns-repeater plugin for discovery) and
    | **System: Deny config write** | only if Omini should **not** manage networks: it blocks every write |
 
    Managing networks needs the write privileges the plugin's README lists
-   (interfaces, VLANs, Kea or dnsmasq, firewall rules and aliases).
+   (interfaces, VLANs, Kea or dnsmasq, firewall rules and aliases); so do
+   local DNS names (Unbound or dnsmasq), Wake-on-LAN (os-wol), pausing
+   devices (aliases, rules, states) and backups (Backup & Restore).
 
 2. Edit the user again and, under **API keys**, click **+**. OPNsense
    downloads a file with the key and the secret.
@@ -215,7 +227,8 @@ network** (VLAN, interface and gateway, DHCP server, access rules marked
 2. **System → User Manager → Users → Add** user `omini` with a long random
    password, and give it the `REST API - /api/v2/... GET` privileges the plugin
    lists (at least `status/system`). To manage networks, also give it the
-   write privileges the plugin's README lists; for the map alone, add
+   write privileges the plugin's README lists (also for local DNS names,
+   Wake-on-LAN and pausing devices); for the map alone, add
    **User - Config: Deny Config Write** instead.
    Temporarily add `REST API - /api/v2/auth/key POST`.
 3. Create the key as that user:
@@ -348,7 +361,7 @@ in `/etc/config`. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.js
         "file": ["read", "list"],
         "uci": ["get"]
       },
-      "uci": ["network", "wireless", "dhcp", "firewall"],
+      "uci": ["network", "wireless", "dhcp", "firewall", "system"],
       "file": {
         "/proc/net/arp": ["read"],
         "/sys/class/thermal": ["list"],
@@ -358,9 +371,13 @@ in `/etc/config`. Over SSH on the router, create `/usr/share/rpcd/acl.d/omini.js
     },
     "write": {
       "ubus": {
-        "uci": ["set", "add", "delete", "revert", "apply", "confirm", "rollback"]
+        "uci": ["set", "add", "delete", "revert", "apply", "confirm", "rollback"],
+        "file": ["stat", "exec"]
       },
-      "uci": ["network", "wireless", "dhcp", "firewall"]
+      "uci": ["network", "wireless", "dhcp", "firewall"],
+      "file": {
+        "/usr/bin/etherwake": ["list", "exec"]
+      }
     }
   }
 }
@@ -385,10 +402,16 @@ password. For the map alone, leave out the `"write"` block and the
 LuCI's Network → Interfaces → Devices; Omini never turns it on); **VLAN
 networks** (interface, gateway, dnsmasq range and a firewall zone with rules
 marked "Omini:") and **fixed addresses** (`config host`); **Wi-Fi per
-VLAN**. Each is applied with rollback: unless Omini sees the port
-change and confirms it within 30 seconds, the router restores the old
+VLAN**; **local DNS names** (dnsmasq `config domain`); **pausing a device's
+internet** (an fw4 ipset `omini_paused` and a rule "Omini pause" per LAN zone
+towards the WAN zone). Each is applied with rollback: unless Omini sees the
+port change and confirms it within 30 seconds, the router restores the old
 configuration by itself. Routers with an old switch chip (swconfig) are not
-supported for changes.
+supported for changes. **Wake-on-LAN** runs `etherwake` (install it on the
+router) through rpcd's `file exec`, which the ACL allows for that one binary
+only. **Backups** are the `network`, `wireless`, `dhcp`, `firewall` and
+`system` configs as `uci export` prints them, without Wi-Fi keys or other
+secrets (`system` is read only). Bonding interfaces are read as LAGs.
 
 ## Proxmox VE
 
@@ -442,6 +465,34 @@ Use the main unit's address and the web interface password. The plugin keeps
 its session between collections and signs in again only when asked; signing
 in may sign you out of the web interface in your browser. The local API has
 no per-client signal or link rate.
+
+## AdGuard Home
+
+Reads AdGuard Home (the standalone server or the Home Assistant add-on): its
+version, the local names it answers (DNS rewrites to an IPv4 address) and,
+when its DHCP server is on, the leases, fixed addresses and pool usage.
+Omini writes the [local DNS names](map.md#the-device-panel) of devices with a
+fixed address there when your network's DHCP hands AdGuard Home out as DNS
+(`/control/rewrite/add|update|delete`), and keeps its settings as
+configuration backups (no passwords).
+
+**Account:** the AdGuard Home user (basic auth); it has full access, so use a
+long password. In Omini: the address (`http://192.168.1.53:3000`), the user
+and the password.
+
+## Pi-hole
+
+Reads Pi-hole v6: its version, local DNS records (`dns.hosts`) and domain
+and, when its DHCP server is on, the leases, fixed addresses and pool usage.
+Omini writes the local DNS names of devices with a fixed address there when
+your network's DHCP hands Pi-hole out as DNS (`/api/config/dns/hosts`), and
+keeps its configuration as backups (no passwords or keys).
+
+**Account:** an **application password** (Settings → Web interface / API →
+Configure app password). To let it change local names, turn on
+`webserver.api.app_sudo` (Settings → All settings → Webserver and API).
+In Omini: the address (`http://pi.hole` or `http://192.168.1.53`) and the
+application password.
 
 ## Writing your own
 

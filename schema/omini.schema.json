@@ -228,6 +228,28 @@
         },
         "firewall_states": {
           "$ref": "#/$defs/FirewallStates"
+        },
+        "dns_records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DnsRecord"
+          },
+          "description": "Local DNS names the device (a DNS server or router) answers, set by hand or by Omini."
+        },
+        "dns_domain": {
+          "type": "string",
+          "description": "The local domain the device hands out or answers for (e.g. \"home.arpa\"), when it has one."
+        },
+        "paused": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PausedDevice"
+          },
+          "description": "Devices whose internet the router cuts (pause.set)."
+        },
+        "stp_root": {
+          "type": "string",
+          "description": "Bridge ID of the spanning tree root as the device sees it (e.g. \"32768.aa:bb:cc:dd:ee:ff\")."
         }
       }
     },
@@ -344,6 +366,13 @@
         },
         "transceiver": {
           "$ref": "#/$defs/Transceiver"
+        },
+        "stp": {
+          "$ref": "#/$defs/PortStp"
+        },
+        "lag": {
+          "type": "string",
+          "description": "Name of the LAG (bond, aggregate) this port is a member of."
         }
       }
     },
@@ -674,12 +703,16 @@
           "items": {
             "$ref": "#/$defs/ChangeKind"
           }
+        },
+        "backup": {
+          "type": "boolean",
+          "description": "The plugin answers the backup action: each device's configuration as readable text."
         }
       }
     },
     "ChangeKind": {
       "type": "string",
-      "description": "A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}).",
+      "description": "A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}).",
       "enum": [
         "port.enabled",
         "port.vlans",
@@ -690,7 +723,12 @@
         "reservation.set",
         "reservation.delete",
         "wifi.set",
-        "wifi.delete"
+        "wifi.delete",
+        "dns.set",
+        "dns.delete",
+        "wol.send",
+        "pause.set",
+        "pause.delete"
       ]
     },
     "Change": {
@@ -753,7 +791,7 @@
     },
     "PluginResponse": {
       "type": "object",
-      "description": "Written by the plugin as JSON to stdout. Exactly one of devices (collect), message (test) or error is set.",
+      "description": "Written by the plugin as JSON to stdout. Exactly one of devices (collect, apply), message (test), backups (backup) or error is set.",
       "additionalProperties": false,
       "properties": {
         "devices": {
@@ -767,6 +805,13 @@
         },
         "error": {
           "type": "string"
+        },
+        "backups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigBackup"
+          },
+          "description": "The backup action: one per device the integration reads (a controller has several)."
         }
       }
     },
@@ -804,7 +849,8 @@
       "enum": [
         "collect",
         "test",
-        "apply"
+        "apply",
+        "backup"
       ]
     },
     "Host": {
@@ -1091,6 +1137,10 @@
         "rx_power_low_dbm": {
           "type": "number",
           "description": "Receive power alarm threshold (low), when the module reports it."
+        },
+        "temperature_high_c": {
+          "type": "number",
+          "description": "Module temperature alarm threshold (high), when the module reports it."
         }
       }
     },
@@ -1184,6 +1234,10 @@
         "to": {
           "type": "string",
           "description": "Last address of the range."
+        },
+        "reserve_in_range": {
+          "type": "boolean",
+          "description": "false: the router refuses a reservation (fixed address) inside the range; absent: it accepts one."
         }
       }
     },
@@ -1505,6 +1559,101 @@
         "error": {
           "type": "string",
           "description": "\"timeout\", \"refused\", \"not found\" or what the resolver said."
+        }
+      }
+    },
+    "DnsRecord": {
+      "type": "object",
+      "description": "A local DNS name.",
+      "required": [
+        "name",
+        "ip"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Fully qualified, e.g. \"nas.home.arpa\"."
+        },
+        "ip": {
+          "type": "string"
+        }
+      }
+    },
+    "PausedDevice": {
+      "type": "object",
+      "description": "A device whose internet the router cuts.",
+      "required": [
+        "mac"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mac": {
+          "$ref": "#/$defs/MacAddress"
+        },
+        "ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Its current addresses, which the router blocks."
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "PortStp": {
+      "type": "object",
+      "description": "A port's spanning tree state and role.",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "forwarding",
+            "blocking",
+            "listening",
+            "learning",
+            "disabled"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "root",
+            "designated",
+            "alternate",
+            "backup",
+            "disabled"
+          ]
+        }
+      }
+    },
+    "ConfigBackup": {
+      "type": "object",
+      "description": "A device's configuration as readable text, for history and differences (never restored).",
+      "required": [
+        "device",
+        "format",
+        "content"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "text",
+            "json",
+            "xml"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string",
+          "description": "Key of the device it belongs to, as collect reports it."
         }
       }
     }

@@ -130,3 +130,82 @@ func TestReservingADevicesAddress(t *testing.T) {
 		t.Fatalf("again: %v", err)
 	}
 }
+
+// A named device gets <name>.<domain> on the DNS server when its address is
+// fixed; renaming it, turning the name off and freeing the address follow.
+func TestDNSNames(t *testing.T) {
+	coll, s, st := switchNetwork(t)
+	ctx := context.Background()
+	phone := ""
+	for _, n := range coll.State().Topology.Nodes {
+		if n.MAC == string(phoneMAC) {
+			phone = n.ID
+		}
+	}
+	name := func() collector.DNSName {
+		t.Helper()
+		got, err := coll.DNSNameOf(ctx, phone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	if got := name(); got.Missing != "no_fixed_ip" {
+		t.Fatalf("before: %+v", got)
+	}
+	// Known by its address only: no name, even with a fixed address.
+	if _, err := coll.Reserve(ctx, phone, "192.168.1.41"); err != nil || len(s.applied) != 1 {
+		t.Fatalf("reserve: %v %+v", err, s.applied)
+	}
+	if got := name(); got.Missing != "no_name" {
+		t.Fatalf("no name: %+v", got)
+	}
+	if _, err := st.UpdateInventory(ctx, phone, store.InventoryUpdate{Alias: model.Ptr("Living Room TV")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := coll.SyncDNSName(ctx, phone); err != nil {
+		t.Fatal(err)
+	}
+	last := func() model.Change { return s.applied[len(s.applied)-1] }
+	if v, ok := last().Value.(model.DnsRecord); !ok || v.Name != "living-room-tv.lan" || v.IP != "192.168.1.41" {
+		t.Fatalf("named: %+v", last())
+	}
+	n := len(s.applied)
+	if err := coll.SyncDNSName(ctx, phone); err != nil || len(s.applied) != n {
+		t.Fatalf("again: nothing to do (%v, %+v)", err, s.applied[n:])
+	}
+	// The user's name: the old one goes, the new one comes.
+	got, err := coll.SetDNSName(ctx, phone, "tv")
+	if err != nil || got.Name != "tv.lan" || !got.Custom {
+		t.Fatalf("custom: %+v %v", got, err)
+	}
+	if d, ok := s.applied[n].Value.(collector.DnsDelete); !ok || d.Name != "living-room-tv.lan" {
+		t.Fatalf("old name removed first: %+v", s.applied[n:])
+	}
+	if _, err := coll.SetDNSName(ctx, phone, "Not A Label"); !errors.Is(err, collector.ErrInvalidChange) {
+		t.Fatalf("invalid: %v", err)
+	}
+	// Turned off, then on with a domain set in Omini.
+	if got, err := coll.SetDNSName(ctx, phone, "-"); err != nil || got.Name != "" || !got.Off {
+		t.Fatalf("off: %+v %v", got, err)
+	}
+	if d, ok := last().Value.(collector.DnsDelete); !ok || d.Name != "tv.lan" {
+		t.Fatalf("off removes it: %+v", last())
+	}
+	if err := st.SetSetting(ctx, collector.DNSDomainSetting, "home.arpa"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := coll.SetDNSName(ctx, phone, ""); err != nil || got.Name != "living-room-tv.home.arpa" {
+		t.Fatalf("back on: %+v %v", got, err)
+	}
+	// Freeing the address takes the name away.
+	if _, err := coll.Unreserve(ctx, phone); err != nil {
+		t.Fatal(err)
+	}
+	if d, ok := last().Value.(collector.DnsDelete); !ok || d.Name != "living-room-tv.home.arpa" {
+		t.Fatalf("freed: %+v", last())
+	}
+}

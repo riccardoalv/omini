@@ -84,9 +84,14 @@ class Change(BaseModel):
         "reservation.delete",
         "wifi.set",
         "wifi.delete",
+        "dns.set",
+        "dns.delete",
+        "wol.send",
+        "pause.set",
+        "pause.delete",
     ]
     """
-    A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}).
+    A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}).
     """
     port: str | None = None
     """
@@ -264,6 +269,10 @@ class Transceiver(BaseModel):
     """
     Receive power alarm threshold (low), when the module reports it.
     """
+    temperature_high_c: float | None = None
+    """
+    Module temperature alarm threshold (high), when the module reports it.
+    """
 
 
 class Vlan(BaseModel):
@@ -302,6 +311,10 @@ class NetworkDhcp(BaseModel):
     to: str | None = None
     """
     Last address of the range.
+    """
+    reserve_in_range: bool | None = None
+    """
+    false: the router refuses a reservation (fixed address) inside the range; absent: it accepts one.
     """
 
 
@@ -469,6 +482,68 @@ class DnsQuery(BaseModel):
     """
 
 
+class DnsRecord(BaseModel):
+    """
+    A local DNS name.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    """
+    Fully qualified, e.g. "nas.home.arpa".
+    """
+    ip: str
+
+
+class PausedDevice(BaseModel):
+    """
+    A device whose internet the router cuts.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    mac: Annotated[str, Field(pattern="^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")]
+    """
+    Lowercase, colon separated: aa:bb:cc:dd:ee:ff.
+    """
+    ips: list[str] | None = None
+    """
+    Its current addresses, which the router blocks.
+    """
+    name: str | None = None
+
+
+class PortStp(BaseModel):
+    """
+    A port's spanning tree state and role.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    state: Literal["forwarding", "blocking", "listening", "learning", "disabled"] | None = None
+    role: Literal["root", "designated", "alternate", "backup", "disabled"] | None = None
+
+
+class ConfigBackup(BaseModel):
+    """
+    A device's configuration as readable text, for history and differences (never restored).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Literal["text", "json", "xml"]
+    content: str
+    device: str
+    """
+    Key of the device it belongs to, as collect reports it.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -536,6 +611,11 @@ class Interface(BaseModel):
     """
     vlans: PortVlans | None = None
     transceiver: Transceiver | None = None
+    stp: PortStp | None = None
+    lag: str | None = None
+    """
+    Name of the LAG (bond, aggregate) this port is a member of.
+    """
 
 
 class Neighbor(BaseModel):
@@ -689,12 +769,21 @@ class PluginManifest(BaseModel):
                 "reservation.delete",
                 "wifi.set",
                 "wifi.delete",
+                "dns.set",
+                "dns.delete",
+                "wol.send",
+                "pause.set",
+                "pause.delete",
             ]
         ]
         | None
     ) = None
     """
     Configuration changes the plugin can apply (action apply).
+    """
+    backup: bool | None = None
+    """
+    The plugin answers the backup action: each device's configuration as readable text.
     """
 
 
@@ -707,7 +796,7 @@ class PluginRequest(BaseModel):
         extra="forbid",
     )
     protocol: Annotated[int, Field(ge=1)]
-    action: Literal["collect", "test", "apply"]
+    action: Literal["collect", "test", "apply", "backup"]
     config: dict[str, Any]
     """
     Values of the manifest fields, keyed by field key.
@@ -981,11 +1070,27 @@ class Device(BaseModel):
     DNS checks of the servers of this network (network scan).
     """
     firewall_states: FirewallStates | None = None
+    dns_records: list[DnsRecord] | None = None
+    """
+    Local DNS names the device (a DNS server or router) answers, set by hand or by Omini.
+    """
+    dns_domain: str | None = None
+    """
+    The local domain the device hands out or answers for (e.g. "home.arpa"), when it has one.
+    """
+    paused: list[PausedDevice] | None = None
+    """
+    Devices whose internet the router cuts (pause.set).
+    """
+    stp_root: str | None = None
+    """
+    Bridge ID of the spanning tree root as the device sees it (e.g. "32768.aa:bb:cc:dd:ee:ff").
+    """
 
 
 class PluginResponse(BaseModel):
     """
-    Written by the plugin as JSON to stdout. Exactly one of devices (collect), message (test) or error is set.
+    Written by the plugin as JSON to stdout. Exactly one of devices (collect, apply), message (test), backups (backup) or error is set.
     """
 
     model_config = ConfigDict(
@@ -994,3 +1099,7 @@ class PluginResponse(BaseModel):
     devices: list[Device] | None = None
     message: str | None = None
     error: str | None = None
+    backups: list[ConfigBackup] | None = None
+    """
+    The backup action: one per device the integration reads (a controller has several).
+    """

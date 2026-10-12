@@ -21,8 +21,8 @@ attention) and **info** (worth knowing).
 
 | Rule | Severity | Opens when |
 |---|---|---|
-| `device_offline` | critical | A device read by an integration is offline: its integration's last collection failed. The integration's error is shown |
-| `integration_failed` | critical | An integration fails and none of its devices is on the map yet |
+| `device_offline` | critical | A device read by an integration is offline: its integration failed **two rounds in a row** (one failed round, a device busy for a moment, shows it offline on the map but is no alert yet). The integration's error is shown |
+| `integration_failed` | critical | An integration fails two rounds in a row and none of its devices is on the map yet |
 | `wan_down` | critical | A WAN gateway is down |
 | `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it) |
 | `device_rebooted` | warning | A device's uptime went back: it restarted. Stays open for 1 hour |
@@ -51,6 +51,9 @@ attention) and **info** (worth knowing).
 | `link_flapping` | warning | A port went up or down 3 or more times in the last hour |
 | `half_duplex` | warning | A port that is up negotiated half duplex |
 | `sfp_low_rx` | warning | An SFP module receives less than its low alarm threshold, or less than -20 dBm when it has none |
+| `sfp_hot` | warning | An SFP module is at or above its high temperature alarm, or 70 °C when it has none |
+| `lag_member_down` | warning | A port of a LAG (bond, aggregate) is down while the LAG is up: less bandwidth, no redundancy. A port turned off on purpose is not told |
+| `stp_root_changed` | warning | The spanning tree root a switch sees changed (a new switch won the election, or the old root or its link went down). Stays open for 1 hour |
 | `weak_wifi` | warning | A Wi-Fi client's signal is below -75 dBm |
 
 ### Network and security
@@ -58,6 +61,8 @@ attention) and **info** (worth knowing).
 | Rule | Severity | Opens when |
 |---|---|---|
 | `duplicate_ip` | warning | Two online devices with different MAC addresses use the same IP |
+| `config_changed` | info | A device's configuration changed outside Omini: its new [backup](map.md#the-device-panel) differs and Omini made no change on it in between. Stays open for 24 hours |
+| `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can fix it on ([Fix IPs](discovery.md#dns-and-dhcp-checks)) |
 | `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |

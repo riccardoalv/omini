@@ -8,6 +8,7 @@ import { edgeLook, type GraphView } from '@/lib/graph'
 import type { Direction } from '@/lib/layout'
 import { NODE_SIZES } from '@/lib/sizes'
 import { deviceFlows, linkLabels, nodeFlow } from '@/lib/traffic'
+import { pausedMacs } from '@/lib/paused'
 import type { MapArea, Point, TopoNode } from '@/lib/types'
 
 type Frame = { id: string; x: number; y: number; width: number; height: number; name: string }
@@ -44,6 +45,8 @@ export function useFlowElements(options: {
   })
   /** The most severe open alert of each node: a mark on the node. */
   const alertOf = computed(() => worstByNode(alertsState.list))
+  /** Devices whose internet a router pauses: a mark too. */
+  const paused = computed(() => pausedMacs(view.value.nodes))
 
   const flowNodes = computed<Node[]>(() => {
     const out: Node[] = options.visibleAreas.value.map((a) => ({
@@ -70,6 +73,7 @@ export function useFlowElements(options: {
         direction: direction.value,
         flow: nodeFlow(n, nodeById.value) ?? linkInfo.value.flows.get(n.id),
         alert: alertOf.value.get(n.id),
+        paused: !!n.mac && paused.value.has(n.mac.toLowerCase()),
       },
       width: NODE_SIZES[n.kind]!.width,
       height: NODE_SIZES[n.kind]!.height,

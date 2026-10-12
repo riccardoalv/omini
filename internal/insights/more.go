@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/fixip"
+
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/topology"
 )
@@ -37,7 +39,20 @@ type History struct {
 	Flaps map[string]int
 	// Reboots is when each device restarted (its uptime went back), recently.
 	Reboots map[string]time.Time
+	// RootChanges: the spanning tree root a device sees changed, recently.
+	RootChanges map[string]RootChange
 }
+
+// RootChange is a spanning tree root that changed: a new switch won the
+// election, or the old root (or the way to it) went down.
+type RootChange struct {
+	From, To string
+	At       time.Time
+}
+
+// SFPHotC is the module temperature that is too hot when the module reports
+// no alarm threshold of its own.
+const SFPHotC = 70.0
 
 func init() {
 	Rules["fast_ethernet"] = fastEthernet
@@ -51,6 +66,11 @@ func init() {
 	Rules["insecure_service"] = insecureService
 	Rules["new_devices_burst"] = newDevicesBurst
 	Rules["discovery_limited"] = discoveryLimited
+	Rules["infra_dynamic_ip"] = infraDynamicIP
+	Rules["sfp_hot"] = sfpHot
+	Rules["lag_member_down"] = lagMemberDown
+	Rules["stp_root_changed"] = stpRootChanged
+	Rules["config_changed"] = configChanged
 }
 
 // fastEthernet: a wired link to a device that runs at 100 Mbps or less (a
@@ -272,4 +292,90 @@ func discoveryLimited(in Input, _ index) []Insight {
 		Key: "discovery_limited", Rule: "discovery_limited", Severity: Warning,
 		Params: map[string]any{"limits": strings.Join(in.DiscoveryLimited, ",")},
 	}}
+}
+
+// infraDynamicIP: a switch, access point, server, NAS... still gets its
+// address by DHCP, without a reservation, on a router Omini can fix it on.
+func infraDynamicIP(in Input, _ index) []Insight {
+	byID := map[string]*topology.Node{}
+	for i := range in.Topology.Nodes {
+		byID[in.Topology.Nodes[i].ID] = &in.Topology.Nodes[i]
+	}
+	var out []Insight
+	for _, c := range fixip.Candidates(in.Topology) {
+		if n := byID[c.NodeID]; c.Infra && n != nil {
+			out = append(out, node("infra_dynamic_ip", Info, n, "", map[string]any{"ip": c.IP}))
+		}
+	}
+	return out
+}
+
+// sfpHot: a module above its own high temperature alarm, or SFPHotC.
+func sfpHot(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		for _, i := range n.Device.Interfaces {
+			t := i.Transceiver
+			if t == nil || t.TemperatureC == nil {
+				continue
+			}
+			limit := SFPHotC
+			if t.TemperatureHighC != nil {
+				limit = *t.TemperatureHighC
+			}
+			if *t.TemperatureC >= limit {
+				out = append(out, node("sfp_hot", Warning, n, i.Name, map[string]any{
+					"iface": i.Name, "temp_c": round1(*t.TemperatureC), "limit_c": round1(limit),
+				}))
+			}
+		}
+	}
+	return out
+}
+
+// lagMemberDown: a port of a LAG is down while the LAG is up (it runs on
+// fewer links than it should).
+func lagMemberDown(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		up := map[string]bool{}
+		for _, i := range n.Device.Interfaces {
+			if i.Up != nil {
+				up[i.Name] = *i.Up
+			}
+		}
+		for _, i := range n.Device.Interfaces {
+			lag := model.Deref(i.Lag)
+			if lag == "" || i.Up == nil || *i.Up || !up[lag] || (i.Enabled != nil && !*i.Enabled) {
+				continue
+			}
+			out = append(out, node("lag_member_down", Warning, n, i.Name, map[string]any{"iface": i.Name, "lag": lag}))
+		}
+	}
+	return out
+}
+
+// stpRootChanged: the spanning tree root a device sees changed recently.
+func stpRootChanged(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if m, ok := in.History.RootChanges[n.ID]; ok {
+			out = append(out, node("stp_root_changed", Warning, n, "", map[string]any{
+				"from": m.From, "to": m.To, "at": m.At.UTC().Format(time.RFC3339),
+			}))
+		}
+	}
+	return out
+}
+
+// configChanged: a device's configuration changed without Omini (its new
+// backup differs and Omini made no change on it in between).
+func configChanged(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if at, ok := in.ConfigChanged[n.ID]; ok {
+			out = append(out, node("config_changed", Info, n, "", map[string]any{"at": at.UTC().Format(time.RFC3339)}))
+		}
+	}
+	return out
 }

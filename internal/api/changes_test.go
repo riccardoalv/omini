@@ -79,9 +79,16 @@ func TestConfigurationChanges(t *testing.T) {
 		t.Fatalf("history: %v", history)
 	}
 
-	var settings map[string]bool
-	if h.do("PUT", "/api/change-settings", map[string]bool{"allow_destructive": true}, &settings); !settings["allow_destructive"] {
+	var settings map[string]any
+	if h.do("PUT", "/api/change-settings", map[string]bool{"allow_destructive": true}, &settings); settings["allow_destructive"] != true {
 		t.Fatalf("settings: %v", settings)
+	}
+	if h.do("PUT", "/api/change-settings", map[string]string{"dns_domain": " Home.Arpa. "}, &settings); settings["dns_domain"] != "home.arpa" ||
+		settings["allow_destructive"] != true {
+		t.Fatalf("domain: %v", settings)
+	}
+	if code := h.do("PUT", "/api/change-settings", map[string]string{"dns_domain": "not a domain"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("bad domain: %d", code)
 	}
 	if code := h.do("POST", sw+"/changes", map[string]any{"kind": "port.enabled", "port": "Port 1", "value": false}, &out); code != http.StatusConflict ||
 		out["allowed"] != true {

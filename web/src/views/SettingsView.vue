@@ -90,7 +90,16 @@ function go(id: Section) {
 
 // Destructive changes (cutting Omini or other gear off): off by default.
 const allowDestructive = ref(false)
+const dnsDomain = ref('')
 const changesError = ref('')
+async function saveDomain() {
+  changesError.value = ''
+  try {
+    dnsDomain.value = (await api.setChangeSettings({ dns_domain: dnsDomain.value })).dns_domain
+  } catch (e) {
+    changesError.value = e instanceof ApiError ? e.message : t('common.error')
+  }
+}
 async function setAllowDestructive(on: boolean) {
   changesError.value = ''
   try {
@@ -109,7 +118,9 @@ onMounted(async () => {
     // version is informative only
   }
   try {
-    allowDestructive.value = (await api.changeSettings()).allow_destructive
+    const cs = await api.changeSettings()
+    allowDestructive.value = cs.allow_destructive
+    dnsDomain.value = cs.dns_domain ?? ''
   } catch {
     // shown as off
   }
@@ -214,6 +225,22 @@ onMounted(async () => {
                 data-test="allow-destructive"
                 @update:model-value="setAllowDestructive"
               />
+            </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="label">{{ t('settings.changes.domain') }}</span>
+                <small class="muted">{{ t('settings.changes.domainHint') }}</small>
+              </div>
+              <form class="domain" @submit.prevent="saveDomain">
+                <input
+                  v-model="dnsDomain"
+                  class="input mono"
+                  placeholder="home.arpa"
+                  :aria-label="t('settings.changes.domain')"
+                  data-test="dns-domain"
+                />
+                <button class="btn" type="submit">{{ t('common.save') }}</button>
+              </form>
             </div>
             <p v-if="changesError" class="error" role="alert">{{ changesError }}</p>
           </div>
@@ -388,6 +415,13 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 24px;
   padding: 16px 20px;
+}
+.domain {
+  display: flex;
+  gap: 8px;
+}
+.domain .input {
+  width: 14em;
 }
 .row + .row {
   border-top: 1px solid var(--border);

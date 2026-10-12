@@ -157,7 +157,7 @@ export function edgeLook(edge: TopoEdge, source?: TopoNode, target?: TopoNode): 
   else if (speed >= 1000) width = 2
   return {
     width,
-    dashed: edge.kind === 'inferred' || edge.kind === 'vpn',
+    dashed: edge.kind === 'inferred' || edge.kind === 'vpn' || !!edge.standby,
     dotted: edge.kind === 'wifi',
     vpn: edge.kind === 'vpn',
     slow: infra && speed > 0 && speed < 1000 && edge.kind !== 'vpn',

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/riccardoalv/omini/internal/collector"
+	"github.com/riccardoalv/omini/internal/fixip"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -349,4 +350,51 @@ func (s *Server) deleteWifi(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"changes": nonNil(done)})
+}
+
+// fixCandidates lists the devices on DHCP without a reservation, with the
+// address each would keep (or the one proposed outside the DHCP range).
+func (s *Server) fixCandidates(w http.ResponseWriter, _ *http.Request) {
+	list := fixip.Candidates(s.Collector.State().Topology)
+	if list == nil {
+		list = []fixip.Candidate{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// fixed is one device's result when fixing many addresses.
+type fixed struct {
+	NodeID string              `json:"node_id"`
+	Change *store.ConfigChange `json:"change,omitempty"`
+	Error  string              `json:"error,omitempty"`
+}
+
+// fixMany fixes the addresses of many devices, one reservation each; one
+// device failing does not stop the others.
+func (s *Server) fixMany(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Items []struct {
+			NodeID string `json:"node_id"`
+			IP     string `json:"ip"`
+		} `json:"items"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	if len(in.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "no device to fix")
+		return
+	}
+	out := make([]fixed, 0, len(in.Items))
+	for _, it := range in.Items {
+		ctx, cancel := changeContext(r)
+		rec, err := s.Collector.Reserve(ctx, it.NodeID, it.IP)
+		cancel()
+		if err != nil {
+			out = append(out, fixed{NodeID: it.NodeID, Error: err.Error()})
+			continue
+		}
+		out = append(out, fixed{NodeID: it.NodeID, Change: &rec})
+	}
+	writeJSON(w, http.StatusOK, out)
 }

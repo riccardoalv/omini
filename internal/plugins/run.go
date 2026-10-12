@@ -35,7 +35,7 @@ func (i *pluginIntegration) Info() integration.Info {
 	man := i.p.Manifest
 	return integration.Info{
 		Type: man.ID, Name: man.Name, Description: model.Deref(man.Description),
-		Kind: integration.KindPlugin, Fields: man.Fields, Changes: man.Changes,
+		Kind: integration.KindPlugin, Fields: man.Fields, Changes: man.Changes, Backup: model.Deref(man.Backup),
 	}
 }
 
@@ -48,6 +48,18 @@ func (i *pluginIntegration) Apply(ctx context.Context, cfg integration.Config, c
 		return nil, err
 	}
 	return resp.Devices, nil
+}
+
+// Backup asks the plugin for its devices' configuration.
+func (i *pluginIntegration) Backup(ctx context.Context, cfg integration.Config) ([]model.ConfigBackup, error) {
+	if !model.Deref(i.p.Manifest.Backup) {
+		return nil, fmt.Errorf("plugin %s keeps no configuration backups", i.p.Manifest.ID)
+	}
+	resp, err := i.m.run(ctx, i.p, model.PluginActionBackup, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Backups, nil
 }
 
 // Timeout lets the collector give the plugin its own time limit.

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/netip"
 	"slices"
 	"sort"
 	"strings"
@@ -34,6 +36,8 @@ type Status struct {
 	CollectedAt   time.Time `json:"collected_at"`
 	DurationMs    int64     `json:"duration_ms"`
 	Devices       int       `json:"devices"`
+	// Failures is how many rounds in a row the integration failed.
+	Failures int `json:"failures,omitempty"`
 }
 
 // State is everything the UI needs to draw the map.
@@ -57,6 +61,10 @@ type Options struct {
 	// Self is the machine Omini runs on (its MACs and addresses): the way to
 	// it is protected from destructive changes (see ProtectedPorts).
 	Self Self
+	// LocalNets are the networks Omini is on, and SendMagic broadcasts a
+	// Wake-on-LAN packet on one of them (for tests).
+	LocalNets func() []netip.Prefix
+	SendMagic func(netip.Prefix, net.HardwareAddr) error
 }
 
 type Collector struct {
@@ -67,7 +75,11 @@ type Collector struct {
 
 	mu    sync.RWMutex
 	snaps map[int64]store.Snapshot
-	state State
+	// failures counts each integration's failed rounds in a row.
+	failures map[int64]int
+	// backupDue: integrations Omini changed a device of, backed up after the round.
+	backupDue map[int64]bool
+	state     State
 
 	traffic *trafficMeter
 
@@ -106,12 +118,19 @@ func New(st *store.Store, reg *integration.Registry, box *secret.Box, opts Optio
 	if opts.Timeout == 0 {
 		opts.Timeout = 45 * time.Second
 	}
+	if opts.LocalNets == nil {
+		opts.LocalNets = localNets
+	}
+	if opts.SendMagic == nil {
+		opts.SendMagic = sendMagic
+	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
 	return &Collector{
 		store: st, reg: reg, box: box, opts: opts,
 		snaps:      map[int64]store.Snapshot{},
+		failures:   map[int64]int{},
 		busy:       map[int64]*sync.Mutex{},
 		applied:    map[int64]time.Time{},
 		traffic:    newTrafficMeter(),
@@ -167,6 +186,9 @@ func (c *Collector) collectLogged(ctx context.Context) {
 	}
 	if err := c.CollectNow(round); err != nil && ctx.Err() == nil {
 		slog.Error("collection round failed", "err", err)
+	}
+	if ctx.Err() == nil {
+		c.afterRound(ctx)
 	}
 }
 
@@ -341,9 +363,14 @@ func (c *Collector) collectOne(ctx context.Context, in store.Integration) store.
 		slog.Warn("integration collection failed", "integration", in.Name, "type", in.Type, "err", err)
 		snap.Error = err.Error()
 		// Keep the last known devices: they are shown as offline instead of vanishing.
-		c.mu.RLock()
+		c.mu.Lock()
 		snap.Devices = c.snaps[in.ID].Devices
-		c.mu.RUnlock()
+		c.failures[in.ID]++
+		c.mu.Unlock()
+	} else {
+		c.mu.Lock()
+		delete(c.failures, in.ID)
+		c.mu.Unlock()
 	}
 	if snap.Devices == nil {
 		snap.Devices = []model.Device{}
@@ -391,9 +418,13 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	statuses := make([]Status, 0, len(snaps))
 	for _, s := range snaps {
 		sources = append(sources, topology.Source{IntegrationID: s.IntegrationID, Online: s.OK, Devices: s.Devices})
+		c.mu.RLock()
+		failures := c.failures[s.IntegrationID]
+		c.mu.RUnlock()
 		statuses = append(statuses, Status{
 			IntegrationID: s.IntegrationID, OK: s.OK, Error: s.Error,
 			CollectedAt: s.CollectedAt, DurationMs: s.DurationMs, Devices: countDevices(s.Devices),
+			Failures: failures,
 		})
 	}
 	now := c.opts.Now()

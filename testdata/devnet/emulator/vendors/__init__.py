@@ -16,6 +16,8 @@ KINDS = {
     "pfsense": "pfsense:PfSense",
     "horaco": "horaco:Horaco",
     "mercusys": "mercusys:Mercusys",
+    "adguard": "adguard:AdGuard",
+    "pihole": "pihole:Pihole",
     "snmp": "snmp:SnmpAgent",
 }
 

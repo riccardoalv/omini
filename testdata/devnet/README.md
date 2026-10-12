@@ -58,7 +58,7 @@ network looks like at an instant.
   computes are the designed ones. The week repeats, so tests ask for "Tuesday 14:10".
 - `emulator/vendors/` — one emulator per API: OPNsense, Proxmox VE, UniFi Network, MikroTik RouterOS REST, Omada
   Open API, OpenWrt ubus, pfSense REST, the Horaco switch's web pages, the Mercusys Halo local API (with its
-  RSA/AES protocol) and SNMP v1/v2c/v3 agents (Cisco, Aruba, Juniper, MikroTik, Synology, QNAP, APC, net-snmp).
+  RSA/AES protocol), AdGuard Home, Pi-hole v6 and SNMP v1/v2c/v3 agents (Cisco, Aruba, Juniper, MikroTik, Synology, QNAP, APC, net-snmp).
 - `emulator/scan.py` — what the network scan finds about hosts (ports, titles, banners, NetBIOS, mDNS, SSDP, DNS).
 - `emulator/server.py` — the asyncio HTTP(S)/UDP server; `emulator/lab.py` — the namespace; `emulator/control.py`
   — the clock's control API; `emulator/testing.py` — test helpers (serve on random ports, run a plugin like Omini).

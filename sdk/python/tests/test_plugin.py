@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from omini_sdk import Device, Interface, PluginError
+from omini_sdk import ConfigBackup, Device, Interface, PluginError
 from omini_sdk.plugin import Plugin
 
 
@@ -140,3 +140,24 @@ def test_run_writes_one_json_line(plugin):
         plugin.run(stdin=io.StringIO(request("test", {"host": "x"})), stdout=out)
     assert e.value.code == 0
     assert json.loads(out.getvalue()) == {"message": "Connected to x (tls=True)"}
+
+
+def test_backup(plugin):
+    resp, code = plugin.handle(request("backup", {"host": "x"}))
+    assert code == 1 and "no @plugin.backup" in resp["error"]
+
+    @plugin.backup
+    def backup(cfg):
+        return [
+            ConfigBackup(device="fw", format="xml", content="<opnsense/>"),
+            {"device": "sw", "format": "json", "content": "{}"},
+        ]
+
+    resp, code = plugin.handle(request("backup", {"host": "x"}))
+    assert code == 0
+    assert resp == {
+        "backups": [
+            {"device": "fw", "format": "xml", "content": "<opnsense/>"},
+            {"device": "sw", "format": "json", "content": "{}"},
+        ]
+    }

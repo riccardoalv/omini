@@ -3,7 +3,7 @@
     "id": "opnsense",
     "detect": {"products": ["opnsense"]},
     "name": "OPNsense",
-    "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, VLANs, SFP modules, ARP, DHCP leases and pool usage, VPN peers (WireGuard, OpenVPN, IPsec), services, firewall states, CPU, memory, disks, temperatures, pending updates and uptime; on 26.7+ it manages each VLAN's network (interface, gateway, DHCP, access rules, mDNS) and fixed addresses.",
+    "description": "OPNsense firewall through its official REST API: ports with link speed, WANs and gateways, VLANs, LAGs, SFP modules, ARP, DHCP leases and pool usage, VPN peers (WireGuard, OpenVPN, IPsec), services, firewall states, CPU, memory, disks, temperatures, pending updates and uptime; manages local DNS names, wakes devices (os-wol), keeps configuration backups and, on 26.7+, manages each VLAN's network (interface, gateway, DHCP, access rules, mDNS), fixed addresses and paused devices.",
     "url": "https://github.com/riccardoalv/omini-plugin-opnsense",
     "icon": "opnsense",
     "publisher": "official",
@@ -17,7 +17,7 @@
     "id": "horaco",
     "detect": {"brands": ["horaco"]},
     "name": "Horaco switch",
-    "description": "Horaco HC-SWTGW218AS and managed switches with the same web interface: ports with link speed and connector, traffic counters and MAC table; enables and disables ports and manages 802.1Q VLANs.",
+    "description": "Horaco HC-SWTGW218AS and managed switches with the same web interface: ports with link speed and connector, traffic counters and MAC table; enables and disables ports, manages 802.1Q VLANs and keeps configuration backups.",
     "url": "https://github.com/riccardoalv/omini-plugin-horaco",
     "icon": "switch",
     "publisher": "official",
@@ -43,7 +43,7 @@
     "id": "mikrotik",
     "detect": {"products": ["mikrotik"], "brands": ["mikrotik"]},
     "name": "MikroTik RouterOS",
-    "description": "MikroTik routers, switches and access points through the RouterOS v7 REST API: ports with link speed, traffic, SFP diagnostics and VLANs, bridge MAC table, ARP, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi clients, gateways, CPU, memory, temperatures and pending updates; enables and disables ports, manages switch VLANs and, on routers, each VLAN's network (gateway, DHCP, access rules, mDNS) and fixed addresses.",
+    "description": "MikroTik routers, switches and access points through the RouterOS v7 REST API: ports with link speed, traffic, SFP diagnostics, VLANs, spanning tree and bonds, bridge MAC table, ARP, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi clients, gateways, CPU, memory, temperatures and pending updates; enables and disables ports, manages switch VLANs and, on routers, each VLAN's network, fixed addresses, local DNS names and paused devices; wakes devices and keeps configuration backups.",
     "url": "https://github.com/riccardoalv/omini-plugin-mikrotik",
     "icon": "mikrotik",
     "publisher": "official",
@@ -58,7 +58,7 @@
     "id": "unifi",
     "detect": {"brands": ["ubiquiti"]},
     "name": "UniFi Network",
-    "description": "UniFi Network controllers (UniFi OS consoles or the self-hosted application): every adopted gateway, switch and access point with ports, link speed, LLDP and uplinks, Wi-Fi and wired clients with band, signal and traffic, VLANs, WAN status, CPU, memory, temperatures and pending firmware; enables and disables switch ports, manages switch VLANs and each VLAN's Wi-Fi.",
+    "description": "UniFi Network controllers (UniFi OS consoles or the self-hosted application): every adopted gateway, switch and access point with ports, link speed, spanning tree, LAGs, LLDP and uplinks, Wi-Fi and wired clients with band, signal and traffic, VLANs, WAN status, CPU, memory, temperatures and pending firmware; enables and disables switch ports, manages switch VLANs and each VLAN's Wi-Fi, and keeps configuration backups.",
     "url": "https://github.com/riccardoalv/omini-plugin-unifi",
     "icon": "ubiquiti",
     "publisher": "official",
@@ -73,7 +73,7 @@
     "id": "openwrt",
     "detect": {"products": ["openwrt"], "os": ["openwrt"]},
     "name": "OpenWrt",
-    "description": "OpenWrt routers and access points through ubus (the API LuCI uses): ports with link speed, traffic and bridge VLANs, WANs and gateways, Wi-Fi clients with signal and rates, ARP, DHCP leases, host names, memory, load, disks and temperatures; enables and disables ports, manages bridge VLANs, each VLAN's network (gateway, DHCP, firewall zone), fixed addresses and each VLAN's Wi-Fi.",
+    "description": "OpenWrt routers and access points through ubus (the API LuCI uses): ports with link speed, traffic, bridge VLANs and bonds, WANs and gateways, Wi-Fi clients with signal and rates, ARP, DHCP leases, host names, memory, load, disks and temperatures; enables and disables ports, manages bridge VLANs, each VLAN's network (gateway, DHCP, firewall zone), fixed addresses, local DNS names, paused devices and each VLAN's Wi-Fi; wakes devices (etherwake) and keeps configuration backups.",
     "url": "https://github.com/riccardoalv/omini-plugin-openwrt",
     "icon": "openwrt",
     "publisher": "official",
@@ -87,7 +87,7 @@
     "id": "proxmox",
     "detect": {"products": ["proxmox"]},
     "name": "Proxmox VE",
-    "description": "Proxmox VE hosts and clusters through the official API with a token: node CPU, memory, storage and interfaces, and every running VM and container placed under the node that runs it; puts a guest's network device in VLANs.",
+    "description": "Proxmox VE hosts and clusters through the official API with a token: node CPU, memory, storage, interfaces and bonds, and every running VM and container placed under the node that runs it; puts a guest's network device in VLANs and keeps configuration backups of nodes and guests.",
     "url": "https://github.com/riccardoalv/omini-plugin-proxmox",
     "icon": "proxmox",
     "publisher": "official",
@@ -99,7 +99,7 @@
   {
     "id": "omada",
     "name": "TP-Link Omada",
-    "description": "TP-Link Omada Software Controller and OC200/OC300 through the official Open API: gateways, switches and access points with ports, link speed, traffic, SFP diagnostics, LLDP and uplinks, WANs, Wi-Fi and wired clients, CPU, memory and pending updates; enables and disables switch ports, manages switch VLANs (through port profiles) and each VLAN's Wi-Fi.",
+    "description": "TP-Link Omada Software Controller and OC200/OC300 through the official Open API: gateways, switches and access points with ports, link speed, traffic, SFP diagnostics, spanning tree, LAGs, LLDP and uplinks, WANs, Wi-Fi and wired clients, CPU, memory and pending updates; enables and disables switch ports, manages switch VLANs (through port profiles) and each VLAN's Wi-Fi, and keeps configuration backups.",
     "url": "https://github.com/riccardoalv/omini-plugin-omada",
     "icon": "tplink",
     "publisher": "official",
@@ -114,7 +114,7 @@
     "id": "pfsense",
     "detect": {"products": ["pfsense"]},
     "name": "pfSense",
-    "description": "pfSense CE and Plus firewalls through the pfSense REST API package: ports with link speed, WANs and gateways, ARP, DHCP leases and pool usage, VLANs, services, VPN peers, firewall states, CPU, memory, temperature and uptime; manages each VLAN's network (interface, gateway, DHCP, access rules) and fixed addresses.",
+    "description": "pfSense CE and Plus firewalls through the pfSense REST API package: ports with link speed, WANs and gateways, ARP, DHCP leases and pool usage, VLANs, LAGs, services, VPN peers, firewall states, CPU, memory, temperature and uptime; manages each VLAN's network (interface, gateway, DHCP, access rules), fixed addresses, local DNS names and paused devices, and wakes devices.",
     "url": "https://github.com/riccardoalv/omini-plugin-pfsense",
     "icon": "pfsense",
     "publisher": "official",
@@ -122,6 +122,32 @@
     "categories": [
       "firewall",
       "router"
+    ]
+  },
+  {
+    "id": "adguard",
+    "detect": {"products": ["adguard"]},
+    "name": "AdGuard Home",
+    "description": "AdGuard Home DNS servers: version, local DNS names (rewrites), and DHCP leases, fixed addresses and pool usage when its DHCP server is on; manages local DNS names and keeps configuration backups.",
+    "url": "https://github.com/riccardoalv/omini-plugin-adguard",
+    "icon": "adguard",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "dns"
+    ]
+  },
+  {
+    "id": "pihole",
+    "detect": {"products": ["pihole"]},
+    "name": "Pi-hole",
+    "description": "Pi-hole v6 DNS servers: version, local DNS records and domain, and DHCP leases, fixed addresses and pool usage when its DHCP server is on; manages local DNS names and keeps configuration backups.",
+    "url": "https://github.com/riccardoalv/omini-plugin-pihole",
+    "icon": "pihole",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "dns"
     ]
   }
 ]

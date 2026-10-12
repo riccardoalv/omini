@@ -41,6 +41,7 @@ docker run -d \
   --restart unless-stopped \
   -v omini-data:/data \
   -e TZ=Europe/Lisbon \
+  -e OMINI_NMAP=install \
   riccardoalv/omini:latest
 ```
 
@@ -97,7 +98,7 @@ services:
       - ./data:/data
     environment:
       TZ: UTC
-      # OMINI_NMAP: install           # install nmap on start, for the nmap integration
+      OMINI_NMAP: install             # install nmap on start, for the nmap integration (leave out to run without it)
 ```
 
 ```bash

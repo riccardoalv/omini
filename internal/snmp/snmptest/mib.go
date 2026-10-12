@@ -110,6 +110,28 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 	for _, v := range d.Vlans {
 		vlanIDs[v.ID] = model.Deref(v.Name)
 	}
+	// BRIDGE-MIB spanning tree and IEEE8023-LAG-MIB aggregates.
+	stpCodes := map[model.PortStpState]int{
+		model.PortStpStateDisabled: 1, model.PortStpStateBlocking: 2, model.PortStpStateListening: 3,
+		model.PortStpStateLearning: 4, model.PortStpStateForwarding: 5,
+	}
+	for _, iface := range d.Interfaces {
+		if iface.Stp != nil && iface.Stp.State != nil {
+			add(gosnmp.Integer, stpCodes[*iface.Stp.State], "1.3.6.1.2.1.17.2.15.1.3.%d", ifIndex[iface.Name])
+		}
+		if lag := model.Deref(iface.Lag); lag != "" {
+			add(gosnmp.Integer, ifIndex[lag], "1.2.840.10006.300.43.1.2.1.1.13.%d", ifIndex[iface.Name])
+		}
+	}
+	if root := model.Deref(d.StpRoot); root != "" {
+		var prio int
+		var mac string
+		if _, err := fmt.Sscanf(root, "%d.%s", &prio, &mac); err == nil {
+			if hw, err := net.ParseMAC(mac); err == nil {
+				add(gosnmp.OctetString, append([]byte{byte(prio >> 8), byte(prio)}, hw...), "1.3.6.1.2.1.17.2.5.0")
+			}
+		}
+	}
 	for _, iface := range d.Interfaces {
 		if iface.Vlans == nil {
 			continue

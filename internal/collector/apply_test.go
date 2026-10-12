@@ -3,6 +3,7 @@ package collector_test
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"path/filepath"
 	"slices"
 	"sync"
@@ -25,6 +26,9 @@ type switchy struct {
 	devices []model.Device
 	applied []model.Change
 	err     error
+	// config is what the firewall's backup reads; backups counts them.
+	config  string
+	backups int
 }
 
 func (*switchy) Info() integration.Info {
@@ -33,7 +37,9 @@ func (*switchy) Info() integration.Info {
 		Changes: []model.ChangeKind{
 			model.ChangeKindPortEnabled, model.ChangeKindPortVlans, model.ChangeKindVlanSet, model.ChangeKindVlanDelete,
 			model.ChangeKindNetworkSet, model.ChangeKindNetworkDelete, model.ChangeKindReservationSet, model.ChangeKindReservationDelete,
+			model.ChangeKindDnsSet, model.ChangeKindDnsDelete, model.ChangeKindWolSend, model.ChangeKindPauseSet, model.ChangeKindPauseDelete,
 		},
+		Backup: true,
 	}
 }
 
@@ -49,12 +55,43 @@ func (s *switchy) Collect(context.Context, integration.Config) ([]model.Device, 
 
 func (*switchy) Test(context.Context, integration.Config) (string, error) { return "ok", nil }
 
+func (s *switchy) Backup(context.Context, integration.Config) ([]model.ConfigBackup, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.backups++
+	return []model.ConfigBackup{{Device: string(fwMAC), Format: model.ConfigBackupFormatText, Content: s.config}}, nil
+}
+
 func (s *switchy) Apply(_ context.Context, _ integration.Config, c model.Change) ([]model.Device, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.applied = append(s.applied, c)
 	if s.err != nil {
 		return nil, s.err
+	}
+	switch v := c.Value.(type) {
+	case model.DnsRecord:
+		fw := s.devices[0]
+		fw.DnsRecords = append(slices.DeleteFunc(slices.Clone(fw.DnsRecords), func(r model.DnsRecord) bool { return r.Name == v.Name }), v)
+		s.devices[0] = fw
+		return []model.Device{fw}, nil
+	case collector.DnsDelete:
+		fw := s.devices[0]
+		fw.DnsRecords = slices.DeleteFunc(slices.Clone(fw.DnsRecords), func(r model.DnsRecord) bool { return r.Name == v.Name })
+		s.devices[0] = fw
+		return []model.Device{fw}, nil
+	case model.PausedDevice:
+		fw := s.devices[0]
+		fw.Paused = append(slices.DeleteFunc(slices.Clone(fw.Paused), func(p model.PausedDevice) bool { return p.MAC == v.MAC }), v)
+		s.devices[0] = fw
+		return []model.Device{fw}, nil
+	case collector.MACValue:
+		fw := s.devices[0]
+		fw.Paused = slices.DeleteFunc(slices.Clone(fw.Paused), func(p model.PausedDevice) bool { return p.MAC == v.MAC })
+		s.devices[0] = fw
+		return []model.Device{fw}, nil
+	case collector.WolValue:
+		return []model.Device{s.devices[0]}, nil
 	}
 	if c.Kind == model.ChangeKindReservationSet || c.Kind == model.ChangeKindReservationDelete {
 		fw := s.devices[0]
@@ -122,6 +159,12 @@ const (
 // Omini on Port 3 and a dumb switch with three PCs on Port 4.
 func switchNetwork(t *testing.T) (*collector.Collector, *switchy, *store.Store) {
 	t.Helper()
+	return switchNetworkWith(t, nil)
+}
+
+// switchNetworkWith is switchNetwork with options of the test's.
+func switchNetworkWith(t *testing.T, opt func(*collector.Options)) (*collector.Collector, *switchy, *store.Store) {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
 	if err != nil {
@@ -134,15 +177,20 @@ func switchNetwork(t *testing.T) (*collector.Collector, *switchy, *store.Store) 
 	reg.Register(s)
 	var clock sync.Mutex
 	now := time.Unix(1_790_000_000, 0).UTC()
-	coll := collector.New(st, reg, box, collector.Options{
+	opts := collector.Options{
 		Now: func() time.Time { // a second per call: what happened first is older
 			clock.Lock()
 			defer clock.Unlock()
 			now = now.Add(time.Second)
 			return now
 		},
-		Self: collector.Self{MACs: []model.MACAddress{ominiMAC}, IPs: []string{"192.168.1.3"}},
-	})
+		Self:      collector.Self{MACs: []model.MACAddress{ominiMAC}, IPs: []string{"192.168.1.3"}},
+		LocalNets: func() []netip.Prefix { return nil },
+	}
+	if opt != nil {
+		opt(&opts)
+	}
+	coll := collector.New(st, reg, box, opts)
 	if _, err := st.CreateIntegration(ctx, store.Integration{Name: "sw", Type: "switchy", Enabled: true, Config: integration.Config{}}); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +203,8 @@ func switchNetwork(t *testing.T) (*collector.Collector, *switchy, *store.Store) 
 	s.devices = []model.Device{
 		{
 			Key: string(fwMAC), Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{fwMAC},
-			Arp: []model.ArpEntry{{IP: "192.168.1.2", MAC: swMAC}, {IP: "192.168.1.41", MAC: phoneMAC}},
+			Arp:       []model.ArpEntry{{IP: "192.168.1.2", MAC: swMAC}, {IP: "192.168.1.41", MAC: phoneMAC}},
+			DnsDomain: model.Ptr("lan"), DnsRecords: []model.DnsRecord{},
 			Networks: []model.Network{{
 				Vlan: 1, Name: model.Ptr("LAN"), Gateway: model.Ptr("192.168.1.1/24"),
 				Dhcp:   &model.NetworkDhcp{Enabled: true, From: model.Ptr("192.168.1.100"), To: model.Ptr("192.168.1.250")},
@@ -400,7 +449,10 @@ func TestProtectionFollowsOminiAndTheInternet(t *testing.T) {
 // reports none cannot be changed either.
 func TestPortChangesNeedThePortState(t *testing.T) {
 	coll, s, _ := switchNetwork(t)
-	if fw, _ := node(coll.State(), "dev:"+string(fwMAC)); !slices.Equal(fw.Changes, []model.ChangeKind{model.ChangeKindNetworkSet, model.ChangeKindNetworkDelete, model.ChangeKindReservationSet, model.ChangeKindReservationDelete}) {
+	if fw, _ := node(coll.State(), "dev:"+string(fwMAC)); !slices.Equal(fw.Changes, []model.ChangeKind{
+		model.ChangeKindNetworkSet, model.ChangeKindNetworkDelete, model.ChangeKindReservationSet, model.ChangeKindReservationDelete,
+		model.ChangeKindDnsSet, model.ChangeKindDnsDelete, model.ChangeKindWolSend, model.ChangeKindPauseSet, model.ChangeKindPauseDelete,
+	}) {
 		t.Fatalf("firewall: %v", fw.Changes)
 	}
 	s.mu.Lock()

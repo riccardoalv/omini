@@ -79,7 +79,7 @@ curl -b omini.cookie -X POST -H 'X-Omini-Request: 1' http://omini.lan:8080/api/r
 | `PUT` | `/api/nodes/{id}/ports/{port}` | Body `{label}`: name a device's port; `""` restores the device's own description |
 | `POST` | `/api/nodes/{id}/changes` | Body `{kind, port, value, confirm}`: apply a [configuration change](decisions.md#configuration-changes) (`kind` one of the node's `changes`, e.g. `{"kind":"port.enabled","port":"Port 5","value":false}`). Returns the change as kept in the history. 409 `{error:"destructive", reason, node, allowed}` for a destructive one: blocked (`allowed` false) or to be confirmed again with `confirm: true`; 400 for an unknown port or a wrong value; 404 when the device cannot apply it; 502 `{error, change}` when the device refused it |
 | `GET` | `/api/nodes/{id}/changes` | The latest changes made to the node, newest first: `[{id, kind, port, before, after, error, at}]` (kept a year) |
-| `GET`, `PUT` | `/api/change-settings` | `{allow_destructive}`: whether destructive changes are allowed (asked twice) or blocked |
+| `GET`, `PUT` | `/api/change-settings` | `{allow_destructive, dns_domain}`: whether destructive changes are allowed (asked twice) or blocked, and the domain of local DNS names (`''`: the one the DNS server or router uses, else `home.arpa`); `PUT` changes the fields it has |
 | `GET` | `/api/nodes/{id}/web` | Web interfaces found on the node's IP: `[{url, port, title}]`. Only nodes on the map are probed; cached 10 minutes |
 | `POST` | `/api/nodes/{id}/scan` | Scan the node with the nmap integration (up to 6 minutes) and rebuild the map. Returns the host found. 409 without an enabled nmap integration, 404 when the node has no address |
 
@@ -109,6 +109,16 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | `PATCH` | `/api/vlans/{id}` | Change `name`, `color`, `subnet` or `network` (`confirm` as above); the network goes to the router first, a new name to the devices that have the VLAN. Returns `{vlan, changes}` |
 | `PUT` | `/api/nodes/{id}/reservation` | Body `{ip}`: fix the device's address on the router whose network holds it (`reservation.set`) |
 | `DELETE` | `/api/nodes/{id}/reservation` | Free it (`reservation.delete`) |
+| `GET` | `/api/fix-ip` | Devices on DHCP without a reservation, on a router that can make one: `node_id`, `label`, `type`, `mac`, `ip`, `router`, `infra` and `proposed` (the address used instead, outside the DHCP range, when the router refuses one inside) |
+| `POST` | `/api/fix-ip` | Body `{items: [{node_id, ip}]}`: one reservation each; answers each device's `{node_id, change}` or `{node_id, error}` |
+| `GET` | `/api/nodes/{id}/dns-name` | The device's local DNS name: `name` (full, `''` when none), `label`, `custom`, `off`, `server` (the node that answers it), `missing` (`no_fixed_ip`, `no_server`, `no_name`) and `others` (every name the DNS servers have for its address) |
+| `PUT` | `/api/nodes/{id}/dns-name` | Body `{name}`: a label, `''` for the device's own, `-` for none; applied at once (`dns.set`/`dns.delete`) |
+| `GET` | `/api/nodes/{id}/actions` | What its panel can do: `wake` (`via`: `omini` or `router`, and the `router`) and `can_pause` (with `pause_router`) |
+| `POST` | `/api/nodes/{id}/wake` | Send it a Wake-on-LAN packet (from Omini on its own networks, else `wol.send` on the router); kept in its changes |
+| `PUT`, `DELETE` | `/api/nodes/{id}/pause` | Pause its internet on its router (`pause.set`), or give it back (`pause.delete`) |
+| `GET` | `/api/nodes/{id}/backups` | Its configuration versions, newest first: `id`, `taken_at`, `format`, `size`, `by_omini` |
+| `GET` | `/api/backups/{id}` | One version with its `content` (it may hold secrets the device would not leave out) |
+| `POST` | `/api/integrations/{id}/backup` | Back up the integration's devices now (204) |
 | `PUT` | `/api/wifi` | Body `{ssid, previous, vlan, password, enabled}`: create or change a Wi-Fi network on every controller and access point Omini manages (`wifi.set`); an empty password keeps the current one. The password is passed on, never kept nor logged |
 | `DELETE` | `/api/wifi/{ssid}` | Remove it from every device that broadcasts it |
 | `DELETE` | `/api/vlans/{id}` | Remove its network from the router, delete it from every device, then from the catalog; 409 when a device cannot (it names it), or `destructive` (Omini's network) until `?confirm=1` |

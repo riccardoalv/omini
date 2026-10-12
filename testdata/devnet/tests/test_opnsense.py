@@ -298,3 +298,75 @@ def test_fixes_an_address(emu: Emulator) -> None:
         FW1, "apply", change={"device": "x", "kind": "reservation.delete", "value": {"mac": value["mac"]}}
     )
     assert not any(r["mac"] == value["mac"] for r in out["devices"][0].get("dhcp_reservations") or [])
+
+
+# -- local DNS names, Wake-on-LAN, pausing the internet, backups, LAGs --
+
+
+def apply(emu: Emulator, kind: str, value: dict[str, Any]) -> dict[str, Any]:
+    emu.set_time(TUE_1030)
+    out = emu.collect(FW1, "apply", change={"device": "x", "kind": kind, "value": value})
+    assert "error" not in out, out.get("error")
+    [dev] = out["devices"]
+    return dev
+
+
+def test_link_aggregation(emu: Emulator) -> None:
+    p = ports(device(emu, FW1, TUE_1030))
+    assert p["lagg0"]["type"] == "lag" and p["lagg0"]["members"] == ["ax0", "ax1"]
+    assert p["ax0"]["lag"] == p["ax1"]["lag"] == "lagg0"
+    assert "lag" not in p["igc0"]
+
+
+def test_local_dns_names(emu: Emulator) -> None:
+    dev = device(emu, FW1, TUE_1030)
+    assert dev["dns_domain"] == "acme.local"
+    assert {"name": "intranet.acme.local", "ip": "10.10.20.10"} in dev["dns_records"]
+
+    dev = apply(emu, "dns.set", {"name": "nas.acme.local", "ip": "10.10.20.20"})
+    assert {"name": "nas.acme.local", "ip": "10.10.20.20"} in dev["dns_records"]
+    dev = apply(emu, "dns.set", {"name": "nas.acme.local", "ip": "10.10.20.21"})
+    assert [r["ip"] for r in dev["dns_records"] if r["name"] == "nas.acme.local"] == ["10.10.20.21"]
+    dev = apply(emu, "dns.delete", {"name": "nas.acme.local"})
+    assert not any(r["name"] == "nas.acme.local" for r in dev["dns_records"])
+    assert {"name": "intranet.acme.local", "ip": "10.10.20.10"} in dev["dns_records"]
+
+
+def test_wake_on_lan(emu: Emulator) -> None:
+    # os-wol answers only for an assigned interface: the USERS VLAN's holds the address.
+    apply(emu, "wol.send", {"mac": "02:00:00:00:30:01", "ip": "10.10.30.50"})
+    apply(emu, "wol.send", {"mac": "02:00:00:00:30:01"})  # no address: the LAN
+    out = emu.collect(
+        FW1,
+        "apply",
+        change={"device": "x", "kind": "wol.send", "value": {"mac": "02:00:00:00:30:01", "ip": "172.31.0.9"}},
+    )
+    assert "no network of the firewall holds 172.31.0.9" in out["error"]
+
+
+def test_pause_and_resume_internet(emu: Emulator) -> None:
+    tv = {"mac": "02:00:00:00:50:01", "ips": ["10.10.50.120"], "name": "Meeting room TV"}
+    dev = apply(emu, "pause.set", tv)
+    assert dev["paused"] == [tv]
+    # The pause rule is no network's access: each network keeps the one it had.
+    assert {n["vlan"]: n["access"] for n in dev["networks"]}[80] == "internet"
+    dev = apply(emu, "pause.set", {**tv, "ips": ["10.10.50.121"]})
+    assert dev["paused"] == [{**tv, "ips": ["10.10.50.121"]}]
+    dev = apply(emu, "pause.delete", {"mac": tv["mac"]})
+    assert not dev.get("paused")
+
+
+def test_configuration_backup(emu: Emulator) -> None:
+    emu.set_time(TUE_1030)
+    first = emu.collect(FW1, "backup")
+    assert "error" not in first, first.get("error")
+    emu.set_time(TUE_1035)
+    second = emu.collect(FW1, "backup")
+    [a], [b] = first["backups"], second["backups"]
+    assert a["format"] == "xml" and a["device"] == device(emu, FW1, TUE_1030)["key"]
+    assert "<revision>" not in a["content"] and "<hostname>fw-hq-01</hostname>" in a["content"]
+    assert a["content"] == b["content"]  # the revision's time moved; nothing else did
+    apply(emu, "dns.set", {"name": "backup-test.acme.local", "ip": "10.10.20.30"})
+    [c] = emu.collect(FW1, "backup")["backups"]
+    assert c["content"] != a["content"] and "backup-test" in c["content"]
+    apply(emu, "dns.delete", {"name": "backup-test.acme.local"})

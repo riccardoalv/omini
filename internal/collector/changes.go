@@ -16,6 +16,8 @@ type changeTracker struct {
 	flaps   map[string][]time.Time // "node|iface" → when it changed state
 	uptime  map[string]uint64      // node → uptime at the last round
 	reboots map[string]time.Time   // node → when it restarted
+	roots   map[string]string      // node → spanning tree root at the last round
+	moved   map[string]insights.RootChange
 }
 
 // observeChanges compares this round with the last one: a port that changed
@@ -28,6 +30,7 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 	if t.up == nil {
 		t.up, t.flaps = map[string]bool{}, map[string][]time.Time{}
 		t.uptime, t.reboots = map[string]uint64{}, map[string]time.Time{}
+		t.roots, t.moved = map[string]string{}, map[string]insights.RootChange{}
 	}
 	for _, n := range topo.Nodes {
 		if n.Kind != topology.KindDevice || n.Device == nil || !n.Online {
@@ -43,6 +46,12 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 			}
 			t.up[key] = *i.Up
 		}
+		if root := model.Deref(n.Device.StpRoot); root != "" {
+			if was, ok := t.roots[n.ID]; ok && was != root {
+				t.moved[n.ID] = insights.RootChange{From: was, To: root, At: now}
+			}
+			t.roots[n.ID] = root
+		}
 		if u := n.Device.UptimeS; u != nil {
 			if was, ok := t.uptime[n.ID]; ok && *u < was {
 				t.reboots[n.ID] = now.Add(-time.Duration(*u) * time.Second)
@@ -50,7 +59,14 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 			t.uptime[n.ID] = *u
 		}
 	}
-	h := insights.History{Flaps: map[string]int{}, Reboots: map[string]time.Time{}}
+	h := insights.History{Flaps: map[string]int{}, Reboots: map[string]time.Time{}, RootChanges: map[string]insights.RootChange{}}
+	for id, m := range t.moved {
+		if now.Sub(m.At) > insights.RebootWindow {
+			delete(t.moved, id)
+			continue
+		}
+		h.RootChanges[id] = m
+	}
 	for key, times := range t.flaps {
 		kept := times[:0]
 		for _, at := range times {

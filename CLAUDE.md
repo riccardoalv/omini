@@ -34,6 +34,9 @@ for how it is built.
 5. **One device failing never breaks the rest.** An integration error is an
    "offline" status and an alert; the round goes on with its last good data.
 6. **Small first.** When in doubt, leave it out and put it on the roadmap.
+7. **Not a replacement for the device's own interface.** A change belongs in
+   Omini when it spans several devices or is easier centralized; a single
+   device's setting stays in that device's UI.
 
 ## Where things are
 
@@ -114,4 +117,5 @@ make hooks       # install the git hooks (lefthook)
 ## Out of scope (for now)
 
 Multi-tenancy; jumbo frames, port mirroring, rate limits, QoS, IGMP and DHCP
-snooping.
+snooping; changing firmware, factory reset, device passwords, the management
+IP or HA pairs.

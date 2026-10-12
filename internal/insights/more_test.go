@@ -176,3 +176,66 @@ func TestFastEthernetSkipsDevicesMadeFor100Mbps(t *testing.T) {
 		t.Fatalf("fast Ethernet alerts on %v, want %v", alerted, want)
 	}
 }
+
+// TestInfraDynamicIP: a switch on DHCP is told; a phone on DHCP and a NAS
+// with a reservation are not.
+func TestInfraDynamicIP(t *testing.T) {
+	gw := topology.Node{
+		ID: "dev:gw", Kind: topology.KindDevice, Label: "gw", IP: "192.168.1.1",
+		Changes: []model.ChangeKind{model.ChangeKindReservationSet},
+		Device: &model.Device{
+			Networks: []model.Network{{Vlan: 1, Gateway: model.Ptr("192.168.1.1/24")}},
+			DhcpLeases: []model.DhcpLease{
+				{MAC: "aa:00:00:00:00:01", IP: "192.168.1.20"},
+				{MAC: "aa:00:00:00:00:02", IP: "192.168.1.21"},
+				{MAC: "aa:00:00:00:00:03", IP: "192.168.1.22"},
+			},
+			DhcpReservations: []model.DhcpReservation{{MAC: "aa:00:00:00:00:03", IP: "192.168.1.22"}},
+		},
+	}
+	topo := topology.Topology{Nodes: []topology.Node{
+		gw,
+		{ID: "sw", Kind: topology.KindClient, Label: "sw-desk", Type: "switch", MAC: "aa:00:00:00:00:01", IP: "192.168.1.20"},
+		{ID: "phone", Kind: topology.KindClient, Label: "phone", Type: "phone", MAC: "aa:00:00:00:00:02", IP: "192.168.1.21"},
+		{ID: "nas", Kind: topology.KindClient, Label: "nas", Type: "nas", MAC: "aa:00:00:00:00:03", IP: "192.168.1.22"},
+	}}
+	got := byRule(Evaluate(Input{Topology: topo}))["infra_dynamic_ip"]
+	if len(got) != 1 || got[0].NodeID != "sw" || got[0].Severity != Info || got[0].Params["ip"] != "192.168.1.20" {
+		t.Fatalf("infra_dynamic_ip: %+v", got)
+	}
+}
+
+// TestSwitchHealthRules: a hot module, a LAG member down while its LAG is
+// up, a spanning tree root that changed.
+func TestSwitchHealthRules(t *testing.T) {
+	now := time.Unix(1_790_000_000, 0).UTC()
+	sw := topology.Node{ID: "dev:sw", Kind: topology.KindDevice, Label: "core", Online: true, Device: &model.Device{
+		Interfaces: []model.Interface{
+			{Name: "SFP 1", Up: model.Ptr(true), Transceiver: &model.Transceiver{TemperatureC: model.Ptr(71.5)}},
+			{Name: "SFP 2", Up: model.Ptr(true), Transceiver: &model.Transceiver{TemperatureC: model.Ptr(71.5), TemperatureHighC: model.Ptr(85.0)}},
+			{Name: "SFP 3", Up: model.Ptr(true), Transceiver: &model.Transceiver{TemperatureC: model.Ptr(40.0)}},
+			{Name: "bond0", Up: model.Ptr(true), Type: model.Ptr(model.InterfaceTypeLag)},
+			{Name: "Port 1", Up: model.Ptr(true), Lag: model.Ptr("bond0")},
+			{Name: "Port 2", Up: model.Ptr(false), Lag: model.Ptr("bond0")},
+			{Name: "Port 3", Up: model.Ptr(false), Enabled: model.Ptr(false), Lag: model.Ptr("bond0")}, // turned off on purpose
+			{Name: "bond1", Up: model.Ptr(false), Type: model.Ptr(model.InterfaceTypeLag)},
+			{Name: "Port 4", Up: model.Ptr(false), Lag: model.Ptr("bond1")}, // the whole LAG is down: that is the link's own alert
+		},
+	}}
+	got := byRule(Evaluate(Input{
+		Topology: topology.Topology{Nodes: []topology.Node{sw}},
+		Now:      now,
+		History: History{RootChanges: map[string]RootChange{
+			"dev:sw": {From: "32768.aa:00:00:00:00:01", To: "4096.aa:00:00:00:00:02", At: now.Add(-time.Minute)},
+		}},
+	}))
+	if h := got["sfp_hot"]; len(h) != 1 || h[0].Params["iface"] != "SFP 1" || h[0].Params["limit_c"] != 70.0 {
+		t.Errorf("sfp_hot: %+v", h)
+	}
+	if l := got["lag_member_down"]; len(l) != 1 || l[0].Params["iface"] != "Port 2" || l[0].Params["lag"] != "bond0" {
+		t.Errorf("lag_member_down: %+v", l)
+	}
+	if r := got["stp_root_changed"]; len(r) != 1 || r[0].Params["to"] != "4096.aa:00:00:00:00:02" || r[0].Severity != Warning {
+		t.Errorf("stp_root_changed: %+v", r)
+	}
+}

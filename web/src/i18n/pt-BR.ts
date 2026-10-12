@@ -139,6 +139,14 @@ const ptBR: typeof en = {
     tagged: 'com tag {ids}',
     module: 'Módulo',
     optics: 'Óptica',
+    stp: {
+      forwarding: 'Encaminhando',
+      blocking: 'Bloqueada (link redundante em espera)',
+      listening: 'Escutando',
+      learning: 'Aprendendo',
+      disabled: 'Desligado',
+    },
+    stpRole: 'porta {role}',
     trafficNow: 'Tráfego agora',
     band: 'Banda Wi-Fi',
     linkRate: 'link de {rate} Mbps',
@@ -300,6 +308,63 @@ const ptBR: typeof en = {
     server: 'Servidor',
     unknown: 'Desconhecido',
     client: 'Cliente',
+  },
+  fixIp: {
+    title: 'Fixar IPs',
+    intro:
+      'Cada dispositivo mantém o endereço que tem hoje, como uma reserva no roteador. Marcados: switches, access points, servidores, NAS, hypervisors, VMs, impressoras e nobreaks.',
+    none: 'Todo dispositivo no DHCP já tem endereço fixo.',
+    on: 'em {router}',
+    proposed:
+      'O roteador não fixa endereços dentro da faixa do DHCP: ele recebe este na próxima renovação do lease.',
+    others: 'Mostrar {n} outro dispositivo no DHCP | Mostrar {n} outros dispositivos no DHCP',
+    apply: 'Fixar {n} endereço | Fixar {n} endereços',
+    banner:
+      '{n} dispositivo de infraestrutura está sem IP fixo. | {n} dispositivos de infraestrutura estão sem IP fixo.',
+    bannerOthers:
+      '{n} dispositivo no DHCP está sem IP fixo. | {n} dispositivos no DHCP estão sem IP fixo.',
+    open: 'Fixar IPs',
+  },
+  backups: {
+    title: 'Configuração',
+    summary: '{n} versões · última {when}',
+    hint: 'Lida todo dia e depois de cada mudança feita pelo Omini; guardada quando muda. Segredos ficam de fora quando o equipamento permite. O Omini nunca restaura.',
+    from: 'De',
+    to: 'Para',
+    byOmini: 'pelo Omini',
+    outside: 'fora do Omini',
+    download: 'Baixar',
+    only: 'Uma versão até agora ({size}): as diferenças aparecem a partir da próxima mudança.',
+    same: 'As duas versões são iguais.',
+    skipped: '… {n} linha sem mudança … | … {n} linhas sem mudança …',
+  },
+  host: {
+    wake: 'Acordar',
+    wakeHint: {
+      omini: 'Envia um pacote Wake-on-LAN a partir do Omini (mesma rede)',
+      router: 'Pede ao roteador que envie um pacote Wake-on-LAN',
+    },
+    woken: 'Pacote Wake-on-LAN enviado. Ele aparece online quando responder.',
+    pause: 'Pausar internet',
+    pauseHint: 'O roteador corta a internet dele; a sua rede continua acessível.',
+    pausedNow: 'Internet pausada: o roteador está bloqueando.',
+    resume: 'Retomar internet',
+    resumed: 'Internet de volta.',
+    paused: 'Internet pausada',
+  },
+  dnsName: {
+    label: 'Nome',
+    on: 'em {server}',
+    edit: 'Mudar o nome',
+    off: 'Sem nome no DNS (desligado)',
+    turnOff: 'Remover nome',
+    turnOn: 'Dar um nome',
+    other: 'Também {name} ({ip})',
+    missing: {
+      no_fixed_ip: 'Fixe o IP e ele ganha um nome no DNS.',
+      no_server: 'Nenhum servidor DNS que o Omini gerencia responde por esta rede.',
+      no_name: 'Ele não tem um nome próprio: dê um nome para ter um no DNS.',
+    },
   },
   place: {
     title: 'Rede',
@@ -599,6 +664,26 @@ const ptBR: typeof en = {
         title: 'Sinal óptico fraco em {iface} de {node}',
         detail: 'Recebendo {rx_dbm} dBm, abaixo de {limit_dbm} dBm.',
       },
+      sfp_hot: {
+        title: 'Módulo óptico quente em {iface} de {node}',
+        detail: 'A {temp_c} °C, o limite é {limit_c} °C.',
+      },
+      lag_member_down: {
+        title: '{iface} do {lag} em {node} está fora',
+        detail: 'O LAG funciona com menos links: menos banda e sem redundância.',
+      },
+      stp_root_changed: {
+        title: 'A raiz do spanning tree mudou para {node}',
+        detail: 'Era {from}, agora {to}.',
+      },
+      config_changed: {
+        title: 'A configuração de {node} mudou',
+        detail: 'Ela mudou fora do Omini: veja as diferenças no painel dele, em Configuração.',
+      },
+      infra_dynamic_ip: {
+        title: '{node} não tem IP fixo',
+        detail: 'Ele recebe {ip} por DHCP: o endereço pode mudar.',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -674,6 +759,15 @@ const ptBR: typeof en = {
       sfp_low_rx:
         'Limpe os conectores da fibra e veja se ela não está dobrada; confira o módulo da outra ponta.',
       dhcp_pool_full: 'Aumente a faixa do DHCP ou diminua o tempo de lease.',
+      sfp_hot: 'Verifique a ventilação do switch e se o módulo é adequado à fibra e à distância.',
+      lag_member_down:
+        'Confira o cabo e as duas pontas dessa porta; um membro do LAG precisa estar igual nos dois switches.',
+      stp_root_changed:
+        'Um switch novo pode ter vencido a eleição, ou a raiz antiga ou o link dela caiu: defina a prioridade de raiz no switch principal.',
+      config_changed:
+        'Se ninguém que você conhece fez isso, compare as versões e veja quem tem acesso ao equipamento.',
+      infra_dynamic_ip:
+        'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',
@@ -917,6 +1011,7 @@ const ptBR: typeof en = {
       wifi: 'Wi-Fi',
       hypervisor: 'Hipervisores',
       nas: 'NAS',
+      dns: 'Servidores DNS',
     },
     trust: 'Nível de confiança',
     anyTrust: 'Qualquer nível',
@@ -1152,6 +1247,9 @@ const ptBR: typeof en = {
       destructive: 'Permitir ações destrutivas',
       destructiveHint:
         'Alterações que cortam o acesso do Omini, ou a internet da rede (o uplink de um switch, a porta do roteador). Cada uma pede confirmação duas vezes.',
+      domain: 'Domínio dos nomes locais',
+      domainHint:
+        'Dispositivos com IP fixo ganham <nome>.<domínio> no seu servidor DNS. Vazio: o que o roteador ou o servidor DNS usa, senão home.arpa.',
     },
   },
   changes: {
@@ -1174,6 +1272,22 @@ const ptBR: typeof en = {
     historyEmpty: 'Nenhuma alteração feita pelo Omini ainda.',
     portEnabled: '{port}: ligada',
     portDisabled: '{port}: desligada',
+    done: {
+      port_vlans: '{port}: VLANs alteradas',
+      vlan_set: 'VLAN {id} criada ou renomeada {name}',
+      vlan_delete: 'VLAN {id} apagada',
+      network_set: 'Rede da VLAN {vlan} configurada',
+      network_delete: 'Rede da VLAN {vlan} removida',
+      reservation_set: '{ip} fixo para {mac}',
+      reservation_delete: 'Endereço fixo de {mac} liberado',
+      wifi_set: 'Wi-Fi {ssid} configurado',
+      wifi_delete: 'Wi-Fi {ssid} removido',
+      dns_set: 'Nome DNS {name} → {ip}',
+      dns_delete: 'Nome DNS {name} removido',
+      wol_send: 'Wake-on-LAN enviado para {mac}',
+      pause_set: 'Internet de {mac} pausada',
+      pause_delete: 'Internet de {mac} devolvida',
+    },
     failed: 'não aplicada: {error}',
   },
 }

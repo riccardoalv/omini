@@ -15,9 +15,12 @@ installed (424), and no OpenVPN or IPsec is configured (empty lists).
 
 The key's user also has the write privileges Omini's network changes need:
 VLANs, interface assignments, DHCP servers and static mappings, firewall rules
-and aliases are kept in a configuration of the service (pfsense_config.py)
-that starts from the design, so network.set, network.delete, reservation.set
-and reservation.delete can be applied and read back.
+and aliases and the DNS Resolver's host overrides are kept in a configuration
+of the service (pfsense_config.py) that starts from the design, so
+network.set, network.delete, reservation.set, reservation.delete, dns.set,
+dns.delete, pause.set and pause.delete can be applied and read back;
+wol.send and the firewall state kills are recorded there. lab-fw01 has no
+LAGG (a VM) and no host override in the design.
 """
 
 from __future__ import annotations
@@ -182,6 +185,9 @@ class PfSense(HttpService):
 
     def aliases(self, snap: Snapshot) -> list[dict[str, Any]]:
         return config.aliases(self.config(snap))
+
+    def host_overrides(self, snap: Snapshot) -> list[dict[str, Any]]:
+        return config.host_overrides(self.config(snap))
 
     # -- plural endpoints: filters, sorting, pagination --
     def page(self, req: Request, rows: list[dict[str, Any]]) -> Response:
@@ -548,6 +554,8 @@ ROUTES: dict[str, tuple[Any, bool]] = {
     "/api/v2/interfaces": (PfSense.assigned, True),
     "/api/v2/firewall/rules": (PfSense.rules, True),
     "/api/v2/firewall/aliases": (PfSense.aliases, True),
+    "/api/v2/services/dns_resolver/host_overrides": (PfSense.host_overrides, True),
+    "/api/v2/interface/laggs": (PfSense.empty, True),
     "/api/v2/firewall/states/size": (PfSense.states, False),
     "/api/v2/status/openvpn/servers": (PfSense.empty, True),
     "/api/v2/status/openvpn/clients": (PfSense.empty, True),
@@ -566,4 +574,8 @@ WRITES = {
     "/api/v2/firewall/rule",
     "/api/v2/firewall/alias",
     "/api/v2/firewall/apply",
+    "/api/v2/firewall/states",
+    "/api/v2/services/dns_resolver/host_override",
+    "/api/v2/services/dns_resolver/apply",
+    "/api/v2/services/wake_on_lan/send",
 }

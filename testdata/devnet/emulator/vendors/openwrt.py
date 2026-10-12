@@ -14,7 +14,8 @@ path outside the ACL's "file" section; a wrong password answers status 6 to
 Objects served: system (board, info), network.device (status),
 network.interface (dump), iwinfo (devices, info, assoclist), luci-rpc
 (getHostHints, getDHCPLeases), file (read, list: /proc/net/arp and the
-thermal zones), hostapd.<ifname> (get_clients), session (login, access) and
+thermal zones; stat, exec: /usr/bin/etherwake, which records the magic packets
+in WAKES), hostapd.<ifname> (get_clients), session (login, access) and
 uci on the network, wireless, dhcp and firewall configs (get, set, add, delete,
 revert, changes, apply with rollback, confirm, rollback), like rpcd: changes are
 staged per session, `apply` saves them and reloads the network (a port whose
@@ -22,8 +23,9 @@ staged per session, `apply` saves them and reloads the network (a port whose
 `"present": false` and leaves it out of the full status; `config bridge-vlan`
 sections turn the bridge's VLAN filtering on and show in its "bridge-vlans"),
 and with rollback the previous files come back unless `confirm` arrives within
-the timeout. The configs are built from the design on first use and then kept
-in the service instance. The ports' administrative
+the timeout; the system config is readable only. The configs are built from
+the design on first use and then kept in the service instance; `uci get`
+answers each section's `.index` (its place in the file), like rpcd. The ports' administrative
 state lives in the world design (Port.admin_up); everything else that changes
 comes from the world snapshot.
 """
@@ -64,7 +66,7 @@ ACL: dict[str, dict[str, list[str]]] = {
         "network.interface": ["dump"],
         "luci-rpc": ["getHostHints", "getDHCPLeases"],
         "iwinfo": ["devices", "info", "assoclist"],
-        "file": ["read", "list"],
+        "file": ["read", "list", "stat", "exec"],
         "uci": ["get", "set", "add", "delete", "revert", "apply", "confirm", "rollback"],
     },
     # rpcd's "uci" scope: which configs the login may read and write.
@@ -73,14 +75,21 @@ ACL: dict[str, dict[str, list[str]]] = {
         "wireless": ["read", "write"],
         "dhcp": ["read", "write"],
         "firewall": ["read", "write"],
+        "system": ["read"],
     },
     "file": {
         "/proc/net/arp": ["read"],
         "/sys/class/thermal": ["list"],
         "/sys/class/thermal/thermal_zone*/type": ["read"],
         "/sys/class/thermal/thermal_zone*/temp": ["read"],
+        "/usr/bin/etherwake": ["list", "exec"],
     },
 }
+# etherwake is installed (tests may remove it), and the magic packets it sent:
+# (interface, MAC).
+ETHERWAKE = "/usr/bin/etherwake"
+ETHERWAKE_INSTALLED = True
+WAKES: list[tuple[str, str]] = []
 # What every session (also the null one) may call: rpcd's "unauthenticated" group.
 UNAUTHENTICATED = {"session": ["access", "login"]}
 
@@ -234,6 +243,7 @@ class OpenWrt(HttpService):
         self.wireless: dict[str, dict[str, Any]] | None = None
         self.dhcp: dict[str, dict[str, Any]] | None = None
         self.firewall: dict[str, dict[str, Any]] | None = None
+        self.system: dict[str, dict[str, Any]] | None = None
         self.staged: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
         self.pending: tuple[str, dict[str, dict[str, dict[str, Any]]], float] | None = None
         self.sections = 0
@@ -395,6 +405,8 @@ class OpenWrt(HttpService):
             ("luci-rpc", "getDHCPLeases"): self._dhcp_leases,
             ("file", "read"): self._file_read,
             ("file", "list"): self._file_list,
+            ("file", "stat"): self._file_stat,
+            ("file", "exec"): self._file_exec,
         }.get((obj, func))
         if obj == "uci":
             return self._uci(sid, func, args, snap)
@@ -745,12 +757,36 @@ class OpenWrt(HttpService):
             self.firewall = fw
         return self.firewall
 
+    def _system(self, snap: Snapshot) -> dict[str, dict[str, Any]]:
+        """/etc/config/system as saved: the host name, São Paulo's time zone, NTP."""
+        if self.system is None:
+            n = snap.node(self.node)
+            self.system = {
+                self._new_section(): {
+                    ".type": "system",
+                    "hostname": n.hostname or n.name,
+                    "timezone": "<-03>3",
+                    "zonename": "America/Sao Paulo",
+                    "ttylogin": "0",
+                    "log_size": "128",
+                    "urandom_seed": "0",
+                },
+                "ntp": {
+                    ".type": "timeserver",
+                    "enabled": "1",
+                    "enable_server": "0",
+                    "server": ["0.openwrt.pool.ntp.org", "1.openwrt.pool.ntp.org"],
+                },
+            }
+        return self.system
+
     def _saved(self, snap: Snapshot) -> dict[str, dict[str, dict[str, Any]]]:
         return {
             "network": self._network(snap),
             "wireless": self._wireless(snap),
             "dhcp": self._dhcp(snap),
             "firewall": self._firewall(snap),
+            "system": self._system(snap),
         }
 
     def _new_section(self) -> str:
@@ -763,9 +799,9 @@ class OpenWrt(HttpService):
     @staticmethod
     def _values(net: dict[str, dict[str, Any]]) -> dict[str, Any]:
         out = {}
-        for name, sec in net.items():
+        for index, (name, sec) in enumerate(net.items()):
             anonymous = name.startswith("cfg")
-            out[name] = {".anonymous": anonymous, ".type": sec[".type"], ".name": name}
+            out[name] = {".anonymous": anonymous, ".type": sec[".type"], ".name": name, ".index": index}
             out[name].update({k: (list(v) if isinstance(v, list) else v) for k, v in sec.items() if k != ".type"})
         return out
 
@@ -1206,6 +1242,55 @@ class OpenWrt(HttpService):
             if parts[5] == "temp":
                 return OK, {"data": f"{milli}\n"}
         return NOT_FOUND, None
+
+    def _file_stat(self, snap: Snapshot, args: dict[str, Any]) -> tuple[int, Any]:
+        """rpcd's file stat (the ACL's "list" permission on the path)."""
+        path = args.get("path")
+        if not isinstance(path, str):
+            return INVALID_ARGUMENT, None
+        if not self._file_allowed(path, "list"):
+            return PERMISSION_DENIED, None
+        if path != ETHERWAKE or not ETHERWAKE_INSTALLED:
+            return NOT_FOUND, None
+        boot = int(snap.boot(self.node))
+        return OK, {
+            "path": path,
+            "type": "file",
+            "size": 9_401,
+            "mode": 33261,
+            "atime": boot,
+            "mtime": 1750711236,
+            "ctime": 1750711236,
+            "inode": 812,
+            "uid": 0,
+            "gid": 0,
+        }
+
+    def _file_exec(self, snap: Snapshot, args: dict[str, Any]) -> tuple[int, Any]:
+        """rpcd's file exec, allowed for the command paths the ACL lists with
+        "exec": here only etherwake (`[-b] -i <interface> <mac>`)."""
+        cmd, params = args.get("command"), args.get("params") or []
+        if not isinstance(cmd, str) or not isinstance(params, list):
+            return INVALID_ARGUMENT, None
+        if not self._file_allowed(cmd, "exec"):
+            return PERMISSION_DENIED, None
+        if cmd != ETHERWAKE or not ETHERWAKE_INSTALLED:
+            return NOT_FOUND, None
+        params = [str(p) for p in params]
+        dev = params[params.index("-i") + 1] if "-i" in params[:-1] else "eth0"
+        mac = params[-1] if params else ""
+        devices = self._devices(snap, {})[1]
+        known = set(devices) | {f"{br}.{v['id']}" for br, vs in self._bridge_vlans(snap).items() for v in vs}
+        if dev not in known:
+            return OK, {
+                "code": 1,
+                "stdout": "",
+                "stderr": f"ioctl: No such device\nUnable to get the interface {dev}\n",
+            }
+        if len(mac.split(":")) != 6:
+            return OK, {"code": 3, "stdout": "", "stderr": "The MAC address was not valid.\n"}
+        WAKES.append((dev, mac.lower()))
+        return OK, {"code": 0, "stdout": "", "stderr": ""}
 
     def _file_list(self, snap: Snapshot, args: dict[str, Any]) -> tuple[int, Any]:
         path = args.get("path")

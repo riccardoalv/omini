@@ -189,3 +189,32 @@ def test_vlans_and_a_ports_vlan(world):
         change = {"device": key, "kind": "port.vlans", "port": "Port 3", "value": {"untagged": 99}}
         p3 = ifaces(device(emu.collect("horaco", "apply", change=change)))["Port 3"]
         assert p3["vlans"] == {"untagged": 99}
+
+
+def test_backup(world):
+    import json
+
+    with Emulator(at=TUE_1030, apis=["horaco"], world=World()) as emu:
+        key = device(emu.collect("horaco"))["key"]
+
+        def backup() -> dict[str, Any]:
+            out = emu.collect("horaco", "backup")
+            assert "error" not in out, out
+            [b] = out["backups"]
+            assert (b["device"], b["format"]) == (key, "json")
+            return b
+
+        first = backup()
+        s = json.loads(first["content"])
+        assert s["system"] == {"name": "sw-wh-01", "ip": "10.10.10.8", "netmask": "255.255.255.0"}
+        assert sorted(s["ports"], key=lambda n: int(n.split()[1])) == [f"Port {n}" for n in range(1, 11)]
+        assert all(p["enabled"] for p in s["ports"].values())
+        assert s["vlan_manage"] is True and 1 in {v["id"] for v in s["vlans"]}
+        assert s["port_vlans"]["Port 9"]["mode"] == "trunk"
+        # Five minutes later: uptime and counters moved, the configuration did not.
+        emu.set_time(LATER)
+        assert backup() == first
+        # A change Omini makes shows up in the next backup.
+        change = {"device": key, "kind": "port.enabled", "port": "Port 8", "value": False}
+        device(emu.collect("horaco", "apply", change=change))
+        assert json.loads(backup()["content"])["ports"]["Port 8"]["enabled"] is False

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -75,7 +76,8 @@ func newHarness(t *testing.T, ui *fstest.MapFS, extraPlugins ...string) *harness
 	for _, p := range loaded {
 		reg.Register(plugs.Integration(p))
 	}
-	coll := collector.New(st, reg, box, collector.Options{})
+	// Tests never send packets on the network they run on.
+	coll := collector.New(st, reg, box, collector.Options{LocalNets: func() []netip.Prefix { return nil }})
 
 	web := &fakeWeb{}
 	icons := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

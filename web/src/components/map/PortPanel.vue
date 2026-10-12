@@ -165,6 +165,19 @@ function details(p: Interface) {
         .filter(Boolean)
         .join(' · '),
     })
+  if (p.lag) out.push({ key: 'lag', label: 'LAG', value: p.lag, mono: true })
+  if (p.stp?.state)
+    out.push({
+      key: 'stp',
+      label: 'STP',
+      value: [
+        t(`panel.stp.${p.stp.state}`),
+        p.stp.role ? t('panel.stpRole', { role: p.stp.role }) : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      err: p.stp.state === 'blocking',
+    })
   const m = p.transceiver
   if (m) {
     const ident = [m.vendor, m.part, m.type].filter(Boolean).join(' ')

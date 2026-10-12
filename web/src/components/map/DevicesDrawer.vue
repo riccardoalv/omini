@@ -4,15 +4,17 @@ export type MenuTab = 'devices' | 'vlans' | 'services'
 </script>
 
 <script setup lang="ts">
-import { EyeOff, WifiOff, X } from 'lucide-vue-next'
+import { EyeOff, Pause, WifiOff, X } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
 import DevicesList from '@/components/DevicesList.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import ServicesTab from '@/components/map/ServicesTab.vue'
 import VlansTab from '@/components/map/VlansTab.vue'
+import { displayName } from '@/lib/names'
 import type { NetworkGroup } from '@/lib/networks'
 import { prefs } from '@/lib/prefs'
+import type { TopoNode } from '@/lib/types'
 
 /**
  * The map's menu, a drawer over the map (the menu button in the toolbar opens
@@ -27,6 +29,8 @@ defineProps<{
   colors: Map<string, string>
   offlineCount: number
   hiddenCount: number
+  /** Devices whose internet a router pauses. */
+  paused?: TopoNode[]
 }>()
 const emit = defineEmits<{ close: []; select: [id: string]; changed: [] }>()
 const tab = defineModel<MenuTab>('tab', { default: 'devices' })
@@ -105,6 +109,15 @@ function pick(key: string | undefined) {
           />
         </label>
       </div>
+      <p v-if="paused?.length" class="paused" data-test="paused-list">
+        <Pause :size="14" />
+        {{ t('host.paused') }}:
+        <template v-for="(p, i) in paused" :key="p.id">
+          <button class="link" type="button" @click="emit('select', p.id)">
+            {{ displayName(p, t) }}</button
+          >{{ i < paused.length - 1 ? ', ' : '' }}
+        </template>
+      </p>
       <DevicesList @select="(id) => emit('select', id)" @changed="emit('changed')" />
     </template>
 
@@ -121,6 +134,17 @@ function pick(key: string | undefined) {
 </template>
 
 <style scoped>
+.paused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--warn-soft);
+  font-size: 13px;
+}
 .devices-drawer {
   position: absolute;
   top: 56px;

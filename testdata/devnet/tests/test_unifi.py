@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import ssl
 import urllib.error
 import urllib.request
@@ -65,7 +66,7 @@ def test_devices_and_models(runs: dict, world: World) -> None:
 def test_switch_ports_and_lldp(runs: dict, world: World) -> None:
     sw = runs[TUE_1030]["sw-f3-01"]
     ifs = {i["name"]: i for i in sw["interfaces"]}
-    assert len(ifs) == 52
+    assert len([i for i in ifs.values() if i["type"] == "ethernet"]) == 52
     assert ifs["Port 49"]["speed_mbps"] == 10000 and ifs["Port 49"]["connector"] == "sfp"
     assert ifs["Port 49"]["transceiver"]["part"] == "UACC-OM-MM-10G-D"
     assert ifs["Port 50"]["up"] and ifs["Port 50"]["speed_mbps"] == 10000
@@ -86,6 +87,20 @@ def test_switch_ports_and_lldp(runs: dict, world: World) -> None:
     later = {i["name"]: i for i in runs[TUE_1035]["sw-f3-01"]["interfaces"]}
     assert later["Port 49"]["rx_bytes"] > ifs["Port 49"]["rx_bytes"]
     assert later["Port 45"]["tx_bytes"] > ifs["Port 45"]["tx_bytes"]
+
+
+def test_stp_and_the_lag_to_the_core(runs: dict) -> None:
+    sw = runs[TUE_1030]["sw-f3-01"]
+    ifs = {i["name"]: i for i in sw["interfaces"]}
+    assert ifs["Port 49"]["lag"] == ifs["Port 50"]["lag"] == "LAG 49-50"
+    lag = ifs["LAG 49-50"]
+    assert lag["type"] == "lag" and lag["up"] is True and lag["speed_mbps"] == 20000
+    assert [n for n, i in ifs.items() if i.get("lag")] == ["Port 49", "Port 50"]
+    assert ifs["Port 45"]["stp"] == {"state": "forwarding"}
+    assert ifs["Port 48"]["stp"] == {"state": "disabled"}  # nothing plugged in
+    assert "stp_root" not in sw  # UniFi does not say which bridge is the root
+    ap = runs[TUE_1030]["ap-f1-01"]
+    assert not any(i.get("stp") or i.get("lag") for i in ap["interfaces"])
 
 
 def test_wired_clients(runs: dict, world: World) -> None:
@@ -212,7 +227,7 @@ def test_disable_and_enable_a_port() -> None:
         change["value"] = True
         p30 = ports(emu.collect("unifi", "apply", change=change))["Port 30"]
         assert p30["enabled"] is True and p30["up"] is True
-        assert all(p["enabled"] for p in ports(emu.collect("unifi")).values())
+        assert all(p["enabled"] for p in ports(emu.collect("unifi")).values() if p["type"] != "lag")
 
         # A View Only account reads the map, but cannot change a port.
         emu.secrets["unifi"]["read_only"] = True
@@ -291,3 +306,34 @@ def test_a_switch_port_s_vlans_and_the_site_s_vlans() -> None:
         assert "site's LAN" in apply("vlan.delete", {"id": 1})["error"]
         assert "the Wi-Fi" in apply("vlan.delete", {"id": 50})["error"]
         assert "aggregate" in apply("port.vlans", {"untagged": 30}, "Port 49")["error"]
+
+
+def test_backup() -> None:
+    with Emulator(at=TUE_1030, apis=["unifi"], world=World()) as emu:
+        first = emu.collect("unifi", "backup")
+        assert "error" not in first, first.get("error")
+        keys = {d["key"] for d in emu.collect("unifi")["devices"]}
+        backups = {b["device"]: b for b in first["backups"]}
+        assert set(backups) == keys and {b["format"] for b in backups.values()} == {"json"}
+        content = {k: json.loads(b["content"]) for k, b in backups.items()}
+        # The site's settings go with the switch (the gateway is not UniFi).
+        holders = [k for k, c in content.items() if "site" in c]
+        assert holders == [emu.world.nodes["sw-f3-01"].mac]
+        site = content[holders[0]]["site"]
+        assert {"networks", "wifi_networks", "port_profiles", "settings"} <= set(site)
+        assert site["settings"]["ntp"]["ntp_server_1"] == "a.ntp.br"
+        text = "".join(b["content"] for b in first["backups"])
+        for secret in ("x_passphrase", "x_ssh_password", "Ub1-ssh-Acme!", "acme-ro-2026", "community"):
+            assert secret not in text
+        assert "uptime" not in text and "rx_bytes" not in text
+
+        # Live status changes, the configuration does not: the same backup.
+        emu.set_time(TUE_1035)
+        assert emu.collect("unifi", "backup")["backups"] == first["backups"]
+
+        # A port disabled through Omini changes the switch's backup only.
+        change = {"device": holders[0], "kind": "port.enabled", "port": "Port 30", "value": False}
+        assert "error" not in emu.collect("unifi", "apply", change=change)
+        after = {b["device"]: b["content"] for b in emu.collect("unifi", "backup")["backups"]}
+        assert after[holders[0]] != backups[holders[0]]["content"]
+        assert all(after[k] == b["content"] for k, b in backups.items() if k != holders[0])

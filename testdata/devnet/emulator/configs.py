@@ -39,6 +39,10 @@ def generate() -> dict[str, Any]:
             out[name] = {"api_key": secrets.token_hex(24)}
         elif kind == "horaco" or kind == "mercusys":
             out[name] = {"username": "admin", "password": tok(12)}
+        elif kind == "adguard":
+            out[name] = {"username": "omini", "password": tok(18)}
+        elif kind == "pihole":
+            out[name] = {"password": tok(24)}  # an application password
     out["snmp"] = {
         "community": "acme-ro-" + secrets.token_hex(4),
         "write_community": "acme-rw-" + secrets.token_hex(4),
@@ -50,7 +54,13 @@ def generate() -> dict[str, Any]:
 def load(path: Path) -> dict[str, Any]:
     """Read the credentials file, creating it (0600) on first use."""
     if path.exists():
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
+        # APIs added to Acme after the file was made get their credentials now.
+        missing = {k: v for k, v in generate().items() if k not in data}
+        if missing:
+            data.update(missing)
+            path.write_text(json.dumps(data, indent=1))
+        return data
     data = generate()
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -85,6 +95,8 @@ PLUGIN_OF = {
     "pfsense": "pfsense",
     "horaco": "horaco",
     "mercusys": "mercusys",
+    "adguard": "adguard",
+    "pihole": "pihole",
 }
 
 
@@ -125,6 +137,10 @@ def integrations(urls: dict[str, str], sec: dict[str, Any]) -> list[tuple[str, s
             cfg = {"host": url, "username": s["username"], "password": s["password"]}
         elif kind == "mercusys":
             cfg = {"host": url, "password": s["password"], "username": s["username"], "verify_tls": False}
+        elif kind == "adguard":
+            cfg = {"url": url, "username": s["username"], "password": s["password"], "verify_tls": False}
+        elif kind == "pihole":
+            cfg = {"url": url, "password": s["password"], "verify_tls": False}
         else:
             continue
         out.append((name, PLUGIN_OF[kind], cfg))

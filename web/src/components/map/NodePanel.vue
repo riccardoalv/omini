@@ -20,6 +20,8 @@ import DeviceIcon from '@/components/DeviceIcon.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import DeviceExtras from '@/components/map/DeviceExtras.vue'
+import ConfigBackups from '@/components/map/ConfigBackups.vue'
+import HostActions from '@/components/map/HostActions.vue'
 import NetworkPlace from '@/components/map/NetworkPlace.vue'
 import PanelSection from '@/components/map/PanelSection.vue'
 import PortPanel from '@/components/map/PortPanel.vue'
@@ -145,8 +147,13 @@ const guards = computed(() => {
 })
 function changeText(c: ConfigChange) {
   const port = (c.port && n.value?.port_labels?.[c.port]) || c.port || ''
+  const v = (c.after && typeof c.after === 'object' ? c.after : {}) as Record<string, unknown>
   const what =
-    c.after === false ? t('changes.portDisabled', { port }) : t('changes.portEnabled', { port })
+    c.kind === 'port.enabled' || !c.kind
+      ? c.after === false
+        ? t('changes.portDisabled', { port })
+        : t('changes.portEnabled', { port })
+      : t(`changes.done.${c.kind.replace('.', '_')}`, { port, name: '', ...v })
   return c.error ? `${what}: ${t('changes.failed', { error: c.error })}` : what
 }
 function afterChange() {
@@ -458,6 +465,12 @@ const title = computed(() => {
 // "Scan": nmap on this device now; the map is updated with what it finds.
 const scanning = ref(false)
 const scanResult = ref('')
+/** What the last wake or pause did. */
+const hostDone = ref('')
+watch(
+  () => props.node?.id,
+  () => (hostDone.value = ''),
+)
 watch(
   () => props.node?.id,
   () => (scanResult.value = ''),
@@ -698,7 +711,15 @@ async function save(patch: {
             <component :is="n.pinned ? PinOff : Pin" :size="14" />
             {{ n.pinned ? t('panel.unpin') : t('panel.pin') }}
           </button>
+          <HostActions
+            :node="n"
+            :nodes="nodes"
+            @applied="afterChange"
+            @error="(m) => (error = m)"
+            @done="(m) => ((scanResult = ''), (hostDone = m))"
+          />
         </div>
+        <p v-if="hostDone" class="alert ok" role="status" data-test="host-done">{{ hostDone }}</p>
         <p v-if="error" class="alert error">{{ error }}</p>
         <p v-if="scanResult" class="alert ok" role="status" data-test="scan-result">
           {{ t('panel.scanned', { result: scanResult }) }}
@@ -800,6 +821,7 @@ async function save(patch: {
           @applied="afterChange"
         />
 
+        <ConfigBackups v-if="n.device" :key="n.id" :node-id="n.id" :label="nodeName(n.id)" />
         <DeviceExtras v-if="n.device" :device="n.device" />
 
         <PanelSection

@@ -56,6 +56,9 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		}
 	}
 	in.Detectors = detectors()
+	if changed, err := c.store.ChangedOutside(ctx, now.Add(-ChangedOutsideFor)); err == nil && len(changed) > 0 {
+		in.ConfigChanged = changed
+	}
 	if list, err := c.store.Vlans(ctx); err == nil && len(list) > 0 {
 		in.Vlans = map[uint16]string{}
 		for _, v := range list {
@@ -73,7 +76,7 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 	}
 	for _, s := range statuses {
 		in.Integrations = append(in.Integrations, insights.Integration{
-			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error,
+			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error, Failures: s.Failures,
 		})
 	}
 	seenMAC := firstSeenByMAC(inventory)

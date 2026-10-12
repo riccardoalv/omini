@@ -41,7 +41,8 @@ const path = computed(() =>
 const label = computed(() => {
   const d = props.data
   if (!d || d.hidden || !d.at) return undefined
-  const speed = formatSpeed(d.speed)
+  const speed =
+    d.lag && d.speed ? `${d.lag} × ${formatSpeed(d.speed / d.lag)}` : formatSpeed(d.speed)
   if (!speed && !d.name) return undefined
   const vertical = props.targetPosition === Position.Top
   const inset = d.inset ?? 0

@@ -7,16 +7,21 @@ request (no session); a wrong username or password answers 401
 `{"error":401,"message":"Unauthorized"}`. GET reads a menu (a list, or one
 object for singleton menus like /system/resource); `GET /rest/<menu>/<id>`
 reads one item by `.id` or name; query parameters filter (`?type=ether`) and
-`.proplist` picks fields. POST runs a command: only `print` and the
-read-only `/interface/ethernet/monitor` with `once` are accepted, plus `<menu>/add`
-and `/ip/dns/set` below. PATCH `/rest/interface/ethernet/<id>` (or
+`.proplist` picks fields. POST runs a command: only `print`, the
+read-only `/interface/ethernet/monitor` and `/interface/bridge/monitor` with `once`
+(the bridge's STP root), `/execute` of `/export terse` with `as-string` (the
+configuration as text, its first line the time stamp, sensitive values left out),
+`/tool/wol` (mac, interface: kept in the configuration, nothing is sent) are
+accepted, plus `<menu>/add` and `/ip/dns/set` below. `DELETE
+/rest/ip/firewall/connection/<id>` removes a connection (the table: one HTTPS
+connection per present DHCP client of the branch). PATCH `/rest/interface/ethernet/<id>` (or
 `/rest/interface/<id>`, by `.id` or name) with `{"disabled": "true"|"false"}`
 disables or enables a physical port (the console's `set`): it sets the design
 port's admin_up, so the port reads `disabled=true`, `running=false` and its link
 drops in the world. The configuration Omini's VLAN and network changes write (bridge
 ports' PVID and frame types, the bridge VLAN table, VLAN interfaces, addresses,
 DHCP pools, servers, networks and static leases, firewall filter rules and address
-lists, /ip/dns) is kept per box in mikrotik_config.RouterConfig, built from the
+lists, /ip/dns and /ip/dns/static) is kept per box in mikrotik_config.RouterConfig, built from the
 design on first use: PUT adds, PATCH sets, DELETE removes, POST `<menu>/add` adds
 with `place-before`; a bad write answers 400 "failure: ...". These writes change
 what the API answers, not the world (its traffic, MAC tables and leases still
@@ -39,6 +44,7 @@ import binascii
 import hmac
 import ipaddress
 import json
+import re
 import time
 from typing import Any
 
@@ -88,6 +94,12 @@ FORBIDDEN = {"error": 403, "message": "Forbidden", "detail": "not enough permiss
 UNAUTHORIZED = {"error": 401, "message": "Unauthorized"}
 
 WG_HQ_ENDPOINT = "203.0.113.45"  # fw-hq-01's public address (pppoe0)
+
+# STP as each box sees it: (root node, its priority, the root port); None: the box is the root.
+STP_ROOT: dict[str, tuple[str, int, str] | None] = {
+    "br-gw01": None,
+    "sw-stor-01": ("core-sw01", 0x1000, "bond-core"),
+}
 
 
 # --------------------------------------------------------------------------- formatting
@@ -187,6 +199,12 @@ class MikroTik(HttpService):
                 return Response.json({"error": 400, "message": "Bad Request", "detail": "JSON parse error"}, 400)
             if sub == "/interface/ethernet/monitor":
                 return self.monitor(body, snap)
+            if sub == "/interface/bridge/monitor":
+                return self.bridge_monitor(body, snap)
+            if sub == "/execute":
+                return self.execute(body, snap)
+            if sub == "/tool/wol":
+                return self.write(lambda: self.wol(body))
             if sub.endswith("/print"):
                 return self.get(sub[: -len("/print")], req, snap, body.get(".proplist"))
             if sub == "/ip/dns/set":
@@ -207,6 +225,11 @@ class MikroTik(HttpService):
             return self.patch(sub, body, snap)
         if req.method == "DELETE":
             menu, _, item = sub.rpartition("/")
+            if menu == "/ip/firewall/connection":
+                if not any(r[".id"] == item for r in self.connections(snap)):
+                    return Response.json({"error": 404, "message": "Not Found", "detail": "no such item"}, 404)
+                self.cfg.conn_gone.add(item)
+                return Response(204, b"", [])
             if menu not in PROPS:
                 return Response.json(FORBIDDEN, 403)
             if menu == "/ip/dhcp-server/lease" and self.lease_change(item, None, snap):
@@ -359,6 +382,8 @@ class MikroTik(HttpService):
             "/ip/firewall/filter": self.filter_rules,
             "/ip/firewall/address-list": self.address_lists,
             "/ip/dns": lambda s: dict(self.cfg.dns),
+            "/ip/dns/static": lambda s: [dict(r) for r in self.cfg.rows("/ip/dns/static")],
+            "/ip/firewall/connection": self.connections,
         }
 
     # -- system --
@@ -789,8 +814,16 @@ class MikroTik(HttpService):
     def bridge_port_rows(self, snap: Snapshot) -> list[dict[str, str]]:
         """The configuration's PVID and frame types, with the port's live state."""
         out = []
-        for row in self.cfg.rows("/interface/bridge/port"):
+        root = STP_ROOT.get(self.node)
+        for k, row in enumerate(self.cfg.rows("/interface/bridge/port")):
             up = snap.port(self.node, row["interface"]).up
+            role = (
+                "disabled-port"
+                if not up
+                else "root-port"
+                if root and root[2] == row["interface"]
+                else "designated-port"
+            )
             out.append(
                 {
                     **row,
@@ -801,9 +834,99 @@ class MikroTik(HttpService):
                     "learn": "auto",
                     "horizon": "none",
                     "status": "in-bridge" if up else "inactive",
-                    "role": "designated-port" if up else "disabled-port",
+                    "role": role,
+                    "port-number": str(k + 1),
+                    "forwarding": b(up),
+                    "learning": b(up),
+                    "edge-port": b(
+                        up and role == "designated-port" and not self.module(self.box.ports[row["interface"]])
+                    ),
+                    "point-to-point-port": b(up),
+                    "sending-rstp": b(up),
                     "inactive": b(not up),
                     "trusted": "false",
+                }
+            )
+        return out
+
+    def root_bridge_id(self) -> str:
+        """The root bridge ID as RouterOS prints it: 0x<priority>.<MAC>."""
+        root = STP_ROOT.get(self.node)
+        if root is None:
+            p = self.box.ports[self.bridge or "bridge"]
+            prio = 0x8000 if self.node == "br-gw01" else 0x4000
+            return f"0x{prio:X}.{ros_mac(p.mac)}"
+        node, prio, _ = root
+        return f"0x{prio:X}.{ros_mac(self.ctx.world.nodes[node].mac)}"
+
+    def bridge_monitor(self, body: dict[str, Any], snap: Snapshot) -> Response:
+        if "once" not in body and "duration" not in body:
+            return Response.json({"error": 400, "message": "Bad Request", "detail": "Session closed"}, 400)
+        if not self.bridge or str(body.get("numbers") or "") not in (self.bridge, self.ids.get(self.bridge)):
+            return Response.json({"error": 400, "message": "Bad Request", "detail": "no such item"}, 400)
+        root = STP_ROOT.get(self.node)
+        p = self.box.ports[self.bridge]
+        ports = self.bridge_port_rows(snap)
+        return Response.json(
+            [
+                {
+                    "name": self.bridge,
+                    "state": "enabled",
+                    "current-mac-address": ros_mac(p.mac),
+                    "root-bridge": b(root is None),
+                    "root-bridge-id": self.root_bridge_id(),
+                    "regional-root-bridge-id": self.root_bridge_id() if self.node == "sw-stor-01" else "",
+                    "root-path-cost": "0" if root is None else "2000",
+                    "root-port": "none" if root is None else root[2],
+                    "port-count": str(len(ports)),
+                    "designated-port-count": str(sum(r["role"] == "designated-port" for r in ports)),
+                    "fast-forward": "false",
+                }
+            ]
+        )
+
+    def execute(self, body: dict[str, Any], snap: Snapshot) -> Response:
+        """`/execute`: only the configuration export (what Omini's backup runs)."""
+        script = str(body.get("script") or "").strip()
+        if not script.startswith("/export") or "show-sensitive" in script or "file=" in script:
+            return Response.json(FORBIDDEN, 403)
+        if "as-string" not in body:
+            return Response.json({"ret": "*5A"})  # a background job's id
+        header = f"# {local_time(snap.t)} by RouterOS {self.version(snap)}"
+        return Response.json({"ret": self.cfg.export(header)})
+
+    def wol(self, body: dict[str, Any]) -> list[Any]:
+        if set(body) - {"mac", "interface"}:
+            raise Failure(f"unknown parameter {sorted(set(body) - {'mac', 'interface'})[0]}")
+        mac_ = str(body.get("mac") or "")
+        if not re.fullmatch(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", mac_):
+            raise Failure("invalid value for argument mac")
+        if str(body.get("interface") or "") not in self.interface_names():
+            raise Failure("input does not match any value of interface")
+        self.cfg.wol_sent.append({"mac": mac_, "interface": str(body["interface"])})
+        return []
+
+    def connections(self, snap: Snapshot) -> list[dict[str, str]]:
+        """One HTTPS connection per present DHCP client (less the ones removed)."""
+        out = []
+        for k, lease in enumerate(snap.leases(self.box.site) if self.node == "br-gw01" else []):
+            item = f"*{0x2000 + k:X}"
+            if item in self.cfg.conn_gone or not snap.present(lease.node.name):
+                continue
+            out.append(
+                {
+                    ".id": item,
+                    "protocol": "tcp",
+                    "src-address": f"{lease.ip}:{40000 + k}",
+                    "dst-address": "203.0.113.80:443",
+                    "reply-src-address": "203.0.113.80:443",
+                    "reply-dst-address": f"198.51.100.20:{40000 + k}",
+                    "tcp-state": "established",
+                    "timeout": "23h59m50s",
+                    "seen-reply": "true",
+                    "assured": "true",
+                    "confirmed": "true",
+                    "fasttrack": "true",
                 }
             )
         return out

@@ -74,8 +74,8 @@ func TestRules(t *testing.T) {
 		Topology: topo,
 		Integrations: []Integration{
 			{ID: 2, Name: "OPNsense", OK: true},
-			{ID: 3, Name: "Horaco", OK: false, Error: "timeout"},
-			{ID: 4, Name: "Mercusys", OK: false, Error: "login refused"},
+			{ID: 3, Name: "Horaco", OK: false, Error: "timeout", Failures: 2},
+			{ID: 4, Name: "Mercusys", OK: false, Error: "login refused", Failures: 3},
 		},
 		NewDevices: []NewDevice{{NodeID: "mac:02", FirstSeen: now.Add(-time.Hour)}, {NodeID: "mac:04", FirstSeen: now.Add(-48 * time.Hour)}},
 		Now:        now,
@@ -150,5 +150,25 @@ func TestEvaluateOrderAndKeys(t *testing.T) {
 	// A quiet network: nothing to say.
 	if got := Evaluate(Input{Now: time.Unix(0, 0)}); len(got) != 0 {
 		t.Fatalf("empty: %+v", got)
+	}
+}
+
+// TestOneFailedRoundIsNoAlertYet: a device whose integration failed once is
+// offline on the map, but told only from the second failed round in a row.
+func TestOneFailedRoundIsNoAlertYet(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{
+		{ID: "dev:ap", Kind: topology.KindDevice, Label: "Halo", IntegrationID: 7, Device: &model.Device{Key: "ap"}},
+	}}
+	for failures, want := range []int{0, 0, 1, 1} {
+		got := byRule(Evaluate(Input{Topology: topo, Integrations: []Integration{
+			{ID: 7, Name: "Mercusys", OK: failures == 0, Error: "cut short", Failures: failures},
+		}}))
+		if len(got["device_offline"]) != want && failures > 0 {
+			t.Fatalf("%d failed rounds: %+v", failures, got["device_offline"])
+		}
+	}
+	got := byRule(Evaluate(Input{Integrations: []Integration{{ID: 8, Name: "New", Error: "refused", Failures: 1}}}))
+	if len(got["integration_failed"]) != 0 {
+		t.Fatalf("an integration that failed once: %+v", got["integration_failed"])
 	}
 }

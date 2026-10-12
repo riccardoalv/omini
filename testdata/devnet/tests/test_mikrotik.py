@@ -422,3 +422,110 @@ def test_storage_switch_vlans() -> None:
         d = device(emu.collect(STOR, "apply", change={"device": key, "kind": "vlan.delete", "value": {"id": 130}}))
         assert 130 not in {v["id"] for v in d["vlans"]}
         assert iface(d, "sfp28-8")["vlans"] == {"untagged": 100}
+
+
+# --------------------------------------------------------------------------- DNS, Wake-on-LAN, pause, STP, LAG, backup
+
+
+def test_branch_dns_names_and_wake() -> None:
+    with Emulator(at=TUESDAY_10_30, apis=[BR], world=World()) as emu:
+        d = device(emu.collect(BR))
+        key = d["key"]
+        assert d["dns_domain"] == "cps.acme.local"  # what the branch's DHCP hands out
+        assert d["dns_records"] == [{"name": "br-gw01.cps.acme.local", "ip": "10.20.10.1"}]
+
+        name = {"name": "printer.cps.acme.local", "ip": "10.20.30.250"}
+        d = device(emu.collect(BR, "apply", change={"device": key, "kind": "dns.set", "value": name}))
+        assert name in d["dns_records"]
+        row = next(r for r in rest(emu, BR, "/rest/ip/dns/static") if r.get("name") == name["name"])
+        assert row["comment"] == "Omini" and row["address"] == "10.20.30.250"
+        moved = dict(name, ip="10.20.30.251")
+        d = device(emu.collect(BR, "apply", change={"device": key, "kind": "dns.set", "value": moved}))
+        assert moved in d["dns_records"] and name not in d["dns_records"]
+        d = device(
+            emu.collect(BR, "apply", change={"device": key, "kind": "dns.delete", "value": {"name": name["name"]}})
+        )
+        assert [r["name"] for r in d["dns_records"]] == ["br-gw01.cps.acme.local"]
+
+        prn = World().nodes["br-prn01"]
+        wake = {"mac": prn.mac, "ip": prn.ip}
+        assert "devices" in emu.collect(BR, "apply", change={"device": key, "kind": "wol.send", "value": wake})
+        out = emu.collect(BR, "apply", change={"device": key, "kind": "wol.send", "value": dict(wake, ip="172.31.9.9")})
+        assert "no network that holds 172.31.9.9" in out["error"]
+        # Without an address: the LAN, which the branch router does not have (only VLANs).
+        out = emu.collect(BR, "apply", change={"device": key, "kind": "wol.send", "value": {"mac": prn.mac}})
+        assert "no LAN" in out["error"]
+
+
+def test_branch_pause_internet() -> None:
+    world = World()
+    with Emulator(at=TUESDAY_10_30, apis=[BR], world=world) as emu:
+        key = device(emu.collect(BR))["key"]
+        conns = rest(emu, BR, "/rest/ip/firewall/connection")
+        ip = conns[0]["src-address"].split(":")[0]
+        lease = next(lease for lease in world.at(TUESDAY_10_30).leases("branch") if lease.ip == ip)
+        want = {"mac": lease.mac, "ips": [ip], "name": "Notebook"}
+        d = device(emu.collect(BR, "apply", change={"device": key, "kind": "pause.set", "value": want}))
+        assert d["paused"] == [want]
+        rules = rest(emu, BR, "/rest/ip/firewall/filter")
+        forward = [r for r in rules if r["chain"] == "forward"]
+        assert forward[0]["src-address-list"] == "omini_paused" and forward[0]["dst-address-list"] == "!omini-private"
+        assert forward[0]["comment"] == "Omini: paused devices"
+        lists = rest(emu, BR, "/rest/ip/firewall/address-list")
+        assert {a["address"] for a in lists if a["list"] == "omini-private"} == {
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+        }
+        assert [(a["address"], a["comment"]) for a in lists if a["list"] == "omini_paused"] == [
+            (ip, f"Omini {lease.mac} Notebook")
+        ]
+        # Its open connection is cut; the others stay.
+        left = rest(emu, BR, "/rest/ip/firewall/connection")
+        assert not any(c["src-address"].startswith(ip + ":") for c in left) and len(left) == len(conns) - 1
+
+        d = device(
+            emu.collect(BR, "apply", change={"device": key, "kind": "pause.delete", "value": {"mac": lease.mac}})
+        )
+        assert "paused" not in d
+        assert not any(r.get("src-address-list") == "omini_paused" for r in rest(emu, BR, "/rest/ip/firewall/filter"))
+
+    with Emulator(at=TUESDAY_10_30, apis=[STOR], world=world) as emu:
+        key = device(emu.collect(STOR))["key"]
+        out = emu.collect(STOR, "apply", change={"device": key, "kind": "pause.set", "value": want})
+        assert "does not route" in out["error"]  # its default route is its management VLAN's
+
+
+def test_stp_and_lags(runs: dict, world: World) -> None:
+    stor = device(runs["stor"])
+    core = world.nodes["core-sw01"]
+    assert stor["stp_root"] == f"4096.{core.mac}"  # the core switch, behind bond-core
+    assert iface(stor, "bond-core")["stp"] == {"state": "forwarding", "role": "root"}
+    assert iface(stor, "sfp28-7")["stp"] == {"state": "forwarding", "role": "designated"}
+    assert iface(stor, "sfp28-9")["stp"] == {"state": "disabled", "role": "disabled"}  # nothing plugged
+    assert "stp" not in iface(stor, "sfp28-15")  # a bond member: its bond is the bridge port
+    assert iface(stor, "sfp28-15")["lag"] == iface(stor, "sfp28-16")["lag"] == "bond-core"
+    assert iface(stor, "sfp28-1")["lag"] == "bond1" and "lag" not in iface(stor, "sfp28-7")
+    assert iface(stor, "bond-core")["type"] == "lag"
+    br = device(runs["br"])
+    bridge_mac = iface(br, "bridge")["mac"]
+    assert br["stp_root"] == f"32768.{bridge_mac}"  # the branch router is its own root
+    assert iface(br, "sfp-sfpplus1")["stp"] == {"state": "forwarding", "role": "designated"}
+
+
+def test_backup_is_the_export() -> None:
+    with Emulator(at=TUESDAY_10_30, apis=[BR], world=World()) as emu:
+        key = device(emu.collect(BR))["key"]
+        (b,) = emu.collect(BR, "backup")["backups"]
+        assert b["device"] == key and b["format"] == "text"
+        text = b["content"]
+        assert text.startswith("# software id = ") and " by RouterOS " not in text
+        assert "/ip dns static add address=10.20.10.1 name=br-gw01.cps.acme.local ttl=1d\n" in text
+        assert "private-key" not in text  # no sensitive values
+        # Later, nothing changed: the same backup (the export's time stamp is left out).
+        emu.set_time(TUESDAY_10_45)
+        assert emu.collect(BR, "backup")["backups"] == [b]
+        name = {"name": "nas.cps.acme.local", "ip": "10.20.30.20"}
+        emu.collect(BR, "apply", change={"device": key, "kind": "dns.set", "value": name})
+        (after,) = emu.collect(BR, "backup")["backups"]
+        assert after["content"] != text and "name=nas.cps.acme.local" in after["content"]

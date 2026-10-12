@@ -185,7 +185,12 @@ def test_reads_the_lab_network(runs: dict) -> None:
         "192.168.200.1/24",
         "all",  # pfSense's default LAN rules
     )
-    assert lan["dhcp"] == {"enabled": True, "from": "192.168.200.100", "to": "192.168.200.199"}
+    assert lan["dhcp"] == {
+        "enabled": True,
+        "from": "192.168.200.100",
+        "to": "192.168.200.199",
+        "reserve_in_range": False,
+    }
     names = {r["name"] for r in d["dhcp_reservations"]}
     assert {"lab-k3s-01", "lab-k3s-02", "lab-k3s-03"} <= names
 
@@ -241,3 +246,66 @@ def test_fixes_an_address(world: World) -> None:
         )
         assert "error" not in out, out.get("error")
         assert not any(r["mac"] == value["mac"] for r in device(out)["dhcp_reservations"])
+
+        # pfSense keeps fixed addresses out of the DHCP range, and says so.
+        dhcp = networks_of(device(out))[1]["dhcp"]
+        assert dhcp["reserve_in_range"] is False
+        inside = {**value, "ip": dhcp["from"]}
+        out = emu.collect("pfsense", "apply", change={"device": "x", "kind": "reservation.set", "value": inside})
+        assert "outside it" in out["error"]
+
+
+def apply(emu: Emulator, kind: str, value: dict) -> dict:
+    out = emu.collect("pfsense", "apply", change={"device": "x", "kind": kind, "value": value})
+    assert "error" not in out, out.get("error")
+    return device(out)
+
+
+def test_reads_names_pauses_and_no_lagg(runs: dict) -> None:
+    d = device(runs["first"])
+    assert d["dns_domain"] == "lab.acme.local"
+    assert not d.get("dns_records")  # no host override in the design
+    assert not d.get("paused")
+    assert not any(i.get("lag") for i in d["interfaces"])  # a VM: no LAGG
+
+
+def test_local_dns_names(world: World) -> None:
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        d = apply(emu, "dns.set", {"name": "k3s.lab.acme.local", "ip": "192.168.200.21"})
+        assert d["dns_records"] == [{"name": "k3s.lab.acme.local", "ip": "192.168.200.21"}]
+        d = apply(emu, "dns.set", {"name": "k3s.lab.acme.local", "ip": "192.168.200.22"})
+        assert d["dns_records"] == [{"name": "k3s.lab.acme.local", "ip": "192.168.200.22"}]
+        d = apply(emu, "dns.delete", {"name": "k3s.lab.acme.local"})
+        assert not d.get("dns_records")
+
+
+def test_wake_on_lan(world: World) -> None:
+    kali = world.nodes["lab-kali"]
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        apply(emu, "wol.send", {"mac": kali.mac, "ip": kali.ip})
+        apply(emu, "wol.send", {"mac": kali.mac})  # no address: the LAN
+        out = emu.collect(
+            "pfsense",
+            "apply",
+            change={"device": "x", "kind": "wol.send", "value": {"mac": kali.mac, "ip": "10.10.120.50"}},
+        )
+        assert "no network of pfSense holds 10.10.120.50" in out["error"]  # the WAN's network
+
+
+def test_pause_and_resume_internet(world: World) -> None:
+    kali = world.nodes["lab-kali"]
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        d = apply(emu, "pause.set", {"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"})
+        assert d["paused"] == [{"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"}]
+        assert networks_of(d)[1]["access"] == "all"  # the block is no access preset
+        d = apply(emu, "pause.set", {"mac": kali.mac, "ips": ["192.168.200.98"], "name": "lab-kali"})
+        assert d["paused"][0]["ips"] == ["192.168.200.98"]  # its new address replaces the old one
+        d = apply(emu, "pause.delete", {"mac": kali.mac})
+        assert not d.get("paused")
+
+        out = emu.collect(
+            "pfsense",
+            "apply",
+            change={"device": "x", "kind": "pause.set", "value": {"mac": kali.mac, "ips": ["192.168.200.1"]}},
+        )
+        assert "pfSense's own address" in out["error"]

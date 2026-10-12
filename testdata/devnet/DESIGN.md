@@ -140,6 +140,8 @@ dial-up interfaces), LTE 192.168.8.10/.11 behind the 5G router 192.168.8.1, bran
 | bkp-nas01 | QNAP TS-873AU-RP | QTS 5.2.6 | 10.10.10.31 | Backup target (PBS datastore, Hyper Backup) | SNMPv2c agent |
 | ups-rack01 | APC Smart-UPS SRT 5000 + NMC3 | AOS 3.2.1 | 10.10.10.40 | Rack UPS (community left at "public") | SNMPv1/v2c agent |
 | mon01 | Ubuntu VM with net-snmp | — | 10.10.20.40 | Zabbix | SNMPv2c agent |
+| AdGuard Home (add-on on homeassistant) | AdGuard Home | v0.107.57 | 10.10.50.10:3000 | DNS with the IoT names (rewrites); DHCP off | AdGuard Home API (`adguard`) |
+| Pi-hole (Docker on docker01, host network) | Pi-hole | v6.1.2 (FTL 6.2.3) | 10.10.20.50:8089 | DNS with the servers' names (Local DNS records); DHCP off | Pi-hole v6 API (`pihole`) |
 | br-gw01 | MikroTik RB5009UPr+S+ | RouterOS 7.16.2 | 10.20.10.1 | Branch router | RouterOS REST API |
 | br-oc200, br-sw01, br-ap01/02 | TP-Link OC200, SG3428MP, EAP670 | — | 10.20.10.5, .10, .11–12 | Branch LAN | Omada Open API (OC200) |
 | store-rt01 | GL.iNet GL-MT6000 | OpenWrt 24.10.2 | 10.30.1.1 | Store router + Wi-Fi | ubus over HTTP |
@@ -223,6 +225,8 @@ Each runs on the device's real address in the lab; tests serve them on 127.0.0.1
 | pfsense | pfsense | https://10.10.120.10 | pfSense plugin |
 | horaco | horaco | http://10.10.10.8 | Horaco switch plugin |
 | mercusys | mercusys | https://10.10.34.10 | Mercusys Halo plugin |
+| adguard | adguard | http://10.10.50.10:3000 | AdGuard Home plugin |
+| pihole | pihole | http://10.10.20.50:8089 | Pi-hole plugin |
 | snmp-core-sw01 | snmp | udp://10.10.10.5:161 | Network scan (SNMP v3) |
 | snmp-sw-f1-01 | snmp | udp://10.10.10.21:161 | Network scan (SNMP v2c) |
 | snmp-sw-f2-01 | snmp | udp://10.10.10.22:161 | Network scan (SNMP v2c) |

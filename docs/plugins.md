@@ -111,6 +111,12 @@ changes:                    # optional: the changes `apply` supports
   - reservation.delete      # {mac}
   - wifi.set                # a Wi-Fi network: {ssid, previous, vlan, password, enabled}
   - wifi.delete             # {ssid}
+  - dns.set                 # a local DNS name: {name, ip} (name fully qualified)
+  - dns.delete              # {name}
+  - wol.send                # wake a device: {mac, ip}, sent on the network holding ip
+  - pause.set               # cut a device's internet: {mac, ips, name}
+  - pause.delete            # give it back: {mac}
+backup: true                # optional: the plugin answers the backup action
 fields:                     # the "add integration" form
   - key: url
     type: url
@@ -227,11 +233,12 @@ if __name__ == "__main__":
 | `plugin.collect` | Decorator for the function that returns the devices (a list of `Device`, or dicts with the same shape) |
 | `plugin.test` | Decorator for the connection test; returns a short message for the user |
 | `plugin.apply` | Decorator for the function that applies a change declared under `changes` in the manifest: `apply(cfg, change)` with `change.device`, `change.kind`, `change.port` and `change.value`. Apply it, read the device again to check it took effect, save it to the startup configuration only then, and return the device as read after the change |
+| `plugin.backup` | Decorator for the function that returns each device's configuration (`backup: true` in the manifest): `backup(cfg)` returns a list of `ConfigBackup(device=<key>, format="text"|"json"|"xml", content=...)`, deterministic and without secrets where the device allows |
 | `plugin.run()` | Reads the request, runs the action, prints the answer and exits |
 | `PluginError("...")` | An error the user should read: wrong key, host unreachable, missing permission. Any other exception becomes "unexpected error", with the traceback in Omini's log |
 | `Config` | The `cfg` argument: a dict of the form values, with `cfg.str(key, default)`, `cfg.bool(key, default)`, `cfg.int(key, default)` and `cfg.state_dir` |
 | `log` | A `logging` logger that writes to stderr (shown in Omini's log at debug level) |
-| Models | `Change`, `Device`, `Interface`, `Neighbor`, `FdbEntry`, `ArpEntry`, `DhcpLease`, `WirelessClient`, `Gateway`, `Firmware`, `Storage`, `Temperature`, `Transceiver`, `PortVlans`, `Vlan`, `Service`, `VpnPeer`, `DhcpPool`, `FirewallStates`, `Host` |
+| Models | `Change`, `ConfigBackup`, `Device`, `Interface`, `Neighbor`, `FdbEntry`, `ArpEntry`, `DhcpLease`, `DhcpReservation`, `DnsRecord`, `WirelessClient`, `WifiNetwork`, `Gateway`, `Firmware`, `Storage`, `Temperature`, `Transceiver`, `PortStp`, `PortVlans`, `Vlan`, `Network`, `NetworkDhcp`, `PausedDevice`, `Service`, `VpnPeer`, `DhcpPool`, `FirewallStates`, `Host` |
 
 The models are pydantic classes generated from Omini's JSON Schema
 (`schema/omini.schema.json`), so invalid data is caught before it reaches
@@ -254,13 +261,17 @@ returns itself. The main fields:
 | `macs`, `ips` | Its own addresses |
 | `cpu_pct`, `cpu_count`, `mem_pct`, `mem_used_bytes`, `mem_total_bytes`, `swap_pct`, `load_avg` | Health |
 | `temperatures`, `storage`, `firmware` | Sensors (`kind`: cpu, disk, board, other), disks, pending updates (what the device knows from its own last check) |
-| `interfaces` | Ports: `name`, `description`, `mac`, `up`, `speed_mbps`, `duplex`, `media`, `connector` (`rj45`, `sfp`, `qsfp`), `type`, `rx_bytes`/`tx_bytes` counters, `rx_errors`/`tx_errors`, `ips`, `wan`, `members` (bridges, LAGs), `parent`, `vlan`, `vlans` (untagged and tagged), `transceiver` |
+| `interfaces` | Ports: `name`, `description`, `mac`, `up`, `speed_mbps`, `duplex`, `media`, `connector` (`rj45`, `sfp`, `qsfp`), `type`, `rx_bytes`/`tx_bytes` counters, `rx_errors`/`tx_errors`, `ips`, `wan`, `members` (bridges, LAGs), `lag` (the LAG a port belongs to), `stp` (spanning tree `state` and `role`), `parent`, `vlan`, `vlans` (untagged and tagged), `transceiver` |
 | `neighbors` | LLDP/CDP/MNDP neighbors: `local_port`, `remote_name`, `remote_port`, `remote_mac`, `remote_ip`, `protocol` |
 | `fdb` | MAC table: `mac`, `port`, `vlan` |
 | `arp`, `dhcp_leases` | IP ↔ MAC (and hostnames) |
 | `wireless_clients` | `mac`, `interface`, `ssid`, `band`, `signal_dbm`, link rates, `rx_bps`/`tx_bps` |
 | `gateways` | WAN gateways: `status` (`up`, `degraded`, `down`, `unknown`), `rtt_ms`, `loss_pct` |
 | `vlans`, `services`, `vpn_peers`, `dhcp_pools`, `firewall_states` | Extras shown in the device panel |
+| `networks`, `dhcp_reservations`, `wifi_networks` | A router's VLAN networks and fixed addresses, an access point's Wi-Fi networks (what `network.*`, `reservation.*` and `wifi.*` change) |
+| `dns_records`, `dns_domain` | Local DNS names a DNS server or router answers, and its domain (what `dns.*` changes) |
+| `paused` | Devices whose internet a router cuts: `mac`, `ips`, `name` (what `pause.*` changes) |
+| `stp_root` | The spanning tree root bridge the device sees: `<priority>.<mac>` |
 | `hosts` | End devices your integration observed with extra details (scanners, controllers) |
 
 Rules of the data model:
@@ -299,7 +310,7 @@ run:
     "state_dir": "/data/plugins/example/state/7"}
    ```
 
-   `action` is `collect`, `test` or `apply`. An `apply` request also carries
+   `action` is `collect`, `test`, `apply` or `backup`. An `apply` request also carries
    the change, one of those the manifest declares under `changes`:
 
    ```json
@@ -311,11 +322,19 @@ run:
    The plugin applies it, reads the device again to check that it took
    effect, saves it to the startup configuration only then, and answers with
    the device as read after the change (`{"devices": [...]}`), or an error.
+   A `backup` request (only with `backup: true`) asks for each device's
+   configuration as readable text: the device's own text export where it has
+   one, else its settings as sorted JSON. It must be deterministic (no
+   timestamps, uptimes, counters or client lists), so two backups differ only
+   when the configuration changed, and leave out secrets where the device
+   lets it. Omini keeps the versions that changed and shows their
+   differences; it never sends a configuration back.
 3. The plugin writes one JSON response on stdout, exactly one of:
 
    ```json
    {"devices": [{"key": "...", "name": "..."}]}
    {"message": "Connected to router1"}
+   {"backups": [{"device": "<key as collect reports it>", "format": "xml", "content": "..."}]}
    {"error": "wrong username or password"}
    ```
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { AlertTriangle, Pin, SignalLow, Wifi } from 'lucide-vue-next'
+import { AlertTriangle, Pause, Pin, SignalLow, Wifi } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -21,6 +21,8 @@ export interface NodeData {
   flow?: Flow
   /** The most severe open alert about this node. */
   alert?: Severity
+  /** A router pauses its internet. */
+  paused?: boolean
 }
 
 const props = defineProps<{ data: NodeData; selected?: boolean }>()
@@ -92,6 +94,9 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       <span class="up">↑ {{ formatRate(data.flow.up) }}</span>
     </div>
 
+    <span v-if="data.paused" class="paused-mark" data-test="node-paused" :title="t('host.paused')">
+      <Pause :size="10" :stroke-width="3" />
+    </span>
     <!-- An open alert (critical or warning): details in the panel and in Alerts. -->
     <span
       v-if="data.alert && data.alert !== 'info'"
@@ -164,6 +169,21 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   height: 18px;
   border: 2px solid var(--bg);
   border-radius: 50%;
+  color: #fff;
+  pointer-events: none;
+}
+.paused-mark {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--warn);
   color: #fff;
   pointer-events: none;
 }

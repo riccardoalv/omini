@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/collector"
@@ -65,19 +66,118 @@ func (s *Server) configChanges(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) changeSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"allow_destructive": s.Collector.AllowDestructive(r.Context())})
+	domain, _, err := s.Store.GetSetting(r.Context(), collector.DNSDomainSetting)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"allow_destructive": s.Collector.AllowDestructive(r.Context()),
+		"dns_domain":        domain,
+	})
 }
 
 func (s *Server) setChangeSettings(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		AllowDestructive bool `json:"allow_destructive"`
+		AllowDestructive *bool   `json:"allow_destructive"`
+		DNSDomain        *string `json:"dns_domain"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
-	if err := s.Collector.SetAllowDestructive(r.Context(), in.AllowDestructive); err != nil {
-		internalError(w, err)
-		return
+	if in.AllowDestructive != nil {
+		if err := s.Collector.SetAllowDestructive(r.Context(), *in.AllowDestructive); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	if in.DNSDomain != nil {
+		d := strings.Trim(strings.ToLower(strings.TrimSpace(*in.DNSDomain)), ".")
+		if d != "" && !collector.ValidDomain(d) {
+			writeError(w, http.StatusBadRequest, "a domain is labels of letters, digits and dashes (home.arpa, lan)")
+			return
+		}
+		if err := s.Store.SetSetting(r.Context(), collector.DNSDomainSetting, d); err != nil {
+			internalError(w, err)
+			return
+		}
+		s.Collector.Refresh() // the names Omini set follow after the round
 	}
 	s.changeSettings(w, r)
+}
+
+// dnsName is a device's local DNS name, as its panel shows it.
+func (s *Server) dnsName(w http.ResponseWriter, r *http.Request) {
+	name, err := s.Collector.DNSNameOf(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.changeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, name)
+}
+
+// setDNSName changes a device's name: {name} ("" its own, "-" none).
+func (s *Server) setDNSName(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	ctx, cancel := changeContext(r)
+	defer cancel()
+	name, err := s.Collector.SetDNSName(ctx, r.PathValue("id"), in.Name)
+	if err != nil {
+		s.changeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, name)
+}
+
+// hostActions says what the device's panel can offer: waking it (and how)
+// and pausing its internet (on which router).
+func (s *Server) hostActions(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	router, canPause := s.Collector.CanPause(id)
+	out := map[string]any{"wake": s.Collector.CanWake(id), "can_pause": canPause}
+	if canPause {
+		out["pause_router"] = router
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// wake sends the device a Wake-on-LAN packet.
+func (s *Server) wake(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := changeContext(r)
+	defer cancel()
+	rec, err := s.Collector.Wake(ctx, r.PathValue("id"))
+	if err != nil {
+		s.changeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rec)
+}
+
+// pause cuts the device's internet on its router.
+func (s *Server) pause(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := changeContext(r)
+	defer cancel()
+	rec, err := s.Collector.Pause(ctx, r.PathValue("id"))
+	if err != nil {
+		s.changeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rec)
+}
+
+// resume gives it back.
+func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := changeContext(r)
+	defer cancel()
+	rec, err := s.Collector.Resume(ctx, r.PathValue("id"))
+	if err != nil {
+		s.changeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rec)
 }

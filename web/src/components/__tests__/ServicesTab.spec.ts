@@ -15,6 +15,8 @@ vi.mock('@/lib/api', async (orig) => {
       ...mod.api,
       services: vi.fn<typeof mod.api.services>(),
       topology: vi.fn<typeof mod.api.topology>(),
+      fixCandidates: vi.fn<typeof mod.api.fixCandidates>(),
+      fixMany: vi.fn<typeof mod.api.fixMany>(),
     },
   }
 })
@@ -58,6 +60,7 @@ const view: View = {
 describe('ServicesTab', () => {
   beforeEach(() => {
     vi.mocked(api.services).mockResolvedValue(view)
+    vi.mocked(api.fixCandidates).mockResolvedValue([])
     vi.mocked(api.topology).mockResolvedValue({
       topology: {
         nodes: [
@@ -101,6 +104,63 @@ describe('ServicesTab', () => {
     expect(rows[0]!.text()).toContain('8 ms')
     expect(rows[1]!.text()).toContain('Not answering')
     expect(rows[1]!.text()).toContain('no answer')
+    w.unmount()
+  })
+
+  it('fixes the infrastructure addresses many at once', async () => {
+    vi.mocked(api.fixCandidates).mockResolvedValue([
+      {
+        node_id: 'mac:sw',
+        label: 'sw-desk',
+        type: 'switch',
+        mac: 'aa:00:00:00:00:01',
+        ip: '192.168.1.120',
+        router: 'dev:fw',
+        infra: true,
+        proposed: '192.168.1.2',
+      },
+      {
+        node_id: 'mac:nas',
+        label: 'nas',
+        type: 'nas',
+        mac: 'aa:00:00:00:00:02',
+        ip: '192.168.1.30',
+        router: 'dev:fw',
+        infra: true,
+      },
+      {
+        node_id: 'mac:tv',
+        label: 'tv',
+        type: 'tv',
+        mac: 'aa:00:00:00:00:03',
+        ip: '192.168.1.40',
+        router: 'dev:fw',
+        infra: false,
+      },
+    ])
+    vi.mocked(api.fixMany).mockResolvedValue([
+      { node_id: 'mac:sw', change: {} as never },
+      { node_id: 'mac:nas', error: 'the router refused' },
+    ])
+    const w = mount(ServicesTab, { global: { plugins: plugins() }, attachTo: document.body })
+    await flushPromises()
+    expect(w.get('[data-test=fix-ip]').text()).toContain(
+      '2 infrastructure devices have no fixed IP',
+    )
+    await w.get('[data-test=fix-open]').trigger('click')
+    const rows = () => document.querySelectorAll('[data-test=fix-list] li')
+    expect(rows()).toHaveLength(2)
+    expect(rows()[0]!.textContent).toContain('192.168.1.2')
+    ;(document.querySelector('[data-test=fix-others]') as HTMLElement).click()
+    await flushPromises()
+    expect(rows()).toHaveLength(3)
+    ;(document.querySelector('[data-test=fix-apply]') as HTMLElement).click()
+    await flushPromises()
+    expect(api.fixMany).toHaveBeenCalledWith([
+      { node_id: 'mac:sw', ip: '192.168.1.2' },
+      { node_id: 'mac:nas', ip: '192.168.1.30' },
+    ])
+    expect(document.body.textContent).toContain('the router refused')
     w.unmount()
   })
 })

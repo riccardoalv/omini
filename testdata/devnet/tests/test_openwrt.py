@@ -445,3 +445,85 @@ def test_a_vlan_from_the_switch_port_to_the_router() -> None:
         assert not [s for s in fw.values() if "cameras" in (s.get("name"), s.get("src"))]
         dhcp = rpc(url, sid, "uci", "get", {"config": "dhcp"})["result"][1]["values"]
         assert "cameras" not in dhcp
+
+
+def test_local_dns_names() -> None:
+    with Emulator(at=SAT_15, apis=[API], world=World()) as emu:
+        dev = device(emu.collect(API))
+        assert dev["dns_domain"] == "lan" and "dns_records" not in dev
+        dev = device(apply(emu, "dns.set", {"name": "nvr.lan", "ip": "10.30.1.30"}))
+        assert dev["dns_records"] == [{"name": "nvr.lan", "ip": "10.30.1.30"}]
+        dev = device(apply(emu, "dns.set", {"name": "nvr.lan", "ip": "10.30.1.31"}))
+        assert dev["dns_records"] == [{"name": "nvr.lan", "ip": "10.30.1.31"}]
+        emu.set_time(SAT_15 + 120)  # confirmed: rpcd's rollback timer does not undo it
+        assert device(emu.collect(API))["dns_records"] == [{"name": "nvr.lan", "ip": "10.30.1.31"}]
+        assert "dns_records" not in device(apply(emu, "dns.delete", {"name": "nvr.lan"}))
+        assert "not a DNS name" in apply(emu, "dns.set", {"name": "a b", "ip": "10.30.1.30"})["error"]
+
+
+def test_pause_a_device() -> None:
+    world = World()
+    pc = world.at(SAT_15).node("pc-loja")
+    with Emulator(at=SAT_15, apis=[API], world=world) as emu:
+        url, sec = emu.urls[API], emu.secrets[API]
+        assert "paused" not in device(emu.collect(API))
+        value = {"mac": pc.mac, "ips": [pc.ip], "name": "Store PC"}
+        dev = device(apply(emu, "pause.set", value))
+        assert dev["paused"] == [{"mac": pc.mac, "ips": [pc.ip], "name": "Store PC"}]
+        sid = rpc(
+            url, openwrt.NULL_SESSION, "session", "login", {"username": sec["username"], "password": sec["password"]}
+        )["result"][1]["ubus_rpc_session"]
+        fw = rpc(url, sid, "uci", "get", {"config": "firewall"})["result"][1]["values"]
+        rules = sorted((s["src"], s["dest"], s["target"]) for s in fw.values() if s.get("name") == "Omini pause")
+        assert rules == [("guest", "wan", "REJECT"), ("lan", "wan", "REJECT")]  # every zone but the WAN's
+        [ipset] = [s for s in fw.values() if s[".type"] == "ipset"]
+        assert ipset["name"] == "omini_paused" and ipset["entry"] == [pc.ip]
+
+        assert "is the router itself" in apply(emu, "pause.set", {"mac": pc.mac, "ips": ["10.30.1.1"]})["error"]
+        emu.set_time(SAT_15 + 120)
+        assert device(emu.collect(API))["paused"][0]["mac"] == pc.mac
+        assert "paused" not in device(apply(emu, "pause.delete", {"mac": pc.mac}))
+        fw = rpc(url, sid, "uci", "get", {"config": "firewall"})["result"][1]["values"]
+        assert not [s for s in fw.values() if s[".type"] == "ipset" or s.get("name") == "Omini pause"]
+
+
+def test_wake_on_lan(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(openwrt, "WAKES", [])
+    with Emulator(at=SUN_15, apis=[API], world=World()) as emu:
+        device(apply(emu, "wol.send", {"mac": "02:00:00:aa:bb:07", "ip": "10.30.80.7"}))
+        device(apply(emu, "wol.send", {"mac": "02:00:00:aa:bb:08"}))
+        assert openwrt.WAKES == [("br-guest", "02:00:00:aa:bb:07"), ("br-lan", "02:00:00:aa:bb:08")]
+        assert "holds 10.99.0.7" in apply(emu, "wol.send", {"mac": "02:00:00:aa:bb:07", "ip": "10.99.0.7"})["error"]
+        monkeypatch.setattr(openwrt, "ETHERWAKE_INSTALLED", False)
+        assert "etherwake is not installed" in apply(emu, "wol.send", {"mac": "02:00:00:aa:bb:07"})["error"]
+    assert len(openwrt.WAKES) == 2
+
+
+def test_wake_on_lan_needs_the_acl(monkeypatch: pytest.MonkeyPatch) -> None:
+    acl = json.loads(json.dumps(openwrt.ACL))
+    del acl["file"][openwrt.ETHERWAKE]
+    monkeypatch.setattr(openwrt, "ACL", acl)
+    with Emulator(at=SUN_15, apis=[API], world=World()) as emu:
+        err = apply(emu, "wol.send", {"mac": "02:00:00:aa:bb:07"})["error"]
+        assert "does not allow running etherwake" in err and '"/usr/bin/etherwake": ["list", "exec"]' in err
+
+
+def test_backup() -> None:
+    with Emulator(at=SAT_15, apis=[API], world=World()) as emu:
+        key = device(emu.collect(API))["key"]
+        out = emu.collect(API, "backup")
+        assert "error" not in out, out.get("error")
+        [b] = out["backups"]
+        assert b["device"] == key and b["format"] == "text"
+        text = b["content"]
+        for package in ("network", "wireless", "dhcp", "firewall", "system"):
+            assert f"package {package}\n" in text
+        assert "config interface 'lan'\n\toption device 'br-lan'\n\toption proto 'static'\n" in text
+        assert "option hostname 'store-rt01'" in text
+        assert "emulated-key" not in text and "option key " not in text  # the Wi-Fi keys stay out
+        # Only configuration: an hour later, with other clients and counters, the same text.
+        emu.set_time(SAT_15 + 3600)
+        assert emu.collect(API, "backup")["backups"][0]["content"] == text
+        apply(emu, "dns.set", {"name": "nvr.lan", "ip": "10.30.1.30"})
+        after = emu.collect(API, "backup")["backups"][0]["content"]
+        assert after != text and "config domain\n\toption name 'nvr.lan'\n\toption ip '10.30.1.30'\n" in after

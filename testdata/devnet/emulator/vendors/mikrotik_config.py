@@ -2,8 +2,10 @@
 
 What Omini's changes write lives here, per emulated box, built from the design on first use:
 the bridge ports' PVID and frame types, the bridge VLAN table, VLAN interfaces, IP addresses,
-DHCP pools, servers, networks and static leases, firewall filter rules and address lists, and
-/ip/dns. The vendor module renders these menus from it, adding what is live (running, counters).
+DHCP pools, servers, networks and static leases, firewall filter rules and address lists,
+/ip/dns and its static names, the Wake-on-LAN packets sent and the firewall connections removed.
+The vendor module renders these menus from it, adding what is live (running, counters), and
+`export` renders them as `/export terse` does (no sensitive values).
 
 Writes follow the REST API: PUT /rest/<menu> adds an item and answers it (with its new .id),
 POST /rest/<menu>/add adds one too (with `place-before`) and answers {"ret": "<.id>"},
@@ -14,6 +16,7 @@ reference to something missing answers 400 with a "failure: ..." detail and chan
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import itertools
 import re
@@ -54,6 +57,7 @@ PROPS: dict[str, set[str]] = {
         "disabled",
     },
     "/ip/firewall/address-list": {"list", "address", "comment", "disabled"},
+    "/ip/dns/static": {"name", "regexp", "address", "type", "cname", "ttl", "match-subdomain", "comment", "disabled"},
 }
 DNS_PROPS = {"servers", "allow-remote-requests", "cache-size", "mdns-repeat-ifaces"}
 # Bridge ports are set, never added or removed, by these changes.
@@ -209,6 +213,7 @@ class RouterConfig:
                 if p.descr:
                     row["comment"] = p.descr
                 self.tables["/ip/address"].append(row)
+        self.domain = str(svc.ctx.world.d.sites.get(box.site, {}).get("domain") or "acme.local")
         for k, (vid, iface, (lo, hi)) in enumerate(svc.dhcp_scopes()):
             gw = next(a for a in box.ports[iface].ips).split("/")[0]
             net = str(ipaddress.ip_interface(box.ports[iface].ips[0]).network)
@@ -225,10 +230,26 @@ class RouterConfig:
                 }
             )
             self.tables["/ip/dhcp-server/network"].append(
-                {".id": f"*{k + 1:X}", "address": net, "gateway": gw, "dns-server": gw, "domain": "acme.local"}
+                {".id": f"*{k + 1:X}", "address": net, "gateway": gw, "dns-server": gw, "domain": self.domain}
             )
         if box.kind == "router":
             self.tables["/ip/firewall/filter"] = defconf_filter()
+        # One local name: the router's own, on its management VLAN (as an admin would add it).
+        if box.kind == "router":
+            mgmt = next((p for p in box.ports.values() if p.kind == "vlan" and p.ips), None)
+            if mgmt is not None:
+                self.tables["/ip/dns/static"].append(
+                    {
+                        ".id": "*1",
+                        "name": f"{box.hostname or box.name}.{self.domain}",
+                        "address": mgmt.ips[0].split("/")[0],
+                        "ttl": "1d",
+                        "dynamic": "false",
+                        "disabled": "false",
+                    }
+                )
+        self.wol_sent: list[dict[str, str]] = []  # POST /tool/wol bodies, in order
+        self.conn_gone: set[str] = set()  # .ids of the firewall connections removed
         self.dns: dict[str, str] = {
             "servers": "",
             "dynamic-servers": "198.51.100.17" if box.kind == "router" else "",
@@ -438,3 +459,84 @@ class RouterConfig:
                 ipaddress.ip_network(row.get("address", ""), strict=False)
             except ValueError as e:
                 raise Failure("invalid value for argument address") from e
+            if any(o["list"] == row["list"] and o["address"] == row["address"] for o in others):
+                raise Failure("already have such entry")
+        elif menu == "/ip/dns/static":
+            if bool(row.get("name")) == bool(row.get("regexp")):
+                raise Failure("either name or regexp must be set")
+            if row.get("type", "A") == "A":
+                try:
+                    ipaddress.IPv4Address(row.get("address", ""))
+                except ValueError as e:
+                    raise Failure("invalid value for argument address") from e
+
+    # -- export ------------------------------------------------------------------
+    def export(self, header: str) -> str:
+        """`/export terse`: the configuration as console commands, one line per item, without
+        sensitive values (RouterOS 7 hides them unless show-sensitive is given). header is the
+        time stamp line RouterOS writes first."""
+        svc, box = self.svc, self.svc.box
+        soft = hashlib.sha256(box.name.encode()).hexdigest()[:8].upper()
+        lines = [
+            header,
+            f"# software id = {soft[:4]}-{soft[4:]}",
+            "#",
+            f"# model = {box.model}",
+            f"# serial number = {box.serial}",
+        ]
+        for b in svc.bridges(None):
+            lines.append(
+                "/interface bridge add "
+                + args(
+                    {k: b[k] for k in ("admin-mac", "frame-types", "name", "priority", "protocol-mode")}
+                    | {"vlan-filtering": "yes"}
+                )
+            )
+        for p in box.ports.values():
+            if p.kind == "lag":
+                lines.append(
+                    f"/interface bonding add {args({'mode': '802.3ad', 'name': p.name, 'slaves': ','.join(p.members)})}"
+                )
+            if p.kind == "wg":
+                lines.append(
+                    f"/interface wireguard add {args({'listen-port': '13231', 'mtu': '1420', 'name': p.name})}"
+                )
+        menus = [
+            ("/interface/vlan", "/interface vlan"),
+            ("/interface/bridge/port", "/interface bridge port"),
+            ("/interface/bridge/vlan", "/interface bridge vlan"),
+            ("/ip/pool", "/ip pool"),
+            ("/ip/address", "/ip address"),
+            ("/ip/dhcp-server", "/ip dhcp-server"),
+            ("/ip/dhcp-server/network", "/ip dhcp-server network"),
+            ("/ip/dhcp-server/lease", "/ip dhcp-server lease"),
+        ]
+        for menu, console in menus:
+            for r in self.rows(menu):
+                lines.append(f"{console} add {args(r)}")
+        lines.append(f"/ip dns set {args({k: v for k, v in self.dns.items() if k in DNS_PROPS})}")
+        for menu, console in (
+            ("/ip/dns/static", "/ip dns static"),
+            ("/ip/firewall/address-list", "/ip firewall address-list"),
+            ("/ip/firewall/filter", "/ip firewall filter"),
+        ):
+            for r in self.rows(menu):
+                lines.append(f"{console} add {args(r)}")
+        lines.append(f"/system identity set name={box.hostname or box.name}")
+        return "\n".join(lines) + "\n"
+
+
+def args(row: dict[str, str]) -> str:
+    """Console arguments, sorted like /export does: defaults, ids and empty values left out."""
+    skip = {".id", "dynamic", "invalid", "disabled", "log", "log-prefix", "ingress-filtering"}
+    out = []
+    for k in sorted(row):
+        v = str(row[k])
+        if k in skip or v == "" or (k == "disabled" and v == "false"):
+            continue
+        if re.search(r'[\s;"\\$]', v):
+            v = '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        out.append(f"{k}={v}")
+    if row.get("disabled") == "true":
+        out.append("disabled=yes")
+    return " ".join(out)

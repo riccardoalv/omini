@@ -265,3 +265,40 @@ def test_raw_api(emu):
     assert get("/nodes/pve01/bogus")[0] == 501
     netstat = get("/nodes/pve02/netstat")[1]["data"]
     assert any(r["vmid"] == "130" and r["dev"] == "net1" for r in netstat)  # lab-fw01's LAN NIC
+
+
+def test_bond_ports_report_their_lag(wed):
+    for name in NODES:
+        ports = {i["name"]: i for i in wed[name]["interfaces"]}
+        assert [ports[p].get("lag") for p in ("eno1", "eno2")] == ["bond0", "bond0"]
+        assert [ports[p].get("lag") for p in ("ens1f0np0", "ens1f1np1")] == ["bond1", "bond1"]
+        assert "lag" not in ports["bond0"] and "lag" not in ports["vmbr0"]
+        assert not any("stp" in i for i in ports.values())  # the API has no port STP state
+
+
+def backups(emu: Emulator, t: float) -> dict[str, dict]:
+    emu.set_time(t)
+    out = emu.collect("proxmox", "backup")
+    assert "error" not in out, out
+    return {b["device"]: b for b in out["backups"]}
+
+
+def test_backups(emu, wed):
+    first = backups(emu, WED)
+    # One per device collect reports: the nodes and their running guests.
+    assert set(first) == {d["key"] for d in wed.values()}
+    assert all(b["format"] == "json" for b in first.values())
+    node = json.loads(first[wed["pve01"]["key"]]["content"])
+    assert node["node"] == "pve01"
+    bond = next(r for r in node["network"] if r["iface"] == "bond1")
+    assert (bond["slaves"], bond["bond_mode"]) == ("ens1f0np0 ens1f1np1", "802.3ad")
+    assert not any({"active", "exists", "priority"} & set(r) for r in node["network"])
+    guest = json.loads(first[wed["docker01"]["key"]]["content"])
+    assert (guest["type"], guest["vmid"]) == ("qemu", 108)
+    assert guest["config"]["net0"].endswith("bridge=vmbr1,firewall=1,tag=20")
+    assert "digest" not in guest["config"]
+    lab = next(n for n in wed if n.startswith("lab-") and json.loads(first[wed[n]["key"]]["content"])["type"] == "qemu")
+    text = first[wed[lab]["key"]]["content"]
+    assert '"ciuser": "acme"' in text and "cipassword" not in text and "sshkeys" not in text
+    # Ten minutes later: counters, uptimes and loads moved, the configuration did not.
+    assert backups(emu, WED + 600) == first
