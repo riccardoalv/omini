@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/riccardoalv/omini/compare/v1.3.0...v1.3.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* a device read by SNMP and a plugin changes through both ([e806694](https://github.com/riccardoalv/omini/commit/e806694e69aad35475955be341f845802d882787))
+* no DHCP answer to Omini is a warning while the router serves DHCP ([6556457](https://github.com/riccardoalv/omini/commit/6556457800f265a684f6e0b5ada6f2d2fec3823d))
+
 ## [1.3.0](https://github.com/riccardoalv/omini/compare/v1.2.0...v1.3.0) (2026-10-12)
 
 
