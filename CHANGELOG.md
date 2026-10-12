@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0](https://github.com/riccardoalv/omini/compare/v1.1.0...v1.2.0) (2026-10-12)
+
+
+### Features
+
+* configuration changes, DNS and DHCP checks ([383fae9](https://github.com/riccardoalv/omini/commit/383fae960ec0d4f619d6c2b4c1bee3d33de6ca04))
+* VLANs as whole networks, the map's menu and network areas ([0c4dc43](https://github.com/riccardoalv/omini/commit/0c4dc43a0d1f340072cf002325465198663780e8))
+* VLANs for the whole network ([35bfa1a](https://github.com/riccardoalv/omini/commit/35bfa1a7d4f12caeed98dd7b4086b95bd584b4ae))
+
 ## [1.1.0](https://github.com/riccardoalv/omini/compare/v1.0.0...v1.1.0) (2026-10-09)
 
 
