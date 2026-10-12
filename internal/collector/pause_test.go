@@ -3,6 +3,7 @@ package collector_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/collector"
@@ -47,6 +48,20 @@ func TestPausingADevice(t *testing.T) {
 	coll.AfterRound(ctx)
 	if v, ok := s.applied[len(s.applied)-1].Value.(model.PausedDevice); !ok || v.IPs[0] != "192.168.1.77" {
 		t.Fatalf("followed: %+v", s.applied[n:])
+	}
+	// A device blocked by a rule set by hand on the router is never rewritten.
+	s.mu.Lock()
+	fw := s.devices[0]
+	fw.Paused = append(slices.Clone(fw.Paused), model.PausedDevice{MAC: swMAC, IPs: []string{"192.168.1.200"}, Rule: model.Ptr("Block the switch")})
+	s.devices[0] = fw
+	s.mu.Unlock()
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	n = len(s.applied)
+	coll.AfterRound(ctx)
+	if len(s.applied) != n {
+		t.Fatalf("a manual block was rewritten: %+v", s.applied[n:])
 	}
 	if _, err := coll.Resume(ctx, phone); err != nil {
 		t.Fatal(err)

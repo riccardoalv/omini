@@ -210,7 +210,10 @@ own it cannot, and then only the way to the internet is protected.
   so its changing IPv6 addresses are covered); your own networks stay
   reachable. If the
   device gets another address, Omini blocks the new one after the next round.
-  Omini's own host and network devices are never paused. A paused device has
+  Omini's own host and network devices are never paused. A device you blocked
+  by hand on the router (OPNsense: a simple block rule from its IP, MAC or a
+  host alias, to anything) shows as paused too, with the rule's name; resuming
+  it turns that rule off, unless the rule blocks other devices as well. A paused device has
   a pause mark on the map and is listed at the top of the device list.
 
 **Network**, for a device a managed router serves: **Reserve this IP** (a

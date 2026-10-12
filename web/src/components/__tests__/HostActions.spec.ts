@@ -74,6 +74,20 @@ describe('HostActions', () => {
     expect(api.resume).toHaveBeenCalledWith('mac:pc')
   })
 
+  it('resuming a device blocked by a rule set by hand says it turns the rule off', async () => {
+    const manual: TopoNode = {
+      ...fw(false),
+      device: {
+        key: 'fw',
+        name: 'fw',
+        paused: [{ mac: 'aa:bb:cc:00:00:09', rule: 'Block kids PC' }],
+      },
+    }
+    const w = mountIt(pc(true), [manual])
+    await flushPromises()
+    expect(w.get('[data-test=resume]').attributes('title')).toContain('Block kids PC')
+  })
+
   it('tells what went wrong', async () => {
     vi.mocked(api.pause).mockRejectedValue(new Error('x'))
     const w = mountIt(pc(true), [fw(false)])

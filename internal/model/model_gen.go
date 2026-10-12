@@ -1516,6 +1516,10 @@ type PausedDevice struct {
 
 	// Name corresponds to the JSON schema field "name".
 	Name *string `json:"name,omitempty,omitzero" yaml:"name,omitempty"`
+
+	// Empty when Omini paused it; otherwise the router rule, set by hand, that blocks
+	// it (resuming turns that rule off).
+	Rule *string `json:"rule,omitempty,omitzero" yaml:"rule,omitempty"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

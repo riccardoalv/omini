@@ -106,6 +106,9 @@ func (c *Collector) syncPaused(ctx context.Context) {
 			continue
 		}
 		for _, p := range r.Device.Paused {
+			if model.Deref(p.Rule) != "" {
+				continue // blocked by a rule set by hand: the user keeps it up to date
+			}
 			mac := model.NormMAC(string(p.MAC))
 			id, ok := c.byMAC(string(mac))
 			if !ok {

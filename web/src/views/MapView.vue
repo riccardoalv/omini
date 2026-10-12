@@ -36,7 +36,7 @@ import { useMapGraph } from '@/composables/useMapGraph'
 import { useMapLayout } from '@/composables/useMapLayout'
 import { useNetworkFilter } from '@/composables/useNetworkFilter'
 import { alertsState, attentionCount } from '@/lib/alerts'
-import { pausedMacs } from '@/lib/paused'
+import { pauseOf, pausedMacs } from '@/lib/paused'
 import { api } from '@/lib/api'
 import { areaIdOf, densest } from '@/lib/areas'
 import { isWifiNetwork } from '@/lib/graph'
@@ -90,7 +90,9 @@ const {
 /** Devices whose internet a router pauses, for the device drawer. */
 const pausedNodes = computed(() => {
   const macs = pausedMacs(allNodes.value)
-  return allNodes.value.filter((n) => n.mac && macs.has(n.mac.toLowerCase()))
+  return allNodes.value
+    .filter((n) => n.mac && macs.has(n.mac.toLowerCase()))
+    .map((node) => ({ node, rule: pauseOf(node, allNodes.value)?.rule }))
 })
 const {
   takeAnchor,

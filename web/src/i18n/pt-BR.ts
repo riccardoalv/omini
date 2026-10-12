@@ -346,6 +346,8 @@ const ptBR: typeof en = {
     pausedNow: 'Internet pausada: o roteador está bloqueando.',
     resume: 'Retomar internet',
     resumed: 'Internet de volta.',
+    resumeRule: 'Desativa a regra "{rule}" do roteador, criada à mão.',
+    manual: 'regra criada à mão',
     paused: 'Internet pausada',
   },
   dnsName: {

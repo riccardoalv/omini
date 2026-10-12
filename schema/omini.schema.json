@@ -1600,6 +1600,10 @@
         },
         "name": {
           "type": "string"
+        },
+        "rule": {
+          "type": "string",
+          "description": "Empty when Omini paused it; otherwise the router rule, set by hand, that blocks it (resuming turns that rule off)."
         }
       }
     },

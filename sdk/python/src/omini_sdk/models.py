@@ -514,6 +514,10 @@ class PausedDevice(BaseModel):
     Its current addresses, which the router blocks.
     """
     name: str | None = None
+    rule: str | None = None
+    """
+    Empty when Omini paused it; otherwise the router rule, set by hand, that blocks it (resuming turns that rule off).
+    """
 
 
 class PortStp(BaseModel):

@@ -342,6 +342,8 @@ export default {
     pausedNow: 'Internet paused: the router blocks it.',
     resume: 'Resume internet',
     resumed: 'Internet back.',
+    resumeRule: 'Turns off the router rule "{rule}", set by hand.',
+    manual: 'rule set by hand',
     paused: 'Internet paused',
   },
   dnsName: {

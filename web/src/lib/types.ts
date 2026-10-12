@@ -706,6 +706,8 @@ export interface PausedDevice {
   mac: string
   ips?: string[]
   name?: string
+  /** The router rule, set by hand, that blocks it (empty: Omini paused it). */
+  rule?: string
 }
 
 /** One version of a device's configuration (its content is read apart). */

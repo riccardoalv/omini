@@ -509,6 +509,11 @@ for many devices at once.
   routers report `Device.paused` `[{mac, ips, name}]`. When a paused device
   gets another address, Omini updates the list in the next round. Open
   connections are cut where the router can (firewall states).
+- **Blocks set by hand are imported** (maintainer's choice, 2026-10-12): a
+  simple block rule on the router (OPNsense: from hosts to anything, no ports
+  or schedule) shows its devices as paused (`PausedDevice.rule`, the rule's
+  name); resuming one turns the rule off when it blocks that device alone,
+  and Omini never rewrites it when the device's address changes.
 - **Protected**: Omini's own host, the router and network devices cannot be
   paused.
 

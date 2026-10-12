@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { api, ApiError } from '@/lib/api'
-import { pausedOn } from '@/lib/paused'
+import { pauseOf } from '@/lib/paused'
 import type { HostActions, TopoNode } from '@/lib/types'
 
 /**
@@ -31,7 +31,7 @@ watch(
   { immediate: true },
 )
 
-const paused = computed(() => pausedOn(props.node, props.nodes))
+const paused = computed(() => pauseOf(props.node, props.nodes))
 const busy = ref(false)
 
 async function run(fn: () => Promise<unknown>, done: string) {
@@ -62,7 +62,14 @@ const resume = () => run(() => api.resume(props.node.id), t('host.resumed'))
   >
     <Power :size="14" />{{ t('host.wake') }}
   </button>
-  <button v-if="paused" class="btn small warn" data-test="resume" :disabled="busy" @click="resume">
+  <button
+    v-if="paused"
+    class="btn small warn"
+    data-test="resume"
+    :disabled="busy"
+    :title="paused.rule ? t('host.resumeRule', { rule: paused.rule }) : undefined"
+    @click="resume"
+  >
     <Play :size="14" />{{ t('host.resume') }}
   </button>
   <button

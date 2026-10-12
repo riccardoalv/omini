@@ -29,8 +29,8 @@ defineProps<{
   colors: Map<string, string>
   offlineCount: number
   hiddenCount: number
-  /** Devices whose internet a router pauses. */
-  paused?: TopoNode[]
+  /** Devices whose internet a router pauses, and the rule set by hand that does it. */
+  paused?: { node: TopoNode; rule?: string }[]
 }>()
 const emit = defineEmits<{ close: []; select: [id: string]; changed: [] }>()
 const tab = defineModel<MenuTab>('tab', { default: 'devices' })
@@ -112,9 +112,10 @@ function pick(key: string | undefined) {
       <p v-if="paused?.length" class="paused" data-test="paused-list">
         <Pause :size="14" />
         {{ t('host.paused') }}:
-        <template v-for="(p, i) in paused" :key="p.id">
-          <button class="link" type="button" @click="emit('select', p.id)">
-            {{ displayName(p, t) }}</button
+        <template v-for="(p, i) in paused" :key="p.node.id">
+          <button class="link" type="button" @click="emit('select', p.node.id)">
+            {{ displayName(p.node, t) }}</button
+          ><small v-if="p.rule" class="muted"> ({{ t('host.manual') + ': ' + p.rule }})</small
           >{{ i < paused.length - 1 ? ', ' : '' }}
         </template>
       </p>
