@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/riccardoalv/omini/compare/v1.3.2...v1.4.0) (2026-10-12)
+
+
+### Features
+
+* blocks set by hand on the router show as paused ([529c69d](https://github.com/riccardoalv/omini/commit/529c69d48c3fb1f464d49d972b266c4e08942e57))
+
 ## [1.3.2](https://github.com/riccardoalv/omini/compare/v1.3.1...v1.3.2) (2026-10-12)
 
 
