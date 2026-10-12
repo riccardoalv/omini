@@ -78,6 +78,8 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 	if !ok || n.Device == nil || n.IntegrationID == 0 || !slices.Contains(n.Changes, req.Kind) {
 		return store.ConfigChange{}, ErrNotChangeable
 	}
+	// Through the integration that makes this change (and its report).
+	n = n.Via(req.Kind)
 	// Waits for this integration only (a collection of it in progress), not
 	// for the whole round.
 	busy := c.lockIntegration(n.IntegrationID)
@@ -301,10 +303,12 @@ func (c *Collector) markChangeable(ctx context.Context, topo *topology.Topology)
 		return
 	}
 	changes := map[int64][]model.ChangeKind{}
+	core := map[int64]bool{}
 	for _, in := range list {
 		if impl, err := c.reg.Get(in.Type); err == nil {
 			if _, ok := impl.(integration.Applier); ok {
 				changes[in.ID] = impl.Info().Changes
+				core[in.ID] = impl.Info().Kind == integration.KindCore
 			}
 		}
 	}
@@ -314,11 +318,37 @@ func (c *Collector) markChangeable(ctx context.Context, topo *topology.Topology)
 		if n.Kind != topology.KindDevice || !n.Online || n.Device == nil {
 			continue
 		}
-		for _, k := range changes[n.IntegrationID] {
-			if !offers(n.Device, k) {
-				continue
+		// Every report of the device offers what its integration can change;
+		// a plugin's goes before the network scan's for the same change.
+		reports := slices.Clone(n.Reports)
+		if len(reports) == 0 {
+			reports = []topology.Report{{IntegrationID: n.IntegrationID, Device: n.Device}}
+		}
+		slices.SortStableFunc(reports, func(a, b topology.Report) int {
+			switch {
+			case core[a.IntegrationID] == core[b.IntegrationID]:
+				return 0
+			case core[a.IntegrationID]:
+				return 1
 			}
-			n.Changes = append(n.Changes, k)
+			return -1
+		})
+		// A device a plugin reads is that plugin's on the map (its data, its
+		// integration), even when the network scan's SNMP read more of it.
+		if core[n.IntegrationID] && len(reports) > 0 && !core[reports[0].IntegrationID] && reports[0].Device != nil {
+			n.Device, n.IntegrationID = reports[0].Device, reports[0].IntegrationID
+		}
+		for _, r := range reports {
+			for _, k := range changes[r.IntegrationID] {
+				if r.Device == nil || !offers(r.Device, k) || slices.Contains(n.Changes, k) {
+					continue
+				}
+				if n.ChangeVia == nil {
+					n.ChangeVia = map[model.ChangeKind]topology.Report{}
+				}
+				n.Changes = append(n.Changes, k)
+				n.ChangeVia[k] = r
+			}
 		}
 		if len(n.Changes) > 0 {
 			n.Protected = protected[n.ID]

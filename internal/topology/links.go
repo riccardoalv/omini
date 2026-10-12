@@ -60,3 +60,13 @@ func markLinks(t *Topology) {
 		}
 	}
 }
+
+// Via is the node as the integration that makes change k reads it: the same
+// node with that report's device (a router read by SNMP and its plugin
+// changes its networks through the plugin's report).
+func (n Node) Via(k model.ChangeKind) Node {
+	if r, ok := n.ChangeVia[k]; ok && r.Device != nil {
+		n.Device, n.IntegrationID = r.Device, r.IntegrationID
+	}
+	return n
+}

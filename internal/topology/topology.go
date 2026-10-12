@@ -119,10 +119,21 @@ type Node struct {
 	// disabling would cut Omini or other gear off (set by the collector).
 	Changes   []model.ChangeKind    `json:"changes,omitempty"`
 	Protected map[string]Protection `json:"protected,omitempty"`
+	// Reports are every integration's report of this device (SNMP and a
+	// vendor plugin may both read it); ChangeVia is the one each change goes
+	// through (set by the collector).
+	Reports   []Report                    `json:"-"`
+	ChangeVia map[model.ChangeKind]Report `json:"-"`
 
 	Pinned   bool       `json:"pinned,omitempty"`    // pinned by the user: never collapsed
 	Hidden   bool       `json:"hidden,omitempty"`    // hidden from the map by the user
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
+}
+
+// Report is one integration's report of a device.
+type Report struct {
+	IntegrationID int64
+	Device        *model.Device
 }
 
 // Protection is why disabling a port is destructive: Reason is "omini" (Omini
@@ -331,9 +342,15 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 			n := b.nodes[id]
 			n.Online = n.Online || src.Online
 			if richness(d) > richness(n.Device) {
-				n.Device = d
+				// The node is the richer report's: its integration reads it and
+				// applies its changes (a vendor plugin over the network scan's SNMP).
+				n.Device, n.IntegrationID = d, src.IntegrationID
+				if r := model.Deref(d.Role); r != "" {
+					n.Role = string(r)
+				}
 			}
 			b.sources[id] = append(b.sources[id], d)
+			n.Reports = append(n.Reports, Report{IntegrationID: src.IntegrationID, Device: d})
 			b.index(id, d, macs)
 			return
 		}
@@ -345,6 +362,7 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 			n := b.nodes[id]
 			n.Online = n.Online || src.Online
 			b.sources[id] = append(b.sources[id], d)
+			n.Reports = append(n.Reports, Report{IntegrationID: src.IntegrationID, Device: d})
 			b.index(id, d, macs)
 			return
 		}
@@ -361,6 +379,7 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 		Vendor:        model.Deref(d.Vendor),
 		Model:         model.Deref(d.Model),
 		Device:        d,
+		Reports:       []Report{{IntegrationID: src.IntegrationID, Device: d}},
 	}
 	if n.Role == "" {
 		n.Role = string(model.DeviceRoleUnknown)

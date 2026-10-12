@@ -104,6 +104,7 @@ func wifiTargets(topo topology.Topology, kind model.ChangeKind, names ...string)
 		if !slices.Contains(n.Changes, kind) {
 			continue
 		}
+		n := n.Via(kind)
 		has := slices.ContainsFunc(names, func(s string) bool { return wifiOf(n, s) != nil })
 		cur, seen := byIntegration[n.IntegrationID]
 		if !seen {

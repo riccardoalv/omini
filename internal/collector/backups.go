@@ -113,8 +113,10 @@ func (c *Collector) backupIntegration(ctx context.Context, in store.Integration,
 	}
 	nodes := map[string]string{} // device key → node
 	for _, n := range c.State().Topology.Nodes {
-		if n.Device != nil && n.IntegrationID == in.ID {
-			nodes[n.Device.Key] = n.ID
+		for _, r := range n.Reports {
+			if r.Device != nil && r.IntegrationID == in.ID {
+				nodes[r.Device.Key] = n.ID
+			}
 		}
 	}
 	for _, bk := range backups {

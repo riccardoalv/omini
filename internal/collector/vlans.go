@@ -184,6 +184,7 @@ func (c *Collector) SaveVlan(ctx context.Context, v store.Vlan, confirmed bool) 
 		return saved, done, err
 	}
 	for _, n := range c.State().Topology.Nodes {
+		n := n.Via(model.ChangeKindVlanSet)
 		i := vlanIndex(n, v.ID)
 		if i < 0 || model.Deref(n.Device.Vlans[i].Name) == saved.Name || !slices.Contains(n.Changes, model.ChangeKindVlanSet) {
 			continue
@@ -224,6 +225,7 @@ func (c *Collector) DeleteVlan(ctx context.Context, id uint16, confirmed bool) (
 		}
 	}
 	for _, n := range c.State().Topology.Nodes {
+		n := n.Via(model.ChangeKindVlanDelete)
 		if vlanIndex(n, id) < 0 {
 			continue
 		}
