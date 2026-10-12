@@ -97,22 +97,12 @@ describe('collapseClients', () => {
     expect(view.nodes).toHaveLength(11)
   })
 
-  it('keeps pinned clients visible', () => {
-    const { nodes, edges } = network(10)
-    nodes[1] = { ...nodes[1]!, pinned: true }
-    const view = collapseClients(nodes, edges, 8, new Set())
-    expect(view.nodes.map((n) => n.id)).toEqual(['ap', 'c0'])
-    expect(view.groups[0]!.clients).toHaveLength(9)
-    expect(view.edges.some((e) => e.target === 'c0')).toBe(true)
-  })
-
-  it('collapses every client of a node the user collapsed, except pinned ones', () => {
+  it('collapses every client of a node the user collapsed', () => {
     const { nodes, edges } = network(3)
     nodes[1] = { ...nodes[1]!, type: 'server', product: 'jellyfin' }
-    nodes[2] = { ...nodes[2]!, pinned: true }
     const view = collapseClients(nodes, edges, 8, new Set(), new Set(['ap']))
-    expect(view.nodes.map((n) => n.id)).toEqual(['ap', 'c1'])
-    expect(view.groups[0]!.clients.map((c) => c.id)).toEqual(['c0', 'c2'])
+    expect(view.nodes.map((n) => n.id)).toEqual(['ap'])
+    expect(view.groups[0]!.clients.map((c) => c.id)).toEqual(['c0', 'c1', 'c2'])
   })
 
   it('keeps infrastructure and homelab software visible', () => {

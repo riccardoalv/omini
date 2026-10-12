@@ -30,15 +30,15 @@ const infrastructure = new Set([
   'virtual_machine',
 ])
 
-/** Pinned devices, homelab software and infrastructure always stay on the map. */
+/** Homelab software and infrastructure always stay on the map. */
 export const alwaysVisible = (n: TopoNode) =>
-  !!n.pinned || (n.kind !== 'app' && (!!n.product || infrastructure.has(n.type ?? '')))
+  n.kind !== 'app' && (!!n.product || infrastructure.has(n.type ?? ''))
 
 /**
  * Collapses clients into a group bubble when a parent (AP, switch, segment)
  * has more than `threshold` of them, unless the user expanded that parent.
- * Pinned clients, homelab software and infrastructure always stay visible.
- * Parents in `forced` (collapsed by the user) group all their clients except pinned ones.
+ * Homelab software and infrastructure always stay visible.
+ * Parents in `forced` (collapsed by the user) group all their clients.
  */
 /**
  * A node that can be folded into its parent's bubble: clients and apps, and
@@ -90,7 +90,7 @@ export function collapseClients(
     // The user can collapse every client of a node (context menu), whatever the count.
     const force = forced.has(parentId)
     if (!force && (clients.length <= threshold || expanded.has(parentId))) continue
-    const collapsible = clients.filter((c) => (force ? !c.pinned : !alwaysVisible(c)))
+    const collapsible = force ? clients : clients.filter((c) => !alwaysVisible(c))
     if (collapsible.length < (force ? 1 : 2)) continue
     for (const c of collapsible) hidden.add(c.id)
     groups.push({

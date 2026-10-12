@@ -7,6 +7,8 @@ see none.
 
 from __future__ import annotations
 
+import base64
+import json
 import ssl
 import time
 import urllib.request
@@ -350,10 +352,22 @@ def test_pause_and_resume_internet(emu: Emulator) -> None:
     assert dev["paused"] == [tv]
     # The pause rule is no network's access: each network keeps the one it had.
     assert {n["vlan"]: n["access"] for n in dev["networks"]}[80] == "internet"
+    # By MAC (OPNsense resolves it to the IPv4 and IPv6 addresses), one rule
+    # for both families, to anything not local (link-local, ULA, multicast
+    # stay reachable over IPv6).
+    [xml] = emu.collect(FW1, "backup")["backups"]
+    content = xml["content"]
+    assert "<name>omini_paused_mac</name>" in content and "<type>mac</type>" in content
+    assert "<content>02:00:00:00:50:01</content>" in content
+    assert "<ipprotocol>inet46</ipprotocol>" in content
+    assert "<destination_net>omini_local</destination_net>" in content
+    assert all(n in content for n in ("fe80::/10", "fc00::/7", "ff00::/8", "10.0.0.0/8"))
     dev = apply(emu, "pause.set", {**tv, "ips": ["10.10.50.121"]})
     assert dev["paused"] == [{**tv, "ips": ["10.10.50.121"]}]
     dev = apply(emu, "pause.delete", {"mac": tv["mac"]})
     assert not dev.get("paused")
+    [xml] = emu.collect(FW1, "backup")["backups"]
+    assert not any(a in xml["content"] for a in ("omini_paused", "omini_local"))
 
 
 def test_configuration_backup(emu: Emulator) -> None:
@@ -370,3 +384,96 @@ def test_configuration_backup(emu: Emulator) -> None:
     [c] = emu.collect(FW1, "backup")["backups"]
     assert c["content"] != a["content"] and "backup-test" in c["content"]
     apply(emu, "dns.delete", {"name": "backup-test.acme.local"})
+
+
+def api_post(emu: Emulator, api: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    cfg = emu.config(api)
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    auth = base64.b64encode(f"{cfg['api_key']}:{cfg['api_secret']}".encode()).decode()
+    req = urllib.request.Request(
+        emu.urls[api] + path,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+        return json.loads(r.read())
+
+
+def test_pause_keeps_the_lans_ipv6_networks_reachable(world: World) -> None:
+    tv = {"mac": "02:00:00:00:50:01", "ips": ["10.10.50.120"], "name": "Meeting room TV"}
+    with Emulator(at=TUE_1030, apis=[FW1], world=world) as emu:
+        emu.secrets[FW1]["ipv6_prefix"] = "2001:db8:ac00::/56"  # the ISP's prefix, a /64 per network
+        dev = apply(emu, "pause.set", tv)
+        assert dev["paused"] == [tv]
+        [xml] = emu.collect(FW1, "backup")["backups"]
+        content = xml["content"]
+        # The MAC alias covers the device's IPv6 addresses (OPNsense resolves it
+        # from NDP); what stays reachable over IPv6 is the LAN-side /64s.
+        assert "<type>mac</type>" in content and "<content>02:00:00:00:50:01</content>" in content
+        assert "2001:db8:ac00:32::/64" in content  # the 10.10.50.0/24 network's
+        assert "2001:db8:ac00:14::/64" in content  # the 10.10.20.0/24 network's
+        # The firewall's own MAC is never paused.
+        own = next(i["mac"] for i in dev["interfaces"] if i.get("mac"))
+        out = emu.collect(FW1, "apply", change={"device": "x", "kind": "pause.set", "value": {**tv, "mac": own}})
+        assert "cannot be paused" in out["error"]
+        dev = apply(emu, "pause.delete", {"mac": tv["mac"]})
+        assert not dev.get("paused")
+
+
+def test_a_pause_of_the_ipv4_only_version_is_migrated_and_resumes(world: World) -> None:
+    tv = {"mac": "02:00:00:00:50:01", "ips": ["10.10.50.120"], "name": "TV"}
+    cam = {"mac": "02:00:00:00:50:02", "ips": ["10.10.50.130"], "name": "Camera"}
+
+    def seed(emu: Emulator) -> None:
+        """What 0.5.0 wrote: an IPv4 host alias and an IPv4 rule to "not omini_private"."""
+        old = {
+            "enabled": "1",
+            "name": "omini_paused",
+            "type": "host",
+            "content": "10.10.50.120",
+            "description": "Omini paused: 02:00:00:00:50:01 10.10.50.120 (TV)",
+        }
+        assert api_post(emu, FW1, "/api/firewall/alias/add_item", {"alias": old})["result"] == "saved"
+        rule = {
+            "enabled": "1",
+            "action": "block",
+            "quick": "1",
+            "interface": "lan",
+            "direction": "in",
+            "ipprotocol": "inet",
+            "protocol": "any",
+            "source_net": "omini_paused",
+            "destination_net": "omini_private",
+            "destination_not": "1",
+            "sequence": "1",
+            "description": "Omini: paused devices (no internet)",
+        }
+        assert api_post(emu, FW1, "/api/firewall/filter/add_rule", {"rule": rule})["result"] == "saved"
+
+    with Emulator(at=TUE_1030, apis=[FW1], world=world) as emu:
+        seed(emu)
+        emu.set_time(TUE_1030)
+        [dev] = emu.collect(FW1)["devices"]
+        assert dev["paused"] == [tv]
+        # Pausing another device moves both to the MAC alias; the old shape goes.
+        dev = apply(emu, "pause.set", cam)
+        assert dev["paused"] == [tv, cam]
+        [xml] = emu.collect(FW1, "backup")["backups"]
+        content = xml["content"]
+        assert "<name>omini_paused</name>" not in content
+        assert "<content>02:00:00:00:50:01\n02:00:00:00:50:02</content>" in content
+        assert "<source_net>omini_paused</source_net>" not in content
+        apply(emu, "pause.delete", {"mac": tv["mac"]})
+        dev = apply(emu, "pause.delete", {"mac": cam["mac"]})
+        assert not dev.get("paused")
+
+    with Emulator(at=TUE_1030, apis=[FW1], world=world) as emu:
+        seed(emu)
+        # Straight from the old shape, resuming removes it all.
+        dev = apply(emu, "pause.delete", {"mac": tv["mac"]})
+        assert not dev.get("paused")
+        [xml] = emu.collect(FW1, "backup")["backups"]
+        assert not any(a in xml["content"] for a in ("omini_paused", "omini_local"))

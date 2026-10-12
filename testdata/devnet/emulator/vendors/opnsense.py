@@ -257,6 +257,19 @@ class OPNsense(HttpService):
             }
         ]
 
+    def _global_ipv6(self, p: Port) -> list[dict[str, Any]]:
+        """With ``ipv6_prefix`` in the secrets (a test: the ISP delegates a /56),
+        each internal network gets a /64 of it: the third octet of its IPv4
+        network picks the /64, the last of the firewall's address the host."""
+        prefix = self.secrets.get("ipv6_prefix")
+        v4 = next((ipaddress.ip_interface(a) for a in p.ips if a.startswith("10.")), None)
+        if not prefix or v4 is None:
+            return []
+        net = ipaddress.IPv6Network(prefix)
+        octets = v4.ip.packed
+        addr = ipaddress.IPv6Address(int(net.network_address) | octets[2] << 64 | octets[3])
+        return [{"ipaddr": f"{addr}/64", "subnetbits": 64}]
+
     def _row(self, snap: Snapshot, p: Port, ident: str, descr: str) -> dict[str, Any]:
         up = self._up(snap, p)
         speed = snap.port_speed(self.fw, p.name) if up and p.kind != "wg" else None
@@ -283,6 +296,7 @@ class OPNsense(HttpService):
                 )
             if p.ips and p.kind in ("vlan", "ethernet") and p.mac:
                 ipv6 = [{"ipaddr": f"fe80::{_eui64(p.mac)}%{p.name}/64", "subnetbits": 64, "link-local": True}]
+                ipv6 += self._global_ipv6(p)
             if p.name == "igc1":
                 gateways = [LTE_GW]
                 link_type = "static"

@@ -202,10 +202,6 @@ export default {
     ports: 'Ports',
     clients: 'Connected devices',
     rename: 'Rename',
-    pin: 'Pin',
-    unpin: 'Unpin',
-    pinned: 'Pinned',
-    pinHint: 'Pinned devices are never collapsed into a group.',
     hide: 'Hide',
     unhide: 'Show on map',
     hideHint:
@@ -307,19 +303,19 @@ export default {
     client: 'Client',
   },
   fixIp: {
-    title: 'Fix IP addresses',
+    title: 'Reserve IP addresses',
     intro:
       'Each device keeps the address it has today, as a reservation on its router. Checked: switches, access points, servers, NAS, hypervisors, VMs, printers and UPS.',
     none: 'Every device on DHCP already has a fixed address.',
     on: 'on {router}',
     proposed:
-      'Its router does not fix addresses inside the DHCP range: it gets this one at its next lease renewal.',
+      'Its router does not reserve addresses inside the DHCP range: it gets this one at its next lease renewal.',
     others: 'Show {n} other device on DHCP | Show {n} other devices on DHCP',
-    apply: 'Fix {n} address | Fix {n} addresses',
+    apply: 'Reserve {n} address | Reserve {n} addresses',
     banner:
       '{n} infrastructure device has no fixed IP. | {n} infrastructure devices have no fixed IP.',
     bannerOthers: '{n} device on DHCP has no fixed IP. | {n} devices on DHCP have no fixed IP.',
-    open: 'Fix IPs',
+    open: 'Reserve IPs',
   },
   backups: {
     title: 'Configuration',
@@ -357,18 +353,18 @@ export default {
     turnOn: 'Give it a name',
     other: 'Also {name} ({ip})',
     missing: {
-      no_fixed_ip: 'Fix its IP and it gets a DNS name.',
+      no_fixed_ip: 'Reserve its IP and it gets a DNS name.',
       no_server: 'No DNS server Omini manages answers for this network.',
       no_name: 'It has no name of its own: give it one to have a DNS name.',
     },
   },
   place: {
     title: 'Network',
-    fixed: 'fixed {ip}',
-    fixedOn: 'Fixed address {ip} (on {router})',
-    free: 'Free it',
+    fixed: 'reserved {ip}',
+    fixedOn: 'Reserved address {ip} (on {router})',
+    free: 'Release',
     ip: 'Address',
-    fix: 'Fix this address',
+    fix: 'Reserve this IP',
     fixHint: '{router} will always hand this device the address above.',
     onPort: 'On {device} {port}: {vlans}',
     move: 'Move to another VLAN',
@@ -766,7 +762,7 @@ export default {
       dhcp_no_offer_omini:
         "Devices still get addresses. Check the DHCP server's log for Omini's MAC: a reservation, a client class or a filter may ignore it, or its answer does not reach Omini's host.",
       infra_dynamic_ip:
-        "Fix its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
+        "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',

@@ -21,6 +21,11 @@ network.set, network.delete, reservation.set, reservation.delete, dns.set,
 dns.delete, pause.set and pause.delete can be applied and read back;
 wol.send and the firewall state kills are recorded there. lab-fw01 has no
 LAGG (a VM) and no host override in the design.
+
+The lab has no IPv6 but link-local. A test can give the LAN the ISP's /64
+(``ipv6_prefix`` in the secrets: the LAN's status shows it, hosts get a SLAAC
+and a temporary address) and the key's user the command prompt (``shell``;
+only ``ndp -an`` is emulated), which the README's user does not have.
 """
 
 from __future__ import annotations
@@ -94,6 +99,11 @@ def link_local(mac: str) -> str:
     return "fe80::" + ":".join(groups)
 
 
+def eui64(mac: str) -> int:
+    """The modified EUI-64 interface identifier of a MAC (as SLAAC makes it)."""
+    return int(ipaddress.IPv6Address(link_local(mac))) & (2**64 - 1)
+
+
 def stamp(t: float) -> str:
     return time.strftime("%Y/%m/%d %H:%M:%S", time.gmtime(t))
 
@@ -106,7 +116,7 @@ class PfSense(HttpService):
                 return Response.html_title("pfSense - Login")
             return Response.text(NOT_FOUND_HTML, 404)
         route = ROUTES.get(path)
-        if route is None and path not in WRITES:
+        if route is None and path not in WRITES and path not in DENIED:
             return Response.text(NOT_FOUND_HTML, 404)
         if req.method == "OPTIONS":
             allow = "GET, POST, PATCH, DELETE, OPTIONS" if path in WRITES else "GET, OPTIONS"
@@ -114,6 +124,12 @@ class PfSense(HttpService):
         key = req.headers.get("x-api-key", "")
         if not key or key != self.secrets.get("api_key"):
             return envelope([], 401, "unauthorized", "AUTH_AUTHENTICATION_FAILED", "Authentication failed.")
+        if path == COMMAND_PROMPT and req.method == "POST" and self.secrets.get("shell"):
+            return self.command_prompt(req, snap)
+        if path in DENIED:
+            # The Omini user of the README does not get it (it runs any shell
+            # command); a test gives it with ``shell`` in the secrets.
+            return envelope([], 403, "forbidden", "AUTH_INSUFFICIENT_PRIVILEGES", "Not authorized.")
         if req.method not in ("GET", "HEAD") or route is None:
             return self.write(req, snap, path)
         fn, plural = route
@@ -124,6 +140,51 @@ class PfSense(HttpService):
         if not plural:
             return envelope(out)
         return self.page(req, out)
+
+    # -- IPv6: a test sets ``ipv6_prefix`` in the secrets (the ISP's /64, tracked on the LAN) --
+    def lan_ipv6(self) -> ipaddress.IPv6Network | None:
+        prefix = self.secrets.get("ipv6_prefix")
+        return ipaddress.IPv6Network(prefix) if prefix else None
+
+    def neighbours(self, snap: Snapshot) -> list[tuple[str, str, str, bool]]:
+        """The NDP table: (address, MAC, NIC, permanent). Its own link-local
+        (and LAN global) addresses; each LAN host's link-local and, with a
+        prefix, its SLAAC address and today's temporary (privacy) one."""
+        n, net = self.lab_node(snap), self.lan_ipv6()
+        out: list[tuple[str, str, str, bool]] = []
+        for _, _, nic in IFACES:
+            p = n.ports[nic]
+            if p.mac:
+                out.append((f"{link_local(p.mac)}%{nic}", p.mac, nic, True))
+                if net is not None and nic == "vtnet1":
+                    out.append((str(net[1]), p.mac, nic, True))
+        day = int(snap.t // 86400)
+        for _, m, nic in snap.arp(NODE):
+            if nic != "vtnet1" or not m:
+                continue
+            out.append((f"{link_local(m)}%{nic}", m, nic, False))
+            if net is not None:
+                base = int(net.network_address)
+                temp = int(h01("temp6", m, day) * 2**62) | 1
+                out.append((str(ipaddress.IPv6Address(base | eui64(m))), m, nic, False))
+                out.append((str(ipaddress.IPv6Address(base | temp)), m, nic, False))
+        return out
+
+    def command_prompt(self, req: Request, snap: Snapshot) -> Response:
+        """`POST /api/v2/diagnostics/command_prompt`: only `ndp -an` is emulated."""
+        try:
+            command = str((req.json() or {}).get("command") or "")
+        except ValueError:
+            return envelope([], 400, "bad request", "INVALID_JSON", "The request body is not valid JSON.")
+        words = command.split()
+        if words[:2] != ["/usr/sbin/ndp", "-an"]:
+            name = words[0] if words else ""
+            return envelope({"command": command, "output": f"sh: {name}: not found\n", "result_code": 127})
+        lines = ["Neighbor                             Linklayer Address  Netif Expire    S Flags"]
+        for ip, m, nic, perm in self.neighbours(snap):
+            expire = "permanent" if perm else f"{23 * 3600 + int(h01('ndp', ip, snap.b) * 3000)}s"
+            lines.append(f"{ip:<36} {m:<18} {nic:<5} {expire:<9} {'R' if perm else 'S'}")
+        return envelope({"command": command, "output": "\n".join(lines) + "\n", "result_code": 0})
 
     # -- configuration changes --
     def config(self, snap: Snapshot) -> config.Config:
@@ -282,7 +343,7 @@ class PfSense(HttpService):
         }
 
     def interfaces(self, snap: Snapshot) -> list[dict[str, Any]]:
-        n = self.lab_node(snap)
+        n, v6 = self.lab_node(snap), self.lan_ipv6()
         out = []
         for i, (name, descr, nic) in enumerate(IFACES):
             p = n.ports[nic]
@@ -301,8 +362,8 @@ class PfSense(HttpService):
                     "ipaddr": ip,
                     "subnet": prefix,
                     "linklocal": f"{link_local(p.mac)}%{nic}" if p.mac else "",
-                    "ipaddrv6": "",
-                    "subnetv6": "",
+                    "ipaddrv6": str(v6[1]) if v6 is not None and name == "lan" else "",
+                    "subnetv6": str(v6.prefixlen) if v6 is not None and name == "lan" else "",
                     "inerrs": st.rx_errors,
                     "outerrs": st.tx_errors,
                     "collisions": 0,
@@ -562,6 +623,10 @@ ROUTES: dict[str, tuple[Any, bool]] = {
     "/api/v2/status/ipsec/sas": (PfSense.empty, True),
     "/api/v2/status/wireguard/tunnels": (PfSense.wireguard, True),
 }
+
+# Endpoints the package has but the emulated API user has no privilege for.
+COMMAND_PROMPT = "/api/v2/diagnostics/command_prompt"
+DENIED = {COMMAND_PROMPT}
 
 # Endpoints that change the configuration (POST, PATCH, DELETE); see pfsense_config.write.
 WRITES = {

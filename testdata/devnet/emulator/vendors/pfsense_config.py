@@ -19,7 +19,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass, field
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from typing import Any
 
 
@@ -110,7 +110,8 @@ def _index(items: list[Any], value: Any, what: str) -> int:
 
 
 def _check_alias(alias: dict[str, Any]) -> None:
-    """A host alias holds addresses, one description per address at most."""
+    """A host alias holds addresses (IPv4 or IPv6), a network alias networks,
+    one description per address at most."""
     address, detail = alias.get("address") or [], alias.get("detail") or []
     if len(detail) > len(address):
         raise Refused(400, "FIELD_INVALID", "Field `detail` cannot have more items than `address`.")
@@ -120,6 +121,12 @@ def _check_alias(alias: dict[str, Any]) -> None:
                 ip_address(str(a))
             except ValueError:
                 raise Refused(400, "FIELD_INVALID", f"Field `address` item `{a}` is not an IP address.") from None
+    if alias.get("type") == "network":
+        for a in address:
+            try:
+                ip_network(str(a))
+            except ValueError:
+                raise Refused(400, "FIELD_INVALID", f"Field `address` item `{a}` is not a network.") from None
 
 
 def _in_use(cfg: Config, name: str) -> bool:
@@ -214,6 +221,8 @@ def write(cfg: Config, method: str, path: str, query: dict[str, str], body: dict
             return {"parent_id": parent, "id": i, **maps[i]}
         return maps.pop(i)
     if key == ("POST", "/api/v2/firewall/rule"):
+        if body.get("ipprotocol", "inet") not in ("inet", "inet6", "inet46"):
+            raise Refused(400, "FIELD_INVALID_CHOICE", "Field `ipprotocol` must be one of [inet, inet6, inet46].")
         rule = {"protocol": None, "destination_port": None, "disabled": False, "floating": False, **body}
         cfg.rules.append(rule)
         return {"id": len(cfg.rules) - 1, **rule}

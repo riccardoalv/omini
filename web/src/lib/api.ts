@@ -159,7 +159,6 @@ export const api = {
     id: string,
     input: {
       alias?: string
-      pinned?: boolean
       hidden?: boolean
       device_type?: string
       icon?: string

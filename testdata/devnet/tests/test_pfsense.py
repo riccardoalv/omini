@@ -292,16 +292,34 @@ def test_wake_on_lan(world: World) -> None:
         assert "no network of pfSense holds 10.10.120.50" in out["error"]  # the WAN's network
 
 
+def api_get(emu: Emulator, path: str) -> list[dict]:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(emu.urls["pfsense"] + path, headers={"X-API-Key": emu.config("pfsense")["api_key"]})
+    with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+        return json.loads(r.read())["data"]
+
+
 def test_pause_and_resume_internet(world: World) -> None:
     kali = world.nodes["lab-kali"]
     with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
         d = apply(emu, "pause.set", {"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"})
         assert d["paused"] == [{"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"}]
         assert networks_of(d)[1]["access"] == "all"  # the block is no access preset
+        # IPv4 and IPv6, to anything not local. The user may not read the NDP
+        # table (command prompt), so the alias holds the IPv4 address only.
+        rules = [r for r in api_get(emu, "/api/v2/firewall/rules") if r.get("source") == "omini_paused"]
+        assert rules and {(r["ipprotocol"], r["destination"]) for r in rules} == {("inet46", "!omini_local")}
+        aliases = {a["name"]: a for a in api_get(emu, "/api/v2/firewall/aliases")}
+        assert aliases["omini_paused"]["address"] == [kali.ip]
+        assert {"fe80::/10", "fc00::/7", "ff00::/8", "192.168.0.0/16"} <= set(aliases["omini_local"]["address"])
         d = apply(emu, "pause.set", {"mac": kali.mac, "ips": ["192.168.200.98"], "name": "lab-kali"})
         assert d["paused"][0]["ips"] == ["192.168.200.98"]  # its new address replaces the old one
         d = apply(emu, "pause.delete", {"mac": kali.mac})
         assert not d.get("paused")
+        names = {a["name"] for a in api_get(emu, "/api/v2/firewall/aliases")}
+        assert not names & {"omini_paused", "omini_local"}
 
         out = emu.collect(
             "pfsense",
@@ -309,3 +327,101 @@ def test_pause_and_resume_internet(world: World) -> None:
             change={"device": "x", "kind": "pause.set", "value": {"mac": kali.mac, "ips": ["192.168.200.1"]}},
         )
         assert "pfSense's own address" in out["error"]
+
+
+LAN_V6 = "2001:db8:200:1::/64"  # the ISP's prefix, tracked on the LAN
+
+
+def api_post(emu: Emulator, path: str, body: dict) -> dict:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    req = urllib.request.Request(
+        emu.urls["pfsense"] + path,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={"X-API-Key": emu.config("pfsense")["api_key"], "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, context=ctx, timeout=10) as r:
+        return json.loads(r.read())["data"]
+
+
+def test_pause_blocks_the_devices_ipv6_from_the_ndp_table(world: World) -> None:
+    kali, k3s = world.nodes["lab-kali"], world.nodes["lab-k3s-01"]
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        # The ISP delegates a prefix to the LAN; the API user may use the command prompt.
+        emu.secrets["pfsense"]["ipv6_prefix"] = LAN_V6
+        emu.secrets["pfsense"]["shell"] = True
+        apply(emu, "pause.set", {"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"})
+        d = apply(emu, "pause.set", {"mac": k3s.mac, "ips": [k3s.ip], "name": "lab-k3s-01"})
+        # Device.paused keeps the IPv4 addresses Omini sent.
+        assert {p["mac"]: p["ips"] for p in d["paused"]} == {kali.mac: [kali.ip], k3s.mac: [k3s.ip]}
+        alias = {a["name"]: a for a in api_get(emu, "/api/v2/firewall/aliases")}["omini_paused"]
+        by_mac: dict[str, list[str]] = {}
+        for address, detail in zip(alias["address"], alias["detail"], strict=True):
+            by_mac.setdefault(detail.split()[1], []).append(address)
+        for node in (kali, k3s):
+            v6 = [a for a in by_mac[node.mac] if ":" in a]
+            # Its SLAAC address and today's temporary one, global only (no link-local).
+            assert len(v6) == 2 and all(a.startswith("2001:db8:200:1:") for a in v6), by_mac
+        # The router's own global address is never paused; the LAN prefix stays reachable.
+        assert "2001:db8:200:1::1" not in alias["address"]
+        local = {a["name"]: a for a in api_get(emu, "/api/v2/firewall/aliases")}["omini_local"]["address"]
+        assert {LAN_V6, "fe80::/10", "fc00::/7", "ff00::/8", "10.0.0.0/8"} <= set(local)
+        rules = [r for r in api_get(emu, "/api/v2/firewall/rules") if r.get("source") == "omini_paused"]
+        assert [(r["ipprotocol"], r["destination"], r["interface"]) for r in rules] == [
+            ("inet46", "!omini_local", ["lan"])
+        ]
+
+        # Resuming one keeps the other's IPv6 entries; the last one cleans up.
+        apply(emu, "pause.delete", {"mac": kali.mac})
+        alias = {a["name"]: a for a in api_get(emu, "/api/v2/firewall/aliases")}["omini_paused"]
+        assert all(d.split()[1] == k3s.mac for d in alias["detail"]) and len(alias["address"]) == 3
+        d = apply(emu, "pause.delete", {"mac": k3s.mac})
+        assert not d.get("paused")
+        names = {a["name"] for a in api_get(emu, "/api/v2/firewall/aliases")}
+        assert not names & {"omini_paused", "omini_local"}
+        assert not [r for r in api_get(emu, "/api/v2/firewall/rules") if r.get("source") == "omini_paused"]
+
+
+def test_a_pause_of_the_ipv4_only_version_is_migrated_and_resumes(world: World) -> None:
+    kali = world.nodes["lab-kali"]
+    with Emulator(at=TUESDAY_10, apis=["pfsense"], world=world) as emu:
+        # What 0.2.0 wrote: an IPv4 host alias and IPv4 rules to "not omini_private".
+        for alias in (
+            {"name": "omini_private", "type": "network", "address": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]},
+            {"name": "omini_paused", "type": "host", "address": [kali.ip], "detail": [f"Omini {kali.mac} lab-kali"]},
+        ):
+            api_post(emu, "/api/v2/firewall/alias", alias)
+        old = {
+            "type": "block",
+            "interface": ["lan"],
+            "ipprotocol": "inet",
+            "source": "omini_paused",
+            "destination": "!omini_private",
+            "floating": True,
+            "quick": True,
+            "direction": "in",
+            "descr": "Omini: paused devices, no internet",
+        }
+        api_post(emu, "/api/v2/firewall/rule", old)
+        d = device(emu.collect("pfsense"))
+        assert d["paused"] == [{"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"}]
+
+        # The next pause replaces the old rule.
+        apply(emu, "pause.set", {"mac": kali.mac, "ips": [kali.ip], "name": "lab-kali"})
+        rules = [r for r in api_get(emu, "/api/v2/firewall/rules") if r.get("source") == "omini_paused"]
+        assert [(r["ipprotocol"], r["destination"]) for r in rules] == [("inet46", "!omini_local")]
+
+        # And straight from the old shape, a resume removes it all.
+        apply(emu, "pause.delete", {"mac": kali.mac})
+        api_post(
+            emu,
+            "/api/v2/firewall/alias",
+            {"name": "omini_paused", "type": "host", "address": [kali.ip], "detail": [f"Omini {kali.mac} lab-kali"]},
+        )
+        api_post(emu, "/api/v2/firewall/rule", old)
+        d = apply(emu, "pause.delete", {"mac": kali.mac})
+        assert not d.get("paused")
+        assert not [r for r in api_get(emu, "/api/v2/firewall/rules") if r.get("source") == "omini_paused"]
+        assert "omini_paused" not in {a["name"] for a in api_get(emu, "/api/v2/firewall/aliases")}

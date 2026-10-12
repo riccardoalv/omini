@@ -7,8 +7,6 @@ import {
   EyeOff,
   ExternalLink,
   Pencil,
-  Pin,
-  PinOff,
   Radar,
   Trash2,
   X,
@@ -528,7 +526,6 @@ function startEdit() {
 
 async function save(patch: {
   alias?: string
-  pinned?: boolean
   hidden?: boolean
   device_type?: string
   icon?: string
@@ -539,7 +536,6 @@ async function save(patch: {
     await api.updateInventory(n.value.id, patch)
     const local: Partial<TopoNode> = {}
     if (patch.alias !== undefined && patch.alias !== '') local.label = patch.alias
-    if (patch.pinned !== undefined) local.pinned = patch.pinned
     if (patch.hidden !== undefined) local.hidden = patch.hidden
     if (patch.device_type) local.type = patch.device_type
     if (patch.icon !== undefined) local.icon = patch.icon || undefined
@@ -702,14 +698,6 @@ async function save(patch: {
           >
             <Radar :size="14" :class="{ spin: scanning }" />
             {{ scanning ? t('panel.scanning') : t('panel.scan') }}
-          </button>
-          <button
-            class="btn small"
-            :title="t('panel.pinHint')"
-            @click="save({ pinned: !n.pinned })"
-          >
-            <component :is="n.pinned ? PinOff : Pin" :size="14" />
-            {{ n.pinned ? t('panel.unpin') : t('panel.pin') }}
           </button>
           <HostActions
             :node="n"

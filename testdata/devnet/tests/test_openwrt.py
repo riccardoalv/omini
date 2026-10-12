@@ -476,8 +476,11 @@ def test_pause_a_device() -> None:
         fw = rpc(url, sid, "uci", "get", {"config": "firewall"})["result"][1]["values"]
         rules = sorted((s["src"], s["dest"], s["target"]) for s in fw.values() if s.get("name") == "Omini pause")
         assert rules == [("guest", "wan", "REJECT"), ("lan", "wan", "REJECT")]  # every zone but the WAN's
-        [ipset] = [s for s in fw.values() if s[".type"] == "ipset"]
-        assert ipset["name"] == "omini_paused" and ipset["entry"] == [pc.ip]
+        # By MAC, IPv4 and IPv6 alike (towards the WAN zone: local IPv6 stays reachable).
+        for r in (s for s in fw.values() if s.get("name") == "Omini pause"):
+            assert r["src_mac"] == [pc.mac] and r["family"] == "any" and r["proto"] == "all"
+            assert r["omini"] == [f"{pc.mac} {pc.ip} Store PC"] and "ipset" not in r
+        assert not [s for s in fw.values() if s[".type"] == "ipset"]
 
         assert "is the router itself" in apply(emu, "pause.set", {"mac": pc.mac, "ips": ["10.30.1.1"]})["error"]
         emu.set_time(SAT_15 + 120)

@@ -68,7 +68,7 @@ describe('DnsNameRow', () => {
     vi.mocked(api.dnsName).mockResolvedValue({ label: 'tv', missing: 'no_fixed_ip' })
     const w = row()
     await flushPromises()
-    expect(w.text()).toContain('Fix its IP')
+    expect(w.text()).toContain('Reserve its IP')
     expect(w.find('[data-test=dns-edit]').exists()).toBe(false)
   })
 })

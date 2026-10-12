@@ -211,14 +211,14 @@ func TestAliasAndPinAreApplied(t *testing.T) {
 	e.addIntegration(t, "demo", integration.Config{})
 	e.collect(t)
 
-	alias, pinned := "NAS (Synology)", true
-	if _, err := e.st.UpdateInventory(context.Background(), "mac:00:11:32:aa:00:01", store.InventoryUpdate{Alias: &alias, Pinned: &pinned}); err != nil {
+	alias := "NAS (Synology)"
+	if _, err := e.st.UpdateInventory(context.Background(), "mac:00:11:32:aa:00:01", store.InventoryUpdate{Alias: &alias}); err != nil {
 		t.Fatal(err)
 	}
 	s := e.collect(t)
 	n, _ := node(s, "mac:00:11:32:aa:00:01")
-	if n.Label != alias || !n.Pinned {
-		t.Fatalf("alias/pin not applied: %+v", n)
+	if n.Label != alias {
+		t.Fatalf("alias not applied: %+v", n)
 	}
 	inv, _ := e.st.ListInventory(context.Background())
 	for _, entry := range inv {

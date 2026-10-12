@@ -207,7 +207,6 @@ export interface TopoNode {
   changes?: ChangeKind[]
   /** Ports whose disabling would cut Omini or other gear off. */
   protected?: Record<string, Protection>
-  pinned?: boolean
   /** Hidden from the map by the user. */
   hidden?: boolean
   last_seen?: string
@@ -357,7 +356,6 @@ export interface InventoryEntry {
   parent_id?: string
   port?: string
   alias?: string
-  pinned: boolean
   hidden: boolean
   first_seen: string
   last_seen: string

@@ -205,10 +205,6 @@ const ptBR: typeof en = {
     ports: 'Portas',
     clients: 'Dispositivos conectados',
     rename: 'Renomear',
-    pin: 'Fixar',
-    unpin: 'Desafixar',
-    pinned: 'Fixado',
-    pinHint: 'Dispositivos fixados nunca são agrupados.',
     hide: 'Ocultar',
     unhide: 'Mostrar no mapa',
     hideHint:

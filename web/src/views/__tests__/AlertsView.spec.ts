@@ -88,7 +88,6 @@ describe('AlertsView', () => {
         kind: 'client',
         label: '192.168.1.10',
         alias: 'Kitchen tablet',
-        pinned: false,
         hidden: false,
         first_seen: '2026-10-01T00:00:00Z',
         last_seen: '2026-10-07T00:00:00Z',

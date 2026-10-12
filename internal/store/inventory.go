@@ -21,7 +21,6 @@ type InventoryEntry struct {
 	ParentID string `json:"parent_id,omitempty"`
 	Port     string `json:"port,omitempty"`
 	Alias    string `json:"alias,omitempty"`
-	Pinned   bool   `json:"pinned"`
 	Hidden   bool   `json:"hidden"` // hidden from the map (kept in the inventory)
 	// User corrections of the classification; empty means automatic.
 	DeviceType string    `json:"device_type,omitempty"`
@@ -32,7 +31,7 @@ type InventoryEntry struct {
 
 // MarkSeen records that entries were present at time at. New entries are
 // created; existing ones get their observed fields refreshed. User fields
-// (alias, pinned) are never overwritten.
+// (alias, hidden) are never overwritten.
 func (s *Store) MarkSeen(ctx context.Context, entries []InventoryEntry, at time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -69,7 +68,7 @@ func (s *Store) MarkSeen(ctx context.Context, entries []InventoryEntry, at time.
 func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, label, COALESCE(mac, ''), COALESCE(ip, ''), COALESCE(hostname, ''), COALESCE(vendor, ''),
-		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), pinned, first_seen, last_seen,
+		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), first_seen, last_seen,
 		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden
 		FROM inventory ORDER BY last_seen DESC, id`)
 	if err != nil {
@@ -79,15 +78,15 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	var out []InventoryEntry
 	for rows.Next() {
 		var (
-			e              InventoryEntry
-			pinned, hidden int
-			first, latest  int64
+			e             InventoryEntry
+			hidden        int
+			first, latest int64
 		)
 		if err := rows.Scan(&e.ID, &e.Kind, &e.Label, &e.MAC, &e.IP, &e.Hostname, &e.Vendor,
-			&e.ParentID, &e.Port, &e.Alias, &pinned, &first, &latest, &e.DeviceType, &e.Icon, &hidden); err != nil {
+			&e.ParentID, &e.Port, &e.Alias, &first, &latest, &e.DeviceType, &e.Icon, &hidden); err != nil {
 			return nil, err
 		}
-		e.Pinned, e.Hidden, e.FirstSeen, e.LastSeen = pinned == 1, hidden == 1, fromUnix(first), fromUnix(latest)
+		e.Hidden, e.FirstSeen, e.LastSeen = hidden == 1, fromUnix(first), fromUnix(latest)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -97,7 +96,6 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 // empty string resets the field to automatic.
 type InventoryUpdate struct {
 	Alias      *string `json:"alias"`
-	Pinned     *bool   `json:"pinned"`
 	Hidden     *bool   `json:"hidden"`
 	DeviceType *string `json:"device_type"`
 	Icon       *string `json:"icon"`
@@ -122,7 +120,7 @@ func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdat
 			return InventoryEntry{}, err
 		}
 	}
-	for col, v := range map[string]*bool{"pinned": u.Pinned, "hidden": u.Hidden} {
+	for col, v := range map[string]*bool{"hidden": u.Hidden} {
 		if v == nil {
 			continue
 		}

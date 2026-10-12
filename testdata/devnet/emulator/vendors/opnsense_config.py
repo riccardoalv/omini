@@ -9,7 +9,9 @@ reaches the emulated network's traffic: it is the router's configuration only.
 
 from __future__ import annotations
 
+import ipaddress
 import itertools
+import re
 from dataclasses import dataclass, field
 from typing import Any
 from xml.sax.saxutils import escape
@@ -51,6 +53,45 @@ class Config:
 
     def uuid(self, kind: str) -> str:
         return f"{kind}-{next(self.ids):08d}-0000-4000-8000-000000000000"
+
+
+# The values OPNsense 26.7's models accept (Firewall/Alias.xml, Firewall/Filter.xml).
+ALIAS_TYPES = {
+    "host",
+    "network",
+    "port",
+    "url",
+    "urltable",
+    "urljson",
+    "geoip",
+    "networkgroup",
+    "mac",
+    "asn",
+    "dynipv6host",
+    "authgroup",
+    "internal",
+    "external",
+}
+IP_PROTOCOLS = {"inet", "inet6", "inet46"}
+MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$", re.I)
+
+
+def alias_error(a: dict[str, Any]) -> dict[str, str] | None:
+    """What OPNsense would refuse in an alias: an unknown type, or content
+    that is not of its type (MACs for mac, networks for network)."""
+    kind = a.get("type")
+    if kind not in ALIAS_TYPES:
+        return {"alias.type": "Invalid type."}
+    content = [e for e in re.split(r"[\s,]+", str(a.get("content") or "")) if e]
+    try:
+        if kind == "mac" and not all(MAC.match(e) for e in content):
+            raise ValueError
+        if kind == "network":
+            for e in content:
+                ipaddress.ip_network(e)
+    except ValueError:
+        return {"alias.content": f"Not a valid {kind} entry."}
+    return None
 
 
 def rows(items: dict[str, dict[str, Any]], key: str = "uuid") -> dict[str, Any]:
@@ -183,6 +224,8 @@ def post(cfg: Config, path: str, body: dict[str, Any]) -> tuple[int, dict[str, A
         cfg.kea.update(((body.get("dhcpv4") or {}).get("general")) or {})
         return 200, ok
     if path == "/api/firewall/filter/add_rule":
+        if (body.get("rule") or {}).get("ipprotocol", "inet") not in IP_PROTOCOLS:
+            return 200, {"result": "failed", "validations": {"rule.ipprotocol": "Invalid option."}}
         uid = cfg.uuid("rule")
         cfg.rules[uid] = dict(body.get("rule") or {})
         return 200, {**ok, "uuid": uid}
@@ -203,6 +246,8 @@ def post(cfg: Config, path: str, body: dict[str, Any]) -> tuple[int, dict[str, A
         cfg.reservations.pop(last, None)
         return 200, {"result": "deleted"}
     if path == "/api/firewall/alias/add_item":
+        if err := alias_error(body.get("alias") or {}):
+            return 200, {"result": "failed", "validations": err}
         uid = cfg.uuid("alias")
         cfg.aliases[uid] = dict(body.get("alias") or {})
         return 200, {**ok, "uuid": uid}
@@ -230,6 +275,8 @@ def post(cfg: Config, path: str, body: dict[str, Any]) -> tuple[int, dict[str, A
     if path.startswith("/api/firewall/alias/set_item/"):
         if last not in cfg.aliases:
             return 200, {"result": "failed"}
+        if err := alias_error({**cfg.aliases[last], **(body.get("alias") or {})}):
+            return 200, {"result": "failed", "validations": err}
         cfg.aliases[last].update(body.get("alias") or {})
         return 200, ok
     if path.startswith("/api/firewall/alias/del_item/"):

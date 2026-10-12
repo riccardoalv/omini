@@ -86,8 +86,8 @@ func TestMarkSeenKeepsUserFields(t *testing.T) {
 	if err := s.MarkSeen(ctx, []InventoryEntry{entry}, first); err != nil {
 		t.Fatal(err)
 	}
-	alias, pinned := "Ricardo's phone", true
-	if _, err := s.UpdateInventory(ctx, entry.ID, InventoryUpdate{Alias: &alias, Pinned: &pinned}); err != nil {
+	alias := "Ricardo's phone"
+	if _, err := s.UpdateInventory(ctx, entry.ID, InventoryUpdate{Alias: &alias}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,7 +97,7 @@ func TestMarkSeenKeepsUserFields(t *testing.T) {
 	}
 	all, _ := s.ListInventory(ctx)
 	got := all[0]
-	if got.Alias != alias || !got.Pinned || got.IP != "192.168.1.50" {
+	if got.Alias != alias || got.IP != "192.168.1.50" {
 		t.Fatalf("user fields or previous values lost: %+v", got)
 	}
 	if !got.FirstSeen.Equal(first) || !got.LastSeen.Equal(first.Add(time.Hour)) {
@@ -131,7 +131,7 @@ func TestHideDevice(t *testing.T) {
 	}
 	yes, no := true, false
 	e, err := s.UpdateInventory(ctx, "mac:aa", InventoryUpdate{Hidden: &yes})
-	if err != nil || !e.Hidden || e.Pinned {
+	if err != nil || !e.Hidden {
 		t.Fatalf("hide: %+v, %v", e, err)
 	}
 	// Seen again: still hidden (user fields are never overwritten).

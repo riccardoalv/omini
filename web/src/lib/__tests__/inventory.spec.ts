@@ -7,7 +7,6 @@ const entry = (id: string, extra: Partial<InventoryEntry>): InventoryEntry => ({
   id,
   kind: 'client',
   label: id,
-  pinned: false,
   hidden: false,
   first_seen: '2026-10-01T00:00:00Z',
   last_seen: '2026-10-06T00:00:00Z',

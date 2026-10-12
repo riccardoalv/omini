@@ -62,7 +62,7 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `duplicate_ip` | warning | Two online devices with different MAC addresses use the same IP |
 | `config_changed` | info | A device's configuration changed outside Omini: its new [backup](map.md#the-device-panel) differs and Omini made no change on it in between. Stays open for 24 hours |
-| `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can fix it on ([Fix IPs](discovery.md#dns-and-dhcp-checks)) |
+| `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can reserve it on ([Reserve IPs](discovery.md#dns-and-dhcp-checks)) |
 | `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
 | `dhcp_no_offer_omini` | warning | No DHCP server answered Omini, but a router that serves DHCP reports its DHCP server running: the devices get addresses, the server ignores Omini's request (a reservation, a client class, a filter) or its answer does not reach Omini's host |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |

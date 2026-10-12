@@ -50,7 +50,7 @@ var migrations = []string{
 		parent_id  TEXT,             -- last known attachment
 		port       TEXT,
 		alias      TEXT,             -- name given by the user
-		pinned     INTEGER NOT NULL DEFAULT 0,
+		pinned     INTEGER NOT NULL DEFAULT 0, -- unused since 1.3.2 (pinning was removed)
 		first_seen INTEGER NOT NULL,
 		last_seen  INTEGER NOT NULL
 	);

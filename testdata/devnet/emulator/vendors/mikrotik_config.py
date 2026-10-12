@@ -2,8 +2,8 @@
 
 What Omini's changes write lives here, per emulated box, built from the design on first use:
 the bridge ports' PVID and frame types, the bridge VLAN table, VLAN interfaces, IP addresses,
-DHCP pools, servers, networks and static leases, firewall filter rules and address lists,
-/ip/dns and its static names, the Wake-on-LAN packets sent and the firewall connections removed.
+DHCP pools, servers, networks and static leases, firewall filter rules and address lists (IPv4
+and IPv6), /ip/dns and its static names, the Wake-on-LAN packets sent and the firewall connections removed.
 The vendor module renders these menus from it, adding what is live (running, counters), and
 `export` renders them as `/export terse` does (no sensitive values).
 
@@ -47,6 +47,7 @@ PROPS: dict[str, set[str]] = {
         "dst-address",
         "src-address-list",
         "dst-address-list",
+        "src-mac-address",
         "src-port",
         "dst-port",
         "connection-state",
@@ -57,8 +58,10 @@ PROPS: dict[str, set[str]] = {
         "disabled",
     },
     "/ip/firewall/address-list": {"list", "address", "comment", "disabled"},
+    "/ipv6/firewall/address-list": {"list", "address", "comment", "disabled"},
     "/ip/dns/static": {"name", "regexp", "address", "type", "cname", "ttl", "match-subdomain", "comment", "disabled"},
 }
+PROPS["/ipv6/firewall/filter"] = PROPS["/ip/firewall/filter"]
 DNS_PROPS = {"servers", "allow-remote-requests", "cache-size", "mdns-repeat-ifaces"}
 # Bridge ports are set, never added or removed, by these changes.
 NO_ADD = {"/interface/bridge/port"}
@@ -121,6 +124,47 @@ def defconf_filter() -> list[dict[str, str]]:
             {"connection-state": "new", "connection-nat-state": "!dstnat", "in-interface-list": "WAN"},
             "drop all from WAN not DSTNATed",
         ),
+    ]
+    return [
+        {
+            ".id": f"*{k + 1:X}",
+            "chain": chain,
+            "action": action,
+            **extra,
+            "log": "false",
+            "log-prefix": "",
+            "comment": f"defconf: {comment}",
+            "invalid": "false",
+            "dynamic": "false",
+            "disabled": "false",
+        }
+        for k, (chain, action, extra, comment) in enumerate(rows)
+    ]
+
+
+def defconf_filter6() -> list[dict[str, str]]:
+    """RouterOS's default IPv6 firewall (defconf), shortened: the forward chain accepts what is
+    established, ICMPv6 and what comes from the LAN."""
+    rows = [
+        (
+            "input",
+            "accept",
+            {"connection-state": "established,related,untracked"},
+            "accept established,related,untracked",
+        ),
+        ("input", "drop", {"connection-state": "invalid"}, "drop invalid"),
+        ("input", "accept", {"protocol": "icmpv6"}, "accept ICMPv6"),
+        ("input", "drop", {"in-interface-list": "!LAN"}, "drop everything else not coming from LAN"),
+        (
+            "forward",
+            "accept",
+            {"connection-state": "established,related,untracked"},
+            "accept established,related,untracked",
+        ),
+        ("forward", "drop", {"connection-state": "invalid"}, "drop invalid"),
+        ("forward", "drop", {"src-address-list": "bad_ipv6"}, "drop packets with bad src ipv6"),
+        ("forward", "accept", {"protocol": "icmpv6"}, "accept ICMPv6"),
+        ("forward", "drop", {"in-interface-list": "!LAN"}, "drop everything else not coming from LAN"),
     ]
     return [
         {
@@ -234,6 +278,17 @@ class RouterConfig:
             )
         if box.kind == "router":
             self.tables["/ip/firewall/filter"] = defconf_filter()
+            self.tables["/ipv6/firewall/filter"] = defconf_filter6()
+            self.tables["/ipv6/firewall/address-list"] = [
+                {
+                    ".id": f"*{k + 1:X}",
+                    "list": "bad_ipv6",
+                    "address": a,
+                    "comment": f"defconf: {c}",
+                    "disabled": "false",
+                }
+                for k, (a, c) in enumerate((("::/128", "unspecified address"), ("::1/128", "lo")))
+            ]
         # One local name: the router's own, on its management VLAN (as an admin would add it).
         if box.kind == "router":
             mgmt = next((p for p in box.ports.values() if p.kind == "vlan" and p.ips), None)
@@ -325,7 +380,7 @@ class RouterConfig:
             at = next((k for k, r in enumerate(rows) if r[".id"] == before), -1)
             if at < 0:
                 raise Failure("no such item (place-before)")
-        if menu in ("/ip/firewall/filter", "/interface/bridge/vlan"):
+        if menu in ("/ip/firewall/filter", "/ipv6/firewall/filter", "/interface/bridge/vlan"):
             row.setdefault("dynamic", "false")
         rows.insert(at, row)
         return row
@@ -442,23 +497,29 @@ class RouterConfig:
                 raise Failure("invalid value for argument address") from e
             if row.get("server", "all") not in {s["name"] for s in self.rows("/ip/dhcp-server")} | {"all"}:
                 raise Failure("input does not match any value of server")
-        elif menu == "/ip/firewall/filter":
+        elif menu in ("/ip/firewall/filter", "/ipv6/firewall/filter"):
             if row.get("chain") not in ("input", "forward", "output") or row.get("action") not in ACTIONS:
                 raise Failure("chain and action must be set")
             for k in ("in-interface", "out-interface"):
                 if row.get(k) and row[k].lstrip("!") not in ifaces:
                     raise Failure(f"input does not match any value of interface: {row[k]}")
-            if row.get("protocol") not in (None, "tcp", "udp", "icmp"):
+            icmp = "icmpv6" if menu.startswith("/ipv6") else "icmp"
+            if row.get("protocol") not in (None, "tcp", "udp", icmp):
                 raise Failure("invalid value for argument protocol")
+            mac = row.get("src-mac-address")
+            if mac is not None and not re.fullmatch(r"!?([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", mac):
+                raise Failure("invalid value for argument src-mac-address")
             if row.get("dst-port") and row.get("protocol") not in ("tcp", "udp"):
                 raise Failure("dst-port can be set only for tcp or udp")
-        elif menu == "/ip/firewall/address-list":
+        elif menu in ("/ip/firewall/address-list", "/ipv6/firewall/address-list"):
             if not row.get("list"):
                 raise Failure("list must be set")
             try:
-                ipaddress.ip_network(row.get("address", ""), strict=False)
+                net = ipaddress.ip_network(row.get("address", ""), strict=False)
             except ValueError as e:
                 raise Failure("invalid value for argument address") from e
+            if net.version != (6 if menu.startswith("/ipv6") else 4):
+                raise Failure("invalid value for argument address")
             if any(o["list"] == row["list"] and o["address"] == row["address"] for o in others):
                 raise Failure("already have such entry")
         elif menu == "/ip/dns/static":
@@ -519,6 +580,8 @@ class RouterConfig:
             ("/ip/dns/static", "/ip dns static"),
             ("/ip/firewall/address-list", "/ip firewall address-list"),
             ("/ip/firewall/filter", "/ip firewall filter"),
+            ("/ipv6/firewall/address-list", "/ipv6 firewall address-list"),
+            ("/ipv6/firewall/filter", "/ipv6 firewall filter"),
         ):
             for r in self.rows(menu):
                 lines.append(f"{console} add {args(r)}")

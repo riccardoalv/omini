@@ -89,7 +89,7 @@ curl -b omini.cookie -X POST -H 'X-Omini-Request: 1' http://omini.lan:8080/api/r
 `band`, `signal_dbm`, `link_mbps`, `flow`), `traffic` (current rate per
 interface: `rx_bps`, `tx_bps`), the identification (`type`, `os`, `brand`,
 `product`, `reasons`), scan results (`open_ports`, `services`, `titles`,
-`web`, `banners`), user fields (`pinned`, `hidden`, `icon`, `port_labels`), for devices whose
+`web`, `banners`), user fields (`hidden`, `icon`, `port_labels`), for devices whose
 integration applies changes `changes` (their kinds) and `protected` (port →
 `{reason, node}`: `omini` or `internet`, the ports whose disabling is
 destructive),
@@ -108,7 +108,7 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | `POST` | `/api/vlans` | Body `{id, name, color, subnet, network, confirm}`: add a VLAN to the catalog (409 when it exists); with a `network`, the router serves it first (`network.set`), and a destructive one answers 409 `destructive` until `confirm` |
 | `PATCH` | `/api/vlans/{id}` | Change `name`, `color`, `subnet` or `network` (`confirm` as above); the network goes to the router first, a new name to the devices that have the VLAN. Returns `{vlan, changes}` |
 | `PUT` | `/api/nodes/{id}/reservation` | Body `{ip}`: fix the device's address on the router whose network holds it (`reservation.set`) |
-| `DELETE` | `/api/nodes/{id}/reservation` | Free it (`reservation.delete`) |
+| `DELETE` | `/api/nodes/{id}/reservation` | Release it (`reservation.delete`) |
 | `GET` | `/api/fix-ip` | Devices on DHCP without a reservation, on a router that can make one: `node_id`, `label`, `type`, `mac`, `ip`, `router`, `infra` and `proposed` (the address used instead, outside the DHCP range, when the router refuses one inside) |
 | `POST` | `/api/fix-ip` | Body `{items: [{node_id, ip}]}`: one reservation each; answers each device's `{node_id, change}` or `{node_id, error}` |
 | `GET` | `/api/nodes/{id}/dns-name` | The device's local DNS name: `name` (full, `''` when none), `label`, `custom`, `off`, `server` (the node that answers it), `missing` (`no_fixed_ip`, `no_server`, `no_name`) and `others` (every name the DNS servers have for its address) |
@@ -135,8 +135,8 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `pinned`, `hidden`, `device_type`, `icon`, `first_seen`, `last_seen`, plus `online` and the current identification |
-| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `pinned`, `hidden`, `device_type`, `icon` (`""` = automatic) |
+| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `first_seen`, `last_seen`, plus `online` and the current identification |
+| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic) |
 | `POST` | `/api/inventory/delete` | Body `{ids: [...]}`: delete entries and their history (they come back if seen again) |
 
 ## Integrations and collection

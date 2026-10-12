@@ -319,10 +319,10 @@ func TestTopologyInventoryAndLayout(t *testing.T) {
 
 	nas := "mac:00:11:32:aa:00:01"
 	var entry map[string]any
-	if code := h.do("PATCH", "/api/inventory/"+url.PathEscape(nas), map[string]any{"alias": "My NAS", "pinned": true}, &entry); code != 200 {
+	if code := h.do("PATCH", "/api/inventory/"+url.PathEscape(nas), map[string]any{"alias": "My NAS"}, &entry); code != 200 {
 		t.Fatalf("patch inventory: %d %v", code, entry)
 	}
-	if entry["alias"] != "My NAS" || entry["pinned"] != true {
+	if entry["alias"] != "My NAS" {
 		t.Fatalf("inventory entry: %v", entry)
 	}
 	var inv []map[string]any

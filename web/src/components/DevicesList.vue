@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Eye, EyeOff, Pencil, Pin, Search, Trash2 } from 'lucide-vue-next'
+import { Eye, EyeOff, Pencil, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -11,7 +11,7 @@ import { displayName as nodeName } from '@/lib/names'
 import type { InventoryEntry } from '@/lib/types'
 
 /**
- * The inventory: every device ever seen, with search, filters, rename, pin,
+ * The inventory: every device ever seen, with search, filters, rename,
  * hide and delete. Shown in a drawer on the map ("N devices"); a click on a
  * name shows that device on the map.
  */
@@ -69,11 +69,6 @@ async function rename(e: InventoryEntry) {
   const updated = await api.updateInventory(e.id, { alias })
   entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
   emit('changed')
-}
-
-async function pin(e: InventoryEntry) {
-  const updated = await api.updateInventory(e.id, { pinned: !e.pinned })
-  entries.value = entries.value.map((x) => (x.id === e.id ? { ...updated, online: x.online } : x))
 }
 
 async function toggleHidden(e: InventoryEntry) {
@@ -160,7 +155,6 @@ onMounted(load)
                 >
                   {{ nameOf(e) }}
                 </button>
-                <Pin v-if="e.pinned" :size="12" class="muted" />
                 <span v-if="e.hidden" class="badge" data-test="hidden-badge">{{
                   t('devices.hidden')
                 }}</span>
@@ -187,13 +181,6 @@ onMounted(load)
                 @click="rename(e)"
               >
                 <Pencil :size="14" />
-              </button>
-              <button
-                class="btn ghost icon small"
-                :aria-label="e.pinned ? t('panel.unpin') : t('panel.pin')"
-                @click="pin(e)"
-              >
-                <Pin :size="14" />
               </button>
               <button
                 class="btn ghost icon small"

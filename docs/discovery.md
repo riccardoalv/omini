@@ -257,16 +257,16 @@ become alerts.
 The screen also lists the DHCP pools and leases the routers' integrations
 report (OPNsense, pfSense, OpenWrt...), with a search.
 
-**Fix IPs.** When a router Omini manages hands out addresses, the DHCP tab
+**Reserve IPs.** When a router Omini manages hands out addresses, the DHCP tab
 lists the devices that still get theirs by DHCP, with no reservation.
-**Fix IPs** opens the list: switches, access points, servers, NAS,
+**Reserve IPs** opens the list: switches, access points, servers, NAS,
 hypervisors, VMs, printers and UPS are checked; the other devices can be
 shown and checked too. Each keeps the address it has today as a reservation
 on its router. A router that does not fix addresses inside its DHCP range
 (pfSense) gets a free address outside it instead, shown before applying; the
 device takes it at its next lease renewal. One device failing does not stop
 the others, and each change is in its router's history. A device's own panel
-has the same button (**Network → Fix this address**).
+has the same button (**Network → Reserve this IP**).
 
 ## Device identification
 

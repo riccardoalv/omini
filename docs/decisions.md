@@ -205,6 +205,9 @@ tested with fixtures). The rules that are easy to break:
 
 ## Screens and panels
 
+- **No pinning** (maintainer's choice, 2026-10-12): pinning a device on the map
+  (never folded into a bubble) was removed as not useful; servers and other
+  infrastructure still stay out of bubbles.
 - **Screens:** Map (home), Alerts, Integrations, Settings; Flows only while
   its integration is on. VLANs and DNS & DHCP are tabs of the map's menu, not
   screens (maintainer's rule). **The device list is a drawer on the map**, and the
@@ -494,9 +497,14 @@ for many devices at once.
   device still reaches its own network (the NAS, the printer); only the
   internet is cut. Paused devices show a pause mark on the map and are listed
   in the device drawer.
-- **On the router that serves the device**: one list of paused addresses
-  (OPNsense and pfSense alias `omini_paused`, MikroTik address list, OpenWrt
-  ipset) and one rule blocking it toward the WANs, both marked "Omini".
+- **On the router that serves the device**, over **IPv4 and IPv6**
+  (2026-10-12: the maintainer's phones kept browsing over the ISP's IPv6
+  while only their IPv4 was blocked): by the device's MAC where the router
+  can (an OPNsense MAC alias resolved from ARP and NDP, OpenWrt `src_mac`
+  rules, MikroTik's IPv6 filter), else its IPv4 and the IPv6 addresses the
+  router's neighbor table knows (pfSense); local destinations (private
+  IPv4, link-local, ULA, multicast and the LAN's IPv6 prefixes) stay
+  reachable. Everything is marked "Omini".
   Changes `pause.set` `{mac, ips, name}` and `pause.delete` `{mac}`;
   routers report `Device.paused` `[{mac, ips, name}]`. When a paused device
   gets another address, Omini updates the list in the next round. Open

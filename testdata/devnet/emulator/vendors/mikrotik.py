@@ -21,13 +21,18 @@ port's admin_up, so the port reads `disabled=true`, `running=false` and its link
 drops in the world. The configuration Omini's VLAN and network changes write (bridge
 ports' PVID and frame types, the bridge VLAN table, VLAN interfaces, addresses,
 DHCP pools, servers, networks and static leases, firewall filter rules and address
-lists, /ip/dns and /ip/dns/static) is kept per box in mikrotik_config.RouterConfig, built from the
+lists of both families, /ip/dns and /ip/dns/static) is kept per box in mikrotik_config.RouterConfig, built from the
 design on first use: PUT adds, PATCH sets, DELETE removes, POST `<menu>/add` adds
 with `place-before`; a bad write answers 400 "failure: ...". These writes change
 what the API answers, not the world (its traffic, MAC tables and leases still
 follow the design). Any other command, property, PUT or DELETE answers 403 "not
 enough permissions". A menu this RouterOS lacks (no `wifi`/`wireless`
 package on these boxes) answers 400 "no such command or directory".
+
+IPv6 on the router: `/ipv6/address` answers a link-local address per addressed
+interface and a global /64 of a documentation prefix per private network (the WAN
+gets one from the ISP, dynamic); `/ipv6/neighbor` and `/ipv6/firewall/connection`
+are empty (the world has no IPv6 clients).
 
 All topology data comes from the world snapshot: port state and counters,
 the bridge host table (snap.fdb), ARP, DHCP leases of the branch, LLDP
@@ -381,6 +386,11 @@ class MikroTik(HttpService):
             "/ip/dhcp-server/network": lambda s: [dict(r) for r in self.cfg.rows("/ip/dhcp-server/network")],
             "/ip/firewall/filter": self.filter_rules,
             "/ip/firewall/address-list": self.address_lists,
+            "/ipv6/address": self.addresses6,
+            "/ipv6/neighbor": lambda s: [],
+            "/ipv6/firewall/filter": lambda s: self.filter_rules(s, "/ipv6/firewall/filter"),
+            "/ipv6/firewall/address-list": lambda s: self.address_lists(s, "/ipv6/firewall/address-list"),
+            "/ipv6/firewall/connection": lambda s: [],
             "/ip/dns": lambda s: dict(self.cfg.dns),
             "/ip/dns/static": lambda s: [dict(r) for r in self.cfg.rows("/ip/dns/static")],
             "/ip/firewall/connection": self.connections,
@@ -1274,17 +1284,54 @@ class MikroTik(HttpService):
     def pools(self, snap: Snapshot) -> list[dict[str, str]]:
         return [dict(p) for p in self.cfg.rows("/ip/pool")]
 
-    def filter_rules(self, snap: Snapshot) -> list[dict[str, str]]:
+    def filter_rules(self, snap: Snapshot, menu: str = "/ip/firewall/filter") -> list[dict[str, str]]:
         return [
             {"bytes": "0", "packets": "0", "log": "false", "log-prefix": "", "invalid": "false", **r}
-            for r in self.cfg.rows("/ip/firewall/filter")
+            for r in self.cfg.rows(menu)
         ]
 
-    def address_lists(self, snap: Snapshot) -> list[dict[str, str]]:
-        return [
-            {"creation-time": local_time(snap.t), "dynamic": "false", **r}
-            for r in self.cfg.rows("/ip/firewall/address-list")
-        ]
+    def address_lists(self, snap: Snapshot, menu: str = "/ip/firewall/address-list") -> list[dict[str, str]]:
+        return [{"creation-time": local_time(snap.t), "dynamic": "false", **r} for r in self.cfg.rows(menu)]
+
+    def addresses6(self, snap: Snapshot) -> list[dict[str, str]]:
+        """A router's IPv6: a link-local address per addressed interface, and a global /64 of the
+        ISP's (documentation) prefix per private network (not a tunnel's), one on the WAN (dynamic, from the ISP)."""
+        if self.box.kind != "router":
+            return []
+        out: list[dict[str, str]] = []
+        for k, a in enumerate(self.cfg.rows("/ip/address")):
+            ip = ipaddress.ip_interface(a["address"])
+            common = {
+                "interface": a["interface"],
+                "actual-interface": a["interface"],
+                "invalid": "false",
+                "disabled": "false",
+            }
+            out.append(
+                {
+                    ".id": f"*{2 * k + 1:X}",
+                    "address": f"fe80::{k + 1:x}/64",
+                    "link-local": "true",
+                    "dynamic": "true",
+                    **common,
+                }
+            )
+            port = self.box.ports.get(a["interface"])
+            if ip.is_private and (port is None or port.kind == "vlan"):  # not a tunnel's
+                prefix = f"2001:db8:4200:{k + 1:x}::1/64"
+                out.append(
+                    {
+                        ".id": f"*{2 * k + 2:X}",
+                        "address": prefix,
+                        "from-pool": "isp-pd",
+                        "advertise": "true",
+                        "dynamic": "false",
+                        **common,
+                    }
+                )
+            elif not ip.is_private:
+                out.append({".id": f"*{2 * k + 2:X}", "address": "2001:db8:ffff::2/64", "dynamic": "true", **common})
+        return out
 
     def leases(self, snap: Snapshot) -> list[dict[str, str]]:
         """The world's leases (less the static ones a change removed, with what a change set

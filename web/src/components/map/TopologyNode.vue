@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { AlertTriangle, Pause, Pin, SignalLow, Wifi } from 'lucide-vue-next'
+import { AlertTriangle, Pause, SignalLow, Wifi } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -140,7 +140,6 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
         <span v-if="sub" class="sub">{{ sub }}</span>
       </div>
       <SignalLow v-if="weak" class="warn-icon" :size="14" />
-      <Pin v-if="n.pinned" class="pin" :size="12" />
       <span
         v-if="variant === 'device'"
         class="dot"
@@ -381,10 +380,6 @@ strong {
 }
 .warn-icon {
   color: var(--warn);
-  flex: none;
-}
-.pin {
-  color: var(--text-muted);
   flex: none;
 }
 .handle {

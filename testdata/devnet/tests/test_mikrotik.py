@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import ipaddress
 import json
 import re
 import ssl
@@ -471,6 +472,22 @@ def test_branch_pause_internet() -> None:
         forward = [r for r in rules if r["chain"] == "forward"]
         assert forward[0]["src-address-list"] == "omini_paused" and forward[0]["dst-address-list"] == "!omini-private"
         assert forward[0]["comment"] == "Omini: paused devices"
+        # And by MAC, in both families: IPv6 (any of its addresses) is cut too.
+        by_mac = (forward[1]["src-mac-address"], forward[1]["dst-address-list"], forward[1]["comment"])
+        assert by_mac == (lease.mac.upper(), "!omini-private", f"Omini {lease.mac} Notebook")
+        forward6 = [r for r in rest(emu, BR, "/rest/ipv6/firewall/filter") if r["chain"] == "forward"]
+        assert forward6[0]["src-mac-address"] == lease.mac.upper() and forward6[0]["action"] == "drop"
+        assert forward6[0]["dst-address-list"] == "!omini-private6"
+        assert forward6[1]["comment"].startswith("defconf: accept established")
+        local6 = {
+            a["address"] for a in rest(emu, BR, "/rest/ipv6/firewall/address-list") if a["list"] == "omini-private6"
+        }
+        lan6 = {
+            str(ipaddress.ip_interface(a["address"]).network)
+            for a in rest(emu, BR, "/rest/ipv6/address")
+            if a.get("from-pool")
+        }
+        assert lan6 and local6 == {"fe80::/10", "fc00::/7", "ff00::/8"} | lan6
         lists = rest(emu, BR, "/rest/ip/firewall/address-list")
         assert {a["address"] for a in lists if a["list"] == "omini-private"} == {
             "10.0.0.0/8",
@@ -489,6 +506,9 @@ def test_branch_pause_internet() -> None:
         )
         assert "paused" not in d
         assert not any(r.get("src-address-list") == "omini_paused" for r in rest(emu, BR, "/rest/ip/firewall/filter"))
+        assert not any(r.get("src-mac-address") for r in rest(emu, BR, "/rest/ip/firewall/filter"))
+        assert not any(r.get("src-mac-address") for r in rest(emu, BR, "/rest/ipv6/firewall/filter"))
+        assert [a["list"] for a in rest(emu, BR, "/rest/ipv6/firewall/address-list")] == ["bad_ipv6", "bad_ipv6"]
 
     with Emulator(at=TUESDAY_10_30, apis=[STOR], world=world) as emu:
         key = device(emu.collect(STOR))["key"]

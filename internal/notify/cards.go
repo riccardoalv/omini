@@ -194,7 +194,7 @@ var tips = map[string]map[string]string{
 		"stp_root_changed":      "A new switch may have won the election, or the old root or its link went down: set the root priority on your core switch.",
 		"config_changed":        "If nobody you know made it, compare the versions and check who has access to the device.",
 		"dhcp_no_offer_omini":   "Devices still get addresses. Check the DHCP server's log for Omini's MAC: a reservation, a client class or a filter may ignore it, or its answer does not reach Omini's host.",
-		"infra_dynamic_ip":      "Fix its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
+		"infra_dynamic_ip":      "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
 		"firewall_states_full":  "Raise the state table limit, or look for a device opening many connections.",
 		"insecure_service":      "Turn it off on the device, or use SSH, SFTP or HTTPS instead.",
 		"new_devices_burst":     "A visitor, a new appliance... or someone who should not be on your network.",

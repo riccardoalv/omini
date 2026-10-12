@@ -125,7 +125,6 @@ type Node struct {
 	Reports   []Report                    `json:"-"`
 	ChangeVia map[model.ChangeKind]Report `json:"-"`
 
-	Pinned   bool       `json:"pinned,omitempty"`    // pinned by the user: never collapsed
 	Hidden   bool       `json:"hidden,omitempty"`    // hidden from the map by the user
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }

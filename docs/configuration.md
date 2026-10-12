@@ -146,4 +146,4 @@ These are remembered per browser, not per user:
 - alert popups you closed.
 
 The layout itself (where you dragged nodes), areas, port names, device names,
-hidden and pinned devices are stored on the server and shared by every browser.
+hidden devices are stored on the server and shared by every browser.

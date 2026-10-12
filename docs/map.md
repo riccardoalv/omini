@@ -198,7 +198,7 @@ and then it asks twice. Omini finds where it runs by itself (the device with
 one of its machine's MACs or addresses); in a container with a network of its
 own it cannot, and then only the way to the internet is protected.
 
-**Buttons for the device** (next to Pin), when its network allows them:
+**Buttons for the device** (next to Scan), when its network allows them:
 
 - **Wake** (an offline device with a MAC): a Wake-on-LAN packet, sent by
   Omini on its own networks, or by the router of the device's network
@@ -206,12 +206,14 @@ own it cannot, and then only the way to the internet is protected.
   kept in the device's **Changes**; the device shows online when it answers.
 - **Pause internet** / **Resume internet** (a client on a network whose router
   Omini manages: OPNsense 26.7+, pfSense, MikroTik, OpenWrt): the router blocks
-  its addresses toward the internet; your own networks stay reachable. If the
+  it toward the internet over IPv4 and IPv6 (by its MAC where the router can,
+  so its changing IPv6 addresses are covered); your own networks stay
+  reachable. If the
   device gets another address, Omini blocks the new one after the next round.
   Omini's own host and network devices are never paused. A paused device has
   a pause mark on the map and is listed at the top of the device list.
 
-**Network**, for a device a managed router serves: **Fix this address** (a
+**Network**, for a device a managed router serves: **Reserve this IP** (a
 DHCP reservation on the router, keeping its address; a router that refuses
 reservations inside its DHCP range, like pfSense, gets a free address outside
 it, proposed in the field) and its **DNS name**: with a fixed address the
@@ -249,8 +251,7 @@ traffic), DHCP pool usage and firewall states (yellow from 75 %, red from
 - Its last **Activity** (joined and left the network).
 - **Changes**: the changes made from Omini (kept a year), the refused ones
   with the device's error.
-- **Pin** (a pinned device is never folded into a bubble), **Hide** and
-  **Delete**.
+- **Hide** and **Delete**.
 
 ## The network's VLANs
 
@@ -272,7 +273,7 @@ then takes it out, showing the plan before applying. Each VLAN can have a **Wi-F
 name (the VLAN's by default), password and on or off, created on every access
 point or controller Omini manages (UniFi, Omada, OpenWrt); the password goes
 to them only. From a device's panel (**Network**) you can **fix its address**
-(a DHCP reservation on the router; many at once with **Fix IPs** in the DNS &
+(a DHCP reservation on the router; many at once with **Reserve IPs** in the DNS &
 DHCP tab) and **move it to another VLAN** (its
 switch port changes, with the plan; others on the same port move too). A
 Proxmox VM or container moves by its own network device (its tag), with the
@@ -301,7 +302,7 @@ A **middle click** on a node also folds or unfolds its children, and a click
 on a Wi-Fi network node folds or unfolds its clients. Collapsing an access
 point gathers its Wi-Fi networks and their clients in one bubble.
 
-Pinned devices and servers always stay visible. What is folded is remembered
+Servers and other infrastructure always stay visible. What is folded is remembered
 per browser.
 
 ## Hiding and deleting devices
@@ -409,7 +410,7 @@ network:
 
 - name, IP, MAC, type, where it is connected, first and last seen,
 - a search box and filters: all, online, offline, only randomized MACs,
-- rename, pin, hide or unhide,
+- rename, hide or unhide,
 - select several and **Delete selected** (phones with randomized MACs can
   leave many entries behind),
 - above it, the devices whose internet is paused (click one to open it).
