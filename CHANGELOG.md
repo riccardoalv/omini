@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/riccardoalv/omini/compare/v1.3.1...v1.3.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* pausing cuts IPv6 too, "Reserve" wording and no more pinning ([ac20b16](https://github.com/riccardoalv/omini/commit/ac20b16630aa847baad3104da565f8122dbae003))
+
 ## [1.3.1](https://github.com/riccardoalv/omini/compare/v1.3.0...v1.3.1) (2026-10-12)
 
 
