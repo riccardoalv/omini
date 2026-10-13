@@ -201,6 +201,7 @@ Channel `config` keys: webhook `url`, `format` (`json`, `slack`, `discord`,
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
+| `GET` | `/api/diagnostics` | yes | The anonymized diagnostics file (Settings → About): integrations and their status, open alerts, the last round and the map with what each integration reported. MACs keep their vendor part; names, SSIDs, serials, public IPv4 and IPv6 addresses become placeholders; private IPv4 addresses stay; secrets, integration settings and backups are left out |
 | `GET` | `/api/icons` | no | Names of the app icons Omini has |
 | `GET` | `/api/icons/{name}` | no | One app icon (SVG), cached a day |
 

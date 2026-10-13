@@ -334,6 +334,25 @@ onMounted(async () => {
                 >GitHub</a
               >
             </div>
+            <div class="row">
+              <div class="row-text">
+                <span class="label">{{ t('settings.feedback.title') }}</span>
+                <small class="muted">{{ t('settings.feedback.hint') }}</small>
+              </div>
+              <div class="feedback">
+                <a class="btn" href="/api/diagnostics" download data-test="diagnostics">{{
+                  t('settings.feedback.diagnostics')
+                }}</a>
+                <a
+                  class="btn"
+                  href="https://github.com/riccardoalv/omini/issues/new/choose"
+                  target="_blank"
+                  rel="noopener"
+                  data-test="report"
+                  >{{ t('settings.feedback.report') }}</a
+                >
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -342,6 +361,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .settings {
   max-width: 1280px;
 }

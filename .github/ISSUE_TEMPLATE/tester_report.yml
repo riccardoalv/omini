@@ -1,0 +1,53 @@
+name: Tester report
+description: You tried Omini on your network. Tell us how it went, good or bad.
+labels: [tester-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Omini! [Testing Omini](https://github.com/riccardoalv/omini/blob/main/docs/testing.md) lists what to look at.
+        Blunt is good: what is wrong, confusing, missing or not worth having.
+  - type: input
+    id: version
+    attributes:
+      label: Omini version
+      description: Settings → About.
+      placeholder: v1.4.0
+    validations:
+      required: true
+  - type: textarea
+    id: network
+    attributes:
+      label: Your network
+      description: Router or firewall, switches, access points, hypervisor, DNS server, with models and firmware, and which integrations you added.
+      placeholder: |
+        OPNsense 25.7 (plugin), 2 × UniFi U6 Lite (plugin), TP-Link TL-SG108E (no SNMP), Proxmox 9 (plugin), ~40 clients
+    validations:
+      required: true
+  - type: dropdown
+    id: time
+    attributes:
+      label: How long did you run it?
+      options: [Less than an hour, A day, A few days, A week or more]
+    validations:
+      required: true
+  - type: textarea
+    id: right
+    attributes:
+      label: What worked well
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What was wrong
+      description: Missing or doubled devices, wrong types, devices on the wrong port, false alerts, errors, slowness. One line each is fine; open separate bug reports for the big ones.
+    validations:
+      required: true
+  - type: textarea
+    id: confusing
+    attributes:
+      label: What was confusing or missing
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → About → Download diagnostics (anonymized; look it over first), then drag the file here.

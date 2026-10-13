@@ -16,6 +16,7 @@ alerts. It only reads: it never changes the configuration of a device.
 | [Alerts and notifications](alerts.md) | Every alert rule, the Alerts screen, Telegram, e-mail, webhooks |
 | [Integrations](integrations.md) | Built-in integrations, each plugin and how to give it a read-only account |
 | [Troubleshooting](troubleshooting.md) | Common problems and how to fix them |
+| [Testing Omini](testing.md) | Trying Omini safely and reporting what you find |
 
 ## For developers
 

@@ -253,6 +253,19 @@ docker rmi riccardoalv/omini
 ```
 
 For a binary install, stop the service, delete the binary and the data
-directory. Omini changes nothing on your devices, so there is nothing to undo
-there. You may want to remove the read-only accounts or API tokens you created
-for its integrations.
+directory.
+
+Omini changes a device only when you ask, and what you changed stays there.
+Before removing it, undo what you do not want to keep:
+
+- **Paused devices:** resume them. Pausing leaves firewall objects named after
+  Omini on the router (aliases, address lists or rules such as
+  `omini_paused_mac`, `omini_local` or `omini-private6`), which you may delete
+  afterwards.
+- **DNS names:** turn them off in each device's panel, or delete them on the
+  router, AdGuard Home or Pi-hole.
+- **IP reservations, VLANs and ports** are your network's configuration now;
+  they stay as they are.
+
+You may also want to remove the accounts or API tokens you created for its
+integrations.

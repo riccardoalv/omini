@@ -1078,7 +1078,7 @@ export default {
         hint: 'Telegram, e-mail, Slack, Discord, ntfy, webhook',
       },
       account: { title: 'Account', hint: 'Your user and signing out' },
-      about: { title: 'About', hint: 'Version and source code' },
+      about: { title: 'About', hint: 'Version, source code and reporting a problem' },
     },
     appearance: 'Appearance',
     theme: 'Theme',
@@ -1107,6 +1107,12 @@ export default {
     },
     about: 'About',
     version: 'Version {v}',
+    feedback: {
+      title: 'Report a problem or give feedback',
+      hint: 'The diagnostics file is what Omini sees of your network, anonymized (MACs keep only their vendor part; names, SSIDs, serials and public addresses are replaced; passwords and settings are left out). Look it over, then attach it to the issue.',
+      diagnostics: 'Download diagnostics',
+      report: 'Open an issue',
+    },
     changes: {
       destructive: 'Allow destructive changes',
       destructiveHint:

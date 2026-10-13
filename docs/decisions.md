@@ -615,3 +615,15 @@ for many devices at once.
   company network whose device APIs are emulated, so the real plugins run
   against it; the Go test checks every placement and the week's alerts
   against its design. No core code knows about it.
+- **Testers come first** (maintainer, 2026-10-13): the project is young and
+  has seen few networks, so reaching people with other gear matters more than
+  new features. [Testing Omini](testing.md) shows how to try it safely (read-only
+  accounts; Omini changes nothing unless a change is clicked and confirmed, so
+  changes stay on without a global switch) and how to report.
+- **Diagnostics file** (Settings → About, `GET /api/diagnostics`): what Omini
+  collected and drew, anonymized for a public issue. MACs keep their vendor
+  part (identification needs it); private IPv4 addresses stay (the networks'
+  shape is what placement bugs need); names, SSIDs, serials, URLs' host names,
+  public IPv4 and every IPv6 address become stable placeholders; passwords,
+  integration settings, layout and configuration backups are left out. The
+  user looks it over before attaching it.

@@ -1219,7 +1219,7 @@ const ptBR: typeof en = {
         hint: 'Telegram, e-mail, Slack, Discord, ntfy, webhook',
       },
       account: { title: 'Conta', hint: 'Seu usuário e sair' },
-      about: { title: 'Sobre', hint: 'Versão e código-fonte' },
+      about: { title: 'Sobre', hint: 'Versão, código-fonte e relatar um problema' },
     },
     appearance: 'Aparência',
     theme: 'Tema',
@@ -1248,6 +1248,12 @@ const ptBR: typeof en = {
     },
     about: 'Sobre',
     version: 'Versão {v}',
+    feedback: {
+      title: 'Relatar um problema ou dar sua opinião',
+      hint: 'O arquivo de diagnóstico é o que o Omini vê da sua rede, anonimizado (os MACs mantêm só a parte do fabricante; nomes, SSIDs, números de série e endereços públicos são trocados; senhas e configurações ficam de fora). Confira o arquivo e anexe-o à issue.',
+      diagnostics: 'Baixar diagnóstico',
+      report: 'Abrir uma issue',
+    },
     changes: {
       destructive: 'Permitir ações destrutivas',
       destructiveHint:

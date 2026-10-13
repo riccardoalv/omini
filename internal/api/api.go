@@ -141,6 +141,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("DELETE /api/nodes/{id}/pause", s.resume)
 	private.HandleFunc("POST /api/fix-ip", s.fixMany)
 	private.HandleFunc("POST /api/nodes/{id}/vlans", s.applyVlans)
+	private.HandleFunc("GET /api/diagnostics", s.diagnosticsBundle)
 	private.HandleFunc("GET /api/notifier-types", s.notifierTypes)
 	private.HandleFunc("GET /api/notifiers", s.listNotifiers)
 	private.HandleFunc("POST /api/notifiers", s.createNotifier)

@@ -49,6 +49,8 @@ describe('SettingsView', () => {
     await w.get('[data-test=section-about]').trigger('click')
     await flushPromises()
     expect(w.text()).toContain('Version 0.4.0')
+    expect(w.get('[data-test=diagnostics]').attributes('href')).toBe('/api/diagnostics')
+    expect(w.get('[data-test=report]').attributes('href')).toContain('/issues/new')
   })
   it('changes the password, checking it before sending', async () => {
     const router = createRouter({

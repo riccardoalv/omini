@@ -7,6 +7,7 @@ body:
       value: |
         Thanks! Real device data is the most valuable contribution to Omini.
         **Anonymize everything** (communities, passwords, public IPs, serial numbers) before attaching files.
+        Settings → About → **Download diagnostics** gives an anonymized file with what Omini sees of the device: attach it.
   - type: input
     id: vendor
     attributes:

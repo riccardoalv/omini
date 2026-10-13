@@ -17,6 +17,13 @@ It runs as one small container (amd64 and arm64, a Raspberry Pi is enough) and k
   <img src="docs/assets/screens/map.png" alt="The network map: firewall, WANs, switches, access points, servers and clients, with port names, link speeds and live traffic" width="100%">
 </p>
 
+> **Omini is young and looking for testers.** It has run on few networks so far,
+> and every network finds something new. If you have UniFi, Omada, MikroTik,
+> pfSense, OpenWrt or Proxmox (or just a home router), [Testing Omini](docs/testing.md)
+> shows how to try it safely with read-only accounts and how to report what you
+> find, in about fifteen minutes. Blunt feedback is welcome in
+> [Discussions](https://github.com/riccardoalv/omini/discussions).
+
 ## Features
 
 - **Zero-config discovery.** ARP, ping, common ports, reverse DNS, NetBIOS, mDNS, SSDP/UPnP and SNMP (v2c and v3), plus optional nmap for operating systems and service versions. The networks behind your routers are scanned too.
@@ -90,6 +97,7 @@ Host networking matters: in a Docker bridge network Omini only sees Docker's own
 | [Alerts and notifications](docs/alerts.md) | [SNMP profiles](docs/snmp-profiles.md) |
 | [Integrations](docs/integrations.md): each plugin and its read-only account | [Plugin review](docs/plugin-review.md) |
 | [Troubleshooting](docs/troubleshooting.md) | [Decisions](docs/decisions.md): what was decided and why |
+| [Testing Omini](docs/testing.md): try it and report what you find | |
 
 ## Integrations
 

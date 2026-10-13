@@ -50,6 +50,7 @@ for how it is built.
 | `internal/netscan`, `nmapscan`, `flows`, `snmp` | Built-in discovery: the network scan (ARP, ping, ports, names, mDNS, SSDP, DHCP fingerprints, SNMP), nmap, NetFlow/IPFIX/sFlow |
 | `internal/plugins`, `sdk/python` | Plugin runtime and store; the Python SDK (embedded in the binary) |
 | `internal/notify` | Notification channels and message cards |
+| `internal/diagnostics` | The anonymized diagnostics file testers attach to issues |
 | `internal/store` | SQLite and its migrations (forward only) |
 | `internal/api`, `internal/auth` | HTTP API and the admin login |
 | `schema/` | JSON Schema: the data contract (Go and Python models are generated from it) |
