@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/riccardoalv/omini/compare/v1.4.0...v1.5.0) (2026-10-13)
+
+
+### Features
+
+* anonymized diagnostics file and a guide for testers ([a2d0722](https://github.com/riccardoalv/omini/commit/a2d0722253d15894b74a568a7255bde3a2def8b3))
+
 ## [1.4.0](https://github.com/riccardoalv/omini/compare/v1.3.2...v1.4.0) (2026-10-12)
 
 
