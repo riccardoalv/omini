@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/riccardoalv/omini/compare/v1.6.0...v1.6.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* alert DNS around the local server only when the outside server answers ([6a9f10a](https://github.com/riccardoalv/omini/commit/6a9f10a31fc78521065c038585de00394b576696))
+
 ## [1.6.0](https://github.com/riccardoalv/omini/compare/v1.5.0...v1.6.0) (2026-10-14)
 
 
