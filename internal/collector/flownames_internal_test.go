@@ -3,10 +3,14 @@ package collector
 import (
 	"context"
 	"net/netip"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/secret"
+	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
 
@@ -46,5 +50,29 @@ func TestFlowNamesFromTheDNSServers(t *testing.T) {
 	f.update(context.Background(), topology.Topology{}, now.Add(25*time.Hour), resolve)
 	if got := f.dir.Name(ip("192.168.1.42"), ip("142.250.78.14")); got != "" {
 		t.Errorf("kept a day-old name: %q", got)
+	}
+}
+
+func TestDNSOutsideNeedsAnAnswer(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	box, _ := secret.New(make([]byte, 32))
+	c := New(st, integration.NewRegistry(), box, Options{Interval: time.Minute})
+	now := time.Unix(1_790_000_000, 0)
+	if err := st.SaveInternet(ctx, now.Add(-10*time.Minute), nil, []store.Destination{
+		// The TV asks Google's DNS and gets answers.
+		{Node: "tv", Dest: "8.8.8.8", Addr: "8.8.8.8", Proto: 17, Port: 53, RX: 300, TX: 120},
+		// The phone asks its carrier's DNS, but the router drops the queries.
+		{Node: "phone", Dest: "200.169.117.221", Addr: "200.169.117.221", Proto: 17, Port: 53, TX: 822},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f := c.flowFacts(ctx, topology.Topology{}, now)
+	if len(f.DNSOutside) != 1 || len(f.DNSOutside["tv"]) != 1 || f.DNSOutside["tv"][0] != "8.8.8.8" {
+		t.Fatalf("DNSOutside = %+v", f.DNSOutside)
 	}
 }

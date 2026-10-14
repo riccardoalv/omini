@@ -21,7 +21,7 @@ func init() {
 // Flows are the facts the flow collector found (nil without flows).
 type Flows struct {
 	// DNSOutside: devices that sent DNS queries to servers on the internet in
-	// the last hour, and those servers (a name when known, else the address).
+	// the last hour and got answers, and those servers (a name when known, else the address).
 	DNSOutside map[string][]string
 	// Upload: each device's upload to the internet.
 	Upload map[string]Upload

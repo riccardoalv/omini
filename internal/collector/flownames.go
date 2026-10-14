@@ -184,6 +184,11 @@ func (c *Collector) flowFacts(ctx context.Context, topo topology.Topology, now t
 	f := &insights.Flows{DNSOutside: map[string][]string{}, Upload: map[string]insights.Upload{}, Scans: map[string]int{}}
 	if dests, err := c.store.Destinations(ctx, now.Add(-time.Hour), "", 53, 853); err == nil {
 		for _, d := range dests {
+			// Queries no server answered (the router drops them) go nowhere:
+			// the device falls back to the local DNS server.
+			if d.RX == 0 {
+				continue
+			}
 			if !slices.Contains(f.DNSOutside[d.Node], d.Dest) {
 				f.DNSOutside[d.Node] = append(f.DNSOutside[d.Node], d.Dest)
 			}
