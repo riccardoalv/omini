@@ -4,6 +4,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 // Rules on the traffic flows show: a device that asks DNS servers on the
@@ -53,7 +55,16 @@ var noFlowAlerts = []string{"router", "firewall", "server", "nas", "hypervisor",
 // local names or the lookups it answered).
 func dnsServer(in Input, id string) bool {
 	for _, n := range in.Topology.Nodes {
-		if n.ID == id && n.Device != nil && (len(n.Device.DnsRecords) > 0 || len(n.Device.DnsLookups) > 0) {
+		if n.ID == id && answersDNS(n) {
+			return true
+		}
+	}
+	return false
+}
+
+func answersDNS(n topology.Node) bool {
+	for _, d := range n.Devices() {
+		if len(d.DnsRecords) > 0 || len(d.DnsLookups) > 0 {
 			return true
 		}
 	}
@@ -63,7 +74,7 @@ func dnsServer(in Input, id string) bool {
 // localDNS reports whether the network has a DNS server Omini reads.
 func localDNS(in Input) bool {
 	for _, n := range in.Topology.Nodes {
-		if n.Device != nil && (len(n.Device.DnsRecords) > 0 || len(n.Device.DnsLookups) > 0) {
+		if answersDNS(n) {
 			return true
 		}
 	}

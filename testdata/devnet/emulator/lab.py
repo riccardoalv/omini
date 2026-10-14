@@ -299,6 +299,9 @@ def inner(args: Any) -> int:
         )
         hub = Hub(ctx, tls)
         await start_services(hub, ctx)
+        from .internet import export
+
+        netflow = asyncio.create_task(export(ctx, world))
         from .control import serve_control
 
         ctl = await serve_control(ctx, "127.0.0.1", 0)
@@ -354,6 +357,7 @@ def inner(args: Any) -> int:
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=min(2.0, STEP / max(clock.speed, 1) / 2))
         boot.cancel()
+        netflow.cancel()
         if omini.returncode is None:
             omini.terminate()
             with contextlib.suppress(asyncio.TimeoutError):

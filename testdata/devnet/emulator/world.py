@@ -603,6 +603,7 @@ class World:
                 f.fwd = f.fwd * scale_up
                 f.rev = f.rev * scale_down
             self._route_flow(f)
+        self.flows = flows  # what the HQ firewall exports (see internet.py)
         # Errors: a bad patch cable on sw-f1-01 port 12, and the failing fiber to the storage switch.
         self.err[("sw-f1-01", "12")] = (
             0.4 * self.business * (self.presence[self._on_port("sw-f1-01", "12")].astype(float))

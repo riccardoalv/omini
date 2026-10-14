@@ -70,3 +70,18 @@ func (n Node) Via(k model.ChangeKind) Node {
 	}
 	return n
 }
+
+// Devices are every report of the node's device: the one it shows and the
+// others merged into it (an AdGuard Home add-on on its Home Assistant host).
+func (n Node) Devices() []*model.Device {
+	var out []*model.Device
+	if n.Device != nil {
+		out = append(out, n.Device)
+	}
+	for _, r := range n.Reports {
+		if r.Device != nil && r.Device != n.Device {
+			out = append(out, r.Device)
+		}
+	}
+	return out
+}

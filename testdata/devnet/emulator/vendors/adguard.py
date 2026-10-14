@@ -6,7 +6,7 @@ openapi.yaml describes it:
 
 - Every ``/control/...`` request carries HTTP basic authentication (the
   web interface's user); without it, 401 with ``WWW-Authenticate``.
-- Reads (``GET``): ``status``, ``rewrite/list``, ``dhcp/status``,
+- Reads (``GET``): ``status``, ``rewrite/list``, ``dhcp/status``, ``querylog``,
   ``dns_info``, ``filtering/status``, ``clients``, ``access/list``.
 - Rewrites: ``POST rewrite/add`` and ``POST rewrite/delete`` with
   ``{domain, answer}``, ``PUT rewrite/update`` with ``{target, update}``.
@@ -23,6 +23,7 @@ import copy
 import ipaddress
 from typing import Any
 
+from ..internet import lookups
 from ..server import HttpService, Request, Response
 from ..world import Snapshot
 
@@ -125,6 +126,7 @@ class AdGuard(HttpService):
                     "supported_tags": ["device_other", "device_pc", "device_phone"],
                 },
                 "access/list": lambda: st["access"],
+                "querylog": lambda: {"data": lookups(snap.w, snap), "oldest": ""},
             }
             if what not in reads:
                 return Response.text("404 page not found", 404, "text/plain")

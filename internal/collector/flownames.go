@@ -12,6 +12,7 @@ import (
 
 	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/insights"
+	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/topology"
 )
 
@@ -73,11 +74,15 @@ func (f *flowNames) update(ctx context.Context, topo topology.Topology, now time
 	}
 	budget := resolvePerRound
 	for _, n := range topo.Nodes {
-		if n.Device == nil || len(n.Device.DnsLookups) == 0 {
+		var list []model.DnsLookup
+		for _, d := range n.Devices() {
+			list = append(list, d.DnsLookups...)
+		}
+		if len(list) == 0 {
 			continue
 		}
 		server, _ := netip.ParseAddr(n.IP)
-		for _, l := range n.Device.DnsLookups {
+		for _, l := range list {
 			client, err := netip.ParseAddr(l.Client)
 			name := strings.TrimSuffix(strings.ToLower(l.Domain), ".")
 			if err != nil || name == "" {

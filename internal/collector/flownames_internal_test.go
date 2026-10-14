@@ -15,9 +15,10 @@ func TestFlowNamesFromTheDNSServers(t *testing.T) {
 		{ID: "adguard", IP: "192.168.1.53", Device: &model.Device{DnsLookups: []model.DnsLookup{
 			{Client: "192.168.1.42", Domain: "YouTube.com.", Answers: []string{"142.250.78.14"}},
 		}}},
-		{ID: "pihole", IP: "192.168.1.54", Device: &model.Device{DnsLookups: []model.DnsLookup{
+		// Pi-hole merged into its Docker host: its lookups are in a report the node does not show.
+		{ID: "pihole", IP: "192.168.1.54", Device: &model.Device{}, Reports: []topology.Report{{Device: &model.Device{DnsLookups: []model.DnsLookup{
 			{Client: "192.168.1.43", Domain: "netflix.com"}, // Pi-hole logs no answers: Omini asks it
-		}}},
+		}}}}},
 	}}
 	asked := 0
 	resolve := func(_ context.Context, server netip.Addr, name string) ([]netip.Addr, error) {

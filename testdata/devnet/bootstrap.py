@@ -104,6 +104,7 @@ def main() -> int:
     want = [(p, c) for _, p, c in configs.integrations(lab_urls(), sec)]
     if args.lab:
         want.insert(0, ("network", configs.scan_config(sec)))
+        want.append(("flows", {"netflow_port": 2055, "sflow_port": 0}))  # the HQ firewall's NetFlow
     _, existing = api.call("GET", "/api/integrations")
     have = set()
     for i in existing if isinstance(existing, list) else []:
