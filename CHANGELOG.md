@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/riccardoalv/omini/compare/v1.5.0...v1.6.0) (2026-10-14)
+
+
+### Features
+
+* Internet screen, where each device goes and alerts from flows ([4f9bc44](https://github.com/riccardoalv/omini/commit/4f9bc44c46b98ff22f8b66f0a6c0845c9f2df627))
+* the Internet screen is a dashboard with a world map ([0b4e010](https://github.com/riccardoalv/omini/commit/0b4e0104e7d3b402ce26409a19170ead2ce2e3c8))
+
+
+### Bug Fixes
+
+* DNS lookups of a merged device name destinations; the devnet exports NetFlow ([97e51cd](https://github.com/riccardoalv/omini/commit/97e51cd093c000d7f9b99be8a437d21095bfdd28))
+
 ## [1.5.0](https://github.com/riccardoalv/omini/compare/v1.4.0...v1.5.0) (2026-10-13)
 
 
