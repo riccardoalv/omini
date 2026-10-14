@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -59,7 +60,13 @@ func TestInternetTrafficPerDevice(t *testing.T) {
 	defer st.Close()
 	now := time.Unix(1_790_000_000, 0)
 	dir := NewDirectory(home(), Names{ByClient: map[netip.Addr]map[netip.Addr]string{ip("192.168.1.42"): {ip("142.250.78.14"): "youtube.com"}}})
-	svc := &Service{Store: st, Now: func() time.Time { return now }, Directory: func() *Directory { return dir }}
+	geo := func(a netip.Addr) geoip.Place {
+		if a == ip("142.250.78.14") {
+			return geoip.Place{Country: "US", Org: "Google LLC"}
+		}
+		return geoip.Place{}
+	}
+	svc := &Service{Store: st, Now: func() time.Time { return now }, Directory: func() *Directory { return dir }, Geo: geo}
 	svc.Add(ip("192.168.1.1"), "netflow", "v9", []Record{
 		// The phone watches YouTube over IPv4 and talks to another site over IPv6.
 		{Src: ip("192.168.1.42"), Dst: ip("142.250.78.14"), Proto: 6, SrcPort: 50000, DstPort: 443, Bytes: 1_000},
@@ -89,6 +96,24 @@ func TestInternetTrafficPerDevice(t *testing.T) {
 	}
 	if len(dests) != 2 || dests[0].Dest != "youtube.com" || dests[0].RX != 90_000 || dests[0].Port != 443 || dests[1].Dest != "2a03:2880::1" {
 		t.Fatalf("destinations = %+v", dests)
+	}
+	places, err := st.Places(ctx, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(places) != 3 || places[0] != (store.PlaceUsage{Country: "US", Org: "Google LLC", RX: 90_000, TX: 1_000}) || places[1].Org != "2a03:2880::1" {
+		t.Fatalf("places = %+v", places)
+	}
+	series, step, err := st.InternetSeries(ctx, now.Add(-10*time.Minute), now)
+	if err != nil || step != time.Minute || len(series) != 11 {
+		t.Fatalf("series: %d points, step %s, %v", len(series), step, err)
+	}
+	var rx uint64
+	for _, p := range series {
+		rx += p.RX
+	}
+	if rx != 95_000 {
+		t.Fatalf("series rx = %d", rx)
 	}
 	if dns, _ := st.Destinations(ctx, now.Add(-time.Hour), "", 53, 853); len(dns) != 1 || dns[0].Node != "ip:192.168.1.77" || dns[0].Dest != "1.1.1.1" {
 		t.Fatalf("DNS destinations = %+v", dns)

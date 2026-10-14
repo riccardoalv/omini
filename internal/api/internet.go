@@ -3,10 +3,12 @@ package api
 import (
 	"cmp"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
@@ -62,10 +64,122 @@ func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
 		total.TX += u.TX
 		out = append(out, v)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	series, step, err := s.Store.InternetSeries(r.Context(), since, now)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	places, err := s.Store.Places(r.Context(), since)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	resp := map[string]any{
 		"devices": out, "total": total, "since": since, "seconds": int(now.Sub(since).Seconds()),
+		"series": series, "step_s": int(step.Seconds()), "now": s.rateNow(r, now),
+		"countries": countries(places), "orgs": orgs(places), "home": s.home(),
 		"listening": s.flowsListening(), "exporters": s.flowExporters(),
+	}
+	if s.Geo.Enabled() {
+		resp["attribution"] = geoip.Attribution
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// rateNow is the network's internet rate over the last five minutes (bits/s).
+func (s *Server) rateNow(r *http.Request, now time.Time) map[string]float64 {
+	list, err := s.Store.InternetUsage(r.Context(), now.Add(-5*time.Minute), now)
+	out := map[string]float64{"rx_bps": 0, "tx_bps": 0}
+	if err != nil {
+		return out
+	}
+	for _, u := range list {
+		out["rx_bps"] += float64(u.RX) * 8 / 300
+		out["tx_bps"] += float64(u.TX) * 8 / 300
+	}
+	return out
+}
+
+// home is where the network is: the country of a router's internet address.
+func (s *Server) home() string {
+	if s.Geo == nil {
+		return ""
+	}
+	for _, a := range s.Collector.FlowDirectory().WANAddrs() {
+		if c := s.Geo.Lookup(a).Country; c != "" {
+			return c
+		}
+	}
+	return ""
+}
+
+type countryUsage struct {
+	Country string `json:"country"`
+	RX      uint64 `json:"rx"`
+	TX      uint64 `json:"tx"`
+}
+
+// countries sums the places per country, busiest first (unknown left out).
+func countries(places []store.PlaceUsage) []countryUsage {
+	by := map[string]*countryUsage{}
+	for _, p := range places {
+		if p.Country == "" {
+			continue
+		}
+		c := by[p.Country]
+		if c == nil {
+			c = &countryUsage{Country: p.Country}
+			by[p.Country] = c
+		}
+		c.RX += p.RX
+		c.TX += p.TX
+	}
+	out := make([]countryUsage, 0, len(by))
+	for _, c := range by {
+		out = append(out, *c)
+	}
+	slices.SortFunc(out, func(a, b countryUsage) int {
+		if c := cmp.Compare(b.RX+b.TX, a.RX+a.TX); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Country, b.Country)
 	})
+	return out
+}
+
+type orgUsage struct {
+	Org       string   `json:"org"`
+	Countries []string `json:"countries"` // busiest first
+	RX        uint64   `json:"rx"`
+	TX        uint64   `json:"tx"`
+}
+
+// orgs sums the places per owner, busiest first (at most 20).
+func orgs(places []store.PlaceUsage) []orgUsage {
+	by := map[string]*orgUsage{}
+	var order []string
+	for _, p := range places { // busiest first already
+		o := by[p.Org]
+		if o == nil {
+			o = &orgUsage{Org: p.Org, Countries: []string{}}
+			by[p.Org] = o
+			order = append(order, p.Org)
+		}
+		if p.Country != "" && !slices.Contains(o.Countries, p.Country) {
+			o.Countries = append(o.Countries, p.Country)
+		}
+		o.RX += p.RX
+		o.TX += p.TX
+	}
+	out := make([]orgUsage, 0, len(order))
+	for _, k := range order {
+		out = append(out, *by[k])
+	}
+	slices.SortStableFunc(out, func(a, b orgUsage) int { return cmp.Compare(b.RX+b.TX, a.RX+a.TX) })
+	if len(out) > 20 {
+		out = out[:20]
+	}
+	return out
 }
 
 // nodeDestinations is where a device went on the internet (by name when a
@@ -86,10 +200,12 @@ func (s *Server) nodeDestinations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type dest struct {
-		Name  string           `json:"name"`
-		RX    uint64           `json:"rx"`
-		TX    uint64           `json:"tx"`
-		Ports []store.FlowPort `json:"ports"`
+		Name    string           `json:"name"`
+		Country string           `json:"country,omitempty"`
+		Org     string           `json:"org,omitempty"`
+		RX      uint64           `json:"rx"`
+		TX      uint64           `json:"tx"`
+		Ports   []store.FlowPort `json:"ports"`
 	}
 	byName := map[string]*dest{}
 	var order []string
@@ -97,6 +213,10 @@ func (s *Server) nodeDestinations(w http.ResponseWriter, r *http.Request) {
 		x := byName[d.Dest]
 		if x == nil {
 			x = &dest{Name: d.Dest}
+			if a, err := netip.ParseAddr(d.Addr); err == nil {
+				p := s.Geo.Lookup(a)
+				x.Country, x.Org = p.Country, p.Org
+			}
 			byName[d.Dest] = x
 			order = append(order, d.Dest)
 		}

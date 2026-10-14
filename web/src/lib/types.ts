@@ -522,6 +522,18 @@ export interface InternetResponse {
   total: { node: string; rx: number; tx: number }
   since: string
   seconds: number
+  /** The network's internet traffic over the period (bytes per step). */
+  series: { at: string; rx: number; tx: number }[]
+  step_s: number
+  /** The rate over the last five minutes. */
+  now: { rx_bps: number; tx_bps: number }
+  countries: { country: string; rx: number; tx: number }[]
+  /** Who runs the places (or their name, or address), busiest first. */
+  orgs: { org: string; countries: string[]; rx: number; tx: number }[]
+  /** The network's own country (from its internet address). */
+  home: string
+  /** The geolocation database's credit; absent when places are unknown. */
+  attribution?: string
   listening: boolean
   exporters: FlowsResponse['exporters']
 }
@@ -531,6 +543,8 @@ export type InternetRange = '15m' | '1h' | 'today' | '7d' | '30d'
 /** Where a device went on the internet: a domain name, or the address. */
 export interface Destination {
   name: string
+  country?: string
+  org?: string
   rx: number
   tx: number
   ports: { proto: number; port: number; bytes: number }[]

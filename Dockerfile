@@ -18,6 +18,8 @@ COPY . .
 COPY --from=web /src/web/dist ./web/dist
 # App icons bundled for offline use (downloaded from Dashboard Icons).
 RUN go run ./internal/appicons/gen -bundle
+# Where internet addresses are (DB-IP Lite, CC BY 4.0), for the Internet screen.
+RUN go run ./internal/geoip/gen
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/omini ./cmd/omini
 

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/store"
 )
 
@@ -34,6 +35,8 @@ type Service struct {
 	// Directory tells local from internet addresses and names them (nil: no
 	// internet traffic per device is kept).
 	Directory func() *Directory
+	// Geo tells where an internet address is (nil: nowhere).
+	Geo func(netip.Addr) geoip.Place
 
 	mu        sync.Mutex
 	ports     [2]int // netflow, sflow
@@ -294,9 +297,9 @@ func (s *Service) flush(force bool) {
 	}
 	s.mu.Unlock()
 	if dir != nil && s.Store != nil {
-		usage, dests := internet(dir, convs)
+		usage, dests, places := internet(dir, s.Geo, convs)
 		if len(usage) > 0 {
-			if err := s.Store.SaveInternet(context.Background(), minute, usage, dests); err != nil {
+			if err := s.Store.SaveInternet(context.Background(), minute, usage, dests, places...); err != nil {
 				slog.Warn("could not store internet traffic", "err", err)
 			}
 		}
@@ -378,7 +381,7 @@ func (s *Service) directory() *Directory {
 // conversations, and where it went: an address on the local network talking
 // to one outside it. Traffic on a router's internet side is left out: it is
 // the LAN's traffic again, after NAT.
-func internet(dir *Directory, convs map[convKey]*store.FlowRow) ([]store.Usage, []store.Destination) {
+func internet(dir *Directory, geo func(netip.Addr) geoip.Place, convs map[convKey]*store.FlowRow) ([]store.Usage, []store.Destination, []store.PlaceUsage) {
 	usage := map[string]*store.Usage{}
 	type destKey struct {
 		node, dest string
@@ -386,6 +389,7 @@ func internet(dir *Directory, convs map[convKey]*store.FlowRow) ([]store.Usage, 
 		port       uint16
 	}
 	dests := map[destKey]*store.Destination{}
+	places := map[[2]string]*store.PlaceUsage{}
 	for k, row := range convs {
 		if dir.WAN(k.a) || dir.WAN(k.b) {
 			continue
@@ -416,11 +420,26 @@ func internet(dir *Directory, convs map[convKey]*store.FlowRow) ([]store.Usage, 
 		dk := destKey{node, dest, k.proto, k.port}
 		d := dests[dk]
 		if d == nil {
-			d = &store.Destination{Node: node, Dest: dest, Proto: k.proto, Port: k.port}
+			d = &store.Destination{Node: node, Dest: dest, Proto: k.proto, Port: k.port, Addr: remote.String()}
 			dests[dk] = d
 		}
 		d.RX += rx
 		d.TX += tx
+		var where geoip.Place
+		if geo != nil {
+			where = geo(remote)
+		}
+		if where.Org == "" {
+			where.Org = dest // the name, else the address
+		}
+		pk := [2]string{where.Country, where.Org}
+		p := places[pk]
+		if p == nil {
+			p = &store.PlaceUsage{Country: where.Country, Org: where.Org}
+			places[pk] = p
+		}
+		p.RX += rx
+		p.TX += tx
 	}
 	outU := make([]store.Usage, 0, len(usage))
 	for _, u := range usage {
@@ -439,7 +458,11 @@ func internet(dir *Directory, convs map[convKey]*store.FlowRow) ([]store.Usage, 
 		}
 		outD = append(outD, list...)
 	}
-	return outU, outD
+	outP := make([]store.PlaceUsage, 0, len(places))
+	for _, p := range places {
+		outP = append(outP, *p)
+	}
+	return outU, outD, outP
 }
 
 // DestinationsPerMinute bounds what is kept of each device's minute.

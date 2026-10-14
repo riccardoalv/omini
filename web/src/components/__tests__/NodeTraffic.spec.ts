@@ -91,6 +91,12 @@ describe('NodeTraffic', () => {
       total: { node: '', rx: 112_500_000, tx: 0 },
       since: '',
       seconds: 900,
+      series: [],
+      step_s: 60,
+      now: { rx_bps: 0, tx_bps: 0 },
+      countries: [],
+      orgs: [],
+      home: '',
       listening: true,
       exporters: [],
     })

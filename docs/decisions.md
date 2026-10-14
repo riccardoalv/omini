@@ -103,6 +103,13 @@ choices and the reasons behind them.
   nothing overlaps) and three alerts (`dns_bypass`, `upload_unusual`,
   `lan_scan`). Internet traffic is a local address talking to an outside one;
   traffic on a router's WAN address is left out (after NAT it counts twice).
+- **Where traffic goes in the world** (maintainer, 2026-10-14): the Internet
+  screen is a dashboard (usage over time, a world map, the networks' owners,
+  the busiest devices, then the list), not a list. Countries and owners come
+  from DB-IP Lite (CC BY 4.0, credited on the screen), downloaded at build
+  time and embedded (about 9 MB compressed), never asked online; cities are
+  left out (60 MB). Per-device destinations stay a day; per-country and
+  per-owner totals, with no device, a month.
 - **Destination names come from the network's own DNS server** (AdGuard Home
   and Pi-hole report the lookups they answered; Omini asks Pi-hole for the
   addresses, as it logs none). The lookups stay in memory for a day; the

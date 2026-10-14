@@ -22,6 +22,7 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/flows"
+	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/netscan"
@@ -170,7 +171,12 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	scan.Fingerprints = st // DHCP fingerprints survive restarts
 	reg.Register(scan)
 	reg.Register(nmapscan.New())
-	flowSvc := &flows.Service{Store: st}
+	geo, err := geoip.Open(filepath.Join(cfg.DataDir, "geoip"))
+	if err != nil {
+		slog.Warn("internet places are unknown", "err", err)
+	}
+	defer geo.Close()
+	flowSvc := &flows.Service{Store: st, Geo: geo.Lookup}
 	defer flowSvc.Close()
 	reg.Register(flows.New(flowSvc))
 
@@ -220,7 +226,7 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	}
 	server := &api.Server{
 		Store: st, Registry: reg, Box: box, Collector: coll, Auth: authService,
-		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, UI: web.FS(), Version: version,
+		WebUI: webui.New(), Plugins: plugs, PluginIndex: index, Flows: flowSvc, Geo: geo, UI: web.FS(), Version: version,
 		Icons:        appicons.NewServer(filepath.Join(cfg.DataDir, "icons")),
 		Capabilities: caps,
 	}

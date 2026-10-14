@@ -7,7 +7,7 @@ device's internet traffic split over the places its kind of device goes
 and the traffic between VLANs. Traffic inside a VLAN never reaches the
 firewall and is not exported, as on a real network.
 
-The places are made-up names on documentation addresses (RFC 5737). AdGuard
+The places are real services' public addresses (some names made up). AdGuard
 Home's query log answers the same names with the same addresses (see
 ``lookups``), so Omini can name where devices go.
 """
@@ -45,7 +45,7 @@ PLACES: dict[str, list[tuple[str, int, float]]] = {
         ("www.youtube.com", 443, 0.25),
     ],
     "guest": [("www.youtube.com", 443, 0.5), ("www.netflix.com", 443, 0.3), ("instagram.com", 443, 0.2)],
-    "tv": [("www.netflix.com", 443, 0.7), ("www.youtube.com", 443, 0.3)],
+    "tv": [("www.netflix.com", 443, 0.6), ("www.youtube.com", 443, 0.25), ("globoplay.globo.com", 443, 0.15)],
     "camera-cloud": [("cloud.camvendor.com", 443, 1.0)],
     "nvr": [("cloud.camvendor.com", 443, 1.0)],
     "iot": [("a.tuyaus.com", 8883, 0.7), ("time.cloudflare.com", 123, 0.3)],
@@ -74,14 +74,40 @@ SERVICES: dict[str, tuple[int, int]] = {
 }
 # One TV asks Google's DNS directly, going around AdGuard Home (the dns_bypass alert).
 BYPASS = ("8.8.8.8", 53)
-_NETS = ((198, 51, 100), (203, 0, 113), (192, 0, 2))
+# Real public addresses of these services (and made-up names on real
+# networks), so the Internet screen's world map has countries.
+ADDRESSES = {
+    "outlook.office365.com": "52.96.165.2",
+    "teams.microsoft.com": "52.113.194.132",
+    "update.microsoft.com": "13.107.4.50",
+    "time.windows.com": "168.61.215.74",
+    "github.com": "140.82.113.3",
+    "www.google.com": "142.250.79.36",
+    "www.youtube.com": "142.250.79.46",
+    "slack.com": "3.22.162.143",
+    "erp.acme-cloud.com": "13.32.0.10",
+    "whatsapp.net": "157.240.12.60",
+    "instagram.com": "157.240.12.174",
+    "www.netflix.com": "45.57.40.1",
+    "globoplay.globo.com": "186.192.90.5",
+    "cloud.camvendor.com": "47.98.0.10",
+    "a.tuyaus.com": "3.212.0.10",
+    "time.cloudflare.com": "162.159.200.1",
+    "cdn.cloudflare.com": "104.16.123.96",
+    "printer.hp.com": "15.73.0.10",
+    "api.stripe.com": "3.18.12.63",
+    "mx.mailprovider.com": "34.240.0.10",
+    "backup.cloudvault.com": "78.46.0.10",
+    "registry-1.docker.io": "54.236.113.205",
+}
 
 
 def address(name: str) -> str:
-    """A place's address: stable, on a documentation network."""
+    """A place's address (a documentation address for a name not listed)."""
+    if name in ADDRESSES:
+        return ADDRESSES[name]
     h = hashlib.sha1(name.encode()).digest()
-    a, b, c = _NETS[h[0] % len(_NETS)]
-    return f"{a}.{b}.{c}.{1 + h[1] % 254}"
+    return f"198.51.100.{1 + h[1] % 254}"
 
 
 def places(world: World, name: str) -> list[tuple[str, int, float]]:

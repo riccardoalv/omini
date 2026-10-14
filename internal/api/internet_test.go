@@ -39,6 +39,15 @@ func TestInternetUsageAndDestinations(t *testing.T) {
 	if len(usage.Devices) != 2 || usage.Devices[0].Node != nas || !usage.Devices[0].OnMap || usage.Devices[1].Label != "192.168.1.77" || usage.Total.RX != 5010 {
 		t.Fatalf("usage = %+v", usage)
 	}
+	var overview struct {
+		Series []struct{ RX uint64 } `json:"series"`
+		StepS  int                   `json:"step_s"`
+		Now    map[string]float64    `json:"now"`
+	}
+	h.do("GET", "/api/internet?range=1h", nil, &overview)
+	if overview.StepS != 60 || len(overview.Series) < 60 || overview.Now["rx_bps"] == 0 {
+		t.Fatalf("overview = step %d, %d points, now %v", overview.StepS, len(overview.Series), overview.Now)
+	}
 	if code := h.do("GET", "/api/internet?range=1y", nil, nil); code != 400 {
 		t.Fatalf("bad range: %d", code)
 	}

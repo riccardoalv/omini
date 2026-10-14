@@ -335,6 +335,19 @@ var migrations = []string{
 	);
 	CREATE INDEX internet_destinations_node ON internet_destinations (node, at);
 	`,
+	// 25: an address of each destination (where it is), and the network's internet
+	// traffic per country and owner for a month (no device in it).
+	`
+	ALTER TABLE internet_destinations ADD COLUMN addr TEXT NOT NULL DEFAULT '';
+	CREATE TABLE internet_places (
+		at      INTEGER NOT NULL, -- unix seconds, the hour
+		country TEXT NOT NULL,    -- ISO 3166 alpha-2 ('' when unknown)
+		org     TEXT NOT NULL,    -- who runs it, else the name or address
+		rx      INTEGER NOT NULL,
+		tx      INTEGER NOT NULL,
+		PRIMARY KEY (at, country, org)
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

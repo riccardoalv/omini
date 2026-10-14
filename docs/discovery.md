@@ -334,15 +334,25 @@ so **export the router's LAN interfaces** (and VLANs). Internet traffic is kept
 per minute for a day and per hour for 35 days; each device's destinations
 for a day.
 
-- The **Internet** screen ranks the devices by download and upload: now (15
-  minutes), the last hour, today, 7 or 30 days. Open one to see where it went,
-  and the exporters Omini is receiving from.
+- The **Internet** screen, for 15 minutes, an hour, today, 7 or 30 days: the
+  rate now and the period's totals, the usage over time, a **world map** of
+  where the traffic goes (countries shaded by traffic, lines from home to the
+  busiest), **where it goes** by the networks' owners (Google, Netflix,
+  Amazon...; a country on the map narrows it), **who uses it most**, and every
+  device with where it went.
 - Each device's panel shows **Where it goes** and the devices it talks to on
   your network, which **Show on the map** highlights. The internet's node
   shows who is using the internet now.
 - Three [alerts](alerts.md#network-and-security) come from flows: a device
   going around your DNS server (`dns_bypass`), an unusual upload
   (`upload_unusual`) and a network scan (`lan_scan`).
+
+**Places.** The country of an address and the owner of its network come from
+DB-IP's free Lite databases (CC BY 4.0, [db-ip.com](https://db-ip.com)),
+embedded in the image at build time (`make geoip` for a build from source;
+without them the map is off). Nothing is looked up online. Home is the country
+of the router's internet address. The network's traffic per country and owner
+(no device in it) is kept per hour for 35 days.
 
 **Names.** A destination is named after what the device looked up: AdGuard
 Home and Pi-hole report the lookups they answered (which client asked for

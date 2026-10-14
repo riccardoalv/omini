@@ -14,13 +14,17 @@ import type { TrafficPoint } from '@/lib/types'
  */
 const props = withDefaults(
   defineProps<{
-    node: string
-    iface: string
+    node?: string
+    iface?: string
+    /** Points given by the parent (no ranges, no loading): the network's internet traffic. */
+    data?: TrafficPoint[]
+    /** The time the given points span (ms). */
+    span?: [number, number]
     /** The interface is at the far end of the link: its sent bytes are the download. */
     swap?: boolean
     hours?: number
   }>(),
-  { swap: false, hours: 24 },
+  { node: '', iface: '', swap: false, hours: 24, data: undefined, span: undefined },
 )
 const { t, locale } = useI18n()
 
@@ -32,6 +36,7 @@ const loading = ref(false)
 const failed = ref(false)
 
 async function load() {
+  if (props.data) return
   loading.value = true
   failed.value = false
   const want = { node: props.node, iface: props.iface, hours: hours.value }
@@ -55,6 +60,16 @@ async function load() {
   }
 }
 watch(() => [props.node, props.iface, hours.value], load, { immediate: true })
+watch(
+  () => props.data,
+  (d) => {
+    if (d) points.value = d
+  },
+  { immediate: true },
+)
+const fromTo = computed<[number, number]>(
+  () => props.span ?? [Date.now() - hours.value * 3600_000, Date.now()],
+)
 
 const W = 600
 const H = 180
@@ -62,7 +77,7 @@ const PAD = { left: 58, right: 8, top: 10, bottom: 22 }
 
 const series = computed(() => chartSeries(points.value, props.swap))
 const scale = computed(() =>
-  chartScale(series.value, Date.now() - hours.value * 3600_000, Date.now(), {
+  chartScale(series.value, fromTo.value[0], fromTo.value[1], {
     width: W,
     height: H,
     ...PAD,
@@ -73,9 +88,9 @@ const timeFormat = computed(
   () =>
     new Intl.DateTimeFormat(
       locale.value,
-      hours.value <= 24
+      fromTo.value[1] - fromTo.value[0] <= 86400_000 + 3600_000
         ? { hour: '2-digit', minute: '2-digit' }
-        : hours.value <= 720
+        : fromTo.value[1] - fromTo.value[0] <= 720 * 3600_000
           ? { day: '2-digit', month: '2-digit' }
           : { month: 'short' },
     ),
@@ -114,7 +129,7 @@ const stats = computed(() => {
         <span class="down"><i />{{ t('traffic.down') }}</span>
         <span class="up"><i />{{ t('traffic.up') }}</span>
       </div>
-      <div class="ranges" role="group" :aria-label="t('traffic.title')">
+      <div v-if="!data" class="ranges" role="group" :aria-label="t('traffic.title')">
         <button
           v-for="r in RANGES"
           :key="r"

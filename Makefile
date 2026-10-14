@@ -11,7 +11,7 @@ SDK := uv run --project sdk/python
 # The devnet emulator (testdata/devnet) is a uv project of its own.
 DEVNET := uv run --project testdata/devnet
 
-.PHONY: image models generate check-generated test cover lint fmt hooks ci web run dev oui icons devnet
+.PHONY: geoip image models generate check-generated test cover lint fmt hooks ci web run dev oui icons devnet
 
 ## run: build the web UI and run Omini on http://localhost:8080 (scans your network)
 run: web
@@ -68,6 +68,10 @@ models:
 
 oui:
 	go run ./internal/oui/gen
+
+## geoip: download DB-IP's free country and network-owner databases (embedded in builds)
+geoip:
+	go run ./internal/geoip/gen
 
 ## check-generated: fail if generated code does not match schema/ (works before committing too)
 check-generated:

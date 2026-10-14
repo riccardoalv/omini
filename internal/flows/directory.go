@@ -2,6 +2,7 @@ package flows
 
 import (
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -144,4 +145,17 @@ func (d *Directory) Name(client, addr netip.Addr) string {
 		return ""
 	}
 	return d.names.Name(client.Unmap(), addr.Unmap())
+}
+
+// WANAddrs are the routers' internet-side addresses (where the network is).
+func (d *Directory) WANAddrs() []netip.Addr {
+	if d == nil {
+		return nil
+	}
+	out := make([]netip.Addr, 0, len(d.wan))
+	for a := range d.wan {
+		out = append(out, a)
+	}
+	slices.SortFunc(out, func(a, b netip.Addr) int { return a.Compare(b) })
+	return out
 }

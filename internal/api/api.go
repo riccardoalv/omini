@@ -16,6 +16,7 @@ import (
 	"github.com/riccardoalv/omini/internal/auth"
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/flows"
+	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/netscan"
 	"github.com/riccardoalv/omini/internal/plugins"
@@ -49,6 +50,8 @@ type Server struct {
 	UI          fs.FS        // built web UI; nil serves a placeholder page
 	// Flows receives NetFlow/IPFIX/sFlow (nil: no flow data).
 	Flows *flows.Service
+	// Geo tells where internet addresses are (nil: no places).
+	Geo *geoip.DB
 	// NotifyClient sends test notifications (nil: a default client).
 	NotifyClient *http.Client
 	// Capabilities: what the network scan can do where Omini runs.

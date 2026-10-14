@@ -28,6 +28,7 @@ type Usage struct {
 type Destination struct {
 	Node  string `json:"-"`
 	Dest  string `json:"dest"`
+	Addr  string `json:"addr,omitempty"` // one of its addresses (where it is)
 	Proto uint8  `json:"proto"`
 	Port  uint16 `json:"port"`
 	RX    uint64 `json:"rx"`
@@ -36,7 +37,7 @@ type Destination struct {
 
 // SaveInternet adds a minute of internet traffic, and drops what is older
 // than it is kept.
-func (s *Store) SaveInternet(ctx context.Context, minute time.Time, usage []Usage, dests []Destination) error {
+func (s *Store) SaveInternet(ctx context.Context, minute time.Time, usage []Usage, dests []Destination, places ...PlaceUsage) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -56,9 +57,16 @@ func (s *Store) SaveInternet(ctx context.Context, minute time.Time, usage []Usag
 		}
 	}
 	for _, d := range dests {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO internet_destinations (at, node, dest, port, proto, rx, tx) VALUES (?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (at, node, dest, port, proto) DO UPDATE SET rx = rx + excluded.rx, tx = tx + excluded.tx`,
-			hour, d.Node, d.Dest, d.Port, d.Proto, clamp(d.RX), clamp(d.TX)); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO internet_destinations (at, node, dest, port, proto, rx, tx, addr) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (at, node, dest, port, proto) DO UPDATE SET rx = rx + excluded.rx, tx = tx + excluded.tx, addr = excluded.addr`,
+			hour, d.Node, d.Dest, d.Port, d.Proto, clamp(d.RX), clamp(d.TX), d.Addr); err != nil {
+			return err
+		}
+	}
+	for _, p := range places {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO internet_places (at, country, org, rx, tx) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (at, country, org) DO UPDATE SET rx = rx + excluded.rx, tx = tx + excluded.tx`,
+			hour, p.Country, p.Org, clamp(p.RX), clamp(p.TX)); err != nil {
 			return err
 		}
 	}
@@ -69,6 +77,7 @@ func (s *Store) SaveInternet(ctx context.Context, minute time.Time, usage []Usag
 		{`DELETE FROM internet_minutes WHERE at < ?`, InternetMinutesKeep},
 		{`DELETE FROM internet_hours WHERE at < ?`, InternetHoursKeep},
 		{`DELETE FROM internet_destinations WHERE at < ?`, DestinationsKeep},
+		{`DELETE FROM internet_places WHERE at < ?`, InternetHoursKeep},
 	} {
 		if _, err := tx.ExecContext(ctx, p.q, minute.Add(-p.keep).Unix()); err != nil {
 			return err
@@ -115,7 +124,7 @@ func (s *Store) InternetUsage(ctx context.Context, since, now time.Time) ([]Usag
 // Destinations sums where devices went since a time, busiest first: one
 // device's (node), or every device's on the given ports.
 func (s *Store) Destinations(ctx context.Context, since time.Time, node string, ports ...uint16) ([]Destination, error) {
-	q := `SELECT node, dest, proto, port, SUM(rx), SUM(tx) FROM internet_destinations WHERE at >= ?`
+	q := `SELECT node, dest, proto, port, SUM(rx), SUM(tx), MAX(addr) FROM internet_destinations WHERE at >= ?`
 	args := []any{since.Truncate(time.Hour).Unix()}
 	if node != "" {
 		q += ` AND node = ?`
@@ -139,7 +148,7 @@ func (s *Store) Destinations(ctx context.Context, since time.Time, node string, 
 			proto, port int64
 			rx, tx      int64
 		)
-		if err := rows.Scan(&d.Node, &d.Dest, &proto, &port, &rx, &tx); err != nil {
+		if err := rows.Scan(&d.Node, &d.Dest, &proto, &port, &rx, &tx, &d.Addr); err != nil {
 			return nil, err
 		}
 		d.Proto, d.Port = uint8(proto), uint16(port) //nolint:gosec // stored from these types
@@ -178,4 +187,83 @@ func (s *Store) HourlyUpload(ctx context.Context, since time.Time) (map[string]m
 		out[node][at] = uint64(tx) //nolint:gosec // stored from uint64
 	}
 	return out, rows.Err()
+}
+
+// PlaceUsage is the network's internet traffic with a country and an owner.
+type PlaceUsage struct {
+	Country string `json:"country"`
+	Org     string `json:"org"`
+	RX      uint64 `json:"rx"`
+	TX      uint64 `json:"tx"`
+}
+
+// Places sums the network's internet traffic per country and owner since a
+// time, busiest first.
+func (s *Store) Places(ctx context.Context, since time.Time) ([]PlaceUsage, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT country, org, SUM(rx), SUM(tx) FROM internet_places WHERE at >= ? GROUP BY country, org`,
+		since.Truncate(time.Hour).Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PlaceUsage
+	for rows.Next() {
+		var (
+			p      PlaceUsage
+			rx, tx int64
+		)
+		if err := rows.Scan(&p.Country, &p.Org, &rx, &tx); err != nil {
+			return nil, err
+		}
+		p.RX, p.TX = uint64(rx), uint64(tx) //nolint:gosec // stored from uint64
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		x, y := out[i].RX+out[i].TX, out[j].RX+out[j].TX
+		if x != y {
+			return x > y
+		}
+		return out[i].Country+out[i].Org < out[j].Country+out[j].Org
+	})
+	return out, rows.Err()
+}
+
+// UsagePoint is the network's internet traffic in one step of a series.
+type UsagePoint struct {
+	At time.Time `json:"at"`
+	RX uint64    `json:"rx"`
+	TX uint64    `json:"tx"`
+}
+
+// InternetSeries is the network's internet traffic since a time, per minute
+// within a day and per hour beyond (step), oldest first, gaps as zeros.
+func (s *Store) InternetSeries(ctx context.Context, since, now time.Time) ([]UsagePoint, time.Duration, error) {
+	table, step := "internet_hours", time.Hour
+	if now.Sub(since) <= 2*time.Hour {
+		table, step = "internet_minutes", time.Minute
+	}
+	from := since.Truncate(step)
+	rows, err := s.db.QueryContext(ctx, `SELECT at, SUM(rx), SUM(tx) FROM `+table+` WHERE at >= ? GROUP BY at`, from.Unix())
+	if err != nil {
+		return nil, step, err
+	}
+	defer rows.Close()
+	got := map[int64]UsagePoint{}
+	for rows.Next() {
+		var at, rx, tx int64
+		if err := rows.Scan(&at, &rx, &tx); err != nil {
+			return nil, step, err
+		}
+		got[at] = UsagePoint{RX: uint64(rx), TX: uint64(tx)} //nolint:gosec // stored from uint64
+	}
+	if err := rows.Err(); err != nil {
+		return nil, step, err
+	}
+	var out []UsagePoint
+	for t := from; !t.After(now); t = t.Add(step) {
+		p := got[t.Unix()]
+		p.At = t
+		out = append(out, p)
+	}
+	return out, step, nil
 }

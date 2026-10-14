@@ -51,6 +51,7 @@ for how it is built.
 | `internal/plugins`, `sdk/python` | Plugin runtime and store; the Python SDK (embedded in the binary) |
 | `internal/notify` | Notification channels and message cards |
 | `internal/diagnostics` | The anonymized diagnostics file testers attach to issues |
+| `internal/geoip` | Countries and network owners of internet addresses (DB-IP Lite, embedded by `make geoip`) |
 | `internal/store` | SQLite and its migrations (forward only) |
 | `internal/api`, `internal/auth` | HTTP API and the admin login |
 | `schema/` | JSON Schema: the data contract (Go and Python models are generated from it) |
@@ -95,6 +96,7 @@ make generate    # Go types and Python models from schema/
 make icons       # refresh the app icon catalog
 make models      # refresh the device model names
 make oui         # refresh the MAC vendor registry
+make geoip       # download the DB-IP Lite databases (countries, network owners)
 make image       # build the Docker image (omini:dev)
 make hooks       # install the git hooks (lefthook)
 ```
