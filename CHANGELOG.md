@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/riccardoalv/omini/compare/v1.6.1...v1.6.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* a DNS server is slow after two slow checks in a row ([c486c8e](https://github.com/riccardoalv/omini/commit/c486c8e507c1d7744c4aee01b65faa279271c6b5))
+
 ## [1.6.1](https://github.com/riccardoalv/omini/compare/v1.6.0...v1.6.1) (2026-10-14)
 
 
