@@ -74,6 +74,9 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 	if in.Configured["network"] {
 		in.DiscoveryLimited = c.opts.DiscoveryLimited
 	}
+	if in.Configured["flows"] {
+		in.Flows = c.flowFacts(ctx, topo, now)
+	}
 	for _, s := range statuses {
 		in.Integrations = append(in.Integrations, insights.Integration{
 			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error, Failures: s.Failures,

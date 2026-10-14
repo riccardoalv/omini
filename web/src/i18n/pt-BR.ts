@@ -6,7 +6,7 @@ const ptBR: typeof en = {
     map: 'Mapa',
     devices: 'Dispositivos',
     alerts: 'Alertas',
-    flows: 'Fluxos',
+    internet: 'Internet',
     integrations: 'Integrações',
     settings: 'Configurações',
     expand: 'Expandir menu',
@@ -539,21 +539,37 @@ const ptBR: typeof en = {
     },
   },
   flows: {
-    title: 'Fluxos',
-    subtitle: 'Quem fala com quem na sua rede, a partir dos fluxos exportados pelo roteador.',
-    search: 'Buscar dispositivos, endereços, serviços…',
-    ranges: { '15': '15 min', '60': '1 h', '360': '6 h', '1440': '24 h' },
-    between: 'Conversa',
-    traffic: 'Tráfego',
-    services: 'Serviços',
-    none: 'Nenhuma conversa neste período.',
     off: 'A coleta de fluxos está desligada.',
     offHint:
       'Adicione a integração "Traffic flows" e aponte o NetFlow/IPFIX do seu roteador ou firewall (OPNsense: Reporting → NetFlow, versão 9) ou o sFlow de um switch para este servidor.',
     enable: 'Adicionar "Traffic flows"',
     exporters: 'Recebendo de',
-    talksTo: 'Conversa com (última hora)',
-    allFlows: 'Todas as conversas dele',
+    goesTo: 'Para onde vai (últimas 24 h)',
+    goesToHint:
+      'O tráfego de internet dele por destino: os nomes vêm das consultas que seu AdGuard Home ou Pi-hole viu.',
+    local: 'Na sua rede (última hora)',
+    showPeers: 'Mostrar no mapa',
+    hidePeers: 'Mostrar o mapa todo',
+    usersNow: 'Usando a internet agora',
+    allUsage: 'Uso da internet',
+  },
+  internet: {
+    title: 'Internet',
+    subtitle:
+      'Quem usa sua internet e para onde vai, a partir dos fluxos exportados pelo roteador.',
+    ranges: {
+      '15m': 'Agora (15 min)',
+      '1h': '1 h',
+      today: 'Hoje',
+      '7d': '7 dias',
+      '30d': '30 dias',
+    },
+    average: 'média ↓ {down} · ↑ {up}',
+    none: 'Nenhum tráfego de internet neste período.',
+    noDestinations: 'Nenhum destino registrado para este dispositivo.',
+    wentTo: 'Para onde foi na última hora | Para onde foi nas últimas {hours} horas',
+    namesHint:
+      'Download em azul, upload em âmbar. Os destinos ganham nome pelas consultas que seu AdGuard Home ou Pi-hole viu (guardadas por um dia); sem eles, aparecem como endereços. Exporte as interfaces LAN do roteador: na WAN, depois do NAT, não dá para separar o tráfego por dispositivo.',
   },
   insights: {
     title: 'Alertas',
@@ -678,10 +694,17 @@ const ptBR: typeof en = {
         title: 'A configuração de {node} mudou',
         detail: 'Ela mudou fora do Omini: veja as diferenças no painel dele, em Configuração.',
       },
-      dhcp_no_offer_omini: {
-        title: 'Sem resposta de DHCP para o Omini em {iface}',
-        detail:
-          'O servidor DHCP de {server} está rodando e entregando endereços, mas não respondeu ao pedido do Omini.',
+      dns_bypass: {
+        title: '{node} contorna seu servidor DNS',
+        detail: 'Na última hora ele consultou servidores DNS na internet: {servers}.',
+      },
+      upload_unusual: {
+        title: '{node} enviou muito mais para a internet que o normal',
+        detail: '{mb} MB na última hora, contra cerca de {usual_mb} MB numa hora normal.',
+      },
+      lan_scan: {
+        title: '{node} varreu sua rede',
+        detail: 'Ele acessou {targets} serviços da sua rede em um minuto.',
       },
       infra_dynamic_ip: {
         title: '{node} não tem IP fixo',
@@ -769,8 +792,12 @@ const ptBR: typeof en = {
         'Um switch novo pode ter vencido a eleição, ou a raiz antiga ou o link dela caiu: defina a prioridade de raiz no switch principal.',
       config_changed:
         'Se ninguém que você conhece fez isso, compare as versões e veja quem tem acesso ao equipamento.',
-      dhcp_no_offer_omini:
-        'Os dispositivos continuam recebendo endereço. Veja no log do servidor DHCP o MAC do Omini: uma reserva, uma classe de cliente ou um filtro podem estar ignorando o pedido, ou a resposta não chega ao host do Omini.',
+      dns_bypass:
+        'O bloqueio e os nomes locais do seu servidor DNS não valem para ele. Configure o DNS dele para o seu servidor, ou bloqueie no roteador o DNS de saída (portas 53 e 853) para todos menos o seu servidor DNS.',
+      upload_unusual:
+        'Veja o que ele enviou no painel, em Para onde vai. Uma câmera ou TV enviando, ou um backup inesperado, são as causas mais comuns.',
+      lan_scan:
+        'Um scanner de rede (seu?) é normal; senão, verifique o dispositivo: ele pode estar infectado.',
       infra_dynamic_ip:
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       firewall_states_full:

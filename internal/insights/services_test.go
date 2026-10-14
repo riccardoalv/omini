@@ -80,8 +80,7 @@ func TestVLANsOutsideTheCatalog(t *testing.T) {
 }
 
 // TestNoAnswerToOminiWhileTheServerRuns: no offer reached Omini, but the
-// router serves DHCP and its server runs: a warning about Omini's request,
-// not "no DHCP server".
+// router serves DHCP and its server runs: no alert.
 func TestNoAnswerToOminiWhileTheServerRuns(t *testing.T) {
 	fw := topology.Node{ID: "dev:fw", Kind: topology.KindDevice, Label: "OPNsense", Online: true, Device: &model.Device{
 		DhcpLeases: []model.DhcpLease{{IP: "192.168.1.20", MAC: "aa:00:00:00:00:20"}},
@@ -92,13 +91,13 @@ func TestNoAnswerToOminiWhileTheServerRuns(t *testing.T) {
 	}}
 	topo := topology.Topology{Nodes: []topology.Node{fw}, DhcpChecks: []model.DhcpCheck{{Interface: "ens18"}}}
 	got := byRule(Evaluate(Input{Topology: topo}))
-	if l := got["dhcp_no_offer_omini"]; len(l) != 1 || l[0].Severity != Warning || l[0].Params["server"] != "OPNsense" || len(got["dhcp_no_offer"]) != 0 {
+	if len(got) != 0 {
 		t.Fatalf("running: %+v", got)
 	}
 	// Its server stopped: no DHCP server answers at all.
 	fw.Device.Services[1].Running = model.Ptr(false)
 	got = byRule(Evaluate(Input{Topology: topology.Topology{Nodes: []topology.Node{fw}, DhcpChecks: topo.DhcpChecks}}))
-	if len(got["dhcp_no_offer"]) != 1 || len(got["dhcp_no_offer_omini"]) != 0 {
+	if len(got["dhcp_no_offer"]) != 1 {
 		t.Fatalf("stopped: %+v", got)
 	}
 }

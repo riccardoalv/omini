@@ -21,23 +21,22 @@ import DeviceExtras from '@/components/map/DeviceExtras.vue'
 import ConfigBackups from '@/components/map/ConfigBackups.vue'
 import HostActions from '@/components/map/HostActions.vue'
 import NetworkPlace from '@/components/map/NetworkPlace.vue'
+import NodeTraffic from '@/components/map/NodeTraffic.vue'
 import PanelSection from '@/components/map/PanelSection.vue'
 import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
 import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
 import { api, ApiError } from '@/lib/api'
 import { ui } from '@/lib/ui'
-import { formatAgo, formatBytes, formatSpeed, formatUptime } from '@/lib/format'
+import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, linkOnPort } from '@/lib/graph'
 import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
 import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
 import { formatRate, nodeFlow } from '@/lib/traffic'
-import { serviceName } from '@/lib/services'
 import type {
   ConfigChange,
-  Conversation,
   Integration,
   PresenceEvent,
   TopoEdge,
@@ -61,6 +60,7 @@ const emit = defineEmits<{
   expand: [parentId: string]
   deleted: [id: string]
   scanned: []
+  peers: [ids: string[] | undefined]
 }>()
 const { t, locale } = useI18n()
 
@@ -159,26 +159,6 @@ function afterChange() {
   emit('scanned') // the map reloads with the device as read after the change
 }
 
-// Who the node talks to (flow exports), when Omini receives them.
-const talks = ref<Conversation[]>([])
-async function loadTalks(id: string | undefined) {
-  talks.value = []
-  if (!id || props.node?.kind === 'ssid' || props.node?.kind === 'app') return
-  try {
-    const res = await api.flows({ node: id, minutes: 60, limit: 5 })
-    if (props.node?.id === id) talks.value = res.conversations
-  } catch {
-    // flows are optional
-  }
-}
-const peerOf = (c: Conversation) => {
-  const mine = c.a_node === n.value?.id
-  const id = mine ? c.b_node : c.a_node
-  const ip = mine ? c.b : c.a
-  const peer = id ? byId.value.get(id) : undefined
-  return { id, label: peer ? displayName(peer, t) : ip }
-}
-
 watch(
   () => props.node?.id,
   (id) => {
@@ -186,7 +166,6 @@ watch(
     error.value = ''
     detectWeb(id, props.node?.ip)
     loadActivity(id)
-    loadTalks(id)
     loadChanges(id)
   },
   { immediate: true },
@@ -847,35 +826,12 @@ async function save(patch: {
           </ul>
         </PanelSection>
 
-        <PanelSection
-          v-if="talks.length"
-          id="talks"
-          :title="t('flows.talksTo')"
-          data-test="node-talks"
-        >
-          <ul class="talks">
-            <li v-for="c in talks" :key="c.a + c.b">
-              <button
-                class="link grow"
-                type="button"
-                :disabled="!peerOf(c).id"
-                @click="peerOf(c).id && emit('select', peerOf(c).id!)"
-              >
-                {{ peerOf(c).label }}
-              </button>
-              <span class="muted small">{{
-                c.ports
-                  .slice(0, 2)
-                  .map((p) => serviceName(p.proto, p.port))
-                  .join(', ')
-              }}</span>
-              <span class="mono small">{{ formatBytes(c.bytes_ab + c.bytes_ba) }}</span>
-            </li>
-          </ul>
-          <RouterLink class="link small" :to="{ path: '/flows', query: { node: n.id } }">{{
-            t('flows.allFlows')
-          }}</RouterLink>
-        </PanelSection>
+        <NodeTraffic
+          :node="n"
+          :nodes="nodes"
+          @select="(id) => emit('select', id)"
+          @peers="(ids) => emit('peers', ids)"
+        />
 
         <PanelSection
           v-if="n.changes?.length"
@@ -1108,31 +1064,6 @@ async function save(patch: {
 </template>
 
 <style scoped>
-.talks {
-  display: grid;
-  gap: 4px;
-  margin: 0 0 6px;
-  padding: 0;
-  list-style: none;
-  font-size: 13px;
-}
-.talks li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.talks .grow {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.talks .small {
-  font-size: 12px;
-  white-space: nowrap;
-}
 .node-alerts {
   display: grid;
   gap: 6px;

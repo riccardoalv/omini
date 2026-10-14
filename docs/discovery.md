@@ -241,9 +241,9 @@ become alerts.
   (DHCPDISCOVER, broadcast) and collects the offers. It never sends a
   REQUEST, so no address is taken, and it asks with its own MAC: the server
   offers the address Omini already has, not one of its pool. No offer is the
-  `dhcp_no_offer` alert (a warning, `dhcp_no_offer_omini`, when a router that
-  serves DHCP reports its DHCP server running: then only Omini goes
-  unanswered); a second server answering that is not a router or
+  `dhcp_no_offer` alert, unless a router that serves DHCP reports its DHCP
+  server running (then only Omini goes unanswered, and that is no alert); a
+  second server answering that is not a router or
   a device known to serve DHCP is `dhcp_rogue` (often a home router plugged
   in by a LAN port), with its address and MAC. Needs raw sockets (root in
   Docker) and host networking.
@@ -306,9 +306,8 @@ icon with a badge for the OS or brand.
 
 ## Traffic flows
 
-The map shows how much traffic each link carries. **Traffic flows** shows
-**who talks to whom**: conversations between two addresses, with protocol,
-service and bytes each way.
+The map shows how much traffic each link carries. **Traffic flows** answers
+**who uses the internet** and **where each device goes**.
 
 1. Add **Traffic flows** in **Integrations → Add integration**. While it is
    enabled, Omini listens on **UDP 2055** for NetFlow v5, NetFlow v9 and IPFIX,
@@ -316,7 +315,7 @@ service and bytes each way.
    off).
 2. Point your router's, firewall's or switch's flow export at the Omini
    server's address and that port. Allow the port in the host's firewall.
-3. Open **Flows** in the sidebar (it appears while the integration is
+3. Open **Internet** in the sidebar (it appears while the integration is
    enabled).
 
 Omini only listens; it never configures an exporter. Sampling rates are
@@ -325,9 +324,33 @@ per minute; the 300 busiest conversations of each minute are kept for 24
 hours. Listeners close when the integration is disabled or deleted (after
 10 minutes, or three rounds when rounds are further apart).
 
-The **Flows** screen has ranges from 15 minutes to 24 hours, a search box,
-services named by port, and the exporters Omini is receiving from. Each
-device's panel shows **Talks to (last hour)**: its top five conversations.
+Each minute, a conversation between an address on your network and one
+outside it is a device's internet traffic. On your network means a private,
+link-local or unique local address, one of the networks of the devices'
+interfaces (not their WANs), or a device on the map; IPv6 addresses are tied
+to their device through the routers' NDP tables (OPNsense, MikroTik). Traffic
+on a router's WAN address is left out: after NAT it is the LAN's traffic again,
+so **export the router's LAN interfaces** (and VLANs). Internet traffic is kept
+per minute for a day and per hour for 35 days; each device's destinations
+for a day.
+
+- The **Internet** screen ranks the devices by download and upload: now (15
+  minutes), the last hour, today, 7 or 30 days. Open one to see where it went,
+  and the exporters Omini is receiving from.
+- Each device's panel shows **Where it goes** and the devices it talks to on
+  your network, which **Show on the map** highlights. The internet's node
+  shows who is using the internet now.
+- Three [alerts](alerts.md#network-and-security) come from flows: a device
+  going around your DNS server (`dns_bypass`), an unusual upload
+  (`upload_unusual`) and a network scan (`lan_scan`).
+
+**Names.** A destination is named after what the device looked up: AdGuard
+Home and Pi-hole report the lookups they answered (which client asked for
+which name). AdGuard logs the answers' addresses; for Pi-hole, Omini asks the
+Pi-hole itself for the name's addresses. Omini keeps these names in memory for
+a day and never stores the lookups; the destinations it stores (a name or an
+address per device, per hour) are kept a day. Without either server,
+destinations show as addresses. Omini makes no lookup outside your network.
 
 ### OPNsense example
 

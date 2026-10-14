@@ -12,6 +12,7 @@ import (
 // after a round: DNS names of renamed devices, paused devices that changed
 // address, and the configuration backups that are due.
 func (c *Collector) afterRound(ctx context.Context) {
+	c.syncFlowNames(ctx)
 	c.syncDNSNames(ctx)
 	c.syncPaused(ctx)
 	c.runBackups(ctx)

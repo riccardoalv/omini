@@ -508,6 +508,34 @@ export interface Conversation {
   ports: { proto: number; port: number; bytes: number }[]
 }
 
+/** A device's internet traffic over a period (bytes). */
+export interface InternetUsage {
+  node: string
+  label: string
+  on_map: boolean
+  rx: number
+  tx: number
+}
+
+export interface InternetResponse {
+  devices: InternetUsage[]
+  total: { node: string; rx: number; tx: number }
+  since: string
+  seconds: number
+  listening: boolean
+  exporters: FlowsResponse['exporters']
+}
+
+export type InternetRange = '15m' | '1h' | 'today' | '7d' | '30d'
+
+/** Where a device went on the internet: a domain name, or the address. */
+export interface Destination {
+  name: string
+  rx: number
+  tx: number
+  ports: { proto: number; port: number; bytes: number }[]
+}
+
 export interface FlowsResponse {
   conversations: Conversation[]
   listening: boolean

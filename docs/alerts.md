@@ -62,9 +62,11 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `duplicate_ip` | warning | Two online devices with different MAC addresses use the same IP |
 | `config_changed` | info | A device's configuration changed outside Omini: its new [backup](map.md#the-device-panel) differs and Omini made no change on it in between. Stays open for 24 hours |
+| `dns_bypass` | warning | With [Traffic flows](discovery.md#traffic-flows) and a DNS server Omini reads (AdGuard Home, Pi-hole or the router's), a device sent DNS queries (ports 53, 853) to servers on the internet in the last hour: your server's blocking and local names do not apply to it. Routers, servers and DNS servers are left out |
+| `upload_unusual` | warning | With Traffic flows, a device sent at least 200 MB to the internet in the last hour, and five times its usual hour (its average over the week before; needs a day of history). Routers, servers, NAS, hypervisors and VMs are left out |
+| `lan_scan` | warning | With Traffic flows, a device reached 50 or more services (address and port) on your network within a minute in the last hour. Omini's own host and routers are left out; only traffic that crosses the router is seen |
 | `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can reserve it on ([Reserve IPs](discovery.md#dns-and-dhcp-checks)) |
 | `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
-| `dhcp_no_offer_omini` | warning | No DHCP server answered Omini, but a router that serves DHCP reports its DHCP server running: the devices get addresses, the server ignores Omini's request (a reservation, a client class, a filter) or its answer does not reach Omini's host |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer |

@@ -249,8 +249,11 @@ traffic), DHCP pool usage and firewall states (yellow from 75 %, red from
   is enabled.
 - **Identification**: type, OS, brand and product with the evidence for each,
   and the **Device type** and **Icon** you can override.
-- **Talks to (last hour)**: its top conversations, with
-  [Traffic flows](discovery.md#traffic-flows) enabled.
+- With [Traffic flows](discovery.md#traffic-flows) enabled: **Where it goes
+  (last 24 h)**, its internet traffic by destination, named by the lookups
+  your AdGuard Home or Pi-hole saw; and **On your network (last hour)**, the
+  devices it talks to, which **Show on the map** highlights (the rest of the
+  map dims). The internet's node shows who is **using the internet now**.
 - Its last **Activity** (joined and left the network).
 - **Changes**: the changes made from Omini (kept a year), the refused ones
   with the device's error.

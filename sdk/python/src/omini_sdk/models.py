@@ -548,6 +548,21 @@ class ConfigBackup(BaseModel):
     """
 
 
+class DnsLookup(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    client: str
+    """
+    The address of the device that asked.
+    """
+    domain: str
+    answers: list[str] | None = None
+    """
+    The A and AAAA addresses in the answer, when the server logs them.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1027,6 +1042,10 @@ class Device(BaseModel):
     neighbors: list[Neighbor] | None = None
     fdb: list[FdbEntry] | None = None
     arp: list[ArpEntry] | None = None
+    ndp: list[ArpEntry] | None = None
+    """
+    IPv6 neighbors (NDP): which MAC each IPv6 address belongs to, so flows over IPv6 reach the right device.
+    """
     dhcp_leases: list[DhcpLease] | None = None
     wireless_clients: list[WirelessClient] | None = None
     gateways: list[Gateway] | None = None
@@ -1077,6 +1096,10 @@ class Device(BaseModel):
     dns_records: list[DnsRecord] | None = None
     """
     Local DNS names the device (a DNS server or router) answers, set by hand or by Omini.
+    """
+    dns_lookups: list[DnsLookup] | None = None
+    """
+    Recent DNS lookups the device (a DNS server) answered: which client asked for which name, and the addresses it got. Omini uses them to name where devices go and keeps them in memory only.
     """
     dns_domain: str | None = None
     """

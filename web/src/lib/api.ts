@@ -1,7 +1,10 @@
 import { noteIntegrations } from './features'
 import type {
   Alert,
+  Destination,
   FlowsResponse,
+  InternetRange,
+  InternetResponse,
   Notifier,
   NotifierType,
   PresenceEvent,
@@ -297,6 +300,13 @@ export const api = {
     const qs = params.toString()
     return request<FlowsResponse>('GET', `/api/flows${qs ? `?${qs}` : ''}`)
   },
+  internet: (range: InternetRange) =>
+    request<InternetResponse>('GET', `/api/internet?range=${range}`),
+  destinations: (nodeId: string, hours = 24) =>
+    request<{ destinations: Destination[]; hours: number }>(
+      'GET',
+      `/api/nodes/${encodeURIComponent(nodeId)}/destinations?hours=${hours}`,
+    ),
   history: (node: string, iface: string, hours = 24) =>
     request<TrafficPoint[]>(
       'GET',

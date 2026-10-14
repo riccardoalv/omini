@@ -306,6 +306,35 @@ var migrations = []string{
 	);
 	CREATE INDEX config_backups_node ON config_backups (node_id, taken_at);
 	`,
+	// 24: internet traffic per device (from flows): per minute for a day, per hour
+	// for a month, and where each device goes for a day.
+	`
+	CREATE TABLE internet_minutes (
+		at   INTEGER NOT NULL, -- unix seconds, the minute
+		node TEXT NOT NULL,    -- map node, or ip:<address> for an unknown one
+		rx   INTEGER NOT NULL, -- bytes from the internet
+		tx   INTEGER NOT NULL, -- bytes to the internet
+		PRIMARY KEY (at, node)
+	);
+	CREATE TABLE internet_hours (
+		at   INTEGER NOT NULL, -- unix seconds, the hour
+		node TEXT NOT NULL,
+		rx   INTEGER NOT NULL,
+		tx   INTEGER NOT NULL,
+		PRIMARY KEY (at, node)
+	);
+	CREATE TABLE internet_destinations (
+		at   INTEGER NOT NULL, -- unix seconds, the hour
+		node TEXT NOT NULL,
+		dest TEXT NOT NULL,    -- a domain name, or the address
+		port INTEGER NOT NULL, -- the service port
+		proto INTEGER NOT NULL,
+		rx   INTEGER NOT NULL,
+		tx   INTEGER NOT NULL,
+		PRIMARY KEY (at, node, dest, port, proto)
+	);
+	CREATE INDEX internet_destinations_node ON internet_destinations (node, at);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

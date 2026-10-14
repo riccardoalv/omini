@@ -238,6 +238,11 @@ type Device struct {
 	// it has one.
 	DnsDomain *string `json:"dns_domain,omitempty,omitzero" yaml:"dns_domain,omitempty"`
 
+	// Recent DNS lookups the device (a DNS server) answered: which client asked for
+	// which name, and the addresses it got. Omini uses them to name where devices go
+	// and keeps them in memory only.
+	DnsLookups []DnsLookup `json:"dns_lookups,omitempty,omitzero" yaml:"dns_lookups,omitempty"`
+
 	// Local DNS names the device (a DNS server or router) answers, set by hand or by
 	// Omini.
 	DnsRecords []DnsRecord `json:"dns_records,omitempty,omitzero" yaml:"dns_records,omitempty"`
@@ -291,6 +296,10 @@ type Device struct {
 
 	// Name corresponds to the JSON schema field "name".
 	Name string `json:"name" yaml:"name"`
+
+	// IPv6 neighbors (NDP): which MAC each IPv6 address belongs to, so flows over
+	// IPv6 reach the right device.
+	Ndp []ArpEntry `json:"ndp,omitempty,omitzero" yaml:"ndp,omitempty"`
 
 	// Neighbors corresponds to the JSON schema field "neighbors".
 	Neighbors []Neighbor `json:"neighbors,omitempty,omitzero" yaml:"neighbors,omitempty"`
@@ -648,6 +657,38 @@ func (j *DnsCheck) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = DnsCheck(plain)
+	return nil
+}
+
+type DnsLookup struct {
+	// The A and AAAA addresses in the answer, when the server logs them.
+	Answers []string `json:"answers,omitempty,omitzero" yaml:"answers,omitempty"`
+
+	// The address of the device that asked.
+	Client string `json:"client" yaml:"client"`
+
+	// Domain corresponds to the JSON schema field "domain".
+	Domain string `json:"domain" yaml:"domain"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *DnsLookup) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["client"]; raw != nil && !ok {
+		return fmt.Errorf("field client in DnsLookup: required")
+	}
+	if _, ok := raw["domain"]; raw != nil && !ok {
+		return fmt.Errorf("field domain in DnsLookup: required")
+	}
+	type Plain DnsLookup
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = DnsLookup(plain)
 	return nil
 }
 

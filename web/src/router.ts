@@ -10,7 +10,8 @@ export const router = createRouter({
       name: 'integrations',
       component: () => import('./views/IntegrationsView.vue'),
     },
-    { path: '/flows', name: 'flows', component: () => import('./views/FlowsView.vue') },
+    { path: '/internet', name: 'internet', component: () => import('./views/InternetView.vue') },
+    { path: '/flows', redirect: '/internet' }, // old address
     // VLANs and DNS/DHCP are tabs of the map's menu.
     { path: '/dns-dhcp', redirect: { path: '/', query: { menu: 'services' } } },
     { path: '/vlans', redirect: { path: '/', query: { menu: 'vlans' } } },

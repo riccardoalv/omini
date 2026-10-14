@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {
-  ArrowLeftRight,
   Bell,
   Cable,
+  Globe,
   Network,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,11 +24,11 @@ const { t } = useI18n()
 const allItems = [
   { to: '/', icon: Network, label: 'nav.map' },
   { to: '/alerts', icon: Bell, label: 'nav.alerts' },
-  { to: '/flows', icon: ArrowLeftRight, label: 'nav.flows', when: () => features.flows },
+  { to: '/internet', icon: Globe, label: 'nav.internet', when: () => features.flows },
   { to: '/integrations', icon: Cable, label: 'nav.integrations' },
   { to: '/settings', icon: Settings, label: 'nav.settings' },
 ]
-// Flows only while the flows integration is on.
+// Internet only while the flows integration is on.
 const items = computed(() => allItems.filter((i) => !i.when || i.when()))
 
 // The menu shows how many alerts ask for attention.

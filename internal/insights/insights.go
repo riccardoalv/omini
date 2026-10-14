@@ -92,6 +92,8 @@ type Input struct {
 	// Core are the built-in integrations (network scan, nmap...): a device only
 	// they report is not read by an integration of its own yet.
 	Core map[int64]bool
+	// Flows: what the traffic flows showed (nil without the flow collector).
+	Flows *Flows
 }
 
 // Events are rules about something that happened (a restart, a device that

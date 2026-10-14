@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/classify"
+	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/models"
@@ -65,6 +66,13 @@ type Options struct {
 	// Wake-on-LAN packet on one of them (for tests).
 	LocalNets func() []netip.Prefix
 	SendMagic func(netip.Prefix, net.HardwareAddr) error
+	// Resolve looks a name up on a DNS server, for the names of flows (nil:
+	// a real lookup; tests set it).
+	Resolve Resolver
+	// Flows is the flow collector, whose scans become alerts (nil: none).
+	Flows interface {
+		Scans(since time.Time) []flows.Scan
+	}
 }
 
 type Collector struct {
@@ -82,6 +90,9 @@ type Collector struct {
 	state     State
 
 	traffic *trafficMeter
+
+	// Names for the places devices go, from the DNS servers' lookups.
+	names flowNames
 
 	// Where each MAC was last learned by a switch (see topology.Options).
 	lastSeen map[model.MACAddress]seenAt

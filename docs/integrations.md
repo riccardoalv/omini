@@ -65,7 +65,7 @@ they are merged into one node, keeping the richer data.
 |---|---|---|
 | **Network scan** | Finds every device with no setup: ARP, ping, ports, DNS, NetBIOS, mDNS, SSDP, web titles, SSH banners and SNMP v2c/v3. Created automatically | [Discovery](discovery.md#the-network-scan) |
 | **nmap** | Operating systems and service versions, with the nmap installed on the server; "Scan (nmap)" in the device panel | [nmap](discovery.md#nmap) |
-| **Traffic flows** | Receives NetFlow v5/v9, IPFIX and sFlow v5: who talks to whom | [Traffic flows](discovery.md#traffic-flows) |
+| **Traffic flows** | Receives NetFlow v5/v9, IPFIX and sFlow v5: who uses the internet and where it goes | [Traffic flows](discovery.md#traffic-flows) |
 
 Each of them can be added only once.
 
@@ -159,7 +159,8 @@ limitations. A summary follows.
 ## OPNsense
 
 Reads the firewall through OPNsense's official REST API (24.7 or later):
-interfaces with status, IPs, link speed and media, traffic and errors; ARP;
+interfaces with status, IPs, link speed and media, traffic and errors; ARP and
+NDP (IPv6 neighbors);
 DHCP leases (ISC, Kea or dnsmasq); CPU, memory, swap, load, disks,
 temperatures, uptime; pending firmware updates (from OPNsense's own last
 check); gateways with status, latency and loss; VLANs; SFP modules; services;
@@ -181,7 +182,7 @@ access rules marked "Omini:", the os-mdns-repeater plugin for discovery) and
    | Lobby: Dashboard | system and health (**required**) |
    | Status: Interfaces | ports, link speed, IPs, counters |
    | Reporting: Traffic | counters of VLANs and other virtual interfaces |
-   | Diagnostics: ARP Table | ARP |
+   | Diagnostics: ARP Table, Diagnostics: NDP Table | ARP and IPv6 neighbors (traffic flows over IPv6) |
    | Status: DHCP leases | ISC DHCP leases (26.1+: *Services: ISC DHCPv4: Leases*) |
    | Services: DHCP: Kea(v4) | Kea leases, if you use Kea |
    | Services: Dnsmasq DNS/DHCP: Settings | dnsmasq leases (the default DHCP since 25.7) |
@@ -248,7 +249,7 @@ Do not give the user *WebCfg - All pages*: it allows every change.
 Reads RouterOS 7.1+ routers, switches and access points through the REST API:
 identity, model, health, temperatures, pending updates (from the device's own
 last check), interfaces with link rate and SFP diagnostics, bridges, bonds,
-bridge VLANs and host table, ARP, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi
+bridge VLANs and host table, ARP and IPv6 neighbors, DHCP leases, MNDP/LLDP/CDP neighbors, Wi-Fi
 clients and default-route gateways.
 
 **Account** (in a RouterOS terminal). The `write` policy lets Omini change
@@ -474,7 +475,10 @@ when its DHCP server is on, the leases, fixed addresses and pool usage.
 Omini writes the [local DNS names](map.md#the-device-panel) of devices with a
 fixed address there when your network's DHCP hands AdGuard Home out as DNS
 (`/control/rewrite/add|update|delete`), and keeps its settings as
-configuration backups (no passwords).
+configuration backups (no passwords). With [Traffic flows](discovery.md#traffic-flows),
+its query log (`/control/querylog`) names where devices go: which client
+looked up which name, and the addresses it got. Omini keeps them in memory for
+a day.
 
 **Account:** the AdGuard Home user (basic auth); it has full access, so use a
 long password. In Omini: the address (`http://192.168.1.53:3000`), the user
@@ -487,6 +491,10 @@ and, when its DHCP server is on, the leases, fixed addresses and pool usage.
 Omini writes the local DNS names of devices with a fixed address there when
 your network's DHCP hands Pi-hole out as DNS (`/api/config/dns/hosts`), and
 keeps its configuration as backups (no passwords or keys).
+With [Traffic flows](discovery.md#traffic-flows), its query log (`/api/queries`)
+names where devices go: Pi-hole logs which client looked up which name but not
+the addresses, so Omini asks the Pi-hole for them. Blocked lookups are left
+out. Omini keeps them in memory for a day.
 
 **Account:** an **application password** (Settings → Web interface / API →
 Configure app password). To let it change local names, turn on

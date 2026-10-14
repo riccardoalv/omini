@@ -4,7 +4,7 @@ export default {
     map: 'Map',
     devices: 'Devices',
     alerts: 'Alerts',
-    flows: 'Flows',
+    internet: 'Internet',
     integrations: 'Integrations',
     settings: 'Settings',
     expand: 'Expand menu',
@@ -532,21 +532,36 @@ export default {
     },
   },
   flows: {
-    title: 'Flows',
-    subtitle: "Who talks to whom on your network, from your router's flow exports.",
-    search: 'Search devices, addresses, services…',
-    ranges: { '15': '15 min', '60': '1 h', '360': '6 h', '1440': '24 h' },
-    between: 'Conversation',
-    traffic: 'Traffic',
-    services: 'Services',
-    none: 'No conversations in this period.',
     off: 'Flow collection is off.',
     offHint:
       'Add the "Traffic flows" integration, then point your router or firewall\'s NetFlow/IPFIX (OPNsense: Reporting → NetFlow, version 9) or a switch\'s sFlow at this server.',
     enable: 'Add "Traffic flows"',
     exporters: 'Receiving from',
-    talksTo: 'Talks to (last hour)',
-    allFlows: 'All its conversations',
+    goesTo: 'Where it goes (last 24 h)',
+    goesToHint:
+      'Its internet traffic by destination: names come from the lookups your AdGuard Home or Pi-hole saw.',
+    local: 'On your network (last hour)',
+    showPeers: 'Show on the map',
+    hidePeers: 'Show the whole map',
+    usersNow: 'Using the internet now',
+    allUsage: 'Internet usage',
+  },
+  internet: {
+    title: 'Internet',
+    subtitle: "Who uses your internet and where it goes, from your router's flow exports.",
+    ranges: {
+      '15m': 'Now (15 min)',
+      '1h': '1 h',
+      today: 'Today',
+      '7d': '7 days',
+      '30d': '30 days',
+    },
+    average: 'average ↓ {down} · ↑ {up}',
+    none: 'No internet traffic in this period.',
+    noDestinations: 'No destinations recorded for this device.',
+    wentTo: 'Where it went in the last hour | Where it went in the last {hours} hours',
+    namesHint:
+      "Download is blue, upload amber. Destinations are named from the lookups your AdGuard Home or Pi-hole saw (kept for a day); without one, they show as addresses. Export the router's LAN interfaces: traffic on the WAN, after NAT, cannot be told apart by device.",
   },
   insights: {
     title: 'Alerts',
@@ -671,10 +686,17 @@ export default {
         title: 'The configuration of {node} changed',
         detail: 'It changed outside Omini: see the differences in its panel, under Configuration.',
       },
-      dhcp_no_offer_omini: {
-        title: 'No DHCP answer to Omini on {iface}',
-        detail:
-          "{server}'s DHCP server runs and hands out addresses, but did not answer Omini's request.",
+      dns_bypass: {
+        title: '{node} goes around your DNS server',
+        detail: 'It asked DNS servers on the internet in the last hour: {servers}.',
+      },
+      upload_unusual: {
+        title: '{node} sent much more to the internet than usual',
+        detail: '{mb} MB in the last hour, against about {usual_mb} MB in a usual hour.',
+      },
+      lan_scan: {
+        title: '{node} scanned your network',
+        detail: 'It reached {targets} services on your network within a minute.',
       },
       infra_dynamic_ip: {
         title: '{node} has no fixed IP',
@@ -761,8 +783,12 @@ export default {
         'A new switch may have won the election, or the old root or its link went down: set the root priority on your core switch.',
       config_changed:
         'If nobody you know made it, compare the versions and check who has access to the device.',
-      dhcp_no_offer_omini:
-        "Devices still get addresses. Check the DHCP server's log for Omini's MAC: a reservation, a client class or a filter may ignore it, or its answer does not reach Omini's host.",
+      dns_bypass:
+        "Your DNS server's blocking and local names do not apply to it. Set its DNS to your server, or block outgoing DNS (port 53 and 853) on the router for everyone but your DNS server.",
+      upload_unusual:
+        'Check what it sent in its panel, under Where it goes. A camera or TV uploading, or a backup you did not expect, are the usual causes.',
+      lan_scan:
+        'A network scanner (yours?) is normal; otherwise check the device: it may be infected.',
       infra_dynamic_ip:
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       firewall_states_full:

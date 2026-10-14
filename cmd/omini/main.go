@@ -205,9 +205,10 @@ func run(ctx context.Context, cfg config, ready chan<- string) error {
 	}
 	notifier := &notify.Dispatcher{Store: st, Box: box}
 	coll := collector.New(st, reg, box, collector.Options{
-		Interval: cfg.PollInterval, OnAlerts: notifier.Handle, DiscoveryLimited: caps.Limited(), Self: self(),
+		Interval: cfg.PollInterval, OnAlerts: notifier.Handle, DiscoveryLimited: caps.Limited(), Self: self(), Flows: flowSvc,
 	})
 	flowSvc.Round = func() time.Duration { return coll.RoundInterval(ctx) }
+	flowSvc.Directory = coll.FlowDirectory
 	notifier.Topology = func() *topology.Topology {
 		t := coll.State().Topology
 		return &t

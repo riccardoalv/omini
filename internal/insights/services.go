@@ -30,10 +30,8 @@ func dhcpNoOffer(in Input, _ index) []Insight {
 		}
 		if server != nil {
 			// A router serves DHCP and its server runs: the devices get their
-			// addresses, only Omini's request goes unanswered.
-			out = append(out, node("dhcp_no_offer_omini", Warning, server, c.Interface, map[string]any{
-				"iface": c.Interface, "server": server.Label,
-			}))
+			// addresses, only Omini's request goes unanswered. Not worth an
+			// alert (maintainer, 2026-10-13).
 			continue
 		}
 		out = append(out, Insight{

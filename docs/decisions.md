@@ -95,6 +95,19 @@ choices and the reasons behind them.
   start, so Omini still does not ship it.
 - **Flows** (NetFlow v5/v9, IPFIX, sFlow) are a single built-in integration:
   Omini only listens; exporters are configured by the user.
+- **Flows answer questions, not list conversations** (maintainer, 2026-10-13):
+  a list of address pairs said nothing. They become **who uses the internet**
+  (the Internet screen, replacing Flows, and the internet's node), **where a
+  device goes** by name (its panel), **whom it talks to** on the network
+  (highlighted on the map by dimming the rest, so no lines are added and
+  nothing overlaps) and three alerts (`dns_bypass`, `upload_unusual`,
+  `lan_scan`). Internet traffic is a local address talking to an outside one;
+  traffic on a router's WAN address is left out (after NAT it counts twice).
+- **Destination names come from the network's own DNS server** (AdGuard Home
+  and Pi-hole report the lookups they answered; Omini asks Pi-hole for the
+  addresses, as it logs none). The lookups stay in memory for a day; the
+  per-device destinations are stored for a day; no lookup leaves the network.
+  The routers' NDP tables tie IPv6 addresses to devices.
 
 ## Identification
 
@@ -208,7 +221,7 @@ tested with fixtures). The rules that are easy to break:
 - **No pinning** (maintainer's choice, 2026-10-12): pinning a device on the map
   (never folded into a bubble) was removed as not useful; servers and other
   infrastructure still stay out of bubbles.
-- **Screens:** Map (home), Alerts, Integrations, Settings; Flows only while
+- **Screens:** Map (home), Alerts, Integrations, Settings; Internet only while
   its integration is on. VLANs and DNS & DHCP are tabs of the map's menu, not
   screens (maintainer's rule). **The device list is a drawer on the map**, and the
   **plugin store a modal in Integrations** — not screens (maintainer's rules).

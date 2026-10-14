@@ -47,7 +47,7 @@ const flows = (enabled: boolean): Integration => ({
 
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: ['/', '/alerts', '/flows', '/integrations', '/settings'].map((path) => ({
+  routes: ['/', '/alerts', '/internet', '/integrations', '/settings'].map((path) => ({
     path,
     component: { template: '<div />' },
   })),
@@ -78,7 +78,7 @@ describe('AppShell', () => {
     expect(nav.classes()).not.toContain('expanded')
   })
 
-  it('links to every screen; Flows only while the flows integration is on', async () => {
+  it('links to every screen; Internet only while the flows integration is on', async () => {
     const links = () => w.findAll('a').map((a) => a.attributes('href'))
     let w = mount(AppShell, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
@@ -88,12 +88,12 @@ describe('AppShell', () => {
     vi.mocked(api.integrations).mockResolvedValue([flows(true)])
     w = mount(AppShell, { global: { plugins: [...plugins(), router] } })
     await flushPromises()
-    expect(links()).toEqual(['/', '/alerts', '/flows', '/integrations', '/settings'])
+    expect(links()).toEqual(['/', '/alerts', '/internet', '/integrations', '/settings'])
 
     // Turned off: the entry goes away.
     noteIntegrations([flows(false)])
     await flushPromises()
-    expect(links()).not.toContain('/flows')
+    expect(links()).not.toContain('/internet')
     w.unmount()
   })
 

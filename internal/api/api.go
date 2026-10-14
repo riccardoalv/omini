@@ -119,6 +119,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("GET /api/presence", s.presence)
 	private.HandleFunc("GET /api/history", s.trafficHistory)
 	private.HandleFunc("GET /api/flows", s.flowsView)
+	private.HandleFunc("GET /api/internet", s.internetUsage)
+	private.HandleFunc("GET /api/nodes/{id}/destinations", s.nodeDestinations)
 	private.HandleFunc("GET /api/dns-dhcp", s.servicesView)
 	private.HandleFunc("GET /api/vlans", s.listVlans)
 	private.HandleFunc("POST /api/vlans", s.createVlan)

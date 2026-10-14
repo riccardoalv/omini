@@ -178,6 +178,12 @@ watch(netFilter, (key) => {
   const shown = densest(boxes, el.clientWidth / READABLE_ZOOM, el.clientHeight / READABLE_ZOOM)
   if (shown.length) void fitView({ nodes: shown, duration: 500, padding: 0.15, maxZoom: 1.2 })
 })
+// The devices the selected one talks to (from its panel): the rest of the map dims.
+const peerIds = ref<Set<string>>()
+watch(selectedId, () => (peerIds.value = undefined))
+function showPeers(ids: string[] | undefined) {
+  peerIds.value = ids ? new Set([...ids, ...onMap(ids)]) : undefined
+}
 const { flowNodes, flowEdges, linkLabels } = useFlowElements({
   view,
   nodes,
@@ -187,7 +193,7 @@ const { flowNodes, flowEdges, linkLabels } = useFlowElements({
   visibleAreas,
   // With the networks' areas drawn, the filter needs no frames of its own.
   netFrames: computed(() => (prefs.networkAreas ? [] : netFrames.value)),
-  inNet,
+  inNet: computed(() => peerIds.value ?? inNet.value),
   failedIntegrations,
   insetOf,
 })
@@ -499,6 +505,7 @@ onBeforeUnmount(() => {
       :can-scan="integrations.some((i) => i.type === 'nmap' && i.enabled)"
       @close="selectedId = undefined"
       @select="(id) => (selectedId = id)"
+      @peers="showPeers"
       @changed="patchSelected"
       @expand="
         (id: string) =>

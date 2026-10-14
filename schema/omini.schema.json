@@ -137,6 +137,13 @@
             "$ref": "#/$defs/ArpEntry"
           }
         },
+        "ndp": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArpEntry"
+          },
+          "description": "IPv6 neighbors (NDP): which MAC each IPv6 address belongs to, so flows over IPv6 reach the right device."
+        },
         "dhcp_leases": {
           "type": "array",
           "items": {
@@ -235,6 +242,13 @@
             "$ref": "#/$defs/DnsRecord"
           },
           "description": "Local DNS names the device (a DNS server or router) answers, set by hand or by Omini."
+        },
+        "dns_lookups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DnsLookup"
+          },
+          "description": "Recent DNS lookups the device (a DNS server) answered: which client asked for which name, and the addresses it got. Omini uses them to name where devices go and keeps them in memory only."
         },
         "dns_domain": {
           "type": "string",
@@ -1658,6 +1672,30 @@
         "device": {
           "type": "string",
           "description": "Key of the device it belongs to, as collect reports it."
+        }
+      }
+    },
+    "DnsLookup": {
+      "type": "object",
+      "required": [
+        "client",
+        "domain"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "client": {
+          "type": "string",
+          "description": "The address of the device that asked."
+        },
+        "domain": {
+          "type": "string"
+        },
+        "answers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The A and AAAA addresses in the answer, when the server logs them."
         }
       }
     }

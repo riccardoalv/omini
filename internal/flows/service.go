@@ -31,6 +31,9 @@ type Service struct {
 	// Round is the time between collection rounds (nil: Idle alone), so
 	// listeners stay open between rounds set further apart than Idle.
 	Round func() time.Duration
+	// Directory tells local from internet addresses and names them (nil: no
+	// internet traffic per device is kept).
+	Directory func() *Directory
 
 	mu        sync.Mutex
 	ports     [2]int // netflow, sflow
@@ -39,6 +42,8 @@ type Service struct {
 	lastAsked time.Time
 	minute    time.Time
 	convs     map[convKey]*store.FlowRow
+	probes    map[netip.Addr]map[probe]bool // this minute: the local services each local client reached
+	scans     []Scan                        // the last hour's scans
 	exporters map[netip.Addr]exporterStat
 	templates *Templates
 	wg        sync.WaitGroup
@@ -196,6 +201,10 @@ func (s *Service) Add(exporter netip.Addr, kind, version string, recs []Record) 
 		st.Version = version
 	}
 	s.exporters[exporter] = st
+	dir := s.directory()
+	if s.probes == nil {
+		s.probes = map[netip.Addr]map[probe]bool{}
+	}
 	for _, r := range recs {
 		a, b, ab := r.Src.Unmap(), r.Dst.Unmap(), true
 		if b.Less(a) {
@@ -218,6 +227,21 @@ func (s *Service) Add(exporter netip.Addr, kind, version string, recs []Record) 
 			row.BytesBA += r.Bytes
 		}
 		row.Packets += r.Packets
+		// The client is the side not on the service port.
+		client, server := r.Src.Unmap(), r.Dst.Unmap()
+		if port != r.DstPort {
+			client, server = server, client
+		}
+		if dir != nil && dir.Local(client) && dir.Local(server) && !dir.WAN(server) {
+			seen := s.probes[client]
+			if seen == nil {
+				seen = map[probe]bool{}
+				s.probes[client] = seen
+			}
+			if len(seen) <= ScanTargets {
+				seen[probe{server, port}] = true
+			}
+		}
 	}
 }
 
@@ -253,9 +277,30 @@ func (s *Service) flush(force bool) {
 		s.mu.Unlock()
 		return
 	}
-	minute, convs := s.minute, s.convs
-	s.minute, s.convs = time.Time{}, map[convKey]*store.FlowRow{}
+	minute, convs, probes := s.minute, s.convs, s.probes
+	s.minute, s.convs, s.probes = time.Time{}, map[convKey]*store.FlowRow{}, map[netip.Addr]map[probe]bool{}
+	dir := s.directory()
+	kept := s.scans[:0]
+	for _, sc := range s.scans {
+		if now.Sub(sc.At) <= time.Hour {
+			kept = append(kept, sc)
+		}
+	}
+	s.scans = kept
+	for addr, seen := range probes {
+		if len(seen) >= ScanTargets {
+			s.scans = append(s.scans, Scan{Addr: addr, Node: dir.Node(addr), Targets: len(seen), At: minute})
+		}
+	}
 	s.mu.Unlock()
+	if dir != nil && s.Store != nil {
+		usage, dests := internet(dir, convs)
+		if len(usage) > 0 {
+			if err := s.Store.SaveInternet(context.Background(), minute, usage, dests); err != nil {
+				slog.Warn("could not store internet traffic", "err", err)
+			}
+		}
+	}
 	rows := make([]store.FlowRow, 0, len(convs))
 	for _, r := range convs {
 		rows = append(rows, *r)
@@ -290,3 +335,112 @@ func (s *Service) Listening() bool {
 	defer s.mu.Unlock()
 	return s.stop != nil
 }
+
+// probe is a local service a local client reached: an address and a port.
+type probe struct {
+	addr netip.Addr
+	port uint16
+}
+
+// ScanTargets is how many local services one client must reach within a
+// minute to be scanning the network (a normal client reaches a handful).
+const ScanTargets = 50
+
+// Scan is a local device that reached many local services within a minute.
+type Scan struct {
+	Addr    netip.Addr
+	Node    string // its node on the map ("" when unknown)
+	Targets int
+	At      time.Time
+}
+
+// Scans are the scans seen since a time.
+func (s *Service) Scans(since time.Time) []Scan {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []Scan
+	for _, sc := range s.scans {
+		if !sc.At.Before(since) {
+			out = append(out, sc)
+		}
+	}
+	return out
+}
+
+func (s *Service) directory() *Directory {
+	if s.Directory == nil {
+		return nil
+	}
+	return s.Directory()
+}
+
+// internet works out each device's internet traffic in a minute of
+// conversations, and where it went: an address on the local network talking
+// to one outside it. Traffic on a router's internet side is left out: it is
+// the LAN's traffic again, after NAT.
+func internet(dir *Directory, convs map[convKey]*store.FlowRow) ([]store.Usage, []store.Destination) {
+	usage := map[string]*store.Usage{}
+	type destKey struct {
+		node, dest string
+		proto      uint8
+		port       uint16
+	}
+	dests := map[destKey]*store.Destination{}
+	for k, row := range convs {
+		if dir.WAN(k.a) || dir.WAN(k.b) {
+			continue
+		}
+		la, lb := dir.Local(k.a), dir.Local(k.b)
+		if la == lb {
+			continue
+		}
+		local, remote, tx, rx := k.a, k.b, row.BytesAB, row.BytesBA
+		if lb {
+			local, remote, tx, rx = k.b, k.a, row.BytesBA, row.BytesAB
+		}
+		node := dir.Node(local)
+		if node == "" {
+			node = "ip:" + local.String()
+		}
+		u := usage[node]
+		if u == nil {
+			u = &store.Usage{Node: node}
+			usage[node] = u
+		}
+		u.RX += rx
+		u.TX += tx
+		dest := dir.Name(local, remote)
+		if dest == "" {
+			dest = remote.String()
+		}
+		dk := destKey{node, dest, k.proto, k.port}
+		d := dests[dk]
+		if d == nil {
+			d = &store.Destination{Node: node, Dest: dest, Proto: k.proto, Port: k.port}
+			dests[dk] = d
+		}
+		d.RX += rx
+		d.TX += tx
+	}
+	outU := make([]store.Usage, 0, len(usage))
+	for _, u := range usage {
+		outU = append(outU, *u)
+	}
+	// Each device's busiest destinations of the minute.
+	byNode := map[string][]store.Destination{}
+	for _, d := range dests {
+		byNode[d.Node] = append(byNode[d.Node], *d)
+	}
+	var outD []store.Destination
+	for _, list := range byNode {
+		sort.Slice(list, func(i, j int) bool { return list[i].RX+list[i].TX > list[j].RX+list[j].TX })
+		if len(list) > DestinationsPerMinute {
+			list = list[:DestinationsPerMinute]
+		}
+		outD = append(outD, list...)
+	}
+	return outU, outD
+}
+
+// DestinationsPerMinute bounds what is kept of each device's minute.
+const DestinationsPerMinute = 40
