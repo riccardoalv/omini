@@ -91,6 +91,9 @@ type Collector struct {
 
 	traffic *trafficMeter
 
+	// slow counts the DNS servers' slow answers in a row.
+	slow slowDNS
+
 	// Names for the places devices go, from the DNS servers' lookups.
 	names flowNames
 

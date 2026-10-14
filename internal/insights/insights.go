@@ -94,6 +94,8 @@ type Input struct {
 	Core map[int64]bool
 	// Flows: what the traffic flows showed (nil without the flow collector).
 	Flows *Flows
+	// SlowDNS: how many checks in a row each DNS server answered slowly.
+	SlowDNS map[string]int
 }
 
 // Events are rules about something that happened (a restart, a device that

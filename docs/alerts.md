@@ -69,7 +69,7 @@ attention) and **info** (worth knowing).
 | `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
-| `dns_slow` | warning | A DNS server took more than 500 ms to answer |
+| `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |
 | `dns_local` | warning | A DNS server resolves the internet name but not a local one |
 | `vlan_unknown` | warning | A device has a VLAN that is not one of the network's (created on the device, not in Omini) |
 | `insecure_service` | warning | Telnet (23) or FTP (21) is open on a device, or a network device's admin page is served only over plain HTTP (no 443 or 8443) |

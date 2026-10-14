@@ -11,6 +11,9 @@ import (
 // DNSSlowMs is when a DNS answer counts as slow.
 const DNSSlowMs = 500.0
 
+// SlowDNSChecks is how many slow answers in a row make a slow DNS server.
+const SlowDNSChecks = 2
+
 func init() {
 	Rules["dhcp_no_offer"] = dhcpNoOffer
 	Rules["dhcp_rogue"] = dhcpRogue
@@ -102,9 +105,11 @@ func dnsDown(in Input, _ index) []Insight {
 	})
 }
 
+// dnsSlow: a DNS server answered slowly in SlowDNSChecks checks in a row (one
+// slow answer is a name it had to look up again, not a slow server).
 func dnsSlow(in Input, _ index) []Insight {
 	return dnsRule(in, func(c model.DnsCheck) (string, string, map[string]any) {
-		if q := c.External; q != nil && q.Ok && model.Deref(q.RttMs) > DNSSlowMs {
+		if q := c.External; q != nil && q.Ok && model.Deref(q.RttMs) > DNSSlowMs && in.SlowDNS[c.Server] >= SlowDNSChecks {
 			return "dns_slow", Warning, map[string]any{"ms": round1(*q.RttMs)}
 		}
 		return "", "", nil

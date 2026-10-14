@@ -251,7 +251,7 @@ become alerts.
   listening on port 53. Each one resolves an internet name (**Advanced →
   External name for the DNS check**, `example.com` by default) and a local
   name the scan learned from reverse DNS, timed. Alerts: `dns_down` (the
-  internet name does not resolve), `dns_slow` (over 500 ms), `dns_local`
+  internet name does not resolve), `dns_slow` (over 500 ms in two checks in a row), `dns_local`
   (the internet name resolves, the local one does not).
 
 The screen also lists the DHCP pools and leases the routers' integrations

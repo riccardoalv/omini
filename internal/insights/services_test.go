@@ -33,8 +33,14 @@ func TestDHCPAndDNSRules(t *testing.T) {
 			{Server: "192.168.1.54", External: &model.DnsQuery{Name: "example.com", Ok: true, RttMs: model.Ptr(800.0)}},
 		},
 	}
+	// One slow answer is a name the server looked up again: no alert yet.
+	for _, i := range Evaluate(Input{Topology: topo, Now: time.Unix(0, 0), SlowDNS: map[string]int{"192.168.1.54": 1}}) {
+		if i.Rule == "dns_slow" {
+			t.Errorf("slow after one check: %+v", i)
+		}
+	}
 	got := map[string][]Insight{}
-	for _, i := range Evaluate(Input{Topology: topo, Now: time.Unix(0, 0)}) {
+	for _, i := range Evaluate(Input{Topology: topo, Now: time.Unix(0, 0), SlowDNS: map[string]int{"192.168.1.54": 2}}) {
 		got[i.Rule] = append(got[i.Rule], i)
 	}
 	if l := got["dhcp_no_offer"]; len(l) != 1 || l[0].Params["iface"] != "eth1" || l[0].Severity != Critical {

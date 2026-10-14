@@ -55,6 +55,7 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 			}
 		}
 	}
+	in.SlowDNS = c.slow.update(topo)
 	in.Detectors = detectors()
 	if changed, err := c.store.ChangedOutside(ctx, now.Add(-ChangedOutsideFor)); err == nil && len(changed) > 0 {
 		in.ConfigChanged = changed
