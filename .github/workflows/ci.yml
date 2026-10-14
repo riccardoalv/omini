@@ -22,7 +22,7 @@ jobs:
         with:
           go-version-file: go.mod
       # The devnet test (internal/collector) runs the real plugins against the emulated network.
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - uses: actions/checkout@v7
         with:
           repository: riccardoalv/omini-plugin-opnsense
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Regenerate from schema and diff
         run: make check-generated
 
@@ -114,7 +114,7 @@ jobs:
         working-directory: sdk/python
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Lint
         run: |
           uv run ruff check .
@@ -177,7 +177,7 @@ jobs:
         with:
           repository: riccardoalv/omini-plugin-pihole
           path: plugins/omini-plugin-pihole
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - name: Lint
         run: |
           uv run ruff check .
