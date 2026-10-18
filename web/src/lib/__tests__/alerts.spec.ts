@@ -83,6 +83,7 @@ describe('alerts', () => {
       'unknown_neighbor',
       'new_device',
       'iot_with_trusted',
+      'wifi_channel_conflict',
     ]
     for (const locale of ['en', 'pt-BR']) {
       const { global } = createAppI18n(locale)
@@ -90,8 +91,18 @@ describe('alerts', () => {
         expect(global.te(`insights.rules.${r}.title`), `${locale} ${r}`).toBe(true)
         expect(global.te(`insights.rules.${r}.detail`), `${locale} ${r}`).toBe(true)
       }
-      expect(global.te('insights.tips.iot_with_trusted'), `${locale} tip`).toBe(true)
+      for (const tip of ['iot_with_trusted', 'wifi_channel_conflict'])
+        expect(global.te(`insights.tips.${tip}`), `${locale} ${tip}`).toBe(true)
     }
+  })
+
+  it('tells the access points left on automatic channel', () => {
+    const wifi = (params: Record<string, unknown>) =>
+      alertText(alert({ rule: 'wifi_channel_conflict', params }), t, 'en').detail
+    expect(wifi({ aps: 'hall (6), office (6)' })).toBe('On 2.4 GHz: hall (6), office (6).')
+    expect(wifi({ aps: 'hall (6), attic (6)', auto_aps: 'attic' })).toBe(
+      'On 2.4 GHz: hall (6), attic (6). On automatic channel (left to their controller): attic.',
+    )
   })
 
   it('sorts by severity, then newest', () => {

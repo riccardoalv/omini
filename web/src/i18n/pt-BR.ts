@@ -736,6 +736,12 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      wifi_channel_conflict: {
+        title: 'Canais de Wi-Fi dos seus pontos de acesso se sobrepõem',
+        detail: 'Em 2,4 GHz: {aps}.',
+        detailAuto:
+          'Em 2,4 GHz: {aps}. Em canal automático (deixados com a controladora): {auto_aps}.',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -828,6 +834,8 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      wifi_channel_conflict:
+        'Use Resolver: ele move o mínimo de pontos de acesso para 1, 6 ou 11, um de cada vez. Os que estão em canal automático ficam com a controladora.',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',

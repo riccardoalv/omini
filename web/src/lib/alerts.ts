@@ -42,6 +42,7 @@ export function alertText(a: Alert, t: T, locale: string): { title: string; deta
     detail = p.reboot ? `${base}.detailVersionReboot` : `${base}.detailVersion`
   // The device did not say which version: only how many updates.
   if (a.rule === 'update_pending' && !a.params.latest) detail = `${base}.detailCount`
+  if (a.rule === 'wifi_channel_conflict' && p.auto_aps) detail = `${base}.detailAuto`
   if (a.rule === 'discovery_limited' && typeof p.limits === 'string')
     p.what = p.limits
       .split(',')

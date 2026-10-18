@@ -724,6 +724,12 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      wifi_channel_conflict: {
+        title: 'Wi-Fi channels of your access points overlap',
+        detail: 'On 2.4 GHz: {aps}.',
+        detailAuto:
+          'On 2.4 GHz: {aps}. On automatic channel (left to their controller): {auto_aps}.',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -815,6 +821,8 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      wifi_channel_conflict:
+        'Press Resolve: it moves the fewest access points to 1, 6 or 11, one at a time. Those on automatic channel are left to their controller.',
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',

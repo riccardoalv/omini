@@ -56,7 +56,7 @@ func TestEveryRuleHasTexts(t *testing.T) {
 			"disk_full", "hot_cpu", "high_cpu", "high_memory", "slow_uplink", "interface_errors", "weak_wifi",
 			"saturated_link", "unmanaged_switch", "unknown_neighbor", "new_device",
 			"fast_ethernet", "integration_available", "link_flapping", "half_duplex", "device_rebooted", "sfp_low_rx",
-			"dhcp_pool_full", "firewall_states_full", "insecure_service", "new_devices_burst", "discovery_limited", "infra_dynamic_ip", "iot_with_trusted", "sfp_hot", "lag_member_down", "stp_root_changed", "config_changed", "dns_bypass", "upload_unusual", "lan_scan",
+			"dhcp_pool_full", "firewall_states_full", "insecure_service", "new_devices_burst", "discovery_limited", "infra_dynamic_ip", "iot_with_trusted", "wifi_channel_conflict", "sfp_hot", "lag_member_down", "stp_root_changed", "config_changed", "dns_bypass", "upload_unusual", "lan_scan",
 			"dhcp_no_offer", "dhcp_rogue", "dns_down", "dns_slow", "dns_local", "vlan_unknown",
 		} {
 			if _, ok := texts[locale][rule]; !ok {
@@ -400,7 +400,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 func TestEveryRuleHasAShortName(t *testing.T) {
 	for _, locale := range []string{"en", "pt-BR"} {
 		for rule := range texts["en"] {
-			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || strings.HasSuffix(rule, "_latest") || rule == "new_device" || rule == "new_devices_burst" {
+			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || strings.HasSuffix(rule, "_latest") || strings.HasSuffix(rule, "_auto") || rule == "new_device" || rule == "new_devices_burst" {
 				continue
 			}
 			if short[locale][rule] == "" {
@@ -420,6 +420,17 @@ func TestUpdateWithoutVersion(t *testing.T) {
 func TestUpdateWithoutCount(t *testing.T) {
 	_, detail := Describe(alert("update_pending", "warning", map[string]any{"node": "br-ap02", "latest": "1.1.6"}), "en")
 	if detail != "1.1.6 is available." {
+		t.Fatalf("detail: %q", detail)
+	}
+}
+
+func TestWifiChannelConflictTellsTheAutoOnes(t *testing.T) {
+	_, detail := Describe(alert("wifi_channel_conflict", "warning", map[string]any{"aps": "hall (6), office (6)"}), "en")
+	if detail != "On 2.4 GHz: hall (6), office (6)." {
+		t.Fatalf("detail: %q", detail)
+	}
+	_, detail = Describe(alert("wifi_channel_conflict", "warning", map[string]any{"aps": "hall (6), attic (6)", "auto_aps": "attic"}), "pt-BR")
+	if detail != "Em 2,4 GHz: hall (6), attic (6). Em canal automático (deixados com a controladora): attic." {
 		t.Fatalf("detail: %q", detail)
 	}
 }
