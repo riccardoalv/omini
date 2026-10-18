@@ -20,7 +20,8 @@ import (
 type Agent struct {
 	Community string
 	Port      int
-	write     string // the community allowed to Set (empty: none)
+	write     string   // the community allowed to Set (empty: none)
+	ignored   []string // OID prefixes whose Sets are answered but not applied
 
 	conn  net.PacketConn
 	mu    sync.RWMutex
@@ -74,6 +75,14 @@ func (a *Agent) AllowWrite(community string) {
 	defer a.mu.Unlock()
 	a.write = community
 	a.views[community] = a.views[a.Community]
+}
+
+// IgnoreWrites makes Sets under an OID prefix answer noError without
+// changing anything, like agents that accept a write and drop it.
+func (a *Agent) IgnoreWrites(prefix string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ignored = append(a.ignored, "."+strings.Trim(prefix, ".")+".")
 }
 
 func (a *Agent) serve(t testing.TB) {
@@ -233,6 +242,9 @@ func (a *Agent) set(req *gosnmp.SnmpPacket) (gosnmp.SNMPError, uint8) {
 	}
 	for i, v := range req.Variables {
 		name := "." + strings.TrimPrefix(v.Name, ".")
+		if slices.ContainsFunc(a.ignored, func(p string) bool { return strings.HasPrefix(name, p) }) {
+			continue
+		}
 		if vid, ok := strings.CutPrefix(name, vlanRowStatus); ok {
 			status, _ := v.Value.(int)
 			base := strings.TrimSuffix(vlanRowStatus, "5.")

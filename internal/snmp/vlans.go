@@ -129,10 +129,12 @@ func collectVlans(c *client, d *model.Device, ifNames map[string]string) error {
 			continue
 		}
 		pv := model.PortVlans{}
+		var pvid uint16
 		if v, ok := pduInt(pvids[strconv.Itoa(bp)]); ok && v >= 1 && v <= 4094 {
-			pv.Untagged = model.Ptr(uint16(v))
+			pvid = uint16(v)
 		}
 		member := false
+		var firstUntagged uint16
 		for _, id := range ids {
 			v := static[id]
 			if !hasPort(v.egress, bp) {
@@ -140,12 +142,24 @@ func collectVlans(c *client, d *model.Device, ifNames map[string]string) error {
 			}
 			member = true
 			if hasPort(v.untagged, bp) {
-				if pv.Untagged == nil {
-					pv.Untagged = model.Ptr(id)
+				if firstUntagged == 0 {
+					firstUntagged = id
 				}
 				continue
 			}
 			pv.Tagged = append(pv.Tagged, id)
+		}
+		// The native VLAN is the PVID when the port is untagged in it. A port
+		// untagged nowhere is a trunk without one: Q-BRIDGE always keeps a
+		// PVID, which then is not a native VLAN. A port the static table does
+		// not list at all keeps its PVID.
+		switch {
+		case !member && pvid != 0:
+			pv.Untagged = model.Ptr(pvid)
+		case pvid != 0 && static[pvid] != nil && hasPort(static[pvid].untagged, bp):
+			pv.Untagged = model.Ptr(pvid)
+		case firstUntagged != 0:
+			pv.Untagged = model.Ptr(firstUntagged)
 		}
 		if member || pv.Untagged != nil {
 			d.Interfaces[i].Vlans = &pv
@@ -177,7 +191,10 @@ func portList(oid string, list []byte) gosnmp.SnmpPDU {
 // SetPortVlans puts a port in VLANs (Q-BRIDGE-MIB): each VLAN's egress and
 // untagged lists, and the port's PVID. VLANs the port joins are set first,
 // then its PVID, then the ones it leaves, so it is never left with none; the
-// tables are read back to check.
+// tables and the PVID are read back to check. Without a native VLAN
+// (want.Untagged nil) the port leaves every untagged membership and its PVID
+// is left as it is: Q-BRIDGE has no "no PVID", and the read reports a port
+// untagged nowhere as having no native VLAN.
 func SetPortVlans(ctx context.Context, t Target, port string, want model.PortVlans) error {
 	c, err := t.dial(ctx)
 	if err != nil {
@@ -267,6 +284,16 @@ func SetPortVlans(ctx context.Context, t Target, port string, want model.PortVla
 		e, u := in(id)
 		if hasPort(v.egress, bp) != e || hasPort(v.untagged, bp) != u {
 			return fmt.Errorf("the agent did not apply the VLANs of %s (VLAN %d)", port, id)
+		}
+	}
+	if native != 0 {
+		oid := fmt.Sprintf("%s.%d", oidPvid, bp)
+		got, err := c.get(oid)
+		if err != nil {
+			return err
+		}
+		if v, ok := pduInt(got[oid]); !ok || v != int64(native) {
+			return fmt.Errorf("the agent did not apply the native VLAN of %s (PVID %d)", port, native)
 		}
 	}
 	return nil

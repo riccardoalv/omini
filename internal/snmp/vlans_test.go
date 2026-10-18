@@ -175,3 +175,26 @@ func TestChangesVLANsWithoutABridgePortTable(t *testing.T) {
 		t.Fatalf("1/1: %+v", p)
 	}
 }
+
+// A trunk without a native VLAN: Q-BRIDGE always keeps a PVID, so the port
+// leaves every untagged membership and is read back with no native VLAN,
+// even though its PVID still names the old one.
+func TestATrunkWithoutANativeVLAN(t *testing.T) {
+	agent := qbridge(t)
+	if err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/1", model.PortVlans{Tagged: []uint16{10, 20}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := portVlans(readVlans(t, agent), "1/1"); p.Untagged != nil || !slices.Equal(p.Tagged, []uint16{10, 20}) {
+		t.Fatalf("1/1: untagged %v, tagged %v", model.Deref(p.Untagged), p.Tagged)
+	}
+}
+
+// An agent that takes the PVID write without applying it must not pass.
+func TestChecksThePVIDWasApplied(t *testing.T) {
+	agent := qbridge(t)
+	agent.IgnoreWrites("1.3.6.1.2.1.17.7.1.4.5.1.1")
+	err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/3", model.PortVlans{Untagged: model.Ptr[uint16](10)})
+	if err == nil {
+		t.Fatal("a PVID the agent did not apply must fail")
+	}
+}
