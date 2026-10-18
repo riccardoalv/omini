@@ -15,6 +15,13 @@ import (
 type Options struct {
 	// Enterprise is the IANA enterprise number used in sysObjectID (e.g. 14988 for MikroTik).
 	Enterprise int
+	// BridgePorts numbers the bridge ports (BRIDGE-MIB dot1dBasePort) by
+	// interface name; interfaces left out are not bridge ports. Nil: every
+	// interface is a bridge port numbered as its ifIndex.
+	BridgePorts map[string]int
+	// NoBridgePortTable leaves dot1dBasePortIfIndex out (agents that number
+	// bridge ports as their ifIndex and do not say so).
+	NoBridgePortTable bool
 }
 
 // FromDevice renders a model device as the standard MIB tables a real agent
@@ -44,6 +51,13 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 
 	// IF-MIB: ifIndex = position + 1.
 	ifIndex := map[string]int{}
+	// bridgePort is an interface's bridge port (0: not one).
+	bridgePort := func(name string) int {
+		if opts.BridgePorts != nil {
+			return opts.BridgePorts[name]
+		}
+		return ifIndex[name]
+	}
 	for i, iface := range d.Interfaces {
 		idx := i + 1
 		ifIndex[iface.Name] = idx
@@ -72,8 +86,14 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Counter64, model.Deref(iface.TxBytes), "1.3.6.1.2.1.31.1.1.1.10.%d", idx)
 		add(gosnmp.Gauge32, uint32(model.Deref(iface.SpeedMbps)), "1.3.6.1.2.1.31.1.1.1.15.%d", idx)
 		add(gosnmp.OctetString, model.Deref(iface.Description), "1.3.6.1.2.1.31.1.1.1.18.%d", idx)
-		// BRIDGE-MIB: bridge port number == ifIndex.
-		add(gosnmp.Integer, idx, "1.3.6.1.2.1.17.1.4.1.2.%d", idx)
+	}
+	// BRIDGE-MIB dot1dBasePortIfIndex: bridge port -> ifIndex.
+	if !opts.NoBridgePortTable {
+		for _, iface := range d.Interfaces {
+			if bp := bridgePort(iface.Name); bp > 0 {
+				add(gosnmp.Integer, ifIndex[iface.Name], "1.3.6.1.2.1.17.1.4.1.2.%d", bp)
+			}
+		}
 	}
 
 	// IF-MIB ifStackTable: a link aggregation over its member ports.
@@ -100,12 +120,12 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 			vlan = *f.Vlan
 		}
 		idx := fmt.Sprintf("%d.%s", vlan, macOID(f.MAC))
-		add(gosnmp.Integer, ifIndex[f.Port], "1.3.6.1.2.1.17.7.1.2.2.1.2.%s", idx)
+		add(gosnmp.Integer, bridgePort(f.Port), "1.3.6.1.2.1.17.7.1.2.2.1.2.%s", idx)
 		add(gosnmp.Integer, 3, "1.3.6.1.2.1.17.7.1.2.2.1.3.%s", idx) // learned
 	}
 
 	// Q-BRIDGE-MIB VLANs: each VLAN's egress and untagged ports (bitmaps of
-	// bridge ports, which are ifIndexes here) and each port's PVID.
+	// bridge ports) and each port's PVID.
 	vlanIDs := map[uint16]string{}
 	for _, v := range d.Vlans {
 		vlanIDs[v.ID] = model.Deref(v.Name)
@@ -117,7 +137,7 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 	}
 	for _, iface := range d.Interfaces {
 		if iface.Stp != nil && iface.Stp.State != nil {
-			add(gosnmp.Integer, stpCodes[*iface.Stp.State], "1.3.6.1.2.1.17.2.15.1.3.%d", ifIndex[iface.Name])
+			add(gosnmp.Integer, stpCodes[*iface.Stp.State], "1.3.6.1.2.1.17.2.15.1.3.%d", bridgePort(iface.Name))
 		}
 		if lag := model.Deref(iface.Lag); lag != "" {
 			add(gosnmp.Integer, ifIndex[lag], "1.2.840.10006.300.43.1.2.1.1.13.%d", ifIndex[iface.Name])
@@ -136,11 +156,11 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		if iface.Vlans == nil {
 			continue
 		}
-		if u := iface.Vlans.Untagged; u != nil {
+		if u := iface.Vlans.Untagged; u != nil && bridgePort(iface.Name) > 0 {
 			if _, ok := vlanIDs[*u]; !ok {
 				vlanIDs[*u] = ""
 			}
-			add(gosnmp.Gauge32, uint32(*u), "1.3.6.1.2.1.17.7.1.4.5.1.1.%d", ifIndex[iface.Name])
+			add(gosnmp.Gauge32, uint32(*u), "1.3.6.1.2.1.17.7.1.4.5.1.1.%d", bridgePort(iface.Name))
 		}
 		for _, t := range iface.Vlans.Tagged {
 			if _, ok := vlanIDs[t]; !ok {
@@ -154,7 +174,10 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 			if iface.Vlans == nil {
 				continue
 			}
-			bp := ifIndex[iface.Name]
+			bp := bridgePort(iface.Name)
+			if bp < 1 {
+				continue
+			}
 			isUntagged := model.Deref(iface.Vlans.Untagged) == id
 			if isUntagged || slices.Contains(iface.Vlans.Tagged, id) {
 				egress = setBit(egress, bp)

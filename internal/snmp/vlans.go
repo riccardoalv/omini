@@ -188,8 +188,14 @@ func SetPortVlans(ctx context.Context, t Target, port string, want model.PortVla
 	if err != nil {
 		return err
 	}
-	bp, ok := bridgePortOf(c)[idx]
+	// Like collectVlans: a port missing from dot1dBasePortIfIndex is not a
+	// bridge port; only an agent without the table numbers them as ifIndex.
+	ports := bridgePortOf(c)
+	bp, ok := ports[idx]
 	if !ok {
+		if len(ports) > 0 {
+			return fmt.Errorf("%s is not a bridge port of the switch: its VLANs cannot be changed", port)
+		}
 		bp, _ = strconv.Atoi(idx)
 	}
 	static, err := readStatic(c)
