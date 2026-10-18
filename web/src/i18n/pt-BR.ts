@@ -1033,13 +1033,25 @@ const ptBR: typeof en = {
         label: 'Fingerprints de DHCP',
         help: 'Observa os pedidos de endereço que os dispositivos enviam ao entrar na rede: o que pedem indica o sistema operacional (Android, Windows, Apple, Linux...). Só observa, nunca responde; vê a rede deste servidor; precisa de raw sockets (root no Docker).',
       },
+      dhcp_check: {
+        label: 'Verificação de DHCP',
+        help: 'A cada rodada, pede um endereço à rede (DHCPDISCOVER, sem nunca ficar com um) para conferir que o servidor DHCP responde e que nenhum outro responde. Precisa de raw sockets (root no Docker).',
+      },
+      dns_check: {
+        label: 'Verificação de DNS',
+        help: 'A cada rodada, cada servidor DNS da rede resolve um nome externo e um local, com o tempo medido.',
+      },
       snmp: {
         label: 'SNMP',
-        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Somente leitura.',
+        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Com uma community de escrita (ou um usuário v3 com permissão de escrita) também liga e desliga as portas deles.',
       },
       snmp_communities: {
         label: 'Communities SNMP',
         help: 'Communities somente leitura a testar, separadas por vírgula (ex.: "public, homelab"). É a "community" ou "read community" configurada no SNMP do equipamento.',
+      },
+      snmp_write_community: {
+        label: 'Community SNMP de escrita',
+        help: 'Para ligar e desligar portas de equipamentos SNMP pelo Omini: a community de "escrita" ou "read-write" do SNMP do equipamento. Vazio: os equipamentos SNMP v2c só são lidos (um usuário v3 com permissão de escrita também serve).',
       },
       ports: {
         label: 'Portas a testar',
@@ -1048,6 +1060,20 @@ const ptBR: typeof en = {
       deep_interval: {
         label: 'Verificar portas e nomes de novo a cada (horas)',
         help: 'Portas, nomes e banners são verificados uma vez por dispositivo novo e de novo depois dessas horas.',
+      },
+      dns_test_name: {
+        label: 'Nome externo para a verificação de DNS',
+        help: 'Um nome na internet que cada servidor DNS precisa resolver.',
+      },
+    },
+    flows: {
+      netflow_port: {
+        label: 'Porta NetFlow / IPFIX (UDP)',
+        help: 'Aponte o exportador para o endereço deste servidor e esta porta. 0 desliga.',
+      },
+      sflow_port: {
+        label: 'Porta sFlow (UDP)',
+        help: 'Para switches que exportam sFlow. 0 desliga.',
       },
     },
   },
