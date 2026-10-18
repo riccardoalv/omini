@@ -360,6 +360,17 @@ var migrations = []string{
 	`
 	ALTER TABLE inventory ADD COLUMN note TEXT NOT NULL DEFAULT '';
 	`,
+	// 28: read-only API tokens (the HTTP API's GET routes and the MCP server),
+	// stored by the SHA-256 of the token, never the token itself.
+	`
+	CREATE TABLE api_tokens (
+		id           INTEGER PRIMARY KEY,
+		name         TEXT    NOT NULL,
+		hash         TEXT    NOT NULL UNIQUE, -- hex SHA-256 of the token
+		created_at   INTEGER NOT NULL,
+		last_used_at INTEGER                  -- NULL: never used
+	);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.
