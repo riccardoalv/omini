@@ -461,6 +461,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 			uplink[e.Target] = e
 		}
 	}
+	c.followMovedDevices(ctx, topo)
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
 	for _, n := range topo.Nodes {
