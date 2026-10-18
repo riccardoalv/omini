@@ -110,13 +110,16 @@ twice); the hosts that answer are read in full on every round:
 |---|---|
 | Name, description, uptime, vendor | `SNMPv2-MIB` |
 | Ports: name, status (enabled or disabled), speed, MAC, byte and error counters | `IF-MIB` |
+| Port addresses with their prefix: IPv4 (with its mask) and IPv6 (with the prefix length the agent knows) | `IP-MIB` (`ipAddrTable`, `ipAddressTable`) |
 | Link aggregations: their member ports, the aggregate each port is in | `IF-MIB` (`ifStackTable`), `IEEE8023-LAG-MIB` |
+| VLAN interfaces: the port each runs on, its VLAN id when the name says it (`igc1.20`, `Vlan20`) | `IF-MIB` (`ifStackTable`) |
 | Neighbors | `LLDP-MIB` |
 | MAC table (which device is on which port, VLAN) | `BRIDGE-MIB`, `Q-BRIDGE-MIB` |
 | VLANs: names, each port's native and tagged VLANs | `Q-BRIDGE-MIB` |
 | Spanning tree: each port's state, the root bridge | `BRIDGE-MIB` |
-| ARP | `IP-MIB` |
-| CPU and memory | `HOST-RESOURCES-MIB`, when the agent has it (a profile's vendor OIDs win) |
+| ARP and IPv6 neighbors (NDP) | `IP-MIB` (`ipNetToMediaTable`, `ipNetToPhysicalTable`) |
+| CPU load and number of processors, memory (percentage and bytes) | `HOST-RESOURCES-MIB`, when the agent has it (a profile's vendor OIDs win for the percentages) |
+| Disks: each fixed disk's mount, size and use (a NAS's volumes), leaving out pseudo file systems such as `/run` and `/snap` | `HOST-RESOURCES-MIB` (`hrStorageTable`) |
 | Vendor CPU and memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
 
 To use it:
