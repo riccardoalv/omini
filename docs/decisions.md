@@ -45,6 +45,11 @@ choices and the reasons behind them.
   addresses, neighbor tables, DNS records, leases, gateways, networks), and
   every plugin reports it where its API can. IPv4-only code is a gap to fix,
   not a choice.
+- **IPv6 today** (decided 2026-10-18): plugins report IPv6 addresses, neighbors (NDP), DHCPv6
+  leases, IPv6 default routes and AAAA records where their API gives them;
+  presence and merging use NDP like ARP; the UI shows IPv6 next to IPv4. DNS
+  names Omini sets stay A records (devices rotate their IPv6 privacy
+  addresses); AAAA records others made are kept, never deleted.
 - **Devices without an API** are inferred from what other devices see (ARP,
   DHCP, MAC tables), or read by an optional scraping plugin.
 - **License** MIT. Nothing that would change that is shipped: nmap (NPSL) is
@@ -245,8 +250,8 @@ tested with fixtures). The rules that are easy to break:
   its integration is on. VLANs and DNS & DHCP are tabs of the map's menu, not
   screens (maintainer's rule). **The device list is a drawer on the map**, and the
   **plugin store a modal in Integrations** — not screens (maintainer's rules).
-- **The map's menu** (hamburger, top left) opens that drawer in three tabs:
-  Devices (with the offline and hidden switches), VLANs (the VLANs and
+- **The map's menu** (hamburger, top left) opens that drawer in four tabs:
+  Devices (with the offline and hidden switches), People, VLANs (the VLANs and
   subnets: a click on one highlights it and zooms to it; the networks' areas
   switch) and DNS & DHCP. No filters tab and no filters in the toolbar
   (maintainer's rule); a dot on the menu says the map is filtered.
@@ -262,6 +267,22 @@ tested with fixtures). The rules that are easy to break:
   file never does (a note may hold names or passwords).
 - **Settings** is a menu of sections; it has no plugin list (maintainer's
   rule). Port descriptions are stored in Omini, never written to the device.
+- **People** (decided 2026-10-18): a person is a name and the devices they
+  own (a device has at most one owner), set from the device's panel or the
+  People tab of the map's menu (a fourth tab, next to Devices, VLANs, DNS &
+  DHCP). A person is **home** while one of their phones, tablets or
+  wearables is online. **Pause a person** pauses every device of theirs that
+  can be paused, after one confirmation, through the same `pause.set` per
+  device (each in its history). The Internet screen sums each person's
+  devices. People are kept in the store (forward-only migration), never in
+  the diagnostics file.
+- **API tokens and MCP** (decided 2026-10-18): Settings → **API tokens**
+  creates a named token, shown once, stored hashed, with its last use;
+  tokens are read-only. They authenticate the HTTP API's GET routes and the
+  **MCP server** at `/mcp` (streamable HTTP), whose tools only read: the
+  map summary, devices (search, one device with its note, ports and alerts),
+  alerts, VLANs and networks, DNS and DHCP, internet use, people. No tool
+  changes anything: changes stay confirmed by the user in the UI.
 
 ## Alerts and notifications
 
@@ -287,6 +308,25 @@ tested with fixtures). The rules that are easy to break:
   out (they usually live on the main network). Only once the network uses a
   VLAN besides 1: without VLANs there is nowhere to move them. A type the
   user corrected counts as corrected; hidden devices do not count.
+- **Alerts from data Omini already has** (decided 2026-10-18):
+  `service_stopped` (warning: a service that is enabled is not running);
+  `vpn_down` (warning: a VPN peer that was connected in the last 24 hours is
+  not any more; peers that never connected, such as a road warrior's phone,
+  are not told); `reboot_pending` (info: a device asks for a restart, even
+  without a pending update); `wifi_open` (warning: a Wi-Fi network without a
+  password; info when it puts its clients in a VLAN of its own, the usual
+  guest network); `hot_sensor` (warning: a disk above 55 °C or a board
+  above 80 °C; CPUs keep `hot_cpu`); `high_swap` (warning: swap above 50 %).
+  A gateway that is down but not tied by name to a WAN interface is told as
+  `wan_down` too. A VPN tunnel that is down is drawn dashed in red.
+- **Exposed to the internet** (decided 2026-10-18): routers report their
+  port forwards (`Device.port_forwards`: protocol, external port or range,
+  internal address and port, source, description, on or off, and whether
+  UPnP or NAT-PMP made it); the network scan asks the router's UPnP gateway
+  (IGD) for its mappings too. `port_forward` (info) for each enabled
+  forward, open while it exists; `upnp_forward` (warning) for one a device
+  opened by itself through UPnP or NAT-PMP. The router's panel lists them in
+  an **Exposed to the internet** section. Omini never changes them.
 - **Notifications**: Telegram, e-mail, Slack, Discord, ntfy and webhooks; one
   message per channel per round, a **card per device** with its details, what
   to do and a link to it (maintainer's rule: informative, and no emoji — the
@@ -397,6 +437,9 @@ every access point of every vendor at once.
   that access point's Wi-Fi: then it is destructive (it cuts Omini off).
 - **Plugins** report each radio's band, channel, width, whether the channel
   is automatic, and declare the change `wifi.channel` in their manifest.
+- **Model**: `Device.radios` (name, band, channel, width in MHz, whether the
+  channel is automatic, transmit power) and `Device.wireless_uplink` (a mesh
+  unit); change `wifi.channel` `{radio, channel}`.
 
 ## VLANs
 
@@ -696,6 +739,23 @@ for many devices at once.
   (official / community) and a **trust level** set by the maintainers for a
   release (plug-and-play, stable, experimental, unverified — always the level
   of a URL import). Review process: [plugin-review.md](plugin-review.md).
+- **New plugins** (decided 2026-10-18, experimental until tested on real
+  hardware): Docker (the Engine API over TCP, or Portainer's API: containers
+  as devices under their host, with ports and state), TrueNAS (pools,
+  disks, SMART health, apps) and Synology DSM (volumes, disks, SMART, Docker
+  containers). Read-only, local repositories until the maintainer publishes
+  them.
+- **One SDK for every plugin** (decided 2026-10-18): the SDK gives an HTTP
+  client (timeouts, retries on refused connections and 429, a login backoff,
+  a session cached in `state_dir`), maps Forbidden and NotFound to errors
+  that name the privilege or resource, and an apply → verify → undo helper
+  (about 30 s to verify; undo whenever the API allows). Plugins use it;
+  conventions (key, role, vendor, form fields) are in plugins.md.
+- **Parity of changes** (decided 2026-10-18): `port.enabled` on OPNsense,
+  pfSense (an interface) and Proxmox (a guest NIC's link); UniFi and Omada
+  gateways read and change networks, reservations and DNS names, and pause
+  the internet only (see Pause); MikroTik reads and changes Wi-Fi (not under
+  CAPsMAN).
 
 ## Specific devices
 
