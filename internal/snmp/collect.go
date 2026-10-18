@@ -113,6 +113,9 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err != nil {
 		log.Debug("interfaces unavailable", "err", err)
 	}
+	if err := collectDuplex(c, &d, ifNames); err != nil {
+		log.Debug("duplex unavailable", "err", err)
+	}
 	if err := collectIPs(c, &d, ifNames); err != nil {
 		log.Debug("ip addresses unavailable", "err", err)
 	}
@@ -322,6 +325,42 @@ func collectInterfaces(c *client, d *model.Device) (map[string]string, error) {
 	}
 	collectStack(c, d, names)
 	return names, nil
+}
+
+// collectDuplex reads each Ethernet port's duplex from EtherLike-MIB's
+// dot3StatsDuplexStatus. Its rows are named by dot3StatsIndex, the port's
+// ifIndex (the row index when the agent leaves that column out); unknown(1)
+// stays empty.
+func collectDuplex(c *client, d *model.Device, ifNames map[string]string) error {
+	rows, err := c.walk(oidDot3StatsDuplexStatus)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	indexes, _ := c.walk(oidDot3StatsIndex) // optional
+	byName := map[string]model.InterfaceDuplex{}
+	for idx, p := range rows {
+		ifIdx := idx
+		if v, ok := pduInt(indexes[idx]); ok && v > 0 {
+			ifIdx = strconv.FormatInt(v, 10)
+		}
+		name := ifNames[ifIdx]
+		v, ok := pduInt(p)
+		if name == "" || !ok {
+			continue
+		}
+		switch v {
+		case 2:
+			byName[name] = model.InterfaceDuplexHalf
+		case 3:
+			byName[name] = model.InterfaceDuplexFull
+		}
+	}
+	for i := range d.Interfaces {
+		if dx, ok := byName[d.Interfaces[i].Name]; ok {
+			d.Interfaces[i].Duplex = &dx
+		}
+	}
+	return nil
 }
 
 // collectStack reads IF-MIB's ifStackTable: the members of each link

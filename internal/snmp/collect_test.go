@@ -474,3 +474,35 @@ func TestVLANInterfaceParentAndID(t *testing.T) {
 		}
 	}
 }
+
+// TestDuplexFromEtherLikeMIB: each port's duplex comes from
+// dot3StatsDuplexStatus, its row named by dot3StatsIndex (the ifIndex);
+// unknown stays empty.
+func TestDuplexFromEtherLikeMIB(t *testing.T) {
+	half, full := model.InterfaceDuplexHalf, model.InterfaceDuplexFull
+	d := model.Device{
+		Key: "x", Name: "sw",
+		Interfaces: []model.Interface{
+			{Name: "ge1", Duplex: &full},
+			{Name: "ge2", Duplex: &half},
+			{Name: "ge3"},
+			{Name: "ge4"},
+		},
+	}
+	pdus := snmptest.FromDevice(d, snmptest.Options{})
+	// ge4 reports unknown(1).
+	pdus = append(pdus,
+		gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.10.7.2.1.1.200", Type: gosnmp.Integer, Value: 4},
+		gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.10.7.2.1.19.200", Type: gosnmp.Integer, Value: 1})
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]model.InterfaceDuplex{"ge1": full, "ge2": half, "ge3": "", "ge4": ""}
+	for _, i := range got.Interfaces {
+		if model.Deref(i.Duplex) != want[i.Name] {
+			t.Errorf("%s: duplex %q, want %q", i.Name, model.Deref(i.Duplex), want[i.Name])
+		}
+	}
+}

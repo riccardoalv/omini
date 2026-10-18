@@ -90,6 +90,19 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Gauge32, uint32(model.Deref(iface.SpeedMbps)), "1.3.6.1.2.1.31.1.1.1.15.%d", idx)
 		add(gosnmp.OctetString, model.Deref(iface.Description), "1.3.6.1.2.1.31.1.1.1.18.%d", idx)
 	}
+	// EtherLike-MIB dot3StatsTable: the duplex of the ports that know it, in
+	// rows numbered apart from the ifIndex (dot3StatsIndex names the port).
+	for i, iface := range d.Interfaces {
+		if iface.Duplex == nil {
+			continue
+		}
+		status := 3 // fullDuplex
+		if *iface.Duplex == model.InterfaceDuplexHalf {
+			status = 2
+		}
+		add(gosnmp.Integer, ifIndex[iface.Name], "1.3.6.1.2.1.10.7.2.1.1.%d", 100+i)
+		add(gosnmp.Integer, status, "1.3.6.1.2.1.10.7.2.1.19.%d", 100+i)
+	}
 	// BRIDGE-MIB dot1dBasePortIfIndex: bridge port -> ifIndex.
 	if !opts.NoBridgePortTable {
 		for _, iface := range d.Interfaces {
