@@ -2,6 +2,7 @@ package snmptest
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"slices"
 	"strings"
@@ -381,14 +382,15 @@ func bytesOID(b []byte) string {
 // chassis (index 1) with the device's model, serial number and software and
 // firmware versions, and for each port with a transceiver, the transceiver
 // (a module in the chassis) and the port inside it (Cisco's layout), the
-// port tied to its ifIndex by entAliasMappingTable.
+// port tied to its ifIndex by entAliasMappingTable; ENTITY-SENSOR-MIB has
+// the temperatures, a transceiver's inside it.
 func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
 	transceivers := slices.ContainsFunc(d.Interfaces, func(i model.Interface) bool { return i.Transceiver != nil })
 	firmware := ""
 	if d.Firmware != nil {
 		firmware = model.Deref(d.Firmware.Current)
 	}
-	if d.Serial == nil && d.OSVersion == nil && firmware == "" && !transceivers {
+	if d.Serial == nil && d.OSVersion == nil && firmware == "" && !transceivers && len(d.Temperatures) == 0 {
 		return nil
 	}
 	var out []gosnmp.SnmpPDU
@@ -413,6 +415,16 @@ func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
 	}
 	physical(1, "Chassis", 0, 3, "Chassis", firmware, model.Deref(d.OSVersion), model.Deref(d.Serial),
 		model.Deref(d.Vendor), model.Deref(d.Model))
+	// sensor adds a temperature sensor (ENTITY-SENSOR-MIB, in tenths of a degree).
+	sensor := func(idx, parent int, name string, celsius float64) {
+		physical(idx, name+" temperature", parent, 8, name, "", "", "", "", "")
+		for col, v := range map[int]int{1: 8, 2: 9, 3: 1, 4: int(math.Round(celsius * 10)), 5: 1} {
+			out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.99.1.1.1.%d.%d", col, idx), Type: gosnmp.Integer, Value: v})
+		}
+	}
+	for j, temp := range d.Temperatures {
+		sensor(100+j, 1, temp.Sensor, temp.Celsius)
+	}
 	for i, iface := range d.Interfaces {
 		x := iface.Transceiver
 		if x == nil {
@@ -425,6 +437,9 @@ func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
 		}
 		physical(module, descr, 1, 9, iface.Name+" transceiver", "", "", model.Deref(x.Serial), model.Deref(x.Vendor), model.Deref(x.Part))
 		physical(port, iface.Name, module, 10, iface.Name, "", "", "", "", "")
+		if x.TemperatureC != nil {
+			sensor(2000+i, module, iface.Name+" transceiver", *x.TemperatureC)
+		}
 		out = append(out, gosnmp.SnmpPDU{
 			Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.3.2.1.2.%d.0", port), Type: gosnmp.ObjectIdentifier,
 			Value: fmt.Sprintf(".1.3.6.1.2.1.2.2.1.1.%d", ifIndex[iface.Name]),

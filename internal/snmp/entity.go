@@ -1,6 +1,8 @@
 package snmp
 
 import (
+	"cmp"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,22 +13,21 @@ import (
 // ENTITY-MIB (RFC 6933): the physical parts of a device (chassis, modules,
 // ports, sensors), what they are and their serial numbers.
 const (
-	oidEntPhysical        = "1.3.6.1.2.1.47.1.1.1.1"   // entPhysicalEntry; index: entPhysicalIndex
-	oidEntAliasMappingID  = "1.3.6.1.2.1.47.1.3.2.1.2" // entAliasMappingIdentifier; index: physical.logical
-	oidIfIndexColumn      = "1.3.6.1.2.1.2.2.1.1"      // ifIndex: what an alias of a port points to
-	entClassChassis       = 3
-	entClassModule        = 9
-	entClassPort          = 10
-	entColDescr           = 2
-	entColContainedIn     = 4
-	entColClass           = 5
-	entColName            = 7
-	entColFirmwareRev     = 9
-	entColSoftwareRev     = 10
-	entColSerialNum       = 11
-	entColMfgName         = 12
-	entColModelName       = 13
-	maxEntityAncestorHops = 16 // a containment loop must not hang the read
+	oidEntPhysical       = "1.3.6.1.2.1.47.1.1.1.1"   // entPhysicalEntry; index: entPhysicalIndex
+	oidEntAliasMappingID = "1.3.6.1.2.1.47.1.3.2.1.2" // entAliasMappingIdentifier; index: physical.logical
+	oidIfIndexColumn     = "1.3.6.1.2.1.2.2.1.1"      // ifIndex: what an alias of a port points to
+	entClassChassis      = 3
+	entClassModule       = 9
+	entClassPort         = 10
+	entColDescr          = 2
+	entColContainedIn    = 4
+	entColClass          = 5
+	entColName           = 7
+	entColFirmwareRev    = 9
+	entColSoftwareRev    = 10
+	entColSerialNum      = 11
+	entColMfgName        = 12
+	entColModelName      = 13
 )
 
 // entity is one row of entPhysicalTable.
@@ -97,15 +98,14 @@ func (es entities) chassis() *entity {
 }
 
 // collectEntity reads the chassis' model, serial number and software and
-// firmware versions, and the transceivers plugged into the ports. A value the
-// device already has is kept, except the model, which here is only the
-// first line of sysDescr: the chassis' model name is what the device is.
-// Profiles run afterwards and win. It returns the entities and each port's
-// transceiver, which the sensors are read with.
-func collectEntity(c *client, d *model.Device, ifNames map[string]string) (entities, map[string]*entity) {
+// firmware versions, the transceivers plugged into the ports, then the
+// temperature sensors. A value the device already has is kept, except the
+// model, which here is only the first line of sysDescr: the chassis' model
+// name is what the device is. Profiles run afterwards and win.
+func collectEntity(c *client, d *model.Device, ifNames map[string]string) {
 	es := readEntities(c)
 	if es == nil {
-		return nil, nil
+		return
 	}
 	if ch := es.chassis(); ch != nil {
 		if ch.model != "" {
@@ -126,7 +126,7 @@ func collectEntity(c *client, d *model.Device, ifNames map[string]string) (entit
 	}
 	byPort := portTransceivers(c, es, ifNames)
 	collectTransceivers(byPort, d)
-	return es, byPort
+	collectSensors(c, es, byPort, d)
 }
 
 // portEntities maps entities to the port they are, from ENTITY-MIB's
@@ -214,5 +214,103 @@ func collectTransceivers(byPort map[string]*entity, d *model.Device) {
 			t.Serial = nonEmpty(x.serial)
 		}
 		d.Interfaces[i].Transceiver = t
+	}
+}
+
+// ENTITY-SENSOR-MIB (RFC 3433): one row per sensor entity.
+const (
+	oidEntPhySensor     = "1.3.6.1.2.1.99.1.1.1" // entPhySensorEntry; index: entPhysicalIndex
+	sensorTypeCelsius   = 8
+	sensorStatusOK      = 1
+	sensorScaleUnits    = 9 // entPhySensorScale units(9): 10^0; each step is 10^3
+	entClassCPU         = 12
+	maxContainmentDepth = 16 // a containment loop must not hang the read
+)
+
+// within reports whether e is the entity outer or inside it.
+func (es entities) within(e *entity, outer int) bool {
+	for hop := 0; e != nil && hop < maxContainmentDepth; hop++ {
+		if e.index == outer {
+			return true
+		}
+		e = es[e.parent]
+	}
+	return false
+}
+
+// sensorKind is cpu for a sensor of a CPU (its entity, or one it is in, is a
+// CPU, or its name says so), else board.
+func (es entities) sensorKind(e *entity) model.TemperatureKind {
+	for hop := 0; e != nil && hop < maxContainmentDepth; hop++ {
+		if e.class == entClassCPU || strings.Contains(strings.ToLower(e.name+" "+e.descr), "cpu") {
+			return model.TemperatureKindCPU
+		}
+		if e.class == entClassChassis || e.class == entClassModule {
+			break // a CPU's sensor is not above its board
+		}
+		e = es[e.parent]
+	}
+	return model.TemperatureKindBoard
+}
+
+// collectSensors reads the temperature sensors (celsius) of ENTITY-SENSOR-MIB:
+// one under a port's transceiver is that transceiver's temperature, the
+// others are the device's, named by their entity. Profiles run afterwards,
+// and theirs replace a sensor of the same name.
+func collectSensors(c *client, es entities, byPort map[string]*entity, d *model.Device) {
+	rows, err := c.walk(oidEntPhySensor)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	t := table(rows)
+	var temps []model.Temperature
+	xcvr := map[string]float64{}
+	for _, e := range es.sorted() {
+		idx := strconv.Itoa(e.index)
+		typ, ok1 := pduInt(t[1][idx])
+		value, ok2 := pduInt(t[4][idx])
+		if !ok1 || !ok2 || typ != sensorTypeCelsius {
+			continue
+		}
+		if st, ok := pduInt(t[5][idx]); ok && st != sensorStatusOK {
+			continue
+		}
+		scale, ok := pduInt(t[2][idx])
+		if !ok {
+			scale = sensorScaleUnits
+		}
+		precision, _ := pduInt(t[3][idx])
+		celsius := float64(value) * math.Pow10(int(scale-sensorScaleUnits)*3-int(precision))
+		if celsius <= -50 || celsius >= 200 { // absent sensors report out of range
+			continue
+		}
+		celsius = math.Round(celsius*10) / 10
+		port := ""
+		for name, x := range byPort {
+			if es.within(e, x.index) {
+				port = name
+				break
+			}
+		}
+		if port != "" {
+			xcvr[port] = celsius
+			continue
+		}
+		name := cmp.Or(e.name, e.descr, "Sensor "+idx)
+		if slices.ContainsFunc(temps, func(x model.Temperature) bool { return x.Sensor == name }) {
+			name += " " + idx
+		}
+		temps = append(temps, model.Temperature{Sensor: name, Celsius: celsius, Kind: model.Ptr(es.sensorKind(e))})
+	}
+	for _, x := range temps {
+		d.Temperatures = append(removeSensor(d.Temperatures, x.Sensor), x)
+	}
+	for i := range d.Interfaces {
+		if temp, ok := xcvr[d.Interfaces[i].Name]; ok {
+			if d.Interfaces[i].Transceiver == nil {
+				d.Interfaces[i].Transceiver = &model.Transceiver{}
+			}
+			d.Interfaces[i].Transceiver.TemperatureC = model.Ptr(temp)
+		}
 	}
 }
