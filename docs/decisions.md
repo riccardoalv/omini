@@ -35,10 +35,16 @@ choices and the reasons behind them.
   once (a VLAN on the router, the switches and the access points) or is
   easier centralized (it needs what only Omini knows: the topology, the
   catalog, every vendor at once). A setting of one device that its own
-  interface already does well (a service restart, a port's speed, an access
-  point's channel) stays there. Features are for a **simple homelab** (a
+  interface already does well (a service restart, a port's speed, one access
+  point's channel) stays there; settling a conflict between several access
+  points is Omini's (see [Wi-Fi channels](#wi-fi-channels)). Features are for a **simple homelab** (a
   router, a switch or two, access points, a hypervisor): simple to use and
   to build, not niche or enterprise.
+- **IPv6 is first-class** (maintainer's rule, 2026-10-18): wherever a device
+  has IPv6, the model carries it as it carries IPv4 (device and interface
+  addresses, neighbor tables, DNS records, leases, gateways, networks), and
+  every plugin reports it where its API can. IPv4-only code is a gap to fix,
+  not a choice.
 - **Devices without an API** are inferred from what other devices see (ARP,
   DHCP, MAC tables), or read by an optional scraping plugin.
 - **License** MIT. Nothing that would change that is shipped: nmap (NPSL) is
@@ -139,6 +145,13 @@ tested with fixtures). The rules that are easy to break:
   integrations, or by MAC in one and by IP in another, is merged; a device
   reported without a MAC takes the one its address has (DHCP, scans, then
   ARP).
+- **A device keeps its history when its key changes** (decided 2026-10-18):
+  a managed device's node is named after its key's MAC, so a plugin that
+  picks another of the device's MACs (a newer version, a stable SNMP key)
+  would make it a new node. When a new device node lists, among its MACs,
+  the MAC of a device the inventory knows and the map no longer has, that
+  device's alias, position, history, changes, backups and areas move to the
+  new node.
 - **A machine with two interfaces is two nodes, each with its own address**
   (cable and Wi-Fi). Linux answers ARP for either address from either
   interface, so an ARP address leased to another MAC is ignored when the MAC
@@ -241,6 +254,12 @@ tested with fixtures). The rules that are easy to break:
   temperatures, disks, updates), a front view of the ports (click a port for
   its card), the device's extras (services, VPN peers, DHCP pools, firewall
   states, VLANs, SFP optics), "Talks to", alerts and presence.
+- **A note per device** (decided 2026-10-18): free plain text (up to 1,000
+  characters, no formatting) at the top of the device panel, saved when the
+  field loses focus. It lives in the inventory, so it stays while the device
+  is offline or has left the map. The map node shows a note mark, the device
+  list's search matches it and the JSON export carries it; the diagnostics
+  file never does (a note may hold names or passwords).
 - **Settings** is a menu of sections; it has no plugin list (maintainer's
   rule). Port descriptions are stored in Omini, never written to the device.
 
@@ -316,6 +335,14 @@ button where the thing is, not a configuration screen.
   not found: then only the way to the internet is protected.
 - **History.** Every change (when, what, before and after, success or the
   error) is kept for a year and shown in the device panel under **Changes**.
+  A change one device makes for another (a reservation, a pause, a DNS name
+  or a Wake-on-LAN on the router or DNS server) is in both histories (decided
+  2026-10-18). A refusal repeated as it was is kept once, and Omini's
+  automatic retries (DNS names, a paused device's new address) wait longer
+  after each refusal, up to 6 hours.
+- **A plan stops at the first failure**: a change applied to several devices
+  (a VLAN, Wi-Fi per VLAN, Wi-Fi channels) goes one device at a time; the
+  first that refuses stops it, and those already done stay.
 - **A disabled port** shows as "Disabled" (not "No link") with an **Enable**
   button; the client that was on it stays there, offline.
 - **Not planned** (maintainer's rule): jumbo frames, port mirroring, rate
@@ -328,6 +355,40 @@ button where the thing is, not a configuration screen.
   Omada, OpenWrt), then VLANs (below), the port's name, rebooting a device,
   configuration backups with history, then reading STP, LAGs and SFP modules
   into the map and alerts.
+
+### Wi-Fi channels
+
+Decided 2026-10-18, not built yet. One access point's channel stays in its
+own interface; Omini settles a conflict between several, because only it sees
+every access point of every vendor at once.
+
+- **An alert finds the conflict**: two access points of the network on the
+  same or overlapping 2.4 GHz channels, or one on a channel other than 1, 6
+  or 11. Every access point of a network is taken to hear the others (a
+  homelab is one house; plugins do not report what each radio hears).
+- **2.4 GHz only, at first** (small first): three channels that do not
+  overlap (1, 6, 11), 20 MHz. 5 GHz (widths, DFS) waits for a later decision.
+- **Resolve** is a button on the alert. It shows a plan for every access
+  point involved before anything changes: it keeps the ones already on a
+  free channel, moves as few as it can, and moves the one with fewest clients
+  first. More than three access points share the three channels evenly.
+- **Never a DFS channel**, and never a width other than 20 MHz.
+- **Auto channel is left alone**: an access point whose channel is automatic
+  (a UniFi or Omada controller on "auto") is not moved, since its controller
+  would move it back; the alert says so. If every access point involved is on
+  auto, there is no button.
+- **Mesh is left alone**: an access point with a wireless uplink (a mesh
+  unit) is never moved, not even with destructive changes allowed: a new
+  channel can drop its backhaul and the unit with it.
+- **One access point at a time**: apply, check that it answers and its radio
+  is up on the new channel, save, then the next. One that fails stops the
+  plan; those already done stay (each is a valid state on its own).
+- **Clients reconnect** for a few seconds. The confirmation says how many
+  clients each access point has; when the browser asking is one of them, it
+  says so. It is an ordinary change, except when Omini's own machine is on
+  that access point's Wi-Fi: then it is destructive (it cuts Omini off).
+- **Plugins** report each radio's band, channel, width, whether the channel
+  is automatic, and declare the change `wifi.channel` in their manifest.
 
 ## VLANs
 
@@ -467,6 +528,12 @@ for many devices at once.
   reservation inside its DHCP range (pfSense with ISC), Omini proposes a free
   address outside the range, shown in the list before applying, and says the
   device takes it at its next lease renewal.
+- **Only a router that serves DHCP** on the device's network is asked
+  (decided 2026-10-18). A device leased by a server Omini cannot reserve on
+  (Pi-hole, AdGuard Home) is listed with that server, to fix there.
+- **Omini's own host is never given another address** (it would move Omini
+  away from its users): it is left out of the list, and from its panel a new
+  address needs destructive changes allowed.
 - **Alert** `infra_dynamic_ip` (info): an infrastructure device on DHCP with
   no reservation, with the same button.
 - Needs nothing new from the plugins: OPNsense, pfSense, MikroTik and OpenWrt
@@ -499,7 +566,9 @@ for many devices at once.
 
 ### Wake-on-LAN
 
-- **A "Wake" button** on the panel of an offline device that has a MAC.
+- **A "Wake" button** on the panel of an offline device that has a MAC, and
+  on the device list for one that has left the map (off for more than an
+  hour; decided 2026-10-18), never for a random MAC.
 - **On Omini's own networks** Omini sends the magic packet itself (UDP
   broadcast to port 9 on the interface in that network). **On another
   network** (maintainer's choice) it asks the router of that network: change
@@ -536,6 +605,15 @@ for many devices at once.
   and Omini never rewrites it when the device's address changes.
 - **Protected**: Omini's own host, the router and network devices cannot be
   paused.
+- **Controllers pause the internet only** (maintainer's choice, 2026-10-18):
+  UniFi and Omada pause through their gateway's internet rules (UniFi
+  traffic rules, Network 7 or later; an Omada gateway ACL towards the WAN),
+  never through their client block, which also cuts the device off its own
+  network. A controller too old for those rules, or a site without their
+  gateway, shows no button.
+- **Not on DNS servers** (maintainer's rule, 2026-10-18): AdGuard Home and
+  Pi-hole could refuse a device's lookups, but a device with its own DNS
+  server or DNS over HTTPS goes around it, so they never pause.
 
 ### STP and LAGs on the map
 
@@ -569,7 +647,8 @@ for many devices at once.
   version is kept only when it differs from the last one.
 - **Not every integration can**: pfSense's REST API has no configuration
   export (only through its shell command endpoint, which Omini does not ask
-  for), and SNMP devices have none; UniFi and Omada keep the site's settings
+  for: maintainer's rule, 2026-10-18, no plugin asks for a shell, nor for
+  XML-RPC credentials), and SNMP devices have none; UniFi and Omada keep the site's settings
   in one device's backup (the gateway's, else the lowest MAC), so a site
   change is one change.
 - **Kept**: in SQLite, compressed and encrypted like credentials (a
@@ -579,7 +658,8 @@ for many devices at once.
   versions (date, "by Omini" or "outside Omini"), the differences between
   any two, and a download.
 - **Alert** `config_changed` (info): a version differs from the previous
-  one and Omini made no change on that device in between.
+  one and Omini made no change on that device, nor through its integration,
+  in between (a UniFi or Omada site's settings live in one device's backup).
 
 ## DNS and DHCP
 
