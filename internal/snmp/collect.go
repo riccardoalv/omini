@@ -730,6 +730,10 @@ func collectResources(c *client, d *model.Device) error {
 		used, ok2 := pduUint(t[6][idx])
 		if ok1 && ok2 && size > 0 {
 			d.MemPct = model.Ptr(float64(used) * 100 / float64(size))
+			if units, ok := pduUint(t[4][idx]); ok && units > 0 {
+				d.MemTotalBytes = model.Ptr(size * units)
+				d.MemUsedBytes = model.Ptr(used * units)
+			}
 		}
 		break
 	}

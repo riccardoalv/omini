@@ -72,6 +72,10 @@ func expected(d model.Device, vendor string, role model.DeviceRole) model.Device
 			d.CPUCount = model.Ptr(uint64(1)) // the fake agent's one processor row
 		}
 	}
+	if d.MemPct != nil && d.MemTotalBytes == nil { // the fake agent's 1000 KiB of RAM
+		d.MemTotalBytes = model.Ptr(uint64(1000 * 1024))
+		d.MemUsedBytes = model.Ptr(uint64(*d.MemPct*10) * 1024)
+	}
 	ifaces := make([]model.Interface, len(d.Interfaces))
 	for i, iface := range d.Interfaces {
 		// Counters always exist over SNMP, even on ports that are down.
@@ -301,5 +305,19 @@ func TestCPUCountIsTheNumberOfProcessorRows(t *testing.T) {
 	agent = snmptest.Start(t, "public", snmptest.FromDevice(model.Device{Key: "y", Name: "sw"}, snmptest.Options{}))
 	if got, err = snmp.Collect(context.Background(), target(agent, "public")); err != nil || got.CPUCount != nil {
 		t.Fatalf("cpu count without the table: %v (%v)", got.CPUCount, err)
+	}
+}
+
+// RAM in bytes is hrStorageRAM's size and used times its allocation units.
+func TestMemoryBytesFromTheRAMRow(t *testing.T) {
+	const gib = 1 << 30
+	d := model.Device{Key: "x", Name: "nas", MemTotalBytes: model.Ptr(uint64(8 * gib)), MemUsedBytes: model.Ptr(uint64(2 * gib))}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(d, snmptest.Options{}))
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.Deref(got.MemTotalBytes) != 8*gib || model.Deref(got.MemUsedBytes) != 2*gib || model.Deref(got.MemPct) != 25 {
+		t.Fatalf("memory total %v, used %v, pct %v", got.MemTotalBytes, got.MemUsedBytes, got.MemPct)
 	}
 }

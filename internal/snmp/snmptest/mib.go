@@ -241,11 +241,20 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 			add(gosnmp.Integer, int(*d.CPUPct), "1.3.6.1.2.1.25.3.3.1.2.%d", 196608+i)
 		}
 	}
-	if d.MemPct != nil {
-		add(gosnmp.ObjectIdentifier, ".1.3.6.1.2.1.25.2.1.2", "1.3.6.1.2.1.25.2.3.1.2.1")
-		add(gosnmp.Integer, 1024, "1.3.6.1.2.1.25.2.3.1.4.1")
-		add(gosnmp.Integer, 1000, "1.3.6.1.2.1.25.2.3.1.5.1")
-		add(gosnmp.Integer, int(*d.MemPct*10), "1.3.6.1.2.1.25.2.3.1.6.1")
+	// hrStorageTable rows: type, description, allocation units, size, used.
+	storage := func(idx int, typ, descr string, units, size, used uint64) {
+		add(gosnmp.ObjectIdentifier, ".1.3.6.1.2.1.25.2.1."+typ, "1.3.6.1.2.1.25.2.3.1.2.%d", idx)
+		add(gosnmp.OctetString, descr, "1.3.6.1.2.1.25.2.3.1.3.%d", idx)
+		add(gosnmp.Integer, int(units), "1.3.6.1.2.1.25.2.3.1.4.%d", idx) //nolint:gosec // test data
+		add(gosnmp.Integer, int(size), "1.3.6.1.2.1.25.2.3.1.5.%d", idx)  //nolint:gosec // test data
+		add(gosnmp.Integer, int(used), "1.3.6.1.2.1.25.2.3.1.6.%d", idx)  //nolint:gosec // test data
+	}
+	// RAM in KiB units: the device's bytes, else 1000 units at MemPct.
+	switch {
+	case d.MemTotalBytes != nil:
+		storage(1, "2", "Physical memory", 1024, *d.MemTotalBytes/1024, model.Deref(d.MemUsedBytes)/1024)
+	case d.MemPct != nil:
+		storage(1, "2", "Physical memory", 1024, 1000, uint64(*d.MemPct*10))
 	}
 	return out
 }
