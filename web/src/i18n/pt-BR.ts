@@ -188,6 +188,8 @@ const ptBR: typeof en = {
     internet: 'Internet',
     details: 'Detalhes',
     serial: 'Número de série',
+    stpRoot: 'Raiz do spanning tree',
+    stpRootSelf: 'Este switch',
     scan: 'Escanear (nmap)',
     scanning: 'Escaneando…',
     scanHint:

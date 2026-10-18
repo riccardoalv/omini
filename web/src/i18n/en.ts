@@ -180,6 +180,8 @@ export default {
     internet: 'Internet',
     details: 'Details',
     serial: 'Serial number',
+    stpRoot: 'Spanning tree root',
+    stpRootSelf: 'This switch',
     scan: 'Scan (nmap)',
     scanning: 'Scanning…',
     scanHint:

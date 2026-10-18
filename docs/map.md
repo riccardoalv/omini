@@ -158,8 +158,10 @@ and the JSON export carries it. The diagnostics file never includes it.
 **Details.** Name (click to rename; the name is kept by Omini, never written
 to the device; until then a client is named by a DNS record of its address,
 else its DHCP reservation's name, else its DHCP lease's host name, a
-router's first, else the names the scan found), type, IP and MAC addresses, vendor, model, serial, version,
-uptime, the integration that reads it, **Connected to** (its parent and port),
+router's first, else the names the scan found), type, IP and MAC addresses,
+vendor, model, serial, the spanning tree root a switch sees (a link to it
+when it is on the map), version, uptime, the integration that reads it,
+**Connected to** (its parent and port),
 **Runs on** (for a router or firewall running as a VM: the host it runs on,
 which is not linked on the map), Wi-Fi network, band, signal and link rate for
 Wi-Fi clients, and **Last seen**.
