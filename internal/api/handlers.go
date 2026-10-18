@@ -661,17 +661,18 @@ func (s *Server) listInventory(w http.ResponseWriter, r *http.Request) {
 	// Classification comes from the current map, when the device is on it.
 	type entry struct {
 		store.InventoryEntry
-		Online  bool   `json:"online"`
-		Role    string `json:"role,omitempty"`
-		Type    string `json:"type,omitempty"`
-		OS      string `json:"os,omitempty"`
-		Brand   string `json:"brand,omitempty"`
-		Product string `json:"product,omitempty"`
+		Online  bool     `json:"online"`
+		IPs6    []string `json:"ips6,omitempty"` // while it is on the map: IPv6 privacy addresses change
+		Role    string   `json:"role,omitempty"`
+		Type    string   `json:"type,omitempty"`
+		OS      string   `json:"os,omitempty"`
+		Brand   string   `json:"brand,omitempty"`
+		Product string   `json:"product,omitempty"`
 	}
 	out := make([]entry, 0, len(inv))
 	for _, e := range inv {
 		n := current[e.ID]
-		out = append(out, entry{e, n.Online, n.Role, n.Type, n.OS, n.Brand, n.Product})
+		out = append(out, entry{e, n.Online, n.IPs6, n.Role, n.Type, n.OS, n.Brand, n.Product})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

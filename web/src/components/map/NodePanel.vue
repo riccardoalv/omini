@@ -33,6 +33,7 @@ import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
 import type { ClientGroup } from '@/lib/graph'
 import { childrenOf, linkOnPort } from '@/lib/graph'
 import { deviceTypes, logos, productSlugs, slugName } from '@/lib/icons'
+import { compactIPv6, globalIPv6, isLinkLocal6 } from '@/lib/ipv6'
 import { displayName } from '@/lib/names'
 import { parseReasons } from '@/lib/reasons'
 import { formatRate, nodeFlow } from '@/lib/traffic'
@@ -664,6 +665,9 @@ async function save(patch: {
               </span>
               <span v-if="roleLabel">{{ roleLabel }}</span>
               <span v-if="n.ip" class="mono">{{ n.ip }}</span>
+              <span v-else-if="globalIPv6(n.ips6).length" class="mono">{{
+                compactIPv6(globalIPv6(n.ips6)[0]!)
+              }}</span>
             </div>
           </div>
           <button class="btn ghost icon" :aria-label="t('common.close')" @click="emit('close')">
@@ -917,6 +921,18 @@ async function save(patch: {
               ><dt>{{ t('panel.ip') }}</dt>
               <dd class="mono">{{ n.ip }}</dd></template
             >
+            <template v-if="n.ips6?.length">
+              <dt>{{ t('panel.ipv6') }}</dt>
+              <dd class="mono ips6" data-test="ipv6">
+                <span
+                  v-for="ip in n.ips6"
+                  :key="ip"
+                  :class="{ muted: isLinkLocal6(ip) }"
+                  :title="isLinkLocal6(ip) ? t('panel.linkLocal') : undefined"
+                  >{{ compactIPv6(ip) }}</span
+                >
+              </dd>
+            </template>
             <template v-if="n.mac">
               <dt>{{ t('panel.mac') }}</dt>
               <dd class="mono">
@@ -1478,6 +1494,9 @@ dt {
 dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+.ips6 span {
+  display: block;
 }
 .err {
   display: block;

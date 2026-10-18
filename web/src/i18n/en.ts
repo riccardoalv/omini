@@ -216,6 +216,8 @@ export default {
       'Removes the device and its history from Omini. If it is still on the network, it comes back on the next scan — use Hide to keep it off the map.',
     expandGroup: 'Show all clients',
     ip: 'IP address',
+    ipv6: 'IPv6',
+    linkLocal: 'Link-local: only reachable on its own network',
     mac: 'MAC address',
     hostname: 'Hostname',
     vendor: 'Vendor',

@@ -31,6 +31,14 @@ describe('inventory', () => {
     expect(ids(filterInventory(entries, { ...f, query: '' }))).toHaveLength(3)
   })
 
+  it('searches IPv6 addresses, typed compact or in full', () => {
+    const list = [...entries, entry('pi', { ips6: ['2001:db8:1::53', 'fe80::53'] })]
+    const f = { status: 'all' as const, randomOnly: false }
+    expect(ids(filterInventory(list, { ...f, query: '2001:db8:1::53' }))).toEqual(['pi'])
+    expect(ids(filterInventory(list, { ...f, query: '2001:0DB8:0001::0053' }))).toEqual(['pi'])
+    expect(ids(filterInventory(list, { ...f, query: 'fe80::53' }))).toEqual(['pi'])
+  })
+
   it('searches the notes too', () => {
     const noted = [...entries, entry('pi', { note: 'Pi-hole in the hallway closet' })]
     const f = { status: 'all' as const, randomOnly: false }

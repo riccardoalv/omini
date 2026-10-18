@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -78,5 +79,15 @@ func TestDNSAndDHCPView(t *testing.T) {
 	// The same server over IPv6 is the same node.
 	if len(v.DNS.Servers) == 2 && v.DNS.Servers[1]["node_id"] != v.DNS.Servers[0]["node_id"] {
 		t.Errorf("dns over IPv6: %+v", v.DNS.Servers)
+	}
+	// The device list has its IPv6 addresses while it is on the map.
+	type row struct {
+		ID   string   `json:"id"`
+		IPs6 []string `json:"ips6"`
+	}
+	var inv []row
+	h.do("GET", "/api/inventory", nil, &inv)
+	if i := slices.IndexFunc(inv, func(e row) bool { return e.ID == "dev:58:9c:fc:00:00:01" }); i < 0 || !slices.Equal(inv[i].IPs6, []string{"2001:db8:1::1"}) {
+		t.Errorf("inventory: %+v", inv)
 	}
 }

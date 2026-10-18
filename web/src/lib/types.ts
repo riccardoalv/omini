@@ -237,6 +237,8 @@ export interface TopoNode {
   vendor?: string
   model?: string
   ip?: string
+  /** IPv6 addresses, compact: global and ULA first, then link-local. */
+  ips6?: string[]
   mac?: string
   hostname?: string
   random_mac?: boolean
@@ -407,6 +409,8 @@ export interface InventoryEntry {
   label: string
   mac?: string
   ip?: string
+  /** Its IPv6 addresses while it is on the map (they change: privacy addresses). */
+  ips6?: string[]
   hostname?: string
   vendor?: string
   parent_id?: string
