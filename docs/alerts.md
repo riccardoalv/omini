@@ -64,6 +64,7 @@ attention) and **info** (worth knowing).
 | Rule | Severity | Opens when |
 |---|---|---|
 | `duplicate_ip` | warning | Two online devices with different MAC addresses use the same IP |
+| `wifi_open` | warning, or info for a guest network | A Wi-Fi network has no password. Info when it puts its clients in a VLAN of their own (other than 1), the usual guest network. A controller that reports the same SSID on every access point gives one alert per SSID |
 | `config_changed` | info | A device's configuration changed outside Omini: its new [backup](map.md#the-device-panel) differs and Omini made no change in between, on it or through its integration (a UniFi or Omada site keeps its settings in one device's backup, while Omini changes them through any of its devices). Stays open for 24 hours |
 | `dns_bypass` | warning | With [Traffic flows](discovery.md#traffic-flows) and a DNS server Omini reads (AdGuard Home, Pi-hole or the router's), a device sent DNS queries (ports 53, 853) to servers on the internet in the last hour and they answered: your server's blocking and local names do not apply to it. Queries the router blocks (no answer) are not alerted. Routers, servers and DNS servers are left out |
 | `upload_unusual` | warning | With Traffic flows, a device sent at least 200 MB to the internet in the last hour, and five times its usual hour (its average over the week before; needs a day of history). Routers, servers, NAS, hypervisors and VMs are left out |

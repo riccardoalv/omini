@@ -1,9 +1,13 @@
 package insights
 
 import (
+	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 // VPNWindow: a VPN peer connected this recently that is not any more is down;
@@ -14,6 +18,7 @@ func init() {
 	Rules["service_stopped"] = serviceStopped
 	Rules["vpn_down"] = vpnDown
 	Rules["reboot_pending"] = rebootPending
+	Rules["wifi_open"] = wifiOpen
 }
 
 // serviceStopped: a service the device is configured to run is not running.
@@ -76,5 +81,49 @@ func rebootPending(in Input, _ index) []Insight {
 			out = append(out, node("reboot_pending", Info, n, "", nil))
 		}
 	}
+	return out
+}
+
+// wifiOpen: a Wi-Fi network without a password. A guest network that puts
+// its clients in a VLAN of their own is only worth knowing (info). A
+// controller reports the same SSID on each of its access points: one alert
+// per integration and SSID, on the first device that reports it.
+func wifiOpen(in Input, _ index) []Insight {
+	type found struct {
+		n    *topology.Node
+		ssid string
+		vlan uint16
+	}
+	byKey := map[string]found{}
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue
+		}
+		for _, w := range n.Device.WifiNetworks {
+			if model.Deref(w.Security) != model.WifiNetworkSecurityOpen || (w.Enabled != nil && !*w.Enabled) {
+				continue
+			}
+			owner := n.ID
+			if n.IntegrationID != 0 {
+				owner = fmt.Sprint(n.IntegrationID)
+			}
+			key := "wifi_open|" + owner + "|" + w.SSID
+			if was, ok := byKey[key]; ok && was.n.ID <= n.ID {
+				continue
+			}
+			byKey[key] = found{n: n, ssid: w.SSID, vlan: model.Deref(w.Vlan)}
+		}
+	}
+	out := make([]Insight, 0, len(byKey))
+	for key, f := range byKey {
+		sev, p := Warning, map[string]any{"ssid": f.ssid}
+		if f.vlan > 1 {
+			sev, p["vlan"] = Info, f.vlan
+		}
+		i := node("wifi_open", sev, f.n, "", p)
+		i.Key = key
+		out = append(out, i)
+	}
+	slices.SortFunc(out, func(a, b Insight) int { return strings.Compare(a.Key, b.Key) })
 	return out
 }

@@ -724,6 +724,10 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      wifi_open: {
+        title: 'Wi-Fi {ssid} has no password',
+        detail: 'Anyone nearby can join it and see what travels unencrypted.',
+      },
       reboot_pending: {
         title: '{node} needs a restart',
         detail: 'The device asks to be restarted to finish an update or a change.',
@@ -827,6 +831,8 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      wifi_open:
+        'Set WPA2 or WPA3 with a password on the access point or controller; a guest network can stay open if it is in a VLAN of its own.',
       reboot_pending: "Restart it when a short outage suits you, from the device's own interface.",
       vpn_down:
         'Check the other end of the tunnel and the internet there; a changed address or key also stops it.',

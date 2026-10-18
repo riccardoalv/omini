@@ -103,3 +103,38 @@ func TestRebootPending(t *testing.T) {
 		t.Fatalf("update_pending: %v", u)
 	}
 }
+
+func TestWifiOpen(t *testing.T) {
+	open := model.Ptr(model.WifiNetworkSecurityOpen)
+	ap := func(id string, integration int64, nets ...model.WifiNetwork) topology.Node {
+		return topology.Node{
+			ID: id, Kind: topology.KindDevice, Role: "ap", Label: id, Online: true, IntegrationID: integration,
+			Device: &model.Device{WifiNetworks: nets},
+		}
+	}
+	in := Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{
+		// A controller reports its site's SSIDs on each access point.
+		ap("dev:ap2", 7, model.WifiNetwork{SSID: "Cafe", Security: open}, model.WifiNetwork{SSID: "Guest", Security: open, Vlan: model.Ptr(uint16(50))}),
+		ap("dev:ap1", 7, model.WifiNetwork{SSID: "Cafe", Security: open}, model.WifiNetwork{SSID: "Guest", Security: open, Vlan: model.Ptr(uint16(50))}),
+		ap("dev:ap3", 8,
+			model.WifiNetwork{SSID: "Home", Security: model.Ptr(model.WifiNetworkSecurityWpa2)},
+			model.WifiNetwork{SSID: "Old", Security: open, Enabled: model.Ptr(false)},
+			model.WifiNetwork{SSID: "Lan", Security: open, Vlan: model.Ptr(uint16(1))}, // the untagged LAN: no guest network
+		),
+	}}}
+	got := keysOf(t, "wifi_open", in)
+	want := map[string]string{"wifi_open|7|Cafe": Warning, "wifi_open|7|Guest": Info, "wifi_open|8|Lan": Warning}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for k, s := range want {
+		if got[k] != s {
+			t.Errorf("%s: %q, want %q", k, got[k], s)
+		}
+	}
+	for _, i := range Evaluate(in) {
+		if i.Key == "wifi_open|7|Cafe" && (i.NodeID != "dev:ap1" || i.Params["ssid"] != "Cafe") {
+			t.Errorf("on %s with %v", i.NodeID, i.Params)
+		}
+	}
+}

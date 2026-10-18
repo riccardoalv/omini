@@ -736,6 +736,10 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      wifi_open: {
+        title: 'O Wi-Fi {ssid} não tem senha',
+        detail: 'Qualquer pessoa por perto pode entrar nele e ver o que trafega sem criptografia.',
+      },
       reboot_pending: {
         title: '{node} precisa reiniciar',
         detail:
@@ -841,6 +845,8 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      wifi_open:
+        'Configure WPA2 ou WPA3 com senha no access point ou controlador; uma rede de visitantes pode ficar aberta se estiver numa VLAN própria.',
       reboot_pending:
         'Reinicie-o quando uma breve interrupção não atrapalhar, pela interface do próprio equipamento.',
       vpn_down:
