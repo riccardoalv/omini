@@ -41,7 +41,7 @@ attention) and **info** (worth knowing).
 | `disk_full` | warning from 80 %, critical from 90 % | Use of a disk or filesystem |
 | `update_pending` | warning | The device knows of a pending update (from its own last check; Omini never starts one) |
 | `reboot_pending` | info | The device asks for a restart (to finish an update or a change), whether or not an update is pending |
-| `dhcp_pool_full` | warning from 90 % | Addresses in use in a DHCP pool |
+| `dhcp_pool_full` | warning from 90 % | Addresses in use in a DHCP pool. A router that reports its networks' DHCP ranges but no pools is counted by Omini: its leases and reservations inside each range |
 | `firewall_states_full` | warning from 90 % | Entries in the firewall's state table against its limit |
 | `service_stopped` | warning | A service the device is configured to run (enabled) is not running |
 

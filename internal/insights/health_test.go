@@ -1,6 +1,7 @@
 package insights
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -207,3 +208,40 @@ func TestWANGatewayWithoutWANInterface(t *testing.T) {
 		t.Fatalf("degraded: %v", d)
 	}
 }
+
+// A router that reports its networks' DHCP ranges but no pools: its leases
+// and reservations in each range feed dhcp_pool_full like a pool would.
+func TestDHCPPoolFromRanges(t *testing.T) {
+	var leases []model.DhcpLease
+	for i := 100; i < 108; i++ {
+		leases = append(leases, model.DhcpLease{IP: "192.168.1." + itoa(i), MAC: "aa:bb:cc:00:00:01"})
+	}
+	leases = append(leases, model.DhcpLease{IP: "192.168.1.50", MAC: "aa:bb:cc:00:00:02"}) // outside the range
+	rt := &model.Device{
+		Networks: []model.Network{
+			{Vlan: 1, Name: model.Ptr("LAN"), Dhcp: &model.NetworkDhcp{Enabled: true, From: model.Ptr("192.168.1.100"), To: model.Ptr("192.168.1.109")}},
+			{Vlan: 30, Name: model.Ptr("IOT"), Dhcp: &model.NetworkDhcp{Enabled: true, From: model.Ptr("192.168.30.100"), To: model.Ptr("192.168.30.199")}},
+			{Vlan: 40, Name: model.Ptr("OFF"), Dhcp: &model.NetworkDhcp{Enabled: false, From: model.Ptr("192.168.1.100"), To: model.Ptr("192.168.1.100")}},
+		},
+		DhcpLeases:       leases,
+		DhcpReservations: []model.DhcpReservation{{IP: "192.168.1.109", MAC: "aa:bb:cc:00:00:03"}, {IP: "192.168.1.107", MAC: "aa:bb:cc:00:00:01"}},
+	}
+	n := topology.Node{ID: "dev:rt", Kind: topology.KindDevice, Label: "rt", Online: true, Device: rt, Reports: []topology.Report{{Device: rt}}}
+	in := Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{n}}}
+	got := keysOf(t, "dhcp_pool_full", in)
+	if len(got) != 1 || got["dhcp_pool_full|dev:rt|LAN"] != Warning {
+		t.Fatalf("got %v", got)
+	}
+	for _, i := range Evaluate(in) {
+		if i.Rule == "dhcp_pool_full" && (i.Params["used"] != uint64(9) || i.Params["total"] != uint64(10)) {
+			t.Fatalf("params %v", i.Params)
+		}
+	}
+	// A router that reports its pools is counted from them only.
+	rt.DhcpPools = []model.DhcpPool{{Network: "LAN", Total: model.Ptr(uint64(100)), Used: model.Ptr(uint64(10))}}
+	if got := keysOf(t, "dhcp_pool_full", in); len(got) != 0 {
+		t.Fatalf("with pools: %v", got)
+	}
+}
+
+func itoa(i int) string { return fmt.Sprint(i) }
