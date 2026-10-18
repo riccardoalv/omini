@@ -7,7 +7,9 @@
 package topology
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"net"
 	"net/netip"
 	"slices"
@@ -206,6 +208,7 @@ type builder struct {
 	byMAC            map[model.MACAddress]string
 	byIP             map[string]string
 	byName           map[string]string
+	names            clientNames
 	// uplinks are ports connected to infrastructure; value is the node on the other end.
 	uplinks map[portKey]string
 	// lastPort: where MACs missing from the MAC tables right now were last learned.
@@ -1021,7 +1024,76 @@ func (b *builder) placeClients(managed []string) {
 			b.collectClientsOf(id, d, wifi, arp, hostnames, leaseIPs, hostsByMAC, hostsByIP)
 		}
 	}
+	b.names = b.clientNames(managed)
+	maps.Copy(hostnames, b.names.lease)
 	b.placeCollected(wifi, arp, hostnames, leaseIPs, hostsByMAC, hostsByIP)
+}
+
+// clientNames is what the network's servers call its clients: DHCP lease
+// hostnames and reservation names by MAC, DNS records by address.
+type clientNames struct {
+	lease, reserved map[model.MACAddress]string
+	dns             map[string]string
+}
+
+// clientNames reads the names of every managed device's DHCP and DNS. When
+// several servers name the same client, a router's name wins, then the
+// lowest integration id's, so the label does not change between rounds.
+func (b *builder) clientNames(managed []string) clientNames {
+	type server struct {
+		router      bool
+		integration int64
+		d           *model.Device
+	}
+	var list []server
+	for _, id := range managed {
+		n := b.nodes[id]
+		if n == nil {
+			continue
+		}
+		for _, r := range n.Reports {
+			role := string(model.Deref(r.Device.Role))
+			router := role == "router" || role == "firewall" || n.Role == "router" || n.Role == "firewall"
+			list = append(list, server{router: router, integration: r.IntegrationID, d: r.Device})
+		}
+	}
+	slices.SortStableFunc(list, func(a, b server) int {
+		if a.router != b.router {
+			if a.router {
+				return -1
+			}
+			return 1
+		}
+		return cmp.Compare(a.integration, b.integration)
+	})
+	out := clientNames{lease: map[model.MACAddress]string{}, reserved: map[model.MACAddress]string{}, dns: map[string]string{}}
+	first := func(m map[model.MACAddress]string, k model.MACAddress, v string) {
+		if _, ok := m[k]; !ok && v != "" {
+			m[k] = v
+		}
+	}
+	for _, s := range list {
+		for _, l := range s.d.DhcpLeases {
+			first(out.lease, l.MAC, model.Deref(l.Hostname))
+		}
+		for _, r := range s.d.DhcpReservations {
+			first(out.reserved, r.MAC, model.Deref(r.Name))
+		}
+		for _, r := range s.d.DnsRecords {
+			if _, ok := out.dns[r.IP]; !ok && r.Name != "" {
+				out.dns[r.IP] = r.Name
+			}
+		}
+	}
+	return out
+}
+
+// clientLabel names a client: a DNS record of its address, else its DHCP
+// reservation's name, else its host name (a lease's first), else its address
+// or MAC. The user's alias, applied later, wins over all.
+func (b *builder) clientLabel(n *Node) string {
+	return firstNonEmpty(shortName(b.names.dns[n.IP]), shortName(b.names.reserved[model.MACAddress(n.MAC)]),
+		shortName(n.Hostname), n.IP, n.MAC)
 }
 
 func (b *builder) collectClientsOf(id string, d *model.Device,
@@ -1041,10 +1113,7 @@ func (b *builder) collectClientsOf(id string, d *model.Device,
 		}
 	}
 	for _, l := range d.DhcpLeases {
-		if h := model.Deref(l.Hostname); h != "" {
-			hostnames[l.MAC] = h
-		}
-		leaseIPs[l.MAC] = l.IP
+		leaseIPs[l.MAC] = l.IP // the hostname is clientNames'
 	}
 	for _, h := range d.Hosts {
 		if h.MAC != nil && !h.MAC.IsGroup() {
@@ -1148,7 +1217,7 @@ func (b *builder) placeCollected(
 		if n.Vendor == "" {
 			n.Vendor = oui.Lookup(string(m))
 		}
-		n.Label = firstNonEmpty(shortName(n.Hostname), n.IP, n.MAC)
+		n.Label = b.clientLabel(n)
 
 		var kind EdgeKind
 		port, onPort, uplink := b.bestPort(b.fdbOrLast(m), "")
@@ -1232,7 +1301,7 @@ func (b *builder) placeCollected(
 		hs := hostsByIP[ip]
 		n := &Node{ID: "ip:" + ip, Kind: KindClient, Role: "client", Online: true, IP: ip, ParentID: hs.node}
 		enrich(n, hs.h)
-		n.Label = firstNonEmpty(shortName(n.Hostname), ip)
+		n.Label = b.clientLabel(n)
 		b.nodes[n.ID] = n
 		b.addEdge(hs.node, "", n.ID, "", EdgeInferred, 0)
 	}
