@@ -137,6 +137,16 @@ describe('ServicesTab', () => {
         router: 'dev:fw',
         infra: false,
       },
+      {
+        node_id: 'mac:ap',
+        label: 'ap-hall',
+        type: 'ap',
+        mac: 'aa:00:00:00:00:04',
+        ip: '10.0.0.40',
+        router: '',
+        infra: true,
+        server: 'dev:pihole',
+      },
     ])
     vi.mocked(api.fixMany).mockResolvedValue([
       { node_id: 'mac:sw', change: {} as never },
@@ -150,6 +160,8 @@ describe('ServicesTab', () => {
     await w.get('[data-test=fix-open]').trigger('click')
     const rows = () => document.querySelectorAll('[data-test=fix-list] li')
     expect(rows()).toHaveLength(2)
+    // One on a DHCP server that cannot reserve: listed with why, never applied.
+    expect(document.querySelector('[data-test=fix-elsewhere]')!.textContent).toContain('ap-hall')
     expect(rows()[0]!.textContent).toContain('192.168.1.2')
     ;(document.querySelector('[data-test=fix-others]') as HTMLElement).click()
     await flushPromises()

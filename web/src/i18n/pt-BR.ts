@@ -311,6 +311,7 @@ const ptBR: typeof en = {
       'Cada dispositivo mantém o endereço que tem hoje, como uma reserva no roteador. Marcados: switches, access points, servidores, NAS, hypervisors, VMs, impressoras e nobreaks.',
     none: 'Todo dispositivo no DHCP já tem endereço fixo.',
     on: 'em {router}',
+    elsewhere: 'Recebe o endereço de {server}, onde o Omini não consegue fixá-lo: fixe lá.',
     proposed:
       'O roteador não fixa endereços dentro da faixa do DHCP: ele recebe este na próxima renovação do lease.',
     others: 'Mostrar {n} outro dispositivo no DHCP | Mostrar {n} outros dispositivos no DHCP',

@@ -265,8 +265,11 @@ shown and checked too. Each keeps the address it has today as a reservation
 on its router. A router that does not fix addresses inside its DHCP range
 (pfSense) gets a free address outside it instead, shown before applying; the
 device takes it at its next lease renewal. One device failing does not stop
-the others, and each change is in its router's history. A device's own panel
-has the same button (**Network → Reserve this IP**).
+the others, and each change is in its router's history and the device's. A
+device's own panel has the same button (**Network → Reserve this IP**). Only a
+router that serves DHCP on the device's network is asked; a device that gets
+its address from a server Omini cannot reserve on (a Pi-hole or AdGuard Home
+handing out addresses) is listed with that server, to be fixed there.
 
 ## Device identification
 

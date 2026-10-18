@@ -34,7 +34,9 @@ const router = computed(() =>
     (r) =>
       r.changes?.includes('reservation.set') &&
       !!props.node.ip &&
-      (r.device?.networks ?? []).some((nw) => nw.gateway && inNetwork(props.node.ip!, nw.gateway)),
+      (r.device?.networks ?? []).some(
+        (nw) => nw.gateway && inNetwork(props.node.ip!, nw.gateway) && nw.dhcp?.enabled !== false, // it serves DHCP there
+      ),
   ),
 )
 /** Its fixed address, on whichever router has it. */
@@ -47,16 +49,20 @@ const reservation = computed(() => {
 
 /** An address outside the DHCP range, when the router refuses one inside. */
 const proposed = ref('')
+/** The DHCP server it gets its address from, when Omini cannot reserve there. */
+const elsewhere = ref('')
 const ip = ref('')
 watch(
   () => [props.node.id, reservation.value?.ip, props.node.ip, !!router.value],
   async () => {
     proposed.value = ''
+    elsewhere.value = ''
     ip.value = reservation.value?.ip ?? props.node.ip ?? ''
-    if (reservation.value || !router.value) return
+    if (reservation.value || !props.node.mac || !props.node.ip) return
     const id = props.node.id
     const list = await api.fixCandidates().catch(() => [])
     const c = list.find((x) => x.node_id === id)
+    if (c?.server && props.node.id === id) elsewhere.value = c.server
     if (c?.proposed && props.node.id === id && !reservation.value) {
       proposed.value = c.proposed
       ip.value = c.proposed
@@ -118,7 +124,9 @@ const summary = computed(() =>
     .filter(Boolean)
     .join(' · '),
 )
-const shown = computed(() => !!place.value || !!router.value || !!reservation.value)
+const shown = computed(
+  () => !!place.value || !!router.value || !!reservation.value || !!elsewhere.value,
+)
 </script>
 
 <template>
@@ -163,6 +171,9 @@ const shown = computed(() => !!place.value || !!router.value || !!reservation.va
       <p v-if="router && !reservation" class="muted small">
         {{ t('place.fixHint', { router: nameOf(router.id) }) }}
         <template v-if="proposed && ip === proposed">{{ t('fixIp.proposed') }}</template>
+      </p>
+      <p v-if="elsewhere && !router && !reservation" class="muted small" data-test="fix-elsewhere">
+        {{ t('fixIp.elsewhere', { server: nameOf(elsewhere) }) }}
       </p>
       <DnsNameRow
         v-if="router || reservation"

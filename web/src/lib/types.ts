@@ -708,6 +708,12 @@ export interface FixCandidate {
   infra: boolean
   /** The address used instead of ip: the router refuses one inside its DHCP range. */
   proposed?: string
+  /**
+   * The DHCP server it gets its address from, when Omini cannot reserve there
+   * (a Pi-hole) and no router it manages serves DHCP on its network: router is
+   * empty then.
+   */
+  server?: string
 }
 
 /** One device's result when fixing many addresses. */

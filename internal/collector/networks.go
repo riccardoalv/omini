@@ -222,6 +222,18 @@ func reservationOf(n topology.Node, mac model.MACAddress) *model.DhcpReservation
 	return nil
 }
 
+// servesDHCP reports whether a router hands out the network's addresses:
+// it says so, or it does not say and holds the device's lease.
+func servesDHCP(r topology.Node, nw *model.Network, mac model.MACAddress) bool {
+	if nw == nil {
+		return false
+	}
+	if nw.Dhcp != nil {
+		return nw.Dhcp.Enabled
+	}
+	return slices.ContainsFunc(r.Device.DhcpLeases, func(l model.DhcpLease) bool { return model.NormMAC(string(l.MAC)) == mac })
+}
+
 // networkHolding is the router's network an address is in (not its gateway,
 // nor its first or last address).
 func networkHolding(n topology.Node, ip netip.Addr) *model.Network {
@@ -258,8 +270,12 @@ func reservationSet(n topology.Node, value any) (json.RawMessage, any, error) {
 	if v.MAC == "" || err != nil || !ip.Is4() {
 		return nil, nil, fmt.Errorf("%w: a reservation is a MAC and an IPv4 address", ErrInvalidChange)
 	}
-	if networkHolding(n, ip) == nil {
+	nw := networkHolding(n, ip)
+	if nw == nil {
 		return nil, nil, fmt.Errorf("%w: %s is in none of %s's networks", ErrInvalidChange, v.IP, n.Label)
+	}
+	if !servesDHCP(n, nw, v.MAC) {
+		return nil, nil, fmt.Errorf("%w: %s does not serve DHCP on the network of %s", ErrInvalidChange, n.Label, v.IP)
 	}
 	for _, r := range n.Device.DhcpReservations {
 		if r.IP == v.IP && r.MAC != v.MAC {
@@ -294,7 +310,9 @@ func reservationDelete(n topology.Node, value any) (json.RawMessage, any, error)
 	return before, v, err
 }
 
-// Reserve fixes a device's address on the router whose network holds it.
+// Reserve fixes a device's address on the router whose network holds it
+// and serves DHCP there (a reservation on a router that does not hand out
+// the addresses does nothing).
 func (c *Collector) Reserve(ctx context.Context, nodeID, ip string) (store.ConfigChange, error) {
 	topo := c.State().Topology
 	n, ok := c.node(nodeID)
@@ -303,7 +321,7 @@ func (c *Collector) Reserve(ctx context.Context, nodeID, ip string) (store.Confi
 		return store.ConfigChange{}, fmt.Errorf("%w: a reservation needs a device with a MAC and an IPv4 address", ErrInvalidChange)
 	}
 	for _, r := range topo.Nodes {
-		if slices.Contains(r.Changes, model.ChangeKindReservationSet) && networkHolding(r, addr) != nil {
+		if slices.Contains(r.Changes, model.ChangeKindReservationSet) && servesDHCP(r, networkHolding(r, addr), model.NormMAC(n.MAC)) {
 			name := n.Label
 			rec, err := c.Apply(ctx, ChangeRequest{
 				NodeID: r.ID, Kind: model.ChangeKindReservationSet, Target: nodeID,

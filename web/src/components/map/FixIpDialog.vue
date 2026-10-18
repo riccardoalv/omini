@@ -20,10 +20,15 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; applied: [] }>()
 const { t } = useI18n()
 
-const picked = ref(new Set(props.candidates.filter((c) => c.infra).map((c) => c.node_id)))
+// Those whose DHCP server cannot reserve addresses are only listed, with why.
+const fixable = computed(() => props.candidates.filter((c) => !c.server))
+const elsewhere = computed(() => props.candidates.filter((c) => c.server))
+const picked = ref(
+  new Set(props.candidates.filter((c) => c.infra && !c.server).map((c) => c.node_id)),
+)
 const showOthers = ref(false)
-const infra = computed(() => props.candidates.filter((c) => c.infra))
-const others = computed(() => props.candidates.filter((c) => !c.infra))
+const infra = computed(() => fixable.value.filter((c) => c.infra))
+const others = computed(() => fixable.value.filter((c) => !c.infra))
 
 function toggle(id: string) {
   const s = new Set(picked.value)
@@ -40,7 +45,7 @@ async function apply() {
   busy.value = true
   error.value = ''
   try {
-    const items = props.candidates
+    const items = fixable.value
       .filter((c) => picked.value.has(c.node_id))
       .map((c) => ({ node_id: c.node_id, ip: c.proposed ?? c.ip }))
     const res = await api.fixMany(items)
@@ -57,7 +62,7 @@ async function apply() {
 <template>
   <ModalDialog :title="t('fixIp.title')" wide @close="emit('close')">
     <p class="muted">{{ t('fixIp.intro') }}</p>
-    <p v-if="!candidates.length" class="muted" data-test="fix-none">{{ t('fixIp.none') }}</p>
+    <p v-if="!fixable.length" class="muted" data-test="fix-none">{{ t('fixIp.none') }}</p>
 
     <template v-for="group in [infra, showOthers ? others : []]" :key="group === infra ? 'i' : 'o'">
       <ul v-if="group.length" class="list" data-test="fix-list">
@@ -98,6 +103,13 @@ async function apply() {
     >
       {{ t('fixIp.others', { n: others.length }, others.length) }}
     </button>
+    <ul v-if="elsewhere.length" class="list elsewhere" data-test="fix-elsewhere">
+      <li v-for="c in elsewhere" :key="c.node_id" :data-node="c.node_id">
+        <strong>{{ c.label }}</strong>
+        <span class="mono addr">{{ c.ip }}</span>
+        <small class="muted note">{{ t('fixIp.elsewhere', { server: nameOf(c.server!) }) }}</small>
+      </li>
+    </ul>
     <p v-if="error" class="bad" role="alert">{{ error }}</p>
 
     <template #footer>

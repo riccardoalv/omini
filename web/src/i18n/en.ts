@@ -308,6 +308,7 @@ export default {
       'Each device keeps the address it has today, as a reservation on its router. Checked: switches, access points, servers, NAS, hypervisors, VMs, printers and UPS.',
     none: 'Every device on DHCP already has a fixed address.',
     on: 'on {router}',
+    elsewhere: 'Gets its address from {server}, where Omini cannot reserve it: fix it there.',
     proposed:
       'Its router does not reserve addresses inside the DHCP range: it gets this one at its next lease renewal.',
     others: 'Show {n} other device on DHCP | Show {n} other devices on DHCP',

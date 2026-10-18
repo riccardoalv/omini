@@ -34,6 +34,11 @@ type Candidate struct {
 	// Proposed is the address the reservation uses instead of IP, when the
 	// router refuses one inside its DHCP range and IP is in it.
 	Proposed string `json:"proposed,omitempty"`
+	// Server is set when the device cannot be fixed here: it gets its address
+	// from this DHCP server (a Pi-hole, an AdGuard Home), which Omini cannot
+	// make reservations on, and no router Omini can change serves DHCP on its
+	// network. Router is empty then.
+	Server string `json:"server,omitempty"`
 }
 
 // Address is the address the reservation uses.
@@ -44,7 +49,7 @@ func (c Candidate) Address() string {
 	return c.IP
 }
 
-// network is a router's network that can take reservations.
+// network is a router's network that serves DHCP and can take reservations.
 type network struct {
 	router  string
 	prefix  netip.Prefix
@@ -52,13 +57,17 @@ type network struct {
 	dhcp    *model.NetworkDhcp
 }
 
-// Candidates are the devices on DHCP (a router has a lease for their MAC)
-// with no reservation anywhere, on a network whose router can make one;
-// devices with a random MAC (phones hiding theirs) are left out. Infra ones
-// first, then by label.
+// Candidates are the devices on DHCP (a DHCP server has a lease for their
+// MAC) with no reservation anywhere, on a network whose router serves DHCP
+// and can make one; devices with a random MAC (phones hiding theirs) are
+// left out. A device whose lease comes from a server Omini cannot make
+// reservations on, with no such router for it, is listed with that Server
+// and no Router (it cannot be fixed from Omini). Infra ones first, then by
+// label.
 func Candidates(topo topology.Topology) []Candidate {
 	var nets []network
-	leased := map[model.MACAddress]bool{}
+	leased := map[model.MACAddress]string{} // MAC → the node that leased it
+	reserves := map[string]bool{}           // nodes that can make reservations
 	reserved := map[model.MACAddress]bool{}
 	used := map[netip.Addr]bool{}
 	for _, n := range topo.Nodes {
@@ -69,7 +78,9 @@ func Candidates(topo topology.Topology) []Candidate {
 			continue
 		}
 		for _, l := range n.Device.DhcpLeases {
-			leased[model.NormMAC(string(l.MAC))] = true
+			if m := model.NormMAC(string(l.MAC)); leased[m] == "" {
+				leased[m] = n.ID
+			}
 			if a, err := netip.ParseAddr(l.IP); err == nil {
 				used[a] = true
 			}
@@ -83,9 +94,10 @@ func Candidates(topo topology.Topology) []Candidate {
 		if !slices.Contains(n.Changes, model.ChangeKindReservationSet) {
 			continue
 		}
+		reserves[n.ID] = true
 		for _, nw := range n.Device.Networks {
 			p, err := netip.ParsePrefix(model.Deref(nw.Gateway))
-			if err != nil || !p.Addr().Is4() {
+			if err != nil || !p.Addr().Is4() || nw.Dhcp != nil && !nw.Dhcp.Enabled { // another server hands out its addresses
 				continue
 			}
 			nets = append(nets, network{router: n.ID, prefix: p.Masked(), gateway: p.Addr(), dhcp: nw.Dhcp})
@@ -96,11 +108,21 @@ func Candidates(topo topology.Topology) []Candidate {
 		mac := model.NormMAC(n.MAC)
 		ip, err := netip.ParseAddr(n.IP)
 		if n.Kind == topology.KindSegment || n.Kind == topology.KindWAN || n.RandomMAC ||
-			mac == "" || err != nil || !ip.Is4() || !leased[mac] || reserved[mac] {
+			mac == "" || err != nil || !ip.Is4() || leased[mac] == "" || reserved[mac] {
 			continue
 		}
-		i := slices.IndexFunc(nets, func(nw network) bool { return nw.prefix.Contains(ip) })
-		if i < 0 || nets[i].router == n.ID || ip == nets[i].gateway {
+		// A router that does not say whether it serves DHCP there does when the
+		// lease is its own.
+		i := slices.IndexFunc(nets, func(nw network) bool {
+			return nw.prefix.Contains(ip) && (nw.dhcp != nil || leased[mac] == nw.router)
+		})
+		if i < 0 {
+			if s := leased[mac]; !reserves[s] && s != n.ID {
+				out = append(out, Candidate{NodeID: n.ID, Label: n.Label, Type: n.Type, MAC: string(mac), IP: n.IP, Infra: Infra(n.Type), Server: s})
+			}
+			continue
+		}
+		if nets[i].router == n.ID || ip == nets[i].gateway {
 			continue
 		}
 		c := Candidate{

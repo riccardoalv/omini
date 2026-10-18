@@ -86,3 +86,20 @@ func TestProposesAnAddressOutsideTheRange(t *testing.T) {
 		}
 	}
 }
+
+// TestOnlyARouterThatServesDHCP: a router whose network another server hands
+// out (a Pi-hole) is not proposed; the device is listed with that server, which
+// cannot reserve, and no router.
+func TestOnlyARouterThatServesDHCP(t *testing.T) {
+	gw := router("gw", "192.168.1.1/24", nil, nil, nil)
+	gw.Device.Networks[0].Dhcp.Enabled = false
+	pihole := topology.Node{
+		ID: "pihole", Kind: topology.KindDevice, Label: "Pi-hole", IP: "192.168.1.5",
+		Device: &model.Device{DhcpLeases: []model.DhcpLease{{MAC: "aa:00:00:00:00:02", IP: "192.168.1.121"}}},
+	}
+	topo := topology.Topology{Nodes: []topology.Node{gw, pihole, client("sw-desk", "switch", "aa:00:00:00:00:02", "192.168.1.121")}}
+	got := Candidates(topo)
+	if len(got) != 1 || got[0].Router != "" || got[0].Server != "pihole" || got[0].Proposed != "" {
+		t.Fatalf("candidates: %+v", got)
+	}
+}

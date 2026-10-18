@@ -27,7 +27,9 @@ const query = ref('')
 const tab = ref<'dhcp' | 'dns'>('dhcp')
 /** Devices on DHCP without a reservation; the infrastructure ones get a button. */
 const candidates = ref<FixCandidate[]>([])
-const infraCount = computed(() => candidates.value.filter((c) => c.infra).length)
+// Only those Omini can fix count (not those on a DHCP server that cannot reserve).
+const fixable = computed(() => candidates.value.filter((c) => !c.server))
+const infraCount = computed(() => fixable.value.filter((c) => c.infra).length)
 const fixing = ref(false)
 function go(t: 'dhcp' | 'dns') {
   tab.value = t
@@ -166,13 +168,13 @@ function errorText(e?: string) {
     <p v-if="loading" class="muted">{{ t('common.loading') }}</p>
 
     <template v-else-if="tab === 'dhcp'">
-      <div v-if="candidates.length" class="card fix" data-test="fix-ip">
+      <div v-if="fixable.length" class="card fix" data-test="fix-ip">
         <Lock :size="18" />
         <span>
           {{
             infraCount
               ? t('fixIp.banner', { n: infraCount }, infraCount)
-              : t('fixIp.bannerOthers', { n: candidates.length }, candidates.length)
+              : t('fixIp.bannerOthers', { n: fixable.length }, fixable.length)
           }}
         </span>
         <button class="btn" type="button" data-test="fix-open" @click="fixing = true">

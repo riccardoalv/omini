@@ -97,6 +97,26 @@ describe('NetworkPlace', () => {
     expect(api.reserve).toHaveBeenCalledWith('mac:tv', '192.168.1.2')
   })
 
+  it('does not fix on a router that does not serve DHCP, and says where to', async () => {
+    vi.mocked(api.fixCandidates).mockResolvedValue([
+      {
+        node_id: 'mac:tv',
+        label: 'tv',
+        mac: 'aa:bb:cc:00:00:01',
+        ip: '192.168.1.50',
+        router: '',
+        infra: false,
+        server: 'dev:pihole',
+      },
+    ])
+    const off = fw()
+    off.device!.networks = [{ vlan: 1, gateway: '192.168.1.1/24', dhcp: { enabled: false } }]
+    const w = mountPlace([off, tv])
+    await flushPromises()
+    expect(w.find('[data-test=fix-ip]').exists()).toBe(false)
+    expect(w.get('[data-test=fix-elsewhere]').text()).toContain('Gets its address from dev:pihole')
+  })
+
   it('shows a fixed address and frees it', async () => {
     const w = mountPlace([fw(true), sw, tv])
     expect(w.get('[data-test=fixed-ip]').text()).toContain('192.168.1.50')

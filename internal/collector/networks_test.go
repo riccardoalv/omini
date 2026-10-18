@@ -214,3 +214,25 @@ func TestDNSNames(t *testing.T) {
 		t.Fatalf("freed: %+v", last())
 	}
 }
+
+// A router whose network another server hands out (a Pi-hole) is never asked
+// for a reservation: it would do nothing.
+func TestNoReservationOnARouterWithoutDHCP(t *testing.T) {
+	coll, s, _ := switchNetwork(t)
+	ctx := context.Background()
+	s.mu.Lock()
+	s.devices[0].Networks[0].Dhcp.Enabled = false
+	s.mu.Unlock()
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	phone := ""
+	for _, n := range coll.State().Topology.Nodes {
+		if n.MAC == string(phoneMAC) {
+			phone = n.ID
+		}
+	}
+	if _, err := coll.Reserve(ctx, phone, "192.168.1.41"); !errors.Is(err, collector.ErrNotChangeable) {
+		t.Fatalf("reserved on a router without DHCP: %v %+v", err, s.applied)
+	}
+}
