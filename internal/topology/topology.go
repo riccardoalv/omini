@@ -82,6 +82,7 @@ type Node struct {
 	Vendor        string                 `json:"vendor,omitempty"`
 	Model         string                 `json:"model,omitempty"`
 	IP            string                 `json:"ip,omitempty"`
+	IPs6          []string               `json:"ips6,omitempty"` // IPv6 addresses: global and ULA first, then link-local (see ipv6.go)
 	MAC           string                 `json:"mac,omitempty"`
 	Hostname      string                 `json:"hostname,omitempty"`
 	RandomMAC     bool                   `json:"random_mac,omitempty"`
@@ -235,6 +236,10 @@ type builder struct {
 	// unit), by edge key → the node that reported it. Only that node counts
 	// as placed by the link: the other end is still placed on its port.
 	hangsBy map[string]string
+	// ndp: where each MAC is in a router's IPv6 neighbor table (like ARP);
+	// v6: the IPv6 addresses seen for each MAC (NDP, DHCPv6 leases).
+	ndp map[model.MACAddress]arpSeen
+	v6  map[model.MACAddress][]string
 }
 
 // Build computes the topology for the given sources.
@@ -279,6 +284,8 @@ func BuildWith(sources []Source, opts Options) Topology {
 		beside:   map[portKey][]string{},
 		phones:   map[portKey]string{},
 		hangsBy:  map[string]string{},
+		ndp:      map[model.MACAddress]arpSeen{},
+		v6:       map[model.MACAddress][]string{},
 	}
 	for _, src := range sources {
 		for i := range src.Devices {
@@ -358,7 +365,7 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 	// Without MACs, a device with the address of one already on the map is
 	// that device (e.g. a scan that could not read MACs).
 	if len(macs) == 0 && d.Host != nil {
-		if id, ok := b.byIP[*d.Host]; ok && b.nodes[id].Kind == KindDevice {
+		if id, ok := b.byIP[ipKey(*d.Host)]; ok && b.nodes[id].Kind == KindDevice {
 			n := b.nodes[id]
 			n.Online = n.Online || src.Online
 			b.sources[id] = append(b.sources[id], d)
@@ -405,9 +412,9 @@ func (b *builder) addManaged(src Source, d *model.Device) {
 func (b *builder) adoptMACs(sources []Source) {
 	byIP := map[string]model.MACAddress{}
 	add := func(ip string, m model.MACAddress) {
-		if m = model.NormMAC(string(m)); ip != "" && m != "" && !m.IsGroup() {
-			if _, ok := byIP[ip]; !ok {
-				byIP[ip] = m
+		if m = model.NormMAC(string(m)); mergeable(ip) && m != "" && !m.IsGroup() {
+			if _, ok := byIP[ipKey(ip)]; !ok {
+				byIP[ipKey(ip)] = m
 			}
 		}
 	}
@@ -424,11 +431,11 @@ func (b *builder) adoptMACs(sources []Source) {
 			}
 		}
 	}
-	// ARP last: a machine with two interfaces may answer for either address
-	// from either one (see ownIP).
+	// ARP (and NDP) last: a machine with two interfaces may answer for either
+	// address from either one (see ownIP).
 	for _, src := range sources {
 		for i := range src.Devices {
-			for _, a := range src.Devices[i].Arp {
+			for _, a := range append(slices.Clone(src.Devices[i].Arp), src.Devices[i].Ndp...) {
 				add(a.IP, a.MAC)
 			}
 		}
@@ -438,7 +445,7 @@ func (b *builder) adoptMACs(sources []Source) {
 		if n.IP == "" || len(deviceMACs(n.Device)) > 0 {
 			continue
 		}
-		m, ok := byIP[n.IP]
+		m, ok := byIP[ipKey(n.IP)]
 		if _, taken := b.byMAC[m]; !ok || taken {
 			continue
 		}
@@ -456,9 +463,9 @@ func (b *builder) index(id string, d *model.Device, macs []model.MACAddress) {
 		}
 	}
 	for _, ip := range append(slices.Clone(d.IPs), model.Deref(d.Host)) {
-		if ip != "" {
-			if _, ok := b.byIP[ip]; !ok {
-				b.byIP[ip] = id
+		if mergeable(ip) {
+			if _, ok := b.byIP[ipKey(ip)]; !ok {
+				b.byIP[ipKey(ip)] = id
 			}
 		}
 	}
@@ -505,7 +512,7 @@ func richness(d *model.Device) int {
 	if d == nil {
 		return -1
 	}
-	return len(d.Interfaces) + len(d.Neighbors) + len(d.Fdb) + len(d.Arp)
+	return len(d.Interfaces) + len(d.Neighbors) + len(d.Fdb) + len(d.Arp) + len(d.Ndp)
 }
 
 func (b *builder) lookup(nb *model.Neighbor) string {
@@ -515,7 +522,7 @@ func (b *builder) lookup(nb *model.Neighbor) string {
 		}
 	}
 	if nb.RemoteIP != nil {
-		if id, ok := b.byIP[*nb.RemoteIP]; ok {
+		if id, ok := b.byIP[ipKey(*nb.RemoteIP)]; ok {
 			return id
 		}
 	}
@@ -659,8 +666,8 @@ func (b *builder) addUnmanaged(nb *model.Neighbor) string {
 			n.MAC = string(*nb.RemoteMAC)
 			b.byMAC[*nb.RemoteMAC] = id
 		}
-		if nb.RemoteIP != nil {
-			b.byIP[*nb.RemoteIP] = id
+		if nb.RemoteIP != nil && mergeable(*nb.RemoteIP) {
+			b.byIP[ipKey(*nb.RemoteIP)] = id
 		}
 		if nb.RemoteName != nil {
 			b.byName[strings.ToLower(*nb.RemoteName)] = id
@@ -1025,6 +1032,7 @@ func (b *builder) collectClientsOf(id string, d *model.Device,
 			arp[a.MAC] = arpSeen{node: id, iface: model.Deref(a.Interface), ip: a.IP}
 		}
 	}
+	b.collectNDP(id, d)
 	for _, l := range d.DhcpLeases {
 		if h := model.Deref(l.Hostname); h != "" {
 			hostnames[l.MAC] = h
@@ -1082,7 +1090,7 @@ func (b *builder) placeCollected(
 		}
 	}
 	for ip, hs := range hostsByIP {
-		if id, ok := b.byIP[ip]; ok {
+		if id, ok := b.byIP[ipKey(ip)]; ok {
 			enrich(b.nodes[id], hs.h)
 		}
 	}
@@ -1097,6 +1105,9 @@ func (b *builder) placeCollected(
 		present[m] = true
 	}
 	for m := range arp {
+		present[m] = true
+	}
+	for m := range b.ndp {
 		present[m] = true
 	}
 	for m := range hostsByMAC {
@@ -1177,7 +1188,7 @@ func (b *builder) placeCollected(
 					if b.listsClients(behind.ID) && !b.isClientOf(behind.ID, m) {
 						// Only that MAC table vouches for it (no ARP, no scan): a
 						// stale entry, or something the AP itself does not see.
-						if _, inARP := arp[m]; !inARP && !scanned {
+						if _, inARP := b.neighborOf(arp, m); !inARP && !scanned {
 							continue
 						}
 						b.beside[port] = append(b.beside[port], n.ID)
@@ -1186,7 +1197,7 @@ func (b *builder) placeCollected(
 					}
 				}
 			}
-		} else if a, ok := arp[m]; ok {
+		} else if a, ok := b.neighborOf(arp, m); ok {
 			n.ParentID, n.Port, kind = a.node, a.iface, EdgeInferred
 			if wan := b.wanPorts[portKey{a.node, a.iface}]; wan != "" {
 				n.ParentID, n.Port = wan, "" // e.g. the ISP modem, seen on the WAN port
@@ -1204,6 +1215,7 @@ func (b *builder) placeCollected(
 		}
 	}
 
+	indexed6 := b.assignIPv6()
 	// Hosts known only by IP (routed subnets, no ARP).
 	ips := make([]string, 0, len(hostsByIP))
 	for ip := range hostsByIP {
@@ -1211,7 +1223,10 @@ func (b *builder) placeCollected(
 	}
 	slices.Sort(ips)
 	for _, ip := range ips {
-		if _, known := b.byIP[ip]; known || placed[ip] {
+		if id, known := b.byIP[ipKey(ip)]; known || placed[ip] {
+			if indexed6[ipKey(ip)] { // a node known by this IPv6 address (NDP, its own report)
+				enrich(b.nodes[id], hostsByIP[ip].h)
+			}
 			continue
 		}
 		hs := hostsByIP[ip]

@@ -110,7 +110,7 @@ somewhere else for sure:
 - **For sure:** on an access point's list of Wi-Fi clients (it moves when it
   roams to another), alone on a switch port (a cable), or behind a desk phone.
 - **Not for sure:** a MAC seen on a port shared with other devices, on a port
-  towards other network gear, or only in a router's ARP table.
+  towards other network gear, or only in a router's ARP or NDP (IPv6) table.
 
 So a phone that drops out of its access point's list for a while stays on its
 Wi-Fi, instead of being drawn on a cable behind a switch. The place is kept in

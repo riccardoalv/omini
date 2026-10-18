@@ -100,6 +100,19 @@ its DHCP leases in its DNS (OPNsense: **Services → Unbound DNS → General →
 Register DHCP leases**), or add the router's own integration, which reports
 its leases.
 
+## IPv6
+
+The network scan sweeps IPv4 networks only (an IPv6 /64 is too large to
+sweep); IPv6 comes from the integrations. A device's IPv6 addresses are what
+it reports itself (its interfaces) and what the routers see: their **IPv6
+neighbor tables (NDP)**, read like ARP. A device seen only in NDP is on the
+map like one seen only in ARP, under the router that sees it.
+
+Global and ULA addresses identify a device like an IPv4 address: a device an
+integration reports by its IPv6 address alone is merged with the one NDP
+gives that address to. **Link-local addresses** (`fe80::`) are shown but
+never used to merge two devices (`fe80::1` is on many routers at once).
+
 ## SNMP
 
 SNMP is a method of the network scan, on by default. Every host found is
