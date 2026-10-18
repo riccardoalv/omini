@@ -354,7 +354,8 @@ for a day.
   where the traffic goes (countries shaded by traffic, lines from home to the
   busiest), **where it goes** by the networks' owners (Google, Netflix,
   Amazon...; a country on the map narrows it), **who uses it most**, and every
-  device with where it went.
+  device with where it went. A device whose internet a router pauses carries
+  the same pause mark as on the map.
 - Each device's panel shows **Where it goes** and the devices it talks to on
   your network, which **Show on the map** highlights. The internet's node
   shows who is using the internet now.
