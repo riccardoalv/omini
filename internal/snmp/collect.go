@@ -492,6 +492,30 @@ func addFDB(d *model.Device, portName func(int64) string, macOID []int, portPDU,
 	}
 }
 
+// fdbVlans maps Q-BRIDGE filtering database ids to their VLAN
+// (dot1qVlanFdbId; index: timeMark.vlan). A database shared by several VLANs
+// maps to 0 (unknown VLAN). Nil when the agent lacks the table.
+func fdbVlans(c *client) map[int]uint16 {
+	rows, err := c.walk(oidVlanFdbID)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	out := map[int]uint16{}
+	for idx, p := range rows {
+		n := splitOID(idx)
+		id, ok := pduInt(p)
+		if len(n) != 2 || !ok || n[1] < 1 || n[1] > 4094 {
+			continue
+		}
+		if v, seen := out[int(id)]; seen && v != uint16(n[1]) {
+			out[int(id)] = 0
+			continue
+		}
+		out[int(id)] = uint16(n[1])
+	}
+	return out
+}
+
 func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 	portName := bridgePorts(c, ifNames)
 	// Q-BRIDGE-MIB (VLAN aware) first, then plain BRIDGE-MIB.
@@ -500,14 +524,20 @@ func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 		return err
 	}
 	t := table(rows)
+	byFdb := fdbVlans(c)
 	for idx, p := range t[2] {
 		n := splitOID(idx)
 		if len(n) != 7 {
 			continue
 		}
 		var vlan *uint16
-		if n[0] > 0 && n[0] <= 4095 {
-			vlan = model.Ptr(uint16(n[0]))
+		switch {
+		case byFdb != nil:
+			if v := byFdb[n[0]]; v != 0 {
+				vlan = model.Ptr(v)
+			}
+		case n[0] > 0 && n[0] <= 4095:
+			vlan = model.Ptr(uint16(n[0])) // most agents: fdbId is the VLAN id
 		}
 		addFDB(d, portName, n[1:], p, t[3][idx], vlan)
 	}

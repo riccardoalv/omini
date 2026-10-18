@@ -22,6 +22,9 @@ type Options struct {
 	// NoBridgePortTable leaves dot1dBasePortIfIndex out (agents that number
 	// bridge ports as their ifIndex and do not say so).
 	NoBridgePortTable bool
+	// FdbIDs gives VLANs a filtering database id other than their VLAN id
+	// (VLAN → dot1qVlanFdbId), exposed in dot1qVlanCurrentTable.
+	FdbIDs map[uint16]int
 }
 
 // FromDevice renders a model device as the standard MIB tables a real agent
@@ -113,15 +116,24 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Integer, 3, "1.3.6.1.2.1.4.22.1.4.%d.%s", idx, a.IP) // dynamic
 	}
 
-	// Q-BRIDGE-MIB forwarding table: index fdbId(VLAN).mac.
+	// Q-BRIDGE-MIB forwarding table: index fdbId.mac, the fdbId being the
+	// VLAN id unless Options.FdbIDs says otherwise (then dot1qVlanCurrentTable
+	// maps each VLAN to its fdbId).
 	for _, f := range d.Fdb {
 		vlan := uint16(1)
 		if f.Vlan != nil {
 			vlan = *f.Vlan
 		}
-		idx := fmt.Sprintf("%d.%s", vlan, macOID(f.MAC))
+		fdbID := int(vlan)
+		if id, ok := opts.FdbIDs[vlan]; ok {
+			fdbID = id
+		}
+		idx := fmt.Sprintf("%d.%s", fdbID, macOID(f.MAC))
 		add(gosnmp.Integer, bridgePort(f.Port), "1.3.6.1.2.1.17.7.1.2.2.1.2.%s", idx)
 		add(gosnmp.Integer, 3, "1.3.6.1.2.1.17.7.1.2.2.1.3.%s", idx) // learned
+	}
+	for vlan, id := range opts.FdbIDs {
+		add(gosnmp.Gauge32, uint32(id), "1.3.6.1.2.1.17.7.1.4.2.1.3.0.%d", vlan) //nolint:gosec // test data
 	}
 
 	// Q-BRIDGE-MIB VLANs: each VLAN's egress and untagged ports (bitmaps of

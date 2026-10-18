@@ -195,3 +195,36 @@ func TestCiscoStyleSwitch(t *testing.T) {
 		t.Errorf("VLAN 20's MAC table not read: %+v", got.Fdb)
 	}
 }
+
+// A Q-BRIDGE MAC table is indexed by filtering database id, which is not
+// always the VLAN id: dot1qVlanFdbId maps it back.
+func TestFdbIDIsMappedToItsVLAN(t *testing.T) {
+	sw := model.Device{
+		Key: "sw", Name: "sw",
+		Interfaces: []model.Interface{{Name: "1/1"}, {Name: "1/2"}},
+		Fdb: []model.FdbEntry{
+			{MAC: "b0:7b:25:18:1b:6d", Port: "1/1", Vlan: model.Ptr[uint16](20)},
+			{MAC: "b0:7b:25:18:1b:6e", Port: "1/2", Vlan: model.Ptr[uint16](1)},
+		},
+	}
+	vlans := func(opts snmptest.Options) map[model.MACAddress]uint16 {
+		agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, opts))
+		d, err := snmp.Collect(context.Background(), target(agent, "public"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[model.MACAddress]uint16{}
+		for _, f := range d.Fdb {
+			out[f.MAC] = model.Deref(f.Vlan)
+		}
+		return out
+	}
+	want := map[model.MACAddress]uint16{"b0:7b:25:18:1b:6d": 20, "b0:7b:25:18:1b:6e": 1}
+	if got := vlans(snmptest.Options{FdbIDs: map[uint16]int{1: 1, 20: 3}}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("with dot1qVlanFdbId: %v", got)
+	}
+	// Without dot1qVlanCurrentTable the fdbId is taken as the VLAN id.
+	if got := vlans(snmptest.Options{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("without it: %v", got)
+	}
+}
