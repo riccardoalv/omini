@@ -55,7 +55,8 @@ type Change struct {
 	// The new value: a boolean for port.enabled, a PortVlans object for port.vlans,
 	// {id, name} for vlan.set, {id} for vlan.delete, a Network for network.set,
 	// {vlan} for network.delete, a DhcpReservation for reservation.set, {mac} for
-	// reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete.
+	// reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete. A
+	// RadioChange for wifi.channel.
 	Value interface{} `json:"value" yaml:"value"`
 }
 
@@ -73,6 +74,7 @@ const ChangeKindReservationDelete ChangeKind = "reservation.delete"
 const ChangeKindReservationSet ChangeKind = "reservation.set"
 const ChangeKindVlanDelete ChangeKind = "vlan.delete"
 const ChangeKindVlanSet ChangeKind = "vlan.set"
+const ChangeKindWifiChannel ChangeKind = "wifi.channel"
 const ChangeKindWifiDelete ChangeKind = "wifi.delete"
 const ChangeKindWifiSet ChangeKind = "wifi.set"
 const ChangeKindWolSend ChangeKind = "wol.send"
@@ -93,6 +95,7 @@ var enumValues_ChangeKind = []interface{}{
 	"wol.send",
 	"pause.set",
 	"pause.delete",
+	"wifi.channel",
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -314,6 +317,12 @@ type Device struct {
 	// Devices whose internet the router cuts (pause.set).
 	Paused []PausedDevice `json:"paused,omitempty,omitzero" yaml:"paused,omitempty"`
 
+	// Ports the router forwards from the internet to the network.
+	PortForwards []PortForward `json:"port_forwards,omitempty,omitzero" yaml:"port_forwards,omitempty"`
+
+	// The access point's Wi-Fi radios and their channels.
+	Radios []Radio `json:"radios,omitempty,omitzero" yaml:"radios,omitempty"`
+
 	// Role corresponds to the JSON schema field "role".
 	Role *DeviceRole `json:"role,omitempty,omitzero" yaml:"role,omitempty"`
 
@@ -354,6 +363,10 @@ type Device struct {
 
 	// WirelessClients corresponds to the JSON schema field "wireless_clients".
 	WirelessClients []WirelessClient `json:"wireless_clients,omitempty,omitzero" yaml:"wireless_clients,omitempty"`
+
+	// The device reaches the network over Wi-Fi (a mesh unit or repeater): changing
+	// its channel can cut it off.
+	WirelessUplink *bool `json:"wireless_uplink,omitempty,omitzero" yaml:"wireless_uplink,omitempty"`
 }
 
 type DeviceRole string
@@ -1763,6 +1776,103 @@ type PluginResponse struct {
 	Message *string `json:"message,omitempty,omitzero" yaml:"message,omitempty"`
 }
 
+// A port the router forwards from the internet to a device on the network (NAT),
+// made by hand or by a device through UPnP or NAT-PMP.
+type PortForward struct {
+	// Description corresponds to the JSON schema field "description".
+	Description *string `json:"description,omitempty,omitzero" yaml:"description,omitempty"`
+
+	// Enabled corresponds to the JSON schema field "enabled".
+	Enabled *bool `json:"enabled,omitempty,omitzero" yaml:"enabled,omitempty"`
+
+	// The port on the internet side (the first of a range).
+	ExternalPort uint16 `json:"external_port" yaml:"external_port"`
+
+	// The last port of a range.
+	ExternalPortEnd *uint16 `json:"external_port_end,omitempty,omitzero" yaml:"external_port_end,omitempty"`
+
+	// The WAN interface it is on.
+	Interface *string `json:"interface,omitempty,omitzero" yaml:"interface,omitempty"`
+
+	// The device it goes to (IPv4 or IPv6).
+	InternalIP *string `json:"internal_ip,omitempty,omitzero" yaml:"internal_ip,omitempty"`
+
+	// The port on the device (the first of a range).
+	InternalPort *uint16 `json:"internal_port,omitempty,omitzero" yaml:"internal_port,omitempty"`
+
+	// Protocol corresponds to the JSON schema field "protocol".
+	Protocol PortForwardProtocol `json:"protocol" yaml:"protocol"`
+
+	// Who may use it (an address or prefix); empty: anyone.
+	Source *string `json:"source,omitempty,omitzero" yaml:"source,omitempty"`
+
+	// A device opened it by itself (UPnP IGD or NAT-PMP), not the router's
+	// administrator.
+	Upnp *bool `json:"upnp,omitempty,omitzero" yaml:"upnp,omitempty"`
+}
+
+type PortForwardProtocol string
+
+const PortForwardProtocolTcp PortForwardProtocol = "tcp"
+const PortForwardProtocolTcpUdp PortForwardProtocol = "tcp/udp"
+const PortForwardProtocolUdp PortForwardProtocol = "udp"
+
+var enumValues_PortForwardProtocol = []interface{}{
+	"tcp",
+	"udp",
+	"tcp/udp",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PortForwardProtocol) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_PortForwardProtocol {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_PortForwardProtocol, v)
+	}
+	*j = PortForwardProtocol(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *PortForward) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["external_port"]; raw != nil && !ok {
+		return fmt.Errorf("field external_port in PortForward: required")
+	}
+	if _, ok := raw["protocol"]; raw != nil && !ok {
+		return fmt.Errorf("field protocol in PortForward: required")
+	}
+	type Plain PortForward
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if 1 > plain.ExternalPort {
+		return fmt.Errorf("field %s: must be >= %v", "external_port", 1)
+	}
+	if plain.ExternalPortEnd != nil && 1 > *plain.ExternalPortEnd {
+		return fmt.Errorf("field %s: must be >= %v", "external_port_end", 1)
+	}
+	if plain.InternalPort != nil && 1 > *plain.InternalPort {
+		return fmt.Errorf("field %s: must be >= %v", "internal_port", 1)
+	}
+	*j = PortForward(plain)
+	return nil
+}
+
 // A port's spanning tree state and role.
 type PortStp struct {
 	// Role corresponds to the JSON schema field "role".
@@ -1867,6 +1977,127 @@ func (j *PortVlans) UnmarshalJSON(value []byte) error {
 		return fmt.Errorf("field %s: must be >= %v", "untagged", 1)
 	}
 	*j = PortVlans(plain)
+	return nil
+}
+
+// A Wi-Fi radio of an access point and the channel it is on.
+type Radio struct {
+	// The device (or its controller) picks the channel itself.
+	Auto *bool `json:"auto,omitempty,omitzero" yaml:"auto,omitempty"`
+
+	// Band corresponds to the JSON schema field "band".
+	Band WifiBand `json:"band" yaml:"band"`
+
+	// The channel it is on now.
+	Channel *uint8 `json:"channel,omitempty,omitzero" yaml:"channel,omitempty"`
+
+	// Enabled corresponds to the JSON schema field "enabled".
+	Enabled *bool `json:"enabled,omitempty,omitzero" yaml:"enabled,omitempty"`
+
+	// The radio as the device names it (wifi0, radio 2.4 GHz, ra0...): what a
+	// wifi.channel change names.
+	Name string `json:"name" yaml:"name"`
+
+	// Transmit power.
+	TxPowerDBM *float64 `json:"tx_power_dbm,omitempty,omitzero" yaml:"tx_power_dbm,omitempty"`
+
+	// Channel width.
+	WidthMhz *RadioWidthMhz `json:"width_mhz,omitempty,omitzero" yaml:"width_mhz,omitempty"`
+}
+
+// A radio to move to another channel (wifi.channel).
+type RadioChange struct {
+	// Channel corresponds to the JSON schema field "channel".
+	Channel uint8 `json:"channel" yaml:"channel"`
+
+	// Radio.name.
+	Radio string `json:"radio" yaml:"radio"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *RadioChange) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["channel"]; raw != nil && !ok {
+		return fmt.Errorf("field channel in RadioChange: required")
+	}
+	if _, ok := raw["radio"]; raw != nil && !ok {
+		return fmt.Errorf("field radio in RadioChange: required")
+	}
+	type Plain RadioChange
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if 233 < plain.Channel {
+		return fmt.Errorf("field %s: must be <= %v", "channel", 233)
+	}
+	if 1 > plain.Channel {
+		return fmt.Errorf("field %s: must be >= %v", "channel", 1)
+	}
+	if utf8.RuneCountInString(string(plain.Radio)) < 1 {
+		return fmt.Errorf("field %s length: must be >= %d", "radio", 1)
+	}
+	*j = RadioChange(plain)
+	return nil
+}
+
+type RadioWidthMhz int64
+
+var enumValues_RadioWidthMhz = []interface{}{
+	20,
+	40,
+	80,
+	160,
+	320,
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *RadioWidthMhz) UnmarshalJSON(value []byte) error {
+	var v int64
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_RadioWidthMhz {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_RadioWidthMhz, v)
+	}
+	*j = RadioWidthMhz(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *Radio) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["band"]; raw != nil && !ok {
+		return fmt.Errorf("field band in Radio: required")
+	}
+	if _, ok := raw["name"]; raw != nil && !ok {
+		return fmt.Errorf("field name in Radio: required")
+	}
+	type Plain Radio
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if plain.Channel != nil && 233 < *plain.Channel {
+		return fmt.Errorf("field %s: must be <= %v", "channel", 233)
+	}
+	if plain.Channel != nil && 1 > *plain.Channel {
+		return fmt.Errorf("field %s: must be >= %v", "channel", 1)
+	}
+	*j = Radio(plain)
 	return nil
 }
 

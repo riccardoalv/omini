@@ -89,9 +89,10 @@ class Change(BaseModel):
         "wol.send",
         "pause.set",
         "pause.delete",
+        "wifi.channel",
     ]
     """
-    A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}).
+    A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}). wifi.channel: move a radio of an access point to another channel (a RadioChange).
     """
     port: str | None = None
     """
@@ -99,7 +100,7 @@ class Change(BaseModel):
     """
     value: Any
     """
-    The new value: a boolean for port.enabled, a PortVlans object for port.vlans, {id, name} for vlan.set, {id} for vlan.delete, a Network for network.set, {vlan} for network.delete, a DhcpReservation for reservation.set, {mac} for reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete.
+    The new value: a boolean for port.enabled, a PortVlans object for port.vlans, {id, name} for vlan.set, {id} for vlan.delete, a Network for network.set, {vlan} for network.delete, a DhcpReservation for reservation.set, {mac} for reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete. A RadioChange for wifi.channel.
     """
 
 
@@ -563,6 +564,94 @@ class DnsLookup(BaseModel):
     """
 
 
+class Radio(BaseModel):
+    """
+    A Wi-Fi radio of an access point and the channel it is on.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str
+    """
+    The radio as the device names it (wifi0, radio 2.4 GHz, ra0...): what a wifi.channel change names.
+    """
+    band: Literal["2.4ghz", "5ghz", "6ghz"]
+    channel: Annotated[int | None, Field(ge=1, le=233)] = None
+    """
+    The channel it is on now.
+    """
+    width_mhz: Literal[20, 40, 80, 160, 320] | None = None
+    """
+    Channel width.
+    """
+    auto: bool | None = None
+    """
+    The device (or its controller) picks the channel itself.
+    """
+    tx_power_dbm: float | None = None
+    """
+    Transmit power.
+    """
+    enabled: bool | None = None
+
+
+class RadioChange(BaseModel):
+    """
+    A radio to move to another channel (wifi.channel).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    radio: Annotated[str, Field(min_length=1)]
+    """
+    Radio.name.
+    """
+    channel: Annotated[int, Field(ge=1, le=233)]
+
+
+class PortForward(BaseModel):
+    """
+    A port the router forwards from the internet to a device on the network (NAT), made by hand or by a device through UPnP or NAT-PMP.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    protocol: Literal["tcp", "udp", "tcp/udp"]
+    external_port: Annotated[int, Field(ge=1, le=65535)]
+    """
+    The port on the internet side (the first of a range).
+    """
+    external_port_end: Annotated[int | None, Field(ge=1, le=65535)] = None
+    """
+    The last port of a range.
+    """
+    internal_ip: str | None = None
+    """
+    The device it goes to (IPv4 or IPv6).
+    """
+    internal_port: Annotated[int | None, Field(ge=1, le=65535)] = None
+    """
+    The port on the device (the first of a range).
+    """
+    source: str | None = None
+    """
+    Who may use it (an address or prefix); empty: anyone.
+    """
+    interface: str | None = None
+    """
+    The WAN interface it is on.
+    """
+    description: str | None = None
+    enabled: bool | None = None
+    upnp: bool | None = None
+    """
+    A device opened it by itself (UPnP IGD or NAT-PMP), not the router's administrator.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -793,6 +882,7 @@ class PluginManifest(BaseModel):
                 "wol.send",
                 "pause.set",
                 "pause.delete",
+                "wifi.channel",
             ]
         ]
         | None
@@ -1112,6 +1202,18 @@ class Device(BaseModel):
     stp_root: str | None = None
     """
     Bridge ID of the spanning tree root as the device sees it (e.g. "32768.aa:bb:cc:dd:ee:ff").
+    """
+    radios: list[Radio] | None = None
+    """
+    The access point's Wi-Fi radios and their channels.
+    """
+    wireless_uplink: bool | None = None
+    """
+    The device reaches the network over Wi-Fi (a mesh unit or repeater): changing its channel can cut it off.
+    """
+    port_forwards: list[PortForward] | None = None
+    """
+    Ports the router forwards from the internet to the network.
     """
 
 

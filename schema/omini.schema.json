@@ -264,6 +264,24 @@
         "stp_root": {
           "type": "string",
           "description": "Bridge ID of the spanning tree root as the device sees it (e.g. \"32768.aa:bb:cc:dd:ee:ff\")."
+        },
+        "radios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Radio"
+          },
+          "description": "The access point's Wi-Fi radios and their channels."
+        },
+        "wireless_uplink": {
+          "type": "boolean",
+          "description": "The device reaches the network over Wi-Fi (a mesh unit or repeater): changing its channel can cut it off."
+        },
+        "port_forwards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortForward"
+          },
+          "description": "Ports the router forwards from the internet to the network."
         }
       }
     },
@@ -726,7 +744,7 @@
     },
     "ChangeKind": {
       "type": "string",
-      "description": "A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}).",
+      "description": "A configuration change Omini knows. port.enabled: enable (true) or disable (false) a port. port.vlans: the port's VLANs, a PortVlans (access: untagged only; trunk: untagged as the native VLAN, or none, and the tagged list), only VLANs the device has. vlan.set: create a VLAN on the device, or rename it ({id, name}). vlan.delete: delete a VLAN from the device ({id}). network.set: create or change a VLAN's network on the router (a Network: interface, gateway, DHCP, access, mDNS). network.delete: remove it ({vlan}). reservation.set: a fixed address for a MAC on the router's DHCP (a DhcpReservation). reservation.delete: remove it ({mac}). wifi.set: create or change a Wi-Fi network (a WifiChange: its name, VLAN, password, on or off). wifi.delete: remove it ({ssid}). dns.set: a local DNS name for an address ({name, ip}, name fully qualified). dns.delete: remove it ({name}). wol.send: wake a device with a magic packet, sent by the router on the network that holds ip ({mac, ip}). pause.set: cut a device's internet on the router (a PausedDevice); its own network stays reachable. pause.delete: give it back ({mac}). wifi.channel: move a radio of an access point to another channel (a RadioChange).",
       "enum": [
         "port.enabled",
         "port.vlans",
@@ -742,7 +760,8 @@
         "dns.delete",
         "wol.send",
         "pause.set",
-        "pause.delete"
+        "pause.delete",
+        "wifi.channel"
       ]
     },
     "Change": {
@@ -767,7 +786,7 @@
           "description": "Interface name, for the changes of a port."
         },
         "value": {
-          "description": "The new value: a boolean for port.enabled, a PortVlans object for port.vlans, {id, name} for vlan.set, {id} for vlan.delete, a Network for network.set, {vlan} for network.delete, a DhcpReservation for reservation.set, {mac} for reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete."
+          "description": "The new value: a boolean for port.enabled, a PortVlans object for port.vlans, {id, name} for vlan.set, {id} for vlan.delete, a Network for network.set, {vlan} for network.delete, a DhcpReservation for reservation.set, {mac} for reservation.delete, a WifiChange for wifi.set, {ssid} for wifi.delete. A RadioChange for wifi.channel."
         }
       }
     },
@@ -1696,6 +1715,132 @@
             "type": "string"
           },
           "description": "The A and AAAA addresses in the answer, when the server logs them."
+        }
+      }
+    },
+    "Radio": {
+      "type": "object",
+      "description": "A Wi-Fi radio of an access point and the channel it is on.",
+      "required": [
+        "name",
+        "band"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The radio as the device names it (wifi0, radio 2.4 GHz, ra0...): what a wifi.channel change names."
+        },
+        "band": {
+          "$ref": "#/$defs/WifiBand"
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 233,
+          "description": "The channel it is on now."
+        },
+        "width_mhz": {
+          "type": "integer",
+          "enum": [
+            20,
+            40,
+            80,
+            160,
+            320
+          ],
+          "description": "Channel width."
+        },
+        "auto": {
+          "type": "boolean",
+          "description": "The device (or its controller) picks the channel itself."
+        },
+        "tx_power_dbm": {
+          "type": "number",
+          "description": "Transmit power."
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "RadioChange": {
+      "type": "object",
+      "description": "A radio to move to another channel (wifi.channel).",
+      "required": [
+        "radio",
+        "channel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "radio": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Radio.name."
+        },
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 233
+        }
+      }
+    },
+    "PortForward": {
+      "type": "object",
+      "description": "A port the router forwards from the internet to a device on the network (NAT), made by hand or by a device through UPnP or NAT-PMP.",
+      "required": [
+        "protocol",
+        "external_port"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp",
+            "tcp/udp"
+          ]
+        },
+        "external_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The port on the internet side (the first of a range)."
+        },
+        "external_port_end": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The last port of a range."
+        },
+        "internal_ip": {
+          "type": "string",
+          "description": "The device it goes to (IPv4 or IPv6)."
+        },
+        "internal_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The port on the device (the first of a range)."
+        },
+        "source": {
+          "type": "string",
+          "description": "Who may use it (an address or prefix); empty: anyone."
+        },
+        "interface": {
+          "type": "string",
+          "description": "The WAN interface it is on."
+        },
+        "description": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "upnp": {
+          "type": "boolean",
+          "description": "A device opened it by itself (UPnP IGD or NAT-PMP), not the router's administrator."
         }
       }
     }
