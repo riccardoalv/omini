@@ -192,3 +192,43 @@ func TestAutoAddsTheRoutersSubnets(t *testing.T) {
 		t.Fatalf("listed: %q", msg)
 	}
 }
+
+// A probe that fails (the agent did not answer this time) keeps the
+// credential the host answered to before: the switch is read again as soon
+// as it answers, not after the next deep scan.
+func TestAFailedProbeKeepsTheCredential(t *testing.T) {
+	sw := model.Device{Key: "x", Name: "sw-core", Model: model.Ptr("Managed switch")}
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
+	clock := time.Unix(1_790_000_000, 0)
+	s := &Integration{
+		ARPPath: "testdata/arp", RoutePath: "testdata/route", Ports: []int{},
+		SettleTime: 10 * time.Millisecond, NoMulticast: true, NoPing: true, NoWebTitles: true,
+		SNMPPort: agent.Port, SNMPTimeout: 200 * time.Millisecond,
+		Locals: func() []localNet { return nil },
+	}
+	s.now = func() time.Time { return clock }
+	cfg := integration.Config{"subnets": "127.0.0.0/30", "snmp_communities": "homelab"}
+	read := func() bool {
+		t.Helper()
+		devices, err := s.Collect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(devices, func(d model.Device) bool { return d.Name == "sw-core" })
+	}
+	if !read() {
+		t.Fatal("the switch was not read")
+	}
+	// The next deep scan finds the agent silent...
+	agent.Drop(-1)
+	clock = clock.Add(7 * time.Hour)
+	if read() {
+		t.Fatal("a silent agent was read")
+	}
+	// ...and it answers again on the round after.
+	agent.Drop(0)
+	clock = clock.Add(time.Minute)
+	if !read() {
+		t.Fatal("the switch was forgotten until the next deep scan")
+	}
+}

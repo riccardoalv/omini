@@ -103,8 +103,8 @@ its leases.
 ## SNMP
 
 SNMP is a method of the network scan, on by default. Every host found is
-probed once per deep scan with your SNMP credentials; the hosts that answer
-are read in full on every round:
+probed once per deep scan with your SNMP credentials (each request retried
+twice); the hosts that answer are read in full on every round:
 
 | Data | From |
 |---|---|
@@ -128,7 +128,8 @@ To use it:
    (none, MD5, SHA-1, SHA-224, SHA-256, SHA-384 or SHA-512) with its password,
    and privacy (none, DES, AES-128, AES-192 or AES-256) with its password. v3
    is tried before the communities. Omini remembers which credential each host
-   answered to.
+   answered to, and keeps it when a later probe gets no answer (while that
+   credential is still in the settings).
 4. To **enable and disable ports** and **change VLANs** of SNMP devices from
    the map, set the **SNMP write community** (the device's "read-write"
    community). A device that answered to the v3 user is written with that

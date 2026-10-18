@@ -22,6 +22,7 @@ type Agent struct {
 	Port      int
 	write     string   // the community allowed to Set (empty: none)
 	ignored   []string // OID prefixes whose Sets are answered but not applied
+	drop      int      // requests left to drop (negative: all)
 
 	conn  net.PacketConn
 	mu    sync.RWMutex
@@ -77,6 +78,14 @@ func (a *Agent) AllowWrite(community string) {
 	a.views[community] = a.views[a.Community]
 }
 
+// Drop leaves the next n requests unanswered, like packets lost on the way;
+// a negative n drops every request until Drop(0).
+func (a *Agent) Drop(n int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.drop = n
+}
+
 // IgnoreWrites makes Sets under an OID prefix answer noError without
 // changing anything, like agents that accept a write and drop it.
 func (a *Agent) IgnoreWrites(prefix string) {
@@ -100,6 +109,15 @@ func (a *Agent) serve(t testing.TB) {
 		req, err := decoder.SnmpDecodePacket(buf[:n])
 		if err != nil {
 			continue
+		}
+		a.mu.Lock()
+		dropped := a.drop != 0
+		if a.drop > 0 {
+			a.drop--
+		}
+		a.mu.Unlock()
+		if dropped {
+			continue // a lost packet
 		}
 		a.mu.RLock()
 		vars, ok := a.views[req.Community]

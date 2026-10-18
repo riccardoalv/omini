@@ -228,3 +228,13 @@ func TestFdbIDIsMappedToItsVLAN(t *testing.T) {
 		t.Fatalf("without it: %v", got)
 	}
 }
+
+// One lost packet must not hide an agent from the probe.
+func TestProbeRetriesALostPacket(t *testing.T) {
+	sw := demo.Network(time.Now())[1]
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
+	agent.Drop(1)
+	if community, ok := snmp.Probe(context.Background(), target(agent, ""), []string{"homelab"}); !ok || community != "homelab" {
+		t.Fatalf("probe = %q %v", community, ok)
+	}
+}

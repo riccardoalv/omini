@@ -45,10 +45,13 @@ func (t Target) dial(ctx context.Context) (*client, error) {
 // credentials (Target.V3) rather than to a community.
 const V3Credential = "\x00v3"
 
+// probeRetries is how many times Probe asks again after a timeout.
+const probeRetries = 2
+
 // Probe returns the credential the host answers to, if any: V3Credential
 // when it answers to the v3 user (tried first, when set), else the first
-// community. A single quick request each, without retries: most hosts have
-// no agent.
+// community. One request each, with a couple of retries: a single lost UDP
+// packet must not hide an agent until the next probe.
 func Probe(ctx context.Context, t Target, communities []string) (string, bool) {
 	if t.V3 != nil {
 		if answers(ctx, t) {
@@ -78,7 +81,7 @@ func answers(ctx context.Context, t Target) bool {
 		return false
 	}
 	defer c.close()
-	c.g.Retries = 0
+	c.g.Retries = probeRetries
 	sys, err := c.get(oidSysName, oidSysObjectID)
 	return err == nil && len(sys) > 0
 }
