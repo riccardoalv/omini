@@ -3,6 +3,7 @@ package collector_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"path/filepath"
 	"slices"
@@ -523,5 +524,37 @@ func TestChangeAPortsVLANs(t *testing.T) {
 	}
 	if len(s.applied) != 2 {
 		t.Fatalf("applied: %+v", s.applied)
+	}
+}
+
+// A port Omini disables and enables goes down and up: that is no flapping
+// link. Another port doing the same on its own is.
+func TestOminisOwnPortTogglesAreNoFlapping(t *testing.T) {
+	coll, s, _ := switchNetwork(t)
+	ctx := context.Background()
+	sw := "dev:" + string(swMAC)
+	for _, on := range []bool{false, true, false, true} {
+		if _, err := coll.Apply(ctx, collector.ChangeRequest{NodeID: sw, Kind: model.ChangeKindPortEnabled, Port: "Port 2", Value: on}); err != nil {
+			t.Fatal(err)
+		}
+		s.mu.Lock()
+		for i, p := range s.devices[1].Interfaces {
+			if p.Name == "Port 2" || p.Name == "Port 4" {
+				s.devices[1].Interfaces[i].Up = model.Ptr(on)
+			}
+		}
+		s.mu.Unlock()
+		if err := coll.CollectNow(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	flapping := map[string]bool{}
+	for _, a := range coll.State().Alerts {
+		if a.Rule == "link_flapping" {
+			flapping[fmt.Sprint(a.Params["iface"])] = true
+		}
+	}
+	if flapping["Port 2"] || !flapping["Port 4"] {
+		t.Fatalf("flapping: %v", flapping)
 	}
 }

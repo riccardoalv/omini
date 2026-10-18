@@ -48,7 +48,7 @@ attention) and **info** (worth knowing).
 | `fast_ethernet` | warning | A wired link to an end device runs at 100 Mbps or less (a Fast Ethernet port, a cable with a broken pair, a forced speed). Not for devices made with a 100 Mbps port: cameras, UPSes, air conditioning, badge readers and other smart home gear, appliances, solar inverters, desk phones |
 | `saturated_link` | warning | A physical port uses more than 80 % of its speed, in either direction, averaged over the last collection |
 | `interface_errors` | warning | A port's receive or transmit errors grew since the last collection |
-| `link_flapping` | warning | A port went up or down 3 or more times in the last hour |
+| `link_flapping` | warning | A port went up or down 3 or more times in the last hour (not counting the hour after Omini enabled or disabled it) |
 | `half_duplex` | warning | A port that is up negotiated half duplex |
 | `sfp_low_rx` | warning | An SFP module receives less than its low alarm threshold, or less than -20 dBm when it has none |
 | `sfp_hot` | warning | An SFP module is at or above its high temperature alarm, or 70 °C when it has none |

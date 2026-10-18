@@ -18,6 +18,9 @@ type changeTracker struct {
 	reboots map[string]time.Time   // node → when it restarted
 	roots   map[string]string      // node → spanning tree root at the last round
 	moved   map[string]insights.RootChange
+	// toggled: "node|iface" → when Omini last enabled or disabled the port; its
+	// ups and downs in the hour after are Omini's, not a flapping link.
+	toggled map[string]time.Time
 }
 
 // observeChanges compares this round with the last one: a port that changed
@@ -41,7 +44,7 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 				continue
 			}
 			key := n.ID + "|" + i.Name
-			if was, ok := t.up[key]; ok && was != *i.Up {
+			if was, ok := t.up[key]; ok && was != *i.Up && !t.byOmini(key, now) {
 				t.flaps[key] = append(t.flaps[key], now)
 			}
 			t.up[key] = *i.Up
@@ -89,6 +92,27 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 		h.Reboots[id] = at
 	}
 	return h
+}
+
+// portToggled records that Omini enabled or disabled a port now.
+func (c *Collector) portToggled(node, port string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.changes.toggled == nil {
+		c.changes.toggled = map[string]time.Time{}
+	}
+	c.changes.toggled[node+"|"+port] = c.opts.Now()
+}
+
+// byOmini reports whether Omini enabled or disabled the port within the hour
+// (and forgets older toggles).
+func (t *changeTracker) byOmini(key string, now time.Time) bool {
+	at, ok := t.toggled[key]
+	if ok && now.Sub(at) > time.Hour {
+		delete(t.toggled, key)
+		return false
+	}
+	return ok
 }
 
 // detectors: what each integration of the plugin store can read, by the

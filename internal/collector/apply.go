@@ -138,6 +138,9 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 	if applyErr != nil {
 		return rec, applyErr
 	}
+	if req.Kind == model.ChangeKindPortEnabled {
+		c.portToggled(n.ID, req.Port) // its link going down and up is no flapping
+	}
 	c.replaceDevices(ctx, n.IntegrationID, devices)
 	if req.Kind != model.ChangeKindWolSend {
 		c.markBackupDue(n.IntegrationID)
