@@ -56,7 +56,7 @@ func TestEveryRuleHasTexts(t *testing.T) {
 			"disk_full", "hot_cpu", "high_cpu", "high_memory", "slow_uplink", "interface_errors", "weak_wifi",
 			"saturated_link", "unmanaged_switch", "unknown_neighbor", "new_device",
 			"fast_ethernet", "integration_available", "link_flapping", "half_duplex", "device_rebooted", "sfp_low_rx",
-			"dhcp_pool_full", "firewall_states_full", "insecure_service", "new_devices_burst", "discovery_limited", "infra_dynamic_ip", "iot_with_trusted", "wifi_open", "reboot_pending", "vpn_down", "service_stopped", "sfp_hot", "lag_member_down", "stp_root_changed", "config_changed", "dns_bypass", "upload_unusual", "lan_scan",
+			"dhcp_pool_full", "firewall_states_full", "insecure_service", "new_devices_burst", "discovery_limited", "infra_dynamic_ip", "iot_with_trusted", "hot_sensor", "wifi_open", "reboot_pending", "vpn_down", "service_stopped", "sfp_hot", "lag_member_down", "stp_root_changed", "config_changed", "dns_bypass", "upload_unusual", "lan_scan",
 			"dhcp_no_offer", "dhcp_rogue", "dns_down", "dns_slow", "dns_local", "vlan_unknown",
 		} {
 			if _, ok := texts[locale][rule]; !ok {

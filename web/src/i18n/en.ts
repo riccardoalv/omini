@@ -724,6 +724,10 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      hot_sensor: {
+        title: '{sensor} is running hot on {node}',
+        detail: 'At {celsius} °C, above {limit_c} °C.',
+      },
       wifi_open: {
         title: 'Wi-Fi {ssid} has no password',
         detail: 'Anyone nearby can join it and see what travels unencrypted.',
@@ -831,6 +835,8 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      hot_sensor:
+        'Check the fans, the dust and the airflow around it; a disk that stays hot wears out sooner.',
       wifi_open:
         'Set WPA2 or WPA3 with a password on the access point or controller; a guest network can stay open if it is in a VLAN of its own.',
       reboot_pending: "Restart it when a short outage suits you, from the device's own interface.",

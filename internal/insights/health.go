@@ -14,11 +14,18 @@ import (
 // one that has not connected within it (a road warrior's phone) is not told.
 const VPNWindow = 24 * time.Hour
 
+// Hot sensors other than CPUs (hot_cpu keeps those).
+const (
+	DiskHotC  = 55.0
+	BoardHotC = 80.0
+)
+
 func init() {
 	Rules["service_stopped"] = serviceStopped
 	Rules["vpn_down"] = vpnDown
 	Rules["reboot_pending"] = rebootPending
 	Rules["wifi_open"] = wifiOpen
+	Rules["hot_sensor"] = hotSensor
 }
 
 // serviceStopped: a service the device is configured to run is not running.
@@ -125,5 +132,33 @@ func wifiOpen(in Input, _ index) []Insight {
 		out = append(out, i)
 	}
 	slices.SortFunc(out, func(a, b Insight) int { return strings.Compare(a.Key, b.Key) })
+	return out
+}
+
+// hotSensor: a disk above DiskHotC or a board above BoardHotC, one alert per
+// sensor.
+func hotSensor(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue
+		}
+		for _, t := range n.Device.Temperatures {
+			limit := 0.0
+			switch model.Deref(t.Kind) {
+			case model.TemperatureKindDisk:
+				limit = DiskHotC
+			case model.TemperatureKindBoard:
+				limit = BoardHotC
+			default:
+				continue
+			}
+			if t.Celsius > limit {
+				out = append(out, node("hot_sensor", Warning, n, t.Sensor, map[string]any{
+					"sensor": t.Sensor, "kind": string(*t.Kind), "celsius": round1(t.Celsius), "limit_c": limit,
+				}))
+			}
+		}
+	}
 	return out
 }

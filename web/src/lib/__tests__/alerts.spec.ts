@@ -83,6 +83,7 @@ describe('alerts', () => {
       'unknown_neighbor',
       'new_device',
       'iot_with_trusted',
+      'hot_sensor',
       'wifi_open',
       'reboot_pending',
       'vpn_down',
@@ -95,6 +96,7 @@ describe('alerts', () => {
         expect(global.te(`insights.rules.${r}.detail`), `${locale} ${r}`).toBe(true)
       }
       expect(global.te('insights.tips.iot_with_trusted'), `${locale} tip`).toBe(true)
+      expect(global.te('insights.tips.hot_sensor'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.wifi_open'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.reboot_pending'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.vpn_down'), `${locale} tip`).toBe(true)

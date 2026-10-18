@@ -138,3 +138,21 @@ func TestWifiOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestHotSensor(t *testing.T) {
+	kind := func(k model.TemperatureKind) *model.TemperatureKind { return &k }
+	nas := topology.Node{
+		ID: "dev:nas", Kind: topology.KindDevice, Label: "nas", Online: true,
+		Device: &model.Device{Temperatures: []model.Temperature{
+			{Sensor: "ada0", Kind: kind(model.TemperatureKindDisk), Celsius: 58},
+			{Sensor: "ada1", Kind: kind(model.TemperatureKindDisk), Celsius: 55}, // at the limit, not above
+			{Sensor: "board", Kind: kind(model.TemperatureKindBoard), Celsius: 81.2},
+			{Sensor: "CPU 0", Kind: kind(model.TemperatureKindCPU), Celsius: 99}, // hot_cpu's
+			{Sensor: "x", Celsius: 99}, // no kind
+		}},
+	}
+	got := sortedKeys(keysOf(t, "hot_sensor", Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{nas}}}))
+	if len(got) != 2 || got[0] != "hot_sensor|dev:nas|ada0" || got[1] != "hot_sensor|dev:nas|board" {
+		t.Fatalf("got %v", got)
+	}
+}
