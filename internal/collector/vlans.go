@@ -183,8 +183,14 @@ func (c *Collector) SaveVlan(ctx context.Context, v store.Vlan, confirmed bool) 
 	if err != nil {
 		return saved, done, err
 	}
-	for _, n := range c.State().Topology.Nodes {
-		n := n.Via(model.ChangeKindVlanSet)
+	// Each device as it is now: a site's VLANs (UniFi, Omada) changed through
+	// one switch are already renamed on the others.
+	for _, id := range nodeIDs(c.State().Topology) {
+		cur, ok := c.node(id)
+		if !ok {
+			continue
+		}
+		n := cur.Via(model.ChangeKindVlanSet)
 		i := vlanIndex(n, v.ID)
 		if i < 0 || model.Deref(n.Device.Vlans[i].Name) == saved.Name || !slices.Contains(n.Changes, model.ChangeKindVlanSet) {
 			continue
@@ -224,8 +230,14 @@ func (c *Collector) DeleteVlan(ctx context.Context, id uint16, confirmed bool) (
 			return done, err
 		}
 	}
-	for _, n := range c.State().Topology.Nodes {
-		n := n.Via(model.ChangeKindVlanDelete)
+	// Each device as it is now: a site's VLAN (UniFi, Omada) deleted through
+	// one switch is gone from the others already.
+	for _, nodeID := range nodeIDs(c.State().Topology) {
+		cur, ok := c.node(nodeID)
+		if !ok {
+			continue
+		}
+		n := cur.Via(model.ChangeKindVlanDelete)
 		if vlanIndex(n, id) < 0 {
 			continue
 		}
@@ -241,6 +253,15 @@ func (c *Collector) DeleteVlan(ctx context.Context, id uint16, confirmed bool) (
 		}
 	}
 	return done, c.store.DeleteVlan(ctx, id)
+}
+
+// nodeIDs are the ids of the map's nodes, in order.
+func nodeIDs(topo topology.Topology) []string {
+	out := make([]string, 0, len(topo.Nodes))
+	for _, n := range topo.Nodes {
+		out = append(out, n.ID)
+	}
+	return out
 }
 
 func vlanIndex(n topology.Node, id uint16) int {

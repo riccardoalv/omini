@@ -3,11 +3,15 @@ package collector_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/collector"
+	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/secret"
 	"github.com/riccardoalv/omini/internal/store"
 )
 
@@ -108,5 +112,79 @@ func TestRenameAndDeleteVLANs(t *testing.T) {
 	}
 	if _, err := coll.DeleteVlan(ctx, 1, false); !errors.Is(err, collector.ErrInvalidChange) {
 		t.Fatalf("VLAN 1: %v", err)
+	}
+}
+
+// sitey is a controller whose VLANs belong to the whole site: a change made
+// through one switch changes them all, and it returns every switch.
+type sitey struct {
+	mu      sync.Mutex
+	vlans   []model.Vlan
+	applied []model.Change
+}
+
+func (*sitey) Info() integration.Info {
+	return integration.Info{
+		Type: "sitey", Name: "Sitey", Kind: integration.KindCore,
+		Changes: []model.ChangeKind{model.ChangeKindVlanSet, model.ChangeKindVlanDelete},
+	}
+}
+
+func (s *sitey) devices() []model.Device {
+	out := []model.Device{}
+	for i, m := range []model.MACAddress{"1c:2a:a3:00:00:21", "1c:2a:a3:00:00:22"} {
+		out = append(out, model.Device{
+			Key: string(m), Name: []string{"sw1", "sw2"}[i], Role: model.Ptr(model.DeviceRoleSwitch),
+			MACs: []model.MACAddress{m}, Vlans: slices.Clone(s.vlans),
+		})
+	}
+	return out
+}
+
+func (s *sitey) Collect(context.Context, integration.Config) ([]model.Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.devices(), nil
+}
+
+func (*sitey) Test(context.Context, integration.Config) (string, error) { return "ok", nil }
+
+func (s *sitey) Apply(_ context.Context, _ integration.Config, c model.Change) ([]model.Device, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.applied = append(s.applied, c)
+	v := c.Value.(collector.VlanValue)
+	s.vlans = slices.DeleteFunc(s.vlans, func(x model.Vlan) bool { return x.ID == v.ID })
+	if c.Kind == model.ChangeKindVlanSet {
+		s.vlans = append(s.vlans, model.Vlan{ID: v.ID, Name: model.Ptr(v.Name)})
+	}
+	return s.devices(), nil
+}
+
+// A site's VLAN is renamed and deleted once, through one of its switches,
+// not again through every other switch of the site.
+func TestASitesVLANChangesOnce(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	box, _ := secret.New(make([]byte, 32))
+	reg := integration.NewRegistry()
+	s := &sitey{vlans: []model.Vlan{{ID: 1}, {ID: 30, Name: model.Ptr("Lab")}}}
+	reg.Register(s)
+	coll := collector.New(st, reg, box, collector.Options{})
+	if _, err := st.CreateIntegration(ctx, store.Integration{Name: "site", Type: "sitey", Enabled: true, Config: integration.Config{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, done, err := coll.SaveVlan(ctx, store.Vlan{ID: 30, Name: "Lab 2"}, false); err != nil || len(done) != 1 || len(s.applied) != 1 {
+		t.Fatalf("rename: %+v %v %+v", done, err, s.applied)
+	}
+	if done, err := coll.DeleteVlan(ctx, 30, false); err != nil || len(done) != 1 || len(s.applied) != 2 {
+		t.Fatalf("delete: %+v %v %+v", done, err, s.applied)
 	}
 }
