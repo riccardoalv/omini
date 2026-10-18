@@ -73,7 +73,14 @@ def test_saturday_afternoon(world: World, tmp_path: Path) -> None:
     assert dev["os_version"] == "OpenWrt 24.10.2"
     assert dev["role"] == "router"
     assert dev["uptime_s"] == snap.uptime(NODE)
-    assert set(dev["ips"]) == {"10.30.1.1", "10.30.80.1", "100.64.23.45"}
+    # IPv4 of each network and the WAN, and the global IPv6 of the WAN and of the LAN's delegated prefix.
+    assert set(dev["ips"]) == {
+        "10.30.1.1",
+        "10.30.80.1",
+        "100.64.23.45",
+        "2804:14d:5c80:8a31::1c4",
+        "2804:14d:5c80:9e00::1",
+    }
     assert 20 < dev["mem_pct"] < 45
     assert dev["temperatures"][0]["sensor"] == "cpu-thermal" and dev["temperatures"][0]["kind"] == "cpu"
     assert abs(dev["temperatures"][0]["celsius"] - snap.temperature(NODE, "cpu")) < 0.1
