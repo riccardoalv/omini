@@ -155,6 +155,9 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("POST /api/notifiers/test", s.testNotifier)
 	private.HandleFunc("GET /api/notifier-settings", s.notifierSettings)
 	private.HandleFunc("PUT /api/notifier-settings", s.setNotifierSettings)
+	private.HandleFunc("GET /api/tokens", s.listTokens)
+	private.HandleFunc("POST /api/tokens", s.createToken)
+	private.HandleFunc("DELETE /api/tokens/{id}", s.deleteToken)
 	mux.Handle("/api/", s.requireAuth(private))
 
 	mux.Handle("/", s.ui())
@@ -179,8 +182,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := s.Auth.Authenticate(r.Context(), sessionToken(r)); err != nil {
-			writeError(w, http.StatusUnauthorized, "login required")
+		if !s.authenticate(w, r) {
 			return
 		}
 		next.ServeHTTP(w, r)

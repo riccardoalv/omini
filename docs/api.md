@@ -49,7 +49,8 @@ Requests without it get 403.
 | `PATCH` | `/api/me` | yes | Body `{locale}`: `en`, `pt-BR` or `""` (the browser's) |
 | `POST` | `/api/me/password` | yes | Body `{current, new}` (8+ characters). `204`; `403` when the current password is wrong; other sessions are signed out |
 
-Every other `/api/` route requires a session and answers 401 without one.
+Every other `/api/` route requires a session or an [API token](#api-tokens)
+and answers 401 without one.
 
 ```bash
 # sign in and keep the cookie
@@ -62,6 +63,31 @@ curl -b omini.cookie http://omini.lan:8080/api/topology
 
 # start a collection round
 curl -b omini.cookie -X POST -H 'X-Omini-Request: 1' http://omini.lan:8080/api/refresh
+```
+
+### API tokens
+
+For scripts and AI assistants that should only read, create a token in
+Settings → **API tokens** (or with the routes below) and send it as
+`Authorization: Bearer omini_…`. A token:
+
+- opens the `GET` routes of `/api/` and the [MCP server](#mcp-server);
+- gets 403 on any other method (it never changes anything) and on
+  `/api/tokens` and `/api/backups/{id}` (tokens are managed by the admin,
+  and a configuration backup may hold the device's passwords);
+- gets 401 once revoked.
+
+Omini keeps only the SHA-256 of a token: it is shown once, when created.
+Its last use is recorded (at most once a minute).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/tokens` | The tokens: `[{id, name, created_at, last_used_at}]` (`last_used_at` null when never used); never the token |
+| `POST` | `/api/tokens` | Body `{name}` (1 to 64 characters). `201 {id, name, token, created_at}`: the only response that carries the token |
+| `DELETE` | `/api/tokens/{id}` | Revoke a token (`204`; `404` when unknown). It stops working at once |
+
+```bash
+curl -H 'Authorization: Bearer omini_…' http://omini.lan:8080/api/topology
 ```
 
 ## Map
