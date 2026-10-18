@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Eye, EyeOff, Pencil, Search, Trash2 } from 'lucide-vue-next'
+import { Eye, EyeOff, Pencil, Power, Search, Trash2 } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatDateTime } from '@/lib/format'
 import { displayName, filterInventory, isRandomMAC, type StatusFilter } from '@/lib/inventory'
 import { displayName as nodeName } from '@/lib/names'
@@ -84,6 +84,24 @@ async function deleteSelected() {
   entries.value = entries.value.filter((e) => !selected.value.has(e.id))
   selected.value = new Set()
   emit('changed')
+}
+
+// Waking an offline device (Wake-on-LAN): one that left the map overnight
+// can only be woken from here. Each row tells how it went.
+const woken = ref(new Map<string, { ok: boolean; text: string }>())
+const waking = ref('')
+async function wake(e: InventoryEntry) {
+  waking.value = e.id
+  const next = new Map(woken.value)
+  try {
+    await api.wake(e.id)
+    next.set(e.id, { ok: true, text: t('host.woken') })
+  } catch (err) {
+    next.set(e.id, { ok: false, text: err instanceof ApiError ? err.message : t('common.error') })
+  } finally {
+    waking.value = ''
+    woken.value = next
+  }
 }
 
 onMounted(load)
@@ -176,6 +194,25 @@ onMounted(load)
             </td>
             <td class="actions">
               <button
+                v-if="!e.online && e.mac && !isRandomMAC(e.mac)"
+                class="btn ghost icon small"
+                data-test="wake"
+                :disabled="waking === e.id"
+                :aria-label="t('host.wake')"
+                :title="woken.get(e.id)?.text ?? t('host.wake')"
+                @click="wake(e)"
+              >
+                <Power :size="14" />
+              </button>
+              <small
+                v-if="woken.get(e.id)"
+                class="wake-result"
+                :class="woken.get(e.id)!.ok ? 'ok' : 'bad'"
+                role="status"
+                data-test="wake-result"
+                >{{ woken.get(e.id)!.text }}</small
+              >
+              <button
                 class="btn ghost icon small"
                 :aria-label="t('panel.rename')"
                 @click="rename(e)"
@@ -266,6 +303,19 @@ onMounted(load)
 .actions {
   white-space: nowrap;
   text-align: right;
+}
+.wake-result {
+  display: block;
+  max-width: 220px;
+  margin-left: auto;
+  white-space: normal;
+  font-size: 11.5px;
+}
+.wake-result.ok {
+  color: var(--ok);
+}
+.wake-result.bad {
+  color: var(--danger);
 }
 .empty {
   text-align: center;

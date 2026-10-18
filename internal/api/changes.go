@@ -139,7 +139,7 @@ func (s *Server) setDNSName(w http.ResponseWriter, r *http.Request) {
 func (s *Server) hostActions(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	router, canPause := s.Collector.CanPause(id)
-	out := map[string]any{"wake": s.Collector.CanWake(id), "can_pause": canPause}
+	out := map[string]any{"wake": s.Collector.CanWake(r.Context(), id), "can_pause": canPause}
 	if canPause {
 		out["pause_router"] = router
 	}

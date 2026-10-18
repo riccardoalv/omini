@@ -204,6 +204,8 @@ own it cannot, and then only the way to the internet is protected.
   Omini on its own networks, or by the router of the device's network
   (OPNsense with os-wol, pfSense, MikroTik, OpenWrt with etherwake). It is
   kept in the device's **Changes**; the device shows online when it answers.
+  A device off for more than an hour has left the map: wake it from the
+  [device list](#the-device-list).
 - **Pause internet** / **Resume internet** (a client on a network whose router
   Omini manages: OPNsense 26.7+, pfSense, MikroTik, OpenWrt): after one short
   confirmation, the router blocks it toward the internet over IPv4 and IPv6 (by its MAC where the router can,
@@ -421,6 +423,9 @@ network:
 - name, IP, MAC, type, where it is connected, first and last seen,
 - a search box and filters: all, online, offline, only randomized MACs,
 - rename, hide or unhide,
+- **Wake** (the power button) on an offline device with a MAC, also one
+  that left the map (off for more than an hour, a PC off overnight): the same
+  Wake-on-LAN as the device's panel, with its last address,
 - select several and **Delete selected** (phones with randomized MACs can
   leave many entries behind),
 - above it, the devices whose internet is paused (click one to open it).

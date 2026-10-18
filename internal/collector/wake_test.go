@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/model"
@@ -39,7 +41,7 @@ func TestWakingADevice(t *testing.T) {
 		}
 	}
 	// Not on Omini's network: the router sends it.
-	if via := coll.CanWake(phone); via.Via != "router" {
+	if via := coll.CanWake(ctx, phone); via.Via != "router" {
 		t.Fatalf("via: %+v", via)
 	}
 	if _, err := coll.Wake(ctx, phone); err != nil {
@@ -66,5 +68,49 @@ func TestWakingADevice(t *testing.T) {
 	}
 	if _, err := coll.Wake(ctx, "no-such-node"); !errors.Is(err, collector.ErrNotChangeable) {
 		t.Fatalf("unknown: %v", err)
+	}
+}
+
+// A PC off overnight has left the map (offline for over an hour) but not the
+// inventory: it can still be woken, with its last MAC and address.
+func TestWakingADeviceOffTheMap(t *testing.T) {
+	var clock time.Time
+	coll, s, _ := switchNetworkWith(t, func(o *collector.Options) {
+		now := o.Now
+		o.Now = func() time.Time {
+			if !clock.IsZero() {
+				return clock
+			}
+			return now()
+		}
+	})
+	ctx := context.Background()
+	phone := ""
+	for _, n := range coll.State().Topology.Nodes {
+		if n.MAC == string(phoneMAC) {
+			phone = n.ID
+		}
+	}
+	s.mu.Lock()
+	s.devices[0].Arp = []model.ArpEntry{{IP: "192.168.1.2", MAC: swMAC}}
+	s.devices[1].Fdb = slices.DeleteFunc(slices.Clone(s.devices[1].Fdb), func(f model.FdbEntry) bool { return f.MAC == phoneMAC })
+	s.mu.Unlock()
+	clock = time.Now().Add(collector.OfflineVisible + 2*time.Hour)
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range coll.State().Topology.Nodes {
+		if n.ID == phone {
+			t.Fatalf("still on the map: %+v", n)
+		}
+	}
+	if via := coll.CanWake(ctx, phone); via.Via != "router" {
+		t.Fatalf("via: %+v", via)
+	}
+	if _, err := coll.Wake(ctx, phone); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := s.applied[len(s.applied)-1].Value.(collector.WolValue); !ok || v.MAC != phoneMAC || v.IP != "192.168.1.41" {
+		t.Fatalf("router: %+v", s.applied)
 	}
 }

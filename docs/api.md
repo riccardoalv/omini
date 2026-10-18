@@ -114,7 +114,7 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | `GET` | `/api/nodes/{id}/dns-name` | The device's local DNS name: `name` (full, `''` when none), `label`, `custom`, `off`, `server` (the node that answers it), `missing` (`no_fixed_ip`, `no_server`, `no_name`) and `others` (every name the DNS servers have for its address) |
 | `PUT` | `/api/nodes/{id}/dns-name` | Body `{name}`: a label, `''` for the device's own, `-` for none; applied at once (`dns.set`/`dns.delete`) |
 | `GET` | `/api/nodes/{id}/actions` | What its panel can do: `wake` (`via`: `omini` or `router`, and the `router`) and `can_pause` (with `pause_router`) |
-| `POST` | `/api/nodes/{id}/wake` | Send it a Wake-on-LAN packet (from Omini on its own networks, else `wol.send` on the router); kept in its changes |
+| `POST` | `/api/nodes/{id}/wake` | Send it a Wake-on-LAN packet (from Omini on its own networks, else `wol.send` on the router); kept in its changes. `id` may be an inventory device no longer on the map (its last MAC and address are used) |
 | `PUT`, `DELETE` | `/api/nodes/{id}/pause` | Pause its internet on its router (`pause.set`), or give it back (`pause.delete`) |
 | `GET` | `/api/nodes/{id}/backups` | Its configuration versions, newest first: `id`, `taken_at`, `format`, `size`, `by_omini` |
 | `GET` | `/api/backups/{id}` | One version with its `content` (it may hold secrets the device would not leave out) |

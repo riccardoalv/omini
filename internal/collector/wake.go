@@ -13,6 +13,7 @@ import (
 
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 // Wake-on-LAN: Omini sends the magic packet itself on its own networks; on
@@ -70,9 +71,14 @@ func sendMagic(p netip.Prefix, mac net.HardwareAddr) error {
 }
 
 // wakeTarget is where a device's packet goes: Omini's own network holding
-// its address, or the router whose network does.
-func (c *Collector) wakeTarget(nodeID string) (model.MACAddress, netip.Addr, netip.Prefix, WakeVia, error) {
+// its address, or the router whose network does. A device off for long has
+// left the map (OfflineVisible) but not the inventory: its last MAC and
+// address there are used.
+func (c *Collector) wakeTarget(ctx context.Context, nodeID string) (model.MACAddress, netip.Addr, netip.Prefix, WakeVia, error) {
 	n, ok := c.node(nodeID)
+	if !ok {
+		n, ok = c.inventoryNode(ctx, nodeID)
+	}
 	mac := model.NormMAC(n.MAC)
 	if !ok || mac == "" {
 		return "", netip.Addr{}, netip.Prefix{}, WakeVia{}, fmt.Errorf("%w: waking a device needs its MAC", ErrNotChangeable)
@@ -97,14 +103,14 @@ func (c *Collector) wakeTarget(nodeID string) (model.MACAddress, netip.Addr, net
 }
 
 // CanWake says how a device would be woken.
-func (c *Collector) CanWake(nodeID string) WakeVia {
-	_, _, _, via, _ := c.wakeTarget(nodeID)
+func (c *Collector) CanWake(ctx context.Context, nodeID string) WakeVia {
+	_, _, _, via, _ := c.wakeTarget(ctx, nodeID)
 	return via
 }
 
 // Wake sends the device a Wake-on-LAN packet, and records it in its history.
 func (c *Collector) Wake(ctx context.Context, nodeID string) (store.ConfigChange, error) {
-	mac, ip, local, via, err := c.wakeTarget(nodeID)
+	mac, ip, local, via, err := c.wakeTarget(ctx, nodeID)
 	if err != nil {
 		return store.ConfigChange{}, err
 	}
@@ -132,4 +138,19 @@ func (c *Collector) Wake(ctx context.Context, nodeID string) (store.ConfigChange
 		return rec, fmt.Errorf("could not send the Wake-on-LAN packet: %s", rec.Error)
 	}
 	return rec, nil
+}
+
+// inventoryNode is a device of the inventory that is not on the map now, as
+// a node with its last MAC and address.
+func (c *Collector) inventoryNode(ctx context.Context, id string) (topology.Node, bool) {
+	list, err := c.store.ListInventory(ctx)
+	if err != nil {
+		return topology.Node{}, false
+	}
+	for _, e := range list {
+		if e.ID == id {
+			return topology.Node{ID: e.ID, Kind: topology.NodeKind(e.Kind), Label: e.Label, MAC: e.MAC, IP: e.IP}, true
+		}
+	}
+	return topology.Node{}, false
 }
