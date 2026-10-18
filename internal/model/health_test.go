@@ -35,3 +35,15 @@ func TestDeviceHealth(t *testing.T) {
 		}
 	}
 }
+
+// TestRadioWidthUnmarshals guards against integer enums in the schema: the
+// generated code compares an int64 with untyped ints and refuses them all.
+func TestRadioWidthUnmarshals(t *testing.T) {
+	var r Radio
+	if err := json.Unmarshal([]byte(`{"name":"wifi0","band":"2.4ghz","channel":6,"width_mhz":20}`), &r); err != nil {
+		t.Fatal(err)
+	}
+	if r.WidthMhz == nil || *r.WidthMhz != 20 {
+		t.Fatalf("width: %+v", r.WidthMhz)
+	}
+}
