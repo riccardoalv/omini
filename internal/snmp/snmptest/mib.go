@@ -203,6 +203,7 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 			add(gosnmp.Integer, ifIndex[lag], "1.2.840.10006.300.43.1.2.1.1.13.%d", ifIndex[iface.Name])
 		}
 	}
+	out = append(out, stpRoles(d, bridgePort)...)
 	if root := model.Deref(d.StpRoot); root != "" {
 		var prio int
 		var mac string
@@ -445,5 +446,46 @@ func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
 			Value: fmt.Sprintf(".1.3.6.1.2.1.2.2.1.1.%d", ifIndex[iface.Name]),
 		})
 	}
+	return out
+}
+
+// stpRoles renders what BRIDGE-MIB tells the ports' roles by, when a port
+// has one: the switch's bridge address (its key's MAC, else
+// 02:00:00:00:00:01) and root port, and each port's designated bridge and
+// port (the switch's for designated and backup ports, another bridge's for
+// root and alternate ones; a backup port's designated port is another one).
+func stpRoles(d model.Device, bridgePort func(string) int) []gosnmp.SnmpPDU {
+	if !slices.ContainsFunc(d.Interfaces, func(i model.Interface) bool { return i.Stp != nil && i.Stp.Role != nil }) {
+		return nil
+	}
+	self := macBytes(model.NormMAC(d.Key))
+	if len(self) != 6 {
+		self = []byte{2, 0, 0, 0, 0, 1}
+	}
+	other := []byte{0x80, 0, 2, 0, 0, 0, 0, 0x99}
+	var out []gosnmp.SnmpPDU
+	add := func(typ gosnmp.Asn1BER, value any, format string, args ...any) {
+		out = append(out, gosnmp.SnmpPDU{Name: "." + fmt.Sprintf(format, args...), Type: typ, Value: value})
+	}
+	add(gosnmp.OctetString, self, "1.3.6.1.2.1.17.1.1.0")
+	rootPort := 0
+	for _, iface := range d.Interfaces {
+		if iface.Stp == nil || iface.Stp.Role == nil {
+			continue
+		}
+		bp := bridgePort(iface.Name)
+		bridge, port := other, bp
+		switch *iface.Stp.Role {
+		case model.PortStpRoleRoot:
+			rootPort = bp
+		case model.PortStpRoleDesignated:
+			bridge = append([]byte{0x80, 1}, self...) // priority 32768 + VLAN 1
+		case model.PortStpRoleBackup:
+			bridge, port = append([]byte{0x80, 1}, self...), bp+1
+		}
+		add(gosnmp.OctetString, bridge, "1.3.6.1.2.1.17.2.15.1.8.%d", bp)
+		add(gosnmp.OctetString, []byte{0x80, byte(port)}, "1.3.6.1.2.1.17.2.15.1.9.%d", bp) //nolint:gosec // test data
+	}
+	add(gosnmp.Integer, rootPort, "1.3.6.1.2.1.17.2.7.0")
 	return out
 }
