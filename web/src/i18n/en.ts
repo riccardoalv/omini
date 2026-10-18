@@ -720,6 +720,10 @@ export default {
         title: '{node} has no fixed IP',
         detail: 'It gets {ip} by DHCP: the address can change.',
       },
+      iot_with_trusted: {
+        title: 'IoT devices share a network with your servers and computers',
+        detail: '{network}: {iot_devices} beside {trusted_devices}.',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -809,6 +813,8 @@ export default {
         'A network scanner (yours?) is normal; otherwise check the device: it may be infected.',
       infra_dynamic_ip:
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
+      iot_with_trusted:
+        "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',

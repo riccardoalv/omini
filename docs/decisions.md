@@ -279,6 +279,14 @@ tested with fixtures). The rules that are easy to break:
   devices made with such a port (cameras, UPSes, air conditioning, badge
   readers and other smart home gear, appliances, solar inverters, desk
   phones; maintainer's rule). Memory alerts are not raised for VMs.
+- **IoT beside servers** (`iot_with_trusted`, info; decided 2026-10-18):
+  cameras, TVs, media players, speakers, smart home gear, appliances, air
+  conditioners and solar inverters on the same network (VLAN, else subnet)
+  as servers, NAS, hypervisors, VMs or computers. One alert per network,
+  never per device. Printers, game consoles, desk phones and phones are left
+  out (they usually live on the main network). Only once the network uses a
+  VLAN besides 1: without VLANs there is nowhere to move them. A type the
+  user corrected counts as corrected; hidden devices do not count.
 - **Notifications**: Telegram, e-mail, Slack, Discord, ntfy and webhooks; one
   message per channel per round, a **card per device** with its details, what
   to do and a link to it (maintainer's rule: informative, and no emoji — the

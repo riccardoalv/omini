@@ -732,6 +732,10 @@ const ptBR: typeof en = {
         title: '{node} não tem IP fixo',
         detail: 'Ele recebe {ip} por DHCP: o endereço pode mudar.',
       },
+      iot_with_trusted: {
+        title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
+        detail: '{network}: {iot_devices} junto de {trusted_devices}.',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -822,6 +826,8 @@ const ptBR: typeof en = {
         'Um scanner de rede (seu?) é normal; senão, verifique o dispositivo: ele pode estar infectado.',
       infra_dynamic_ip:
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
+      iot_with_trusted:
+        'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',

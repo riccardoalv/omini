@@ -66,6 +66,7 @@ attention) and **info** (worth knowing).
 | `upload_unusual` | warning | With Traffic flows, a device sent at least 200 MB to the internet in the last hour, and five times its usual hour (its average over the week before; needs a day of history). Routers, servers, NAS, hypervisors and VMs are left out |
 | `lan_scan` | warning | With Traffic flows, a device reached 50 or more services (address and port) on your network within a minute in the last hour. Omini's own host and routers are left out; only traffic that crosses the router is seen |
 | `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can reserve it on ([Reserve IPs](discovery.md#dns-and-dhcp-checks)) |
+| `iot_with_trusted` | info | Once the network uses VLANs, IoT devices (cameras, TVs, media players, speakers, smart home gear, appliances, air conditioners, solar inverters) share a network with servers, NAS, hypervisors, VMs or computers: one alert per network, listing both. Printers, game consoles, desk phones and phones are left out; a type you corrected counts as corrected, hidden devices do not count |
 | `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
