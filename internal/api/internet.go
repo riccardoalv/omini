@@ -51,12 +51,21 @@ func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	labels := nodeLabels(s.Collector.State().Topology)
+	// A device no longer on the map keeps its name from the inventory.
+	known := map[string]string{}
+	if inv, err := s.Store.ListInventory(r.Context()); err == nil {
+		for _, e := range inv {
+			known[e.ID] = cmp.Or(e.Alias, e.Label)
+		}
+	}
 	out := make([]usageView, 0, len(list))
 	var total store.Usage
 	for _, u := range list {
 		v := usageView{Usage: u, Label: u.Node}
 		if l, ok := labels[u.Node]; ok {
 			v.Label, v.OnMap = l, true
+		} else if l := known[u.Node]; l != "" {
+			v.Label = l
 		} else if len(u.Node) > 3 && u.Node[:3] == "ip:" {
 			v.Label = u.Node[3:]
 		}

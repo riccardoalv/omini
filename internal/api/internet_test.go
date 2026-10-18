@@ -17,8 +17,13 @@ func TestInternetUsageAndDestinations(t *testing.T) {
 	}
 	now := time.Now()
 	nas := "mac:00:11:32:aa:00:01"
+	// A laptop seen yesterday: in the inventory, no longer on the map.
+	gone := "mac:00:11:22:00:00:99"
+	if err := h.store.MarkSeen(context.Background(), []store.InventoryEntry{{ID: gone, Kind: "client", Label: "Old laptop"}}, now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
 	if err := h.store.SaveInternet(context.Background(), now, []store.Usage{
-		{Node: nas, RX: 5000, TX: 100}, {Node: "ip:192.168.1.77", RX: 10},
+		{Node: nas, RX: 5000, TX: 100}, {Node: "ip:192.168.1.77", RX: 10}, {Node: gone, RX: 5},
 	}, []store.Destination{
 		{Node: nas, Dest: "youtube.com", Proto: 6, Port: 443, RX: 4000, TX: 50},
 		{Node: nas, Dest: "1.1.1.1", Proto: 17, Port: 53, RX: 1000, TX: 50},
@@ -36,7 +41,8 @@ func TestInternetUsageAndDestinations(t *testing.T) {
 	if code := h.do("GET", "/api/internet?range=today", nil, &usage); code != 200 {
 		t.Fatalf("internet: %d", code)
 	}
-	if len(usage.Devices) != 2 || usage.Devices[0].Node != nas || !usage.Devices[0].OnMap || usage.Devices[1].Label != "192.168.1.77" || usage.Total.RX != 5010 {
+	if len(usage.Devices) != 3 || usage.Devices[0].Node != nas || !usage.Devices[0].OnMap || usage.Devices[1].Label != "192.168.1.77" ||
+		usage.Devices[2].Label != "Old laptop" || usage.Devices[2].OnMap || usage.Total.RX != 5015 {
 		t.Fatalf("usage = %+v", usage)
 	}
 	var overview struct {

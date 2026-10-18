@@ -179,7 +179,7 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/flows` | Conversations over the last `minutes` (1 to 1440, default 60), at most `limit` (1 to 1000, default 200); `node` or `ip` limits them to one device. Answers `conversations` (`a`, `b`, `a_node`, `b_node`, `bytes_ab`, `bytes_ba`, `packets`, `ports: [{proto, port, bytes}]`), `listening` and `exporters` |
-| `GET` | `/api/internet` | Who used the internet over `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), busiest first: `devices` (`node`, `label`, `on_map`, `rx`, `tx` in bytes; `node` is `ip:<address>` for a device not on the map), `total`, `since`, `seconds`, `listening` and `exporters` |
+| `GET` | `/api/internet` | Who used the internet over `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), busiest first: `devices` (`node`, `label`, `on_map`, `rx`, `tx` in bytes; `node` is `ip:<address>` for an unknown device; `label` is the name on the map, else the inventory's for a device no longer on it, else the address), `total`, `since`, `seconds`, `listening` and `exporters` |
 | `GET` | `/api/nodes/{id}/destinations` | Where a device went on the internet over the last `hours` (1 to 24, default 24), busiest first: `destinations` (`name`: a domain or the address, `rx`, `tx`, `ports: [{proto, port, bytes}]`) |
 
 ## Notifications
