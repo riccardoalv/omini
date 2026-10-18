@@ -2,8 +2,10 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
@@ -32,20 +34,37 @@ func movedDevices(topo topology.Topology, inventory []store.InventoryEntry) map[
 		if _, ok := known[n.ID]; ok {
 			continue
 		}
-		for _, m := range macsOf(n.Device) {
-			old := "dev:" + string(m)
-			e, ok := known[old]
-			if old == n.ID || !ok || e.Kind != string(topology.KindDevice) || onMap[old] {
-				continue
-			}
-			if _, taken := moved[old]; taken {
-				continue
-			}
+		if old := previousID(n, known, onMap, moved); old != "" {
 			moved[old] = n.ID
-			break
 		}
 	}
 	return moved
+}
+
+// previousID is the id a device node had before its key changed: the MAC of
+// one of its MACs, else (a device that had no MAC for a key, keyed by its
+// address) the same integration's node with the same address.
+func previousID(n topology.Node, known map[string]store.InventoryEntry, onMap map[string]bool, moved map[string]string) string {
+	free := func(old string) bool {
+		e, ok := known[old]
+		_, taken := moved[old]
+		return old != n.ID && ok && e.Kind == string(topology.KindDevice) && !onMap[old] && !taken
+	}
+	for _, m := range macsOf(n.Device) {
+		if old := "dev:" + string(m); free(old) {
+			return old
+		}
+	}
+	if n.IP == "" || n.IntegrationID == 0 {
+		return ""
+	}
+	prefix := fmt.Sprintf("dev:%d:", n.IntegrationID)
+	for id, e := range known {
+		if strings.HasPrefix(id, prefix) && e.IP == n.IP && free(id) {
+			return id
+		}
+	}
+	return ""
 }
 
 // macsOf lists a device's MACs, lowest first.

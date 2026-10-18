@@ -57,3 +57,33 @@ func TestANewDeviceDoesNotTakeAnotherDevicesHistory(t *testing.T) {
 		t.Fatalf("a device still on the map keeps its id: %+v", s.Topology.Nodes)
 	}
 }
+
+func TestADeviceKeyedByItsAddressBeforeKeepsItsHistory(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	// An older plugin keyed the DNS server by its address; the newer one by its MAC.
+	dns := model.Device{Key: "192.168.1.5", Name: "adguard", Host: model.Ptr("192.168.1.5"), IPs: []string{"192.168.1.5"}}
+	e.fake.set([]model.Device{dns}, nil)
+	s := e.collect(t)
+	var old string
+	for _, n := range s.Topology.Nodes {
+		if n.Label == "adguard" {
+			old = n.ID
+		}
+	}
+	if old == "" {
+		t.Fatalf("no node for the DNS server: %+v", s.Topology.Nodes)
+	}
+	alias := "DNS"
+	if _, err := e.st.UpdateInventory(ctx, old, store.InventoryUpdate{Alias: &alias}); err != nil {
+		t.Fatal(err)
+	}
+	dns.Key, dns.MACs = "aa:00:00:00:00:53", []model.MACAddress{"aa:00:00:00:00:53"}
+	e.fake.set([]model.Device{dns}, nil)
+	s = e.collect(t)
+	n, ok := node(s, "dev:aa:00:00:00:00:53")
+	if !ok || n.Label != alias {
+		t.Fatalf("the DNS server keeps its alias under its MAC: %+v (found=%v, old=%s)", n, ok, old)
+	}
+}
