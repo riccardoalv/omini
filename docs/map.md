@@ -171,8 +171,9 @@ port** to open its card:
 - its VLANs (untagged and tagged), the LAG it belongs to and its spanning tree
   state (in red when blocked: a redundant link on standby),
 - the SFP module, when reported: vendor, part, type, temperature, voltage,
-  bias, Tx and Rx power (Rx in red below the module's alarm threshold, or
-  below -20 dBm when it has none),
+  bias, Tx and Rx power (in red when the light is weak: Rx below the module's
+  alarm threshold, or below -20 dBm when it has none; or when the module is
+  hot: at its own high temperature alarm, or 70 °C without one),
 - what is connected to it, and the port's traffic chart,
 - the pencil next to its name renames it ("Uplink to the rack"): kept by
   Omini, shown instead of the device's own description; empty restores it,

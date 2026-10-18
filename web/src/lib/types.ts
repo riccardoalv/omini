@@ -53,6 +53,8 @@ export interface Transceiver {
   tx_power_dbm?: number
   rx_power_dbm?: number
   rx_power_low_dbm?: number
+  /** The module's own high temperature alarm (sfp_hot above it, else 70 °C). */
+  temperature_high_c?: number
 }
 
 export interface Vlan {
@@ -171,6 +173,58 @@ export interface Device {
   paused?: PausedDevice[]
   /** The spanning tree root bridge as it sees it. */
   stp_root?: string
+  /** IPv6 neighbors (NDP), like arp. */
+  ndp?: { ip: string; mac: string; interface?: string }[]
+  /** LLDP, CDP or MNDP neighbors, or `other` for a declared link. */
+  neighbors?: Neighbor[]
+  /** Clients of an access point. */
+  wireless_clients?: WirelessClient[]
+  /** The network scan's DHCPDISCOVER on each interface. */
+  dhcp_checks?: DhcpCheck[]
+  /** The network scan's queries to each DNS server. */
+  dns_checks?: DnsCheck[]
+}
+
+export type NeighborCapability =
+  'ap' | 'bridge' | 'docsis' | 'other' | 'repeater' | 'router' | 'station' | 'telephone'
+
+/** A neighbor a device announces (LLDP, CDP, MNDP) or a link it declares. */
+export interface Neighbor {
+  local_port: string
+  protocol?: 'lldp' | 'cdp' | 'mndp' | 'other'
+  remote_mac?: string
+  remote_ip?: string
+  remote_name?: string
+  remote_port?: string
+  remote_platform?: string
+  capabilities?: NeighborCapability[]
+}
+
+/** A client of an access point. */
+export interface WirelessClient {
+  mac: string
+  ssid?: string
+  band?: '2.4ghz' | '5ghz' | '6ghz'
+  interface?: string
+  signal_dbm?: number
+  rx_rate_mbps?: number
+  tx_rate_mbps?: number
+  rx_bps?: number
+  tx_bps?: number
+}
+
+/** One DHCPDISCOVER of the network scan, on one interface. */
+export interface DhcpCheck {
+  interface: string
+  error?: string
+  offers?: Omit<DhcpOffer, 'known' | 'node_id'>[]
+}
+
+/** The network scan's test queries to one DNS server. */
+export interface DnsCheck {
+  server: string
+  external?: DnsQuery
+  local?: DnsQuery
 }
 
 export interface TopoNode {
@@ -592,7 +646,13 @@ export interface Network {
   parent?: string
   /** "192.168.30.1/24" */
   gateway?: string
-  dhcp?: { enabled: boolean; from?: string; to?: string }
+  dhcp?: {
+    enabled: boolean
+    from?: string
+    to?: string
+    /** false: the router refuses reservations inside the range (pfSense with ISC). */
+    reserve_in_range?: boolean
+  }
   access?: NetworkAccess
   /** Discovery between networks; null: the router has no mDNS repeater. */
   mdns?: boolean | null

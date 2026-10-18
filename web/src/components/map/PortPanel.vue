@@ -194,8 +194,11 @@ function details(p: Interface) {
         label: t('panel.optics'),
         value: optics.join(' · '),
         mono: true,
-        // Below the module's alarm threshold, or under -20 dBm without one: weak light.
-        err: m.rx_power_dbm !== undefined && m.rx_power_dbm < (m.rx_power_low_dbm ?? -20),
+        // Below the module's alarm threshold, or under -20 dBm without one: weak
+        // light. At its high temperature alarm, or 70 °C without one: hot (sfp_hot).
+        err:
+          (m.rx_power_dbm !== undefined && m.rx_power_dbm < (m.rx_power_low_dbm ?? -20)) ||
+          (m.temperature_c !== undefined && m.temperature_c >= (m.temperature_high_c ?? 70)),
       })
   }
   if (p.rx_errors || p.tx_errors)

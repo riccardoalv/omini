@@ -42,6 +42,25 @@ describe('PortPanel', () => {
     w.unmount()
   })
 
+  it('flags a hot module, above its own alarm or 70 °C', async () => {
+    const sfp = (temperature_c: number, temperature_high_c?: number) =>
+      port('sfp1', {
+        up: true,
+        connector: 'sfp',
+        transceiver: { rx_power_dbm: -5, temperature_c, temperature_high_c },
+      })
+    for (const [p, hot] of [
+      [sfp(66, 65), true],
+      [sfp(66), false],
+      [sfp(71), true],
+    ] as const) {
+      const w = mountPanel([p])
+      await w.get('.port').trigger('click')
+      expect(w.find('[data-test=port-card] dd.err').exists()).toBe(hot)
+      w.unmount()
+    }
+  })
+
   it('draws one port per interface, colored by speed, empty when down', () => {
     const w = mountPanel([
       port('igb0', { up: true, speed_mbps: 2500 }),
