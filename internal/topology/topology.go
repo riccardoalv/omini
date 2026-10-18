@@ -127,6 +127,7 @@ type Node struct {
 
 	Hidden   bool       `json:"hidden,omitempty"`    // hidden from the map by the user
 	Note     string     `json:"note,omitempty"`      // the user's free note about the device
+	OwnerID  int64      `json:"owner_id,omitempty"`  // the person who owns the device (0: nobody)
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }
 

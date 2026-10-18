@@ -9,6 +9,7 @@ names can change between minor releases, and the release notes say so.
 - [Authentication](#authentication)
 - [Map](#map)
 - [Inventory](#inventory)
+- [People](#people)
 - [Integrations and collection](#integrations-and-collection)
 - [Plugins](#plugins)
 - [Alerts, presence and history](#alerts-presence-and-history)
@@ -135,9 +136,23 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `note`, `first_seen`, `last_seen`, plus `online` and the current identification |
-| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic), `note` (plain text, up to 1,000 characters; `""` clears it; longer is a 400) |
+| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `note`, `owner_id`, `first_seen`, `last_seen`, plus `online` and the current identification |
+| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic), `note` (plain text, up to 1,000 characters; `""` clears it; longer is a 400), `owner_id` (a person's id; `null` clears it; an unknown person is a 400) |
 | `POST` | `/api/inventory/delete` | Body `{ids: [...]}`: delete entries and their history (they come back if seen again) |
+
+## People
+
+A person is a name (unique, ignoring case; up to 60 characters) and an
+optional `color` (`#rrggbb`); a device has at most one owner
+(`owner_id` in the inventory and on the map's nodes).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/people` | The people by name: `id`, `name`, `color`, `created_at`, `devices` (their inventory ids), `home` (one of their phones, tablets or wearables is online) and `last_seen` (the latest of their devices) |
+| `POST` | `/api/people` | Body `{name, color?}`: add a person (201); a name taken is a 409 |
+| `PATCH` | `/api/people/{id}` | Body `{name?, color?}`: rename a person or change the color |
+| `DELETE` | `/api/people/{id}` | Delete a person (204); their devices are left without an owner |
+| `POST` | `/api/people/{id}/pause`, `/api/people/{id}/resume` | Pause (or give back) the internet of every device of the person, each through its own `pause.set` (or `pause.delete`) and in its own history: `[{node_id, status, error?, change?}]`, `status` `done`, `skipped` (Omini's host, routers and network gear, a device no router Omini manages serves, one already as asked) or `failed` (the router refused; the others go on) |
 
 ## Integrations and collection
 
@@ -179,7 +194,7 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/flows` | Conversations over the last `minutes` (1 to 1440, default 60), at most `limit` (1 to 1000, default 200); `node` or `ip` limits them to one device. Answers `conversations` (`a`, `b`, `a_node`, `b_node`, `bytes_ab`, `bytes_ba`, `packets`, `ports: [{proto, port, bytes}]`), `listening` and `exporters` |
-| `GET` | `/api/internet` | Who used the internet over `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), busiest first: `devices` (`node`, `label`, `on_map`, `rx`, `tx` in bytes; `node` is `ip:<address>` for an unknown device; `label` is the name on the map, else the inventory's for a device no longer on it, else the address), `total`, `since`, `seconds`, `listening` and `exporters` |
+| `GET` | `/api/internet` | Who used the internet over `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), busiest first: `devices` (`node`, `label`, `on_map`, `rx`, `tx` in bytes; `node` is `ip:<address>` for an unknown device; `label` is the name on the map, else the inventory's for a device no longer on it, else the address), `people` (each person's `id`, `name`, `rx` and `tx`: the sum of their devices, busiest first; people who used nothing are left out), `total`, `since`, `seconds`, `listening` and `exporters` |
 | `GET` | `/api/nodes/{id}/destinations` | Where a device went on the internet over the last `hours` (1 to 24, default 24), busiest first: `destinations` (`name`: a domain or the address, `rx`, `tx`, `ports: [{proto, port, bytes}]`) |
 
 ## Notifications

@@ -35,6 +35,8 @@ var dropped = map[string]bool{
 	"note":    true, // the user's notes about devices (names, passwords)
 	"config":  true, // integration settings (hosts, users)
 	"layout":  true,
+	"people":  true, // the people and their names (device owners)
+	"person":  true,
 }
 
 // named keys hold names people choose: a device's, a network's, a port's.
@@ -44,6 +46,7 @@ var named = map[string]bool{
 	"user": true, "username": true, "comment": true, "location": true, "contact": true,
 	"sys_name": true, "author": true, "port_labels": true, "fqdn": true, "title": true,
 	"mount": true, "sensor": true, // may carry the owner's names (/mnt/ricardo-photos)
+	"owner_name": true, "owner": true, // a device owner's name
 }
 
 // safeParams are the alert parameters that never hold a name someone chose:

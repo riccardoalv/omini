@@ -134,3 +134,18 @@ func (c *Collector) syncPaused(ctx context.Context) {
 		}
 	}
 }
+
+// Paused tells whether a router pauses the device's internet.
+func (c *Collector) Paused(nodeID string) bool {
+	n, ok := c.node(nodeID)
+	mac := model.NormMAC(n.MAC)
+	if !ok || mac == "" {
+		return false
+	}
+	for _, r := range c.State().Topology.Nodes {
+		if r.Device != nil && pausedOf(r, mac) != nil {
+			return true
+		}
+	}
+	return false
+}

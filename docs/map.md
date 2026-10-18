@@ -14,15 +14,17 @@ attention.
 - [Areas](#areas)
 - [VLAN and subnet filter](#vlan-and-subnet-filter)
 - [The device list](#the-device-list)
+- [People](#people)
 - [Export](#export)
 
 ## Reading the map
 
 The bar at the top shows:
 
-- **The menu** (☰): a drawer with three tabs: **Devices** (the
+- **The menu** (☰): a drawer with four tabs: **Devices** (the
   [device list](#the-device-list), with the switches for offline and hidden
-  devices), **VLANs** ([the network's VLANs](#the-networks-vlans) and
+  devices), **People** ([who owns which devices](#people), and pausing a
+  person's internet), **VLANs** ([the network's VLANs](#the-networks-vlans) and
   subnets: a click on one is the [network filter](#vlan-and-subnet-filter);
   the [networks' areas](#the-networks-areas) switch) and **DNS & DHCP** (see
   [discovery](discovery.md)). A dot on it means the map is filtered;
@@ -152,6 +154,11 @@ characters of plain text. It stays while the device is offline or off the map;
 a note mark on the map shows it on hover, the device list's search finds it
 and the JSON export carries it. The diagnostics file never includes it.
 
+**Owner.** Below the note, the **Owner** select gives the device to one of
+the [people](#people), to **Nobody**, or to a **New person…** named there
+(created and picked at once). It is saved as soon as you pick it; a device
+has at most one owner.
+
 **Details.** Name (click to rename; the name is kept by Omini, never written
 to the device), type, IP and MAC addresses, vendor, model, serial, version,
 uptime, the integration that reads it, **Connected to** (its parent and port),
@@ -223,7 +230,8 @@ own it cannot, and then only the way to the internet is protected.
   by hand on the router (OPNsense: a simple block rule from its IP, MAC or a
   host alias, to anything) shows as paused too, with the rule's name; resuming
   it turns that rule off, unless the rule blocks other devices as well. A paused device has
-  a pause mark on the map and is listed at the top of the device list.
+  a pause mark on the map and is listed at the top of the device list. To
+  pause all of someone's devices at once, see [People](#people).
 
 **Network**, for a device a managed router serves: **Reserve this IP** (a
 DHCP reservation on the router, keeping its address; a router that refuses
@@ -439,6 +447,27 @@ network:
 
 Click a name to close the drawer and open that device on the map, centered,
 its group unfolded.
+
+## People
+
+The menu's **People** tab lists the people of the network: each with a dot
+that is green while they are **home** (one of their phones, tablets or
+wearables is online) and how many devices they have. Add a person by name,
+rename one with the pencil, or delete one after a short confirmation (their
+devices stay, with no owner). A device has at most one owner, set with the
+**Owner** select in [its panel](#the-device-panel).
+
+Click a person to see their devices; click a device to open it on the map.
+**Pause internet** pauses every device of theirs that can be paused, after one
+confirmation: each goes through its own [pause](#the-device-panel) on its
+router and is kept in its own **Changes**. Omini's own host, routers and
+network devices are never paused, and one device the router refuses does not
+stop the others; a line per device then says whether it was done, skipped or
+failed. **Resume internet** shows while one of their devices is paused and
+gives them all their internet back.
+
+The [Internet screen](discovery.md#traffic-flows) sums each person's devices under
+**People**. People's names never reach the diagnostics file.
 
 ## Export
 

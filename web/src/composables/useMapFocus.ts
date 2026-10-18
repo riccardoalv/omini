@@ -34,7 +34,7 @@ export function useMapFocus(options: {
   }
 
   // The map's menu, a drawer: /devices opens it on the devices, ?menu=<tab> on a tab.
-  const tabs = ['devices', 'vlans', 'services'] as const
+  const tabs = ['devices', 'people', 'vlans', 'services'] as const
   const asked = tabs.find((t) => t === route.query.menu)
   const menuTab = ref<MenuTab>(asked ?? 'devices')
   const devicesOpen = ref(route.query.devices === '1' || !!asked)

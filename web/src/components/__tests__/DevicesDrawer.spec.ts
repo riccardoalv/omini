@@ -14,6 +14,9 @@ vi.mock('@/lib/api', async (orig) => {
       ...mod.api,
       inventory: vi.fn<typeof mod.api.inventory>().mockResolvedValue([]),
       vlans: vi.fn<typeof mod.api.vlans>().mockResolvedValue([]),
+      people: vi
+        .fn<typeof mod.api.people>()
+        .mockResolvedValue([{ id: 1, name: 'Ana', created_at: '', devices: [], home: true }]),
       topology: vi.fn<typeof mod.api.topology>().mockResolvedValue({
         topology: { nodes: [], edges: [] },
         statuses: [],
@@ -44,9 +47,14 @@ const mountDrawer = (extra = {}) =>
   mount(DevicesDrawer, { props: { ...props, ...extra }, global: { plugins: plugins() } })
 
 describe('DevicesDrawer', () => {
-  it('has the devices, VLANs and DNS & DHCP tabs, and opens on the devices', () => {
+  it('has the devices, people, VLANs and DNS & DHCP tabs, and opens on the devices', () => {
     const w = mountDrawer()
-    expect(w.findAll('[role=tab]').map((t) => t.text())).toEqual(['Devices', 'VLANs', 'DNS & DHCP'])
+    expect(w.findAll('[role=tab]').map((t) => t.text())).toEqual([
+      'Devices',
+      'People',
+      'VLANs',
+      'DNS & DHCP',
+    ])
     expect(w.text()).toContain('3 devices')
     expect(w.text()).toContain('7 clients online')
   })
@@ -69,5 +77,11 @@ describe('DevicesDrawer', () => {
     await w.get('[data-net="subnet:192.168.1.0/24"]').trigger('click')
     expect(w.emitted('update:netFilter')).toEqual([['subnet:192.168.1.0/24']])
     expect(w.emitted('close')).toHaveLength(1)
+  })
+
+  it('lists the people in the people tab', async () => {
+    const w = mountDrawer({ tab: 'people' })
+    await flushPromises()
+    expect(w.get('[data-test=people-tab]').text()).toContain('Ana')
   })
 })

@@ -16,6 +16,8 @@ import type {
   Integration,
   IntegrationType,
   InventoryEntry,
+  Person,
+  PersonDeviceResult,
   MapArea,
   CatalogEntry,
   ChangeKind,
@@ -166,9 +168,20 @@ export const api = {
       device_type?: string
       icon?: string
       note?: string
+      owner_id?: number | null
     },
   ) => request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),
+
+  people: () => request<Person[]>('GET', '/api/people'),
+  createPerson: (input: { name: string; color?: string }) =>
+    request<Person>('POST', '/api/people', input),
+  updatePerson: (id: number, input: { name?: string; color?: string }) =>
+    request<Person>('PATCH', `/api/people/${id}`, input),
+  deletePerson: (id: number) => request<void>('DELETE', `/api/people/${id}`),
+  /** Pauses (or resumes) the internet of every device of the person that can be. */
+  pausePerson: (id: number) => request<PersonDeviceResult[]>('POST', `/api/people/${id}/pause`),
+  resumePerson: (id: number) => request<PersonDeviceResult[]>('POST', `/api/people/${id}/resume`),
 
   setPortLabel: (nodeId: string, port: string, label: string) =>
     request<void>(

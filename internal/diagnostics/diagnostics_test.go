@@ -143,3 +143,22 @@ func TestBundleLeavesDeviceNotesOut(t *testing.T) {
 		t.Fatalf("a device's note never reaches the bundle: %s", raw)
 	}
 }
+
+func TestBundleLeavesPeopleOut(t *testing.T) {
+	topo := map[string]any{
+		"nodes":  []any{map[string]any{"id": "dev:00:11:32:aa:bb:cc", "owner_id": 3, "owner": "Ana Lima"}},
+		"people": []any{map[string]any{"id": 3, "name": "Ana Lima"}},
+		"person": map[string]any{"id": 3, "name": "Ana Lima"},
+	}
+	out, err := Bundle(Input{Version: "1.6.1", Topology: topo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out)
+	if strings.Contains(string(raw), "Ana") || strings.Contains(string(raw), `"people"`) || strings.Contains(string(raw), `"person"`) {
+		t.Fatalf("people's names never reach the bundle: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"owner_id":3`) {
+		t.Fatalf("the owner's id (no name) stays: %s", raw)
+	}
+}

@@ -153,4 +153,19 @@ describe('InternetView', () => {
     expect(off.w.find('[data-test=internet-off]').exists()).toBe(true)
     off.w.unmount()
   })
+
+  it("sums each person's devices, and shows no people when there are none", async () => {
+    vi.mocked(api.internet).mockResolvedValue(
+      usage({ people: [{ id: 1, name: 'Ana', rx: 3_000_000, tx: 100_000 }] }),
+    )
+    const { w } = await mountIt()
+    const people = w.get('[data-test=internet-people]')
+    expect(people.text()).toContain('Ana')
+    expect(people.text()).toContain('3.0 MiB')
+    w.unmount()
+    vi.mocked(api.internet).mockResolvedValue(usage())
+    const none = await mountIt()
+    expect(none.w.find('[data-test=internet-people]').exists()).toBe(false)
+    none.w.unmount()
+  })
 })

@@ -1,6 +1,6 @@
 <script lang="ts">
 /** The menu's tabs. */
-export type MenuTab = 'devices' | 'vlans' | 'services'
+export type MenuTab = 'devices' | 'people' | 'vlans' | 'services'
 </script>
 
 <script setup lang="ts">
@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 
 import DevicesList from '@/components/DevicesList.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
+import PeopleTab from '@/components/map/PeopleTab.vue'
 import ServicesTab from '@/components/map/ServicesTab.vue'
 import VlansTab from '@/components/map/VlansTab.vue'
 import { displayName } from '@/lib/names'
@@ -19,8 +20,8 @@ import type { TopoNode } from '@/lib/types'
 /**
  * The map's menu, a drawer over the map (the menu button in the toolbar opens
  * it), in tabs: the device list (with the offline and hidden switches), the
- * network's VLANs and subnets (a click highlights one on the map) and its DNS
- * and DHCP.
+ * people and their devices, the network's VLANs and subnets (a click
+ * highlights one on the map) and its DNS and DHCP.
  */
 defineProps<{
   summary: { devices: number; clients: number }
@@ -34,7 +35,7 @@ defineProps<{
 }>()
 const emit = defineEmits<{ close: []; select: [id: string]; changed: [] }>()
 const tab = defineModel<MenuTab>('tab', { default: 'devices' })
-const TABS: MenuTab[] = ['devices', 'vlans', 'services']
+const TABS: MenuTab[] = ['devices', 'people', 'vlans', 'services']
 const netFilter = defineModel<string | undefined>('netFilter')
 const showHidden = defineModel<boolean>('showHidden', { required: true })
 const { t } = useI18n()
@@ -122,6 +123,12 @@ function pick(key: string | undefined) {
       <DevicesList @select="(id) => emit('select', id)" @changed="emit('changed')" />
     </template>
 
+    <PeopleTab
+      v-else-if="tab === 'people'"
+      :paused-ids="paused?.map((p) => p.node.id)"
+      @select="(id) => emit('select', id)"
+      @changed="emit('changed')"
+    />
     <VlansTab
       v-else-if="tab === 'vlans'"
       :groups="networkGroups"
