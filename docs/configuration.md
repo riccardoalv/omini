@@ -109,6 +109,7 @@ with `?section=` (for example `/settings?section=notifications`).
 | **Map** | "Group clients when there are more than" N: above this many clients, an access point, switch port or segment folds them into a bubble (default 8). See [Folding](map.md#folding-children-into-bubbles) |
 | **Changes** | **Allow destructive changes** (off by default): changes that cut Omini off, or the network off the internet, such as disabling a switch's uplink or the router's port. Off, they are blocked; on, each one asks twice. See [the device panel](map.md#the-device-panel) |
 | **Notifications** | Where alerts are sent: Telegram, e-mail, Slack, Discord, ntfy or a webhook. See [Notifications](alerts.md#notifications) |
+| **API tokens** | Read-only tokens for scripts and AI assistants: create (shown once), see when each was last used, delete. The page shows the MCP server address and a client configuration to copy. See [Use Omini from an AI assistant](mcp.md) |
 | **Account** | Who is signed in, and **Sign out** |
 | **About** | The running version and a link to the source code |
 

@@ -258,6 +258,8 @@ curl -s http://omini.lan:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_devices","arguments":{"query":"printer"}}}'
 ```
 
+How to connect an assistant: [Use Omini from an AI assistant](mcp.md).
+
 ## Other
 
 | Method | Path | Auth | Purpose |

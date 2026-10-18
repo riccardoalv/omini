@@ -15,6 +15,7 @@ alerts. It only reads: it never changes the configuration of a device.
 | [The map](map.md) | Layout, nodes and links, panels, folding, areas, filters, export |
 | [Alerts and notifications](alerts.md) | Every alert rule, the Alerts screen, Telegram, e-mail, webhooks |
 | [Integrations](integrations.md) | Built-in integrations, each plugin and how to give it a read-only account |
+| [AI assistants (MCP)](mcp.md) | Read-only API tokens and connecting Claude or another assistant to Omini |
 | [Troubleshooting](troubleshooting.md) | Common problems and how to fix them |
 | [Testing Omini](testing.md) | Trying Omini safely and reporting what you find |
 

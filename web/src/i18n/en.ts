@@ -1024,6 +1024,31 @@ export default {
     run: 'Run a round now',
     running: 'Collecting…',
   },
+  tokens: {
+    intro:
+      'A token lets a script or an AI assistant read Omini: the HTTP API’s GET routes and the MCP server. It can never change anything; changes stay with you in the UI.',
+    mcpUrl: 'MCP server',
+    mcpHint:
+      'Streamable HTTP. Send the token as “Authorization: Bearer …”. Use the address your assistant reaches Omini by.',
+    name: 'Token name',
+    namePlaceholder: 'e.g. Claude on my laptop',
+    create: 'Create token',
+    createdTitle: 'Token “{name}” created',
+    onceWarning:
+      'Copy it now and keep it somewhere safe: Omini keeps only its hash and will not show it again.',
+    copy: 'Copy',
+    copied: 'Copied',
+    done: 'I copied it',
+    none: 'No tokens yet.',
+    createdAt: 'Created {at}',
+    lastUsed: 'last used {ago}',
+    neverUsed: 'never used',
+    confirmDelete: 'Delete the token “{name}”? Whatever uses it stops working at once.',
+    exampleTitle: 'Connect an assistant',
+    exampleCli: 'Claude Code:',
+    exampleJson:
+      'Clients configured with JSON take an entry like this (the exact keys vary by client):',
+  },
   notifications: {
     title: 'Notifications',
     hint: 'Omini sends its alerts (a device offline, a WAN down, a disk almost full...) wherever you want to read them. Pick one or more ways below; each can be tested before saving.',
@@ -1127,6 +1152,7 @@ export default {
         title: 'Notifications',
         hint: 'Telegram, e-mail, Slack, Discord, ntfy, webhook',
       },
+      tokens: { title: 'API tokens', hint: 'Read-only access for scripts and AI assistants (MCP)' },
       account: { title: 'Account', hint: 'Your user and signing out' },
       about: { title: 'About', hint: 'Version, source code and reporting a problem' },
     },

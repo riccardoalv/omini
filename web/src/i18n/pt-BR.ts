@@ -1196,6 +1196,31 @@ const ptBR: typeof en = {
     run: 'Rodar uma rodada agora',
     running: 'Coletando…',
   },
+  tokens: {
+    intro:
+      'Um token permite que um script ou um assistente de IA leia o Omini: as rotas GET da API HTTP e o servidor MCP. Ele nunca altera nada; as alterações continuam com você na interface.',
+    mcpUrl: 'Servidor MCP',
+    mcpHint:
+      'HTTP streamable. Envie o token como “Authorization: Bearer …”. Use o endereço pelo qual o seu assistente acessa o Omini.',
+    name: 'Nome do token',
+    namePlaceholder: 'ex.: Claude no meu notebook',
+    create: 'Criar token',
+    createdTitle: 'Token “{name}” criado',
+    onceWarning:
+      'Copie agora e guarde num lugar seguro: o Omini guarda só o hash dele e não vai mostrá-lo de novo.',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    done: 'Já copiei',
+    none: 'Nenhum token ainda.',
+    createdAt: 'Criado em {at}',
+    lastUsed: 'último uso {ago}',
+    neverUsed: 'nunca usado',
+    confirmDelete: 'Excluir o token “{name}”? O que o usa para de funcionar na hora.',
+    exampleTitle: 'Conectar um assistente',
+    exampleCli: 'Claude Code:',
+    exampleJson:
+      'Clientes configurados com JSON recebem uma entrada assim (as chaves exatas variam por cliente):',
+  },
   notifications: {
     title: 'Notificações',
     hint: 'O Omini envia os alertas (um dispositivo offline, a WAN fora, um disco quase cheio...) para onde você quiser lê-los. Escolha uma ou mais formas abaixo; cada uma pode ser testada antes de salvar.',
@@ -1298,6 +1323,10 @@ const ptBR: typeof en = {
       notifications: {
         title: 'Notificações',
         hint: 'Telegram, e-mail, Slack, Discord, ntfy, webhook',
+      },
+      tokens: {
+        title: 'Tokens de API',
+        hint: 'Acesso só de leitura para scripts e assistentes de IA (MCP)',
       },
       account: { title: 'Conta', hint: 'Seu usuário e sair' },
       about: { title: 'Sobre', hint: 'Versão, código-fonte e relatar um problema' },
