@@ -73,7 +73,9 @@ def test_saturday_afternoon(world: World, tmp_path: Path) -> None:
     assert dev["os_version"] == "OpenWrt 24.10.2"
     assert dev["role"] == "router"
     assert dev["uptime_s"] == snap.uptime(NODE)
-    assert set(dev["ips"]) == {"10.30.1.1", "10.30.80.1", "100.64.23.45"}
+    # Its IPv4 addresses, and its IPv6 ones next to them (IPv6 is first-class).
+    assert {ip for ip in dev["ips"] if ":" not in ip} == {"10.30.1.1", "10.30.80.1", "100.64.23.45"}
+    assert any(":" in ip for ip in dev["ips"])
     assert 20 < dev["mem_pct"] < 45
     assert dev["temperatures"][0]["sensor"] == "cpu-thermal" and dev["temperatures"][0]["kind"] == "cpu"
     assert abs(dev["temperatures"][0]["celsius"] - snap.temperature(NODE, "cpu")) < 0.1
