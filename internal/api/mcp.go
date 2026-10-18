@@ -112,6 +112,12 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			out, err := s.internetSummary(ctx, in.Range, in.Limit)
 			return nil, out, err
 		})
+	mcp.AddTool(srv, tool("list_people", "List people",
+		"The people who own devices: their name, whether they are home (one of their phones, tablets or wearables is online), when one of their devices was last seen, and their devices' ids."),
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, any, error) {
+			out, err := s.people(ctx)
+			return nil, map[string]any{"people": out}, err
+		})
 }
 
 // --- map summary ---

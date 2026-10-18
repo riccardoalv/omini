@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 type rpcResponse struct {
@@ -127,7 +128,7 @@ func TestMCPInitializeAndList(t *testing.T) {
 		}
 		names = append(names, tl.Name)
 	}
-	want := "get_device get_dns_dhcp get_internet_usage get_map_summary list_alerts list_networks search_devices"
+	want := "get_device get_dns_dhcp get_internet_usage get_map_summary list_alerts list_networks list_people search_devices"
 	if strings.Join(names, " ") != want {
 		t.Fatalf("tools %v", names)
 	}
@@ -241,6 +242,18 @@ func TestMCPTools(t *testing.T) {
 	}
 	if res := h.call(token, "get_internet_usage", map[string]any{"range": "1y"}, nil); !res.IsError {
 		t.Fatal("a wrong range is a tool error")
+	}
+	if _, err := h.store.CreatePerson(context.Background(), "Ana", "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	var people struct {
+		People []struct {
+			Name    string   `json:"name"`
+			Devices []string `json:"devices"`
+		} `json:"people"`
+	}
+	if res := h.call(token, "list_people", nil, &people); res.IsError || len(people.People) != 1 || people.People[0].Name != "Ana" {
+		t.Fatalf("people %s", res.StructuredContent)
 	}
 
 	code, resp := h.rpc(token, "tools/call", map[string]any{"name": "set_port", "arguments": map[string]any{}})

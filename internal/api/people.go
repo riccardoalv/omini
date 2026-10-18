@@ -24,12 +24,12 @@ type personView struct {
 }
 
 // people are the people with their devices.
-func (s *Server) people(r *http.Request) ([]personView, error) {
-	list, err := s.Store.ListPeople(r.Context())
+func (s *Server) people(ctx context.Context) ([]personView, error) {
+	list, err := s.Store.ListPeople(ctx)
 	if err != nil {
 		return nil, err
 	}
-	inv, err := s.Store.ListInventory(r.Context())
+	inv, err := s.Store.ListInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (s *Server) people(r *http.Request) ([]personView, error) {
 }
 
 func (s *Server) listPeople(w http.ResponseWriter, r *http.Request) {
-	out, err := s.people(r)
+	out, err := s.people(r.Context())
 	if err != nil {
 		internalError(w, err)
 		return

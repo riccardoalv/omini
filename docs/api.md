@@ -267,6 +267,7 @@ the map's node ids, stable across rounds. A wrong argument is a result with
 | `list_networks` | none | `vlans` (catalog entry with `subnet`, the routers' `networks` with gateway and DHCP range, the `devices` that carry it, its `wifi`), `other_networks` (routed networks of VLANs not in the catalog), `dhcp_pools` |
 | `get_dns_dhcp` | none | `dns_servers` and their checks, `dhcp_checks` (who answers a DHCP request), `dhcp_pools`, `leases` and `leases_by_server` |
 | `get_internet_usage` | `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), `limit` (default 20, at most 200) | As [`GET /api/internet`](#flows) without the series: `total`, `now` (bits/s), `devices` busiest first, `device_count`, the top 10 `countries` and `orgs`, `listening` |
+| `list_people` | — | `people`: each person (`id`, `name`, `color`), `devices` (their inventory ids), `home` (one of their phones, tablets or wearables is online) and `last_seen` |
 
 ```bash
 curl -s http://omini.lan:8080/mcp \

@@ -66,5 +66,6 @@ behind HTTPS (a reverse proxy).
 | `list_networks` | VLANs and subnets, the router serving each one (gateway, DHCP range), the devices carrying it, its Wi-Fi networks |
 | `get_dns_dhcp` | DNS servers and their checks, DHCP checks, pools and leases |
 | `get_internet_usage` | Who used the internet over 15 minutes, an hour, today, 7 or 30 days (needs [traffic flows](discovery.md#traffic-flows)) |
+| `list_people` | The [people](map.md#people) who own devices, whether each is home and their devices |
 
 Each tool's arguments and results are in the [API reference](api.md#mcp-server).
