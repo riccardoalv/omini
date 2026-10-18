@@ -871,3 +871,19 @@ export interface PersonUsage {
   rx: number
   tx: number
 }
+
+/** A read-only API token (the token itself is shown only once). */
+export interface ApiToken {
+  id: number
+  name: string
+  created_at: string
+  last_used_at: string | null
+}
+
+/** A token just created: the only time the API sends it. */
+export interface NewApiToken {
+  id: number
+  name: string
+  token: string
+  created_at: string
+}

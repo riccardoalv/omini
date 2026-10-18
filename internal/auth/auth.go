@@ -40,6 +40,7 @@ type Service struct {
 	ttl   time.Duration
 	now   func() time.Time
 	setup sync.Mutex // serializes first-run setup
+	uses  tokenUses  // when each API token's use was last written
 }
 
 func New(st *store.Store, sessionTTL time.Duration) *Service {

@@ -1,6 +1,8 @@
 import { noteIntegrations } from './features'
 import type {
   Alert,
+  ApiToken,
+  NewApiToken,
   Destination,
   FlowsResponse,
   InternetRange,
@@ -143,6 +145,9 @@ export const api = {
   updateNotifier: (id: number, input: Partial<Omit<Notifier, 'id' | 'type'>>) =>
     request<Notifier>('PUT', `/api/notifiers/${id}`, input),
   deleteNotifier: (id: number) => request<void>('DELETE', `/api/notifiers/${id}`),
+  apiTokens: () => request<ApiToken[]>('GET', '/api/tokens'),
+  createApiToken: (name: string) => request<NewApiToken>('POST', '/api/tokens', { name }),
+  deleteApiToken: (id: number) => request<void>('DELETE', `/api/tokens/${id}`),
   testNotifier: (input: { id?: number; type?: string; config?: Config }) =>
     request<{ ok: boolean; error?: string }>('POST', '/api/notifiers/test', input),
   testIntegration: (input: { id?: number; type?: string; config: Config }) =>

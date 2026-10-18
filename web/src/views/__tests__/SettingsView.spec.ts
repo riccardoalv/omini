@@ -21,6 +21,7 @@ vi.mock('@/lib/api', async (orig) => {
         .mockResolvedValue({ public_url: '' }),
       plugins: vi.fn<typeof mod.api.plugins>().mockResolvedValue([]),
       changePassword: vi.fn<typeof mod.api.changePassword>(),
+      apiTokens: vi.fn<typeof mod.api.apiTokens>().mockResolvedValue([]),
     },
   }
 })
@@ -51,6 +52,11 @@ describe('SettingsView', () => {
     expect(w.text()).toContain('Version 0.4.0')
     expect(w.get('[data-test=diagnostics]').attributes('href')).toBe('/api/diagnostics')
     expect(w.get('[data-test=report]').attributes('href')).toContain('/issues/new')
+
+    await w.get('[data-test=section-tokens]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test=api-tokens]').exists()).toBe(true)
+    expect(api.apiTokens).toHaveBeenCalled()
   })
   it('changes the password, checking it before sending', async () => {
     const router = createRouter({

@@ -15,6 +15,7 @@ names can change between minor releases, and the release notes say so.
 - [Alerts, presence and history](#alerts-presence-and-history)
 - [Flows](#flows)
 - [Notifications](#notifications)
+- [MCP server](#mcp-server)
 - [Other](#other)
 
 ## Conventions
@@ -50,7 +51,8 @@ Requests without it get 403.
 | `PATCH` | `/api/me` | yes | Body `{locale}`: `en`, `pt-BR` or `""` (the browser's) |
 | `POST` | `/api/me/password` | yes | Body `{current, new}` (8+ characters). `204`; `403` when the current password is wrong; other sessions are signed out |
 
-Every other `/api/` route requires a session and answers 401 without one.
+Every other `/api/` route requires a session or an [API token](#api-tokens)
+and answers 401 without one.
 
 ```bash
 # sign in and keep the cookie
@@ -63,6 +65,31 @@ curl -b omini.cookie http://omini.lan:8080/api/topology
 
 # start a collection round
 curl -b omini.cookie -X POST -H 'X-Omini-Request: 1' http://omini.lan:8080/api/refresh
+```
+
+### API tokens
+
+For scripts and AI assistants that should only read, create a token in
+Settings → **API tokens** (or with the routes below) and send it as
+`Authorization: Bearer omini_…`. A token:
+
+- opens the `GET` routes of `/api/` and the [MCP server](#mcp-server);
+- gets 403 on any other method (it never changes anything) and on
+  `/api/tokens` and `/api/backups/{id}` (tokens are managed by the admin,
+  and a configuration backup may hold the device's passwords);
+- gets 401 once revoked.
+
+Omini keeps only the SHA-256 of a token: it is shown once, when created.
+Its last use is recorded (at most once a minute).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/tokens` | The tokens: `[{id, name, created_at, last_used_at}]` (`last_used_at` null when never used); never the token |
+| `POST` | `/api/tokens` | Body `{name}` (1 to 64 characters). `201 {id, name, token, created_at}`: the only response that carries the token |
+| `DELETE` | `/api/tokens/{id}` | Revoke a token (`204`; `404` when unknown). It stops working at once |
+
+```bash
+curl -H 'Authorization: Bearer omini_…' http://omini.lan:8080/api/topology
 ```
 
 ## Map
@@ -213,6 +240,40 @@ optional `color` (`#rrggbb`); a device has at most one owner
 Channel `config` keys: webhook `url`, `format` (`json`, `slack`, `discord`,
 `ntfy`), `secret`; Telegram `token`, `chat_id`; e-mail `host`, `port`,
 `security` (`starttls`, `tls`, `none`), `username`, `password`, `from`, `to`.
+
+## MCP server
+
+`/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server
+(streamable HTTP, stateless; answers are `application/json`), so an AI
+assistant can read the network. Authenticate with an
+[API token](#api-tokens) (`Authorization: Bearer omini_…`) or the admin
+session. `POST` carries the JSON-RPC requests (`initialize`, `tools/list`,
+`tools/call`, `ping`); `GET` answers 405 (no event stream). Posts from a
+browser on another site are refused (403).
+
+Every tool only reads; changes stay confirmed by the user in the UI. Results
+are JSON (in `structuredContent`, and the same text in `content`); ids are
+the map's node ids, stable across rounds. A wrong argument is a result with
+`isError: true`; an unknown tool is a JSON-RPC error.
+
+| Tool | Arguments | Result |
+|---|---|---|
+| `get_map_summary` | none | `nodes`, `online`, `offline`, counts `by_kind`, `by_type` and `by_role`; `integrations` (`id`, `name`, `type`, `enabled`, `ok`, `error`, `collected_at`, `devices`); `open_alerts` by severity |
+| `search_devices` | `query` (matches name, alias, IP, MAC, vendor, hostname and the note, case-insensitive; empty: all), `limit` (default 25, at most 200) | `devices` (`id`, `name`, `kind`, `type`, `ip`, `mac`, `vendor`, `online`, `on_map`, `last_seen`, `note`), online first; `total` before the limit. Devices that left the map come from the inventory |
+| `get_device` | `id` | Identity (`name`, `alias`, `note`, `kind`, `role`, `type`, `os`, `brand`, `product`, `vendor`, `model`, `hostname`), `online`, `ips`, `macs`, `connected_to` (node, port, link kind, speed; SSID, band and signal for Wi-Fi), `links` (devices below it), `clients`, `ports` (`total`, `up`, `down`, `list` with label, speed, VLANs, rate, errors and the neighbor), `health` (CPU, memory, uptime, load, temperatures, storage, firmware), `open_alerts` |
+| `list_alerts` | `severity` (`critical`, `warning`, `info`; empty: all) | `alerts`, worst first: `id`, `rule`, `severity`, `title` and `detail` in English, `node_id`, `params`, `opened_at`, `dismissed` |
+| `list_networks` | none | `vlans` (catalog entry with `subnet`, the routers' `networks` with gateway and DHCP range, the `devices` that carry it, its `wifi`), `other_networks` (routed networks of VLANs not in the catalog), `dhcp_pools` |
+| `get_dns_dhcp` | none | `dns_servers` and their checks, `dhcp_checks` (who answers a DHCP request), `dhcp_pools`, `leases` and `leases_by_server` |
+| `get_internet_usage` | `range` (`15m`, `1h`, `today`, `7d`, `30d`; default `15m`), `limit` (default 20, at most 200) | As [`GET /api/internet`](#flows) without the series: `total`, `now` (bits/s), `devices` busiest first, `device_count`, the top 10 `countries` and `orgs`, `listening` |
+
+```bash
+curl -s http://omini.lan:8080/mcp \
+  -H 'Authorization: Bearer omini_…' -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_devices","arguments":{"query":"printer"}}}'
+```
+
+How to connect an assistant: [Use Omini from an AI assistant](mcp.md).
 
 ## Other
 

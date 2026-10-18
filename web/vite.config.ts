@@ -26,6 +26,6 @@ export default defineConfig({
   },
   server: {
     // `npm run dev` talks to a Go server running on :8080 (`go run ./cmd/omini`).
-    proxy: { '/api': 'http://localhost:8080' },
+    proxy: { '/api': 'http://localhost:8080', '/mcp': 'http://localhost:8080' },
   },
 })

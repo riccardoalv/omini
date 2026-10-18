@@ -53,9 +53,9 @@ Raspberry Pi.
 | Notifications | `internal/notify` | Webhook, Telegram and e-mail senders; grouping and cooldown |
 | Store | `internal/store` | SQLite (pure Go driver, WAL), migrations |
 | Secrets | `internal/secret` | Encrypts credentials at rest with the secret key |
-| Auth | `internal/auth` | The single admin, bcrypt passwords, session tokens (stored hashed) |
+| Auth | `internal/auth` | The single admin, bcrypt passwords, session tokens and read-only API tokens (stored hashed) |
 | Web probe | `internal/webui` | Finds a device's admin page for "Open web interface" |
-| API | `internal/api` | HTTP routes, CSRF check, serves the embedded UI |
+| API | `internal/api` | HTTP routes, CSRF check, the read-only MCP server at `/mcp` (official Go SDK), serves the embedded UI |
 | UI | `web/` | Vue 3 + TypeScript + Vue Flow, its own tree layout, vue-i18n (English, Brazilian Portuguese) |
 | Data contract | `schema/omini.schema.json` | JSON Schema; Go types (`internal/model`) and the Python SDK models are generated from it |
 
@@ -213,11 +213,12 @@ start (`PRAGMA user_version`).
 | `vlans` | The network's VLAN catalog and each VLAN's network | until deleted |
 | `notifiers` | Notification channels (secrets encrypted) | until deleted |
 | `users`, `sessions` | The admin and its sessions | sessions 30 days |
+| `api_tokens` | Read-only API tokens (the SHA-256 of each) and their last use | until revoked |
 | `settings` | Round interval, when presence tracking started | |
 
 Secrets are sealed with the 32-byte key in `secret.key` (or
-`OMINI_SECRET_KEY`); passwords of the admin are bcrypt hashes; session tokens
-are stored as hashes.
+`OMINI_SECRET_KEY`); passwords of the admin are bcrypt hashes; session and API
+tokens are stored as hashes.
 
 ## Repository layout
 

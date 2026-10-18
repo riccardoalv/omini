@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { Bell, Info, Map as MapIcon, Palette, ShieldAlert, UserRound } from 'lucide-vue-next'
+import {
+  Bell,
+  Info,
+  KeyRound,
+  Map as MapIcon,
+  Palette,
+  ShieldAlert,
+  UserRound,
+} from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import ApiTokensSection from '@/components/ApiTokensSection.vue'
 import NotificationsSection from '@/components/NotificationsSection.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { locales } from '@/i18n'
@@ -75,6 +84,7 @@ const sections = [
   { id: 'map', icon: MapIcon },
   { id: 'changes', icon: ShieldAlert },
   { id: 'notifications', icon: Bell },
+  { id: 'tokens', icon: KeyRound },
   { id: 'account', icon: UserRound },
   { id: 'about', icon: Info },
 ] as const
@@ -247,6 +257,8 @@ onMounted(async () => {
         </template>
 
         <NotificationsSection v-else-if="current === 'notifications'" />
+
+        <ApiTokensSection v-else-if="current === 'tokens'" />
 
         <template v-else-if="current === 'account'">
           <div class="rows card">
