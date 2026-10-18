@@ -4,13 +4,17 @@ import { useI18n } from 'vue-i18n'
 
 import PanelSection from '@/components/map/PanelSection.vue'
 import { formatAgo, formatBytes } from '@/lib/format'
-import type { Device } from '@/lib/types'
+import type { Device, PortForward } from '@/lib/types'
 
 /**
  * What some devices report besides ports and health: Wi-Fi radios, VLANs, services, VPN
  * peers, DHCP pool usage and the firewall's state table.
  */
-const props = defineProps<{ device: Device }>()
+const props = defineProps<{
+  device: Device
+  /** The name of the device at an address on the map, if any (where a port forward goes). */
+  nameAt?: (ip: string) => string | undefined
+}>()
 const { t, locale } = useI18n()
 
 const d = computed(() => props.device)
@@ -34,6 +38,28 @@ const radiosSummary = computed(() =>
     .map((r) => `${bands[r.band] ?? r.band} ${r.channel ?? '?'}`)
     .join(' · '),
 )
+/** Port forwards, those a device opened by UPnP first. */
+const forwards = computed(() =>
+  [...(d.value.port_forwards ?? [])].sort(
+    (a, b) => Number(!!b.upnp) - Number(!!a.upnp) || a.external_port - b.external_port,
+  ),
+)
+const upnpCount = computed(() => forwards.value.filter((f) => f.upnp).length)
+const exposedSummary = computed(() => {
+  const on = forwards.value.filter((f) => f.enabled !== false).length
+  return upnpCount.value ? `${on} · ${t('panel.upnpCount', { n: upnpCount.value })}` : String(on)
+})
+const range = (first: number, last?: number) =>
+  last && last > first ? `${first}-${last}` : String(first)
+/** Where a forward goes: the device's name, else its address, and the port. */
+function target(f: PortForward): string {
+  const first = f.internal_port ?? f.external_port
+  const end = f.external_port_end ? first + (f.external_port_end - f.external_port) : undefined
+  const ip = f.internal_ip ?? ''
+  const name = ip ? props.nameAt?.(ip) : undefined
+  const host = name ?? (ip.includes(':') ? `[${ip}]` : ip)
+  return host ? `${host}:${range(first, end)}` : range(first, end)
+}
 const tone = (p?: number) => (p === undefined ? '' : p >= 90 ? 'bad' : p >= 75 ? 'warn' : 'ok')
 </script>
 
@@ -64,6 +90,35 @@ const tone = (p?: number) => (p === undefined ? '' : p >= 90 ? 'bad' : p >= 75 ?
           <template v-if="r.tx_power_dbm !== undefined">{{ r.tx_power_dbm }} dBm · </template
           >{{ r.name }}
         </span>
+      </li>
+    </ul>
+  </PanelSection>
+
+  <PanelSection
+    v-if="forwards.length"
+    id="exposed"
+    :title="t('panel.exposed')"
+    :summary="exposedSummary"
+    data-test="exposed"
+  >
+    <ul class="rows">
+      <li
+        v-for="f in forwards"
+        :key="`${f.protocol}|${f.external_port}|${f.internal_ip}`"
+        :class="{ off: f.enabled === false }"
+        data-test="forward"
+      >
+        <span class="tag mono port">{{ range(f.external_port, f.external_port_end) }}</span>
+        <span class="grow">
+          → <strong>{{ target(f) }}</strong>
+          <span class="muted"> · {{ f.protocol.toUpperCase() }}</span>
+          <span v-if="f.upnp" class="badge upnp">UPnP</span>
+          <span v-if="f.enabled === false" class="badge off">{{ t('panel.radioOff') }}</span>
+          <span v-if="f.description" class="muted"> · {{ f.description }}</span>
+        </span>
+        <span class="muted small">{{
+          f.source ? t('panel.exposedFrom', { source: f.source }) : t('panel.exposedAnyone')
+        }}</span>
       </li>
     </ul>
   </PanelSection>
@@ -222,6 +277,13 @@ const tone = (p?: number) => (p === undefined ? '' : p >= 90 ? 'bad' : p >= 75 ?
 }
 .meter.bad i {
   background: var(--danger);
+}
+.port {
+  min-width: 52px;
+}
+.badge.upnp {
+  border-color: var(--warn);
+  color: var(--warn);
 }
 .band {
   min-width: 56px;

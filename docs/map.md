@@ -251,6 +251,14 @@ transmit power and whether it is off; the summary lists the channels
 ("2.4 GHz 6 · 5 GHz 36"). A mesh unit says so. A conflict between access
 points is settled from its alert ([Wi-Fi channels](#wi-fi-channels)).
 
+**Exposed to the internet**, folded, for a router that reports its port forwards:
+each external port or range, where it goes (the device's name when Omini knows
+the address, else the address, and the port), the protocol, who may use it
+(**from anyone**, or an address or prefix), a **UPnP** badge on those a device
+opened by itself (listed first) and **off** on disabled ones. The summary counts
+the enabled ones and those made by UPnP. It is read-only: Omini never changes
+them; each enabled one is an alert (`port_forward`, or `upnp_forward`).
+
 **Extras**, folded, when an integration reports them: services (stopped ones first),
 VPN peers (WireGuard, OpenVPN, IPsec: connected, endpoint, last handshake,
 traffic), DHCP pool usage and firewall states (yellow from 75 %, red from

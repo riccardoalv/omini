@@ -68,4 +68,48 @@ describe('DeviceExtras', () => {
     expect(rows[2]!.classes()).toContain('off')
     expect(section.text()).toContain('A mesh unit')
   })
+
+  it('lists what a router exposes to the internet, read-only, UPnP ones first', () => {
+    const w = mount(DeviceExtras, {
+      props: {
+        device: {
+          key: 'gw',
+          name: 'gw',
+          port_forwards: [
+            {
+              protocol: 'tcp',
+              external_port: 443,
+              internal_ip: '192.168.1.10',
+              description: 'Nextcloud',
+              source: '203.0.113.0/24',
+            },
+            {
+              protocol: 'udp',
+              external_port: 27015,
+              external_port_end: 27020,
+              internal_ip: '192.168.1.50',
+              upnp: true,
+            },
+            { protocol: 'tcp/udp', external_port: 8080, internal_ip: 'fd00::5', enabled: false },
+          ],
+        },
+        nameAt: (ip: string) => (ip === '192.168.1.10' ? 'nas' : undefined),
+      },
+      global: { plugins: plugins() },
+    })
+    const section = w.get('[data-test=exposed]')
+    expect(section.get('.summary').text()).toBe('2 · 1 by UPnP')
+    const rows = section.findAll('[data-test=forward]')
+    expect(rows.map((r) => r.get('.port').text())).toEqual(['27015-27020', '443', '8080'])
+    expect(rows[0]!.text()).toContain('→ 192.168.1.50:27015-27020')
+    expect(rows[0]!.text()).toContain('UPnP')
+    expect(rows[0]!.text()).toContain('from anyone')
+    expect(rows[1]!.text()).toContain('→ nas:443')
+    expect(rows[1]!.text()).toContain('TCP')
+    expect(rows[1]!.text()).toContain('Nextcloud')
+    expect(rows[1]!.text()).toContain('from 203.0.113.0/24')
+    expect(rows[2]!.text()).toContain('[fd00::5]:8080')
+    expect(rows[2]!.classes()).toContain('off')
+    expect(section.find('button:not([data-test^=fold])').exists()).toBe(false)
+  })
 })

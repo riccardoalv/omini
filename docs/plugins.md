@@ -272,6 +272,7 @@ returns itself. The main fields:
 | `networks`, `dhcp_reservations`, `wifi_networks` | A router's VLAN networks and fixed addresses, an access point's Wi-Fi networks (what `network.*`, `reservation.*` and `wifi.*` change) |
 | `dns_records`, `dns_domain` | Local DNS names a DNS server or router answers, and its domain (what `dns.*` changes) |
 | `paused` | Devices whose internet a router cuts: `mac`, `ips`, `name` (what `pause.*` changes) |
+| `port_forwards` | A router's port forwards (NAT): `protocol` (`tcp`, `udp`, `tcp/udp`), `external_port` and `external_port_end` (a range), `internal_ip` and `internal_port` (the first of a range), `source` (an address or prefix; empty: anyone), `interface` (the WAN), `description`, `enabled`, and `upnp: true` for one a device opened by itself (UPnP IGD or NAT-PMP). Read-only: shown under **Exposed to the internet** and told as alerts |
 | `radios`, `wireless_uplink` | An access point's Wi-Fi radios: `name` (as the device names it: what `wifi.channel` names), `band`, `channel`, `width_mhz`, `auto` (the device or its controller picks the channel), `tx_power_dbm`, `enabled`; `wireless_uplink: true` for a mesh unit or repeater (it reaches the network over Wi-Fi). See [Wi-Fi channels](#wi-fi-channels) |
 | `stp_root` | The spanning tree root bridge the device sees: `<priority>.<mac>` |
 | `hosts` | End devices your integration observed with extra details (scanners, controllers) |

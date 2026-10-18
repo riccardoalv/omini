@@ -183,6 +183,11 @@ const nodeAlerts = computed(() =>
 )
 /** The Wi-Fi channels plan, opened from its alert. */
 const resolving = ref(false)
+/** The name of the node at an address (where a port forward goes). */
+function nameAt(ip: string): string | undefined {
+  const other = props.nodes.find((x) => x.ip === ip && x.kind !== 'app')
+  return other ? displayName(other, t) : undefined
+}
 /** Whose history the panel charts: a Wi-Fi client's own traffic, or a WAN's uplink. */
 const chart = computed(() => {
   const node = n.value
@@ -821,7 +826,7 @@ async function save(patch: {
         />
 
         <ConfigBackups v-if="n.device" :key="n.id" :node-id="n.id" :label="nodeName(n.id)" />
-        <DeviceExtras v-if="n.device" :device="n.device" />
+        <DeviceExtras v-if="n.device" :device="n.device" :name-at="nameAt" />
 
         <PanelSection
           v-if="n.wan || gateways.length"
