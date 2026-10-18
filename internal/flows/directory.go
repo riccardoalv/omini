@@ -59,6 +59,9 @@ func NewDirectory(topo topology.Topology, names Names) *Directory {
 			byMAC[m] = n.ID
 		}
 		add(n.IP, n.ID)
+		for _, a := range topology.GlobalIPv6(n.IPs6) { // NDP, DHCPv6 leases
+			add(a, n.ID)
+		}
 		if n.Device == nil {
 			continue
 		}

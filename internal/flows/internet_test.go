@@ -142,3 +142,20 @@ func TestScansAreSeen(t *testing.T) {
 		t.Fatalf("scans = %+v", scans)
 	}
 }
+
+// A node's IPv6 addresses on the map (a DHCPv6 lease, NDP on another
+// router) tie its traffic to it too.
+func TestDirectoryKnowsTheNodesIPv6Addresses(t *testing.T) {
+	topo := home()
+	topo.Nodes = append(topo.Nodes, topology.Node{
+		ID: "mac:aa:bb:cc:00:00:43", Kind: topology.KindClient, MAC: "aa:bb:cc:00:00:43",
+		IPs6: []string{"2804:1128:bd79:3e00::43", "fe80::43"},
+	})
+	d := NewDirectory(topo, Names{})
+	if d.Node(ip("2804:1128:bd79:3e00::43")) != "mac:aa:bb:cc:00:00:43" {
+		t.Error("the node's IPv6 address is not tied to it")
+	}
+	if d.Node(ip("fe80::43")) != "" {
+		t.Error("a link-local address names a node")
+	}
+}

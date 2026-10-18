@@ -235,7 +235,10 @@ name comes from the device's name ("Living Room TV" → `living-room-tv`) and
 follows it when you rename the device; the pencil sets another, **Remove
 name** takes it away. The domain is the one the router or DNS server uses,
 else `home.arpa`; **Settings → Changes → Domain of local names** sets one.
-Other names the DNS servers have for the address are listed below.
+Other names the DNS servers have for the address, or for one of the
+device's IPv6 addresses (AAAA records), are listed below. Omini only sets
+IPv4 (A) records, since devices change their IPv6 privacy addresses; AAAA
+records made outside Omini are kept, never changed or deleted.
 
 **Configuration**, folded, for a device whose integration keeps backups: the
 versions of its configuration, read every day and after each change Omini

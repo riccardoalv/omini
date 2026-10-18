@@ -15,12 +15,14 @@ func fakeRouter(t *testing.T) string {
 	const man = "id: fakert\nname: Fake router\nversion: 1.0.0\nprotocol: 1\nentrypoint: main.sh\nfields:\n  - {key: host, type: host, required: true}\n"
 	const script = `cat >/dev/null
 echo '{"devices":[
- {"key":"58:9c:fc:00:00:01","name":"fw","role":"firewall","macs":["58:9c:fc:00:00:01"],"ips":["192.168.1.1"],
+ {"key":"58:9c:fc:00:00:01","name":"fw","role":"firewall","macs":["58:9c:fc:00:00:01"],"ips":["192.168.1.1","2001:db8:1::1"],
   "dhcp_pools":[{"network":"192.168.1.0/24","used":20,"total":200}],
-  "dhcp_leases":[{"ip":"192.168.1.20","mac":"00:11:22:00:00:20","hostname":"tv"},{"ip":"192.168.1.3","mac":"00:11:22:00:00:03"}]},
+  "dhcp_leases":[{"ip":"192.168.1.20","mac":"00:11:22:00:00:20","hostname":"tv"},{"ip":"192.168.1.3","mac":"00:11:22:00:00:03"},
+    {"ip":"2001:db8:1::20","mac":"00:11:22:00:00:20","hostname":"tv"}]},
  {"key":"net","name":"Network","role":"unknown",
   "dhcp_checks":[{"interface":"eth0","offers":[{"server_ip":"192.168.1.1","dns":["192.168.1.1"]},{"server_ip":"192.168.1.250"}]}],
-  "dns_checks":[{"server":"192.168.1.1","external":{"name":"example.com","ok":true,"rtt_ms":8}}]}
+  "dns_checks":[{"server":"192.168.1.1","external":{"name":"example.com","ok":true,"rtt_ms":8}},
+   {"server":"2001:db8:1::1","external":{"name":"example.com","ok":true,"rtt_ms":9}}]}
 ]}'
 `
 	_ = os.WriteFile(filepath.Join(dir, "plugin.yaml"), []byte(man), 0o644)
@@ -67,10 +69,14 @@ func TestDNSAndDHCPView(t *testing.T) {
 	if len(v.DHCP.Pools) != 1 || v.DHCP.Pools[0]["network"] != "192.168.1.0/24" {
 		t.Errorf("pools: %+v", v.DHCP.Pools)
 	}
-	if len(v.DHCP.Leases) != 2 || v.DHCP.Leases[0]["ip"] != "192.168.1.3" {
+	if len(v.DHCP.Leases) != 3 || v.DHCP.Leases[0]["ip"] != "192.168.1.3" || v.DHCP.Leases[2]["ip"] != "2001:db8:1::20" {
 		t.Errorf("leases, by address: %+v", v.DHCP.Leases)
 	}
-	if len(v.DNS.Servers) != 1 || v.DNS.Servers[0]["server"] != "192.168.1.1" || v.DNS.Servers[0]["node_id"] == "" {
+	if len(v.DNS.Servers) != 2 || v.DNS.Servers[0]["server"] != "192.168.1.1" || v.DNS.Servers[0]["node_id"] == "" {
 		t.Errorf("dns: %+v", v.DNS.Servers)
+	}
+	// The same server over IPv6 is the same node.
+	if len(v.DNS.Servers) == 2 && v.DNS.Servers[1]["node_id"] != v.DNS.Servers[0]["node_id"] {
+		t.Errorf("dns over IPv6: %+v", v.DNS.Servers)
 	}
 }
