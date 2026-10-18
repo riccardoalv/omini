@@ -51,6 +51,8 @@ type Profile struct {
 	FdbPerVLAN *FdbPerVLAN `yaml:"fdb_per_vlan"`
 
 	source string // file it came from, for messages
+	// sysDescr is Match.SysDescr compiled (case-insensitive) by ParseProfile.
+	sysDescr *regexp.Regexp
 }
 
 // FdbPerVLAN tells how to read a MAC table kept per VLAN.
@@ -212,9 +214,11 @@ func ParseProfile(raw []byte) (Profile, error) {
 		return p, errors.New("match needs sys_object_id, sys_descr or oid_exists")
 	}
 	if m.SysDescr != "" {
-		if _, err := regexp.Compile("(?i)" + m.SysDescr); err != nil {
+		re, err := regexp.Compile("(?i)" + m.SysDescr)
+		if err != nil {
 			return p, fmt.Errorf("sys_descr: %w", err)
 		}
+		p.sysDescr = re
 	}
 	switch p.Role {
 	case "", "router", "switch", "ap", "firewall", "server":
@@ -250,7 +254,7 @@ func (p Profile) matches(c *client, sysObjectID, sysDescr string) bool {
 			return false
 		}
 	}
-	if m.SysDescr != "" && !regexp.MustCompile("(?i)"+m.SysDescr).MatchString(sysDescr) {
+	if p.sysDescr != nil && !p.sysDescr.MatchString(sysDescr) {
 		return false
 	}
 	if len(m.OIDExists) > 0 {
@@ -318,7 +322,11 @@ func (p Profile) apply(c *client, d *model.Device) {
 	for i := range p.Temperatures {
 		t := p.Temperatures[i]
 		f, ok := r.number(&t.Value)
-		if !ok || f <= -50 || f >= 200 { // sensors report 0 or junk when absent
+		// Absent sensors report values out of any sensor's range (-127,
+		// 255...): those are dropped. 0 is kept: it is a real reading (an
+		// outdoor or cold-room probe), and a profile that reads a column with
+		// zeros for empty slots combines it with walk: max.
+		if !ok || f <= -50 || f >= 200 {
 			continue
 		}
 		temp := model.Temperature{Sensor: t.Sensor, Celsius: math.Round(f*10) / 10}

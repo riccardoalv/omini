@@ -2,6 +2,7 @@ package snmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -45,10 +46,13 @@ func (t Target) dial(ctx context.Context) (*client, error) {
 // credentials (Target.V3) rather than to a community.
 const V3Credential = "\x00v3"
 
+// probeRetries is how many times Probe asks again after a timeout.
+const probeRetries = 2
+
 // Probe returns the credential the host answers to, if any: V3Credential
 // when it answers to the v3 user (tried first, when set), else the first
-// community. A single quick request each, without retries: most hosts have
-// no agent.
+// community. One request each, with a couple of retries: a single lost UDP
+// packet must not hide an agent until the next probe.
 func Probe(ctx context.Context, t Target, communities []string) (string, bool) {
 	if t.V3 != nil {
 		if answers(ctx, t) {
@@ -78,7 +82,7 @@ func answers(ctx context.Context, t Target) bool {
 		return false
 	}
 	defer c.close()
-	c.g.Retries = 0
+	c.g.Retries = probeRetries
 	sys, err := c.get(oidSysName, oidSysObjectID)
 	return err == nil && len(sys) > 0
 }
@@ -98,6 +102,10 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 		return d, err
 	}
 	log := slog.With("snmp", host)
+	var chassis model.MACAddress // LLDP's, the first MAC when there is one
+	if len(d.MACs) > 0 {
+		chassis = d.MACs[0]
+	}
 
 	// Everything below is optional: agents implement different subsets of MIBs.
 	ifNames, err := collectInterfaces(c, &d)
@@ -139,12 +147,48 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 			collectFDBPerVLAN(ctx, c, t, perVLAN, &d, ifNames)
 		}
 	}
-	// Stable identity: the chassis MAC (LLDP) or first interface MAC, else the host.
-	d.Key = host
-	if len(d.MACs) > 0 {
-		d.Key = string(d.MACs[0])
-	}
+	d.Key = deviceKey(c, &d, chassis, host)
 	return d, nil
+}
+
+// deviceKey is the device's stable identity, which must not change from one
+// round to the next: the LLDP chassis MAC (what neighbors know it by), else
+// the bridge address (BRIDGE-MIB dot1dBaseBridgeAddress), else the lowest
+// MAC of its Ethernet ports, else of any interface, else the host. Not the
+// first interface's MAC: a VLAN or tunnel interface added at a lower ifIndex
+// would change it.
+func deviceKey(c *client, d *model.Device, chassis model.MACAddress, host string) string {
+	if chassis != "" {
+		return string(chassis)
+	}
+	if r, err := c.get(oidBaseBridgeAddress); err == nil {
+		if mac := model.MACFromBytes(pduBytes(r[oidBaseBridgeAddress])); mac != "" {
+			if !slices.Contains(d.MACs, mac) {
+				d.MACs = append(d.MACs, mac)
+			}
+			return string(mac)
+		}
+	}
+	var ethernet, lowest model.MACAddress
+	for _, iface := range d.Interfaces {
+		mac := model.Deref(iface.MAC)
+		if mac == "" {
+			continue
+		}
+		if lowest == "" || mac < lowest {
+			lowest = mac
+		}
+		if model.Deref(iface.Type) == model.InterfaceTypeEthernet && (ethernet == "" || mac < ethernet) {
+			ethernet = mac
+		}
+	}
+	switch {
+	case ethernet != "":
+		return string(ethernet)
+	case lowest != "":
+		return string(lowest)
+	}
+	return host
 }
 
 func collectSystem(c *client, host string) (model.Device, error) {
@@ -492,6 +536,30 @@ func addFDB(d *model.Device, portName func(int64) string, macOID []int, portPDU,
 	}
 }
 
+// fdbVlans maps Q-BRIDGE filtering database ids to their VLAN
+// (dot1qVlanFdbId; index: timeMark.vlan). A database shared by several VLANs
+// maps to 0 (unknown VLAN). Nil when the agent lacks the table.
+func fdbVlans(c *client) map[int]uint16 {
+	rows, err := c.walk(oidVlanFdbID)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	out := map[int]uint16{}
+	for idx, p := range rows {
+		n := splitOID(idx)
+		id, ok := pduInt(p)
+		if len(n) != 2 || !ok || n[1] < 1 || n[1] > 4094 {
+			continue
+		}
+		if v, seen := out[int(id)]; seen && v != uint16(n[1]) {
+			out[int(id)] = 0
+			continue
+		}
+		out[int(id)] = uint16(n[1])
+	}
+	return out
+}
+
 func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 	portName := bridgePorts(c, ifNames)
 	// Q-BRIDGE-MIB (VLAN aware) first, then plain BRIDGE-MIB.
@@ -500,14 +568,20 @@ func collectFDB(c *client, d *model.Device, ifNames map[string]string) error {
 		return err
 	}
 	t := table(rows)
+	byFdb := fdbVlans(c)
 	for idx, p := range t[2] {
 		n := splitOID(idx)
 		if len(n) != 7 {
 			continue
 		}
 		var vlan *uint16
-		if n[0] > 0 && n[0] <= 4095 {
-			vlan = model.Ptr(uint16(n[0]))
+		switch {
+		case byFdb != nil:
+			if v := byFdb[n[0]]; v != 0 {
+				vlan = model.Ptr(v)
+			}
+		case n[0] > 0 && n[0] <= 4095:
+			vlan = model.Ptr(uint16(n[0])) // most agents: fdbId is the VLAN id
 		}
 		addFDB(d, portName, n[1:], p, t[3][idx], vlan)
 	}
@@ -627,11 +701,10 @@ func capabilities(bits []byte) []model.NeighborCapability {
 	return out
 }
 
+// collectResources reads CPU load and RAM usage; each table is optional, and
+// one failing does not keep the other from being read.
 func collectResources(c *client, d *model.Device) error {
-	loads, err := c.walk(oidHrProcessorLoad)
-	if err != nil {
-		return err
-	}
+	loads, cpuErr := c.walk(oidHrProcessorLoad)
 	var sum, n uint64
 	for _, p := range loads {
 		if v, ok := pduUint(p); ok {
@@ -645,7 +718,7 @@ func collectResources(c *client, d *model.Device) error {
 
 	rows, err := c.walk(oidHrStorage)
 	if err != nil {
-		return err
+		return errors.Join(cpuErr, err)
 	}
 	t := table(rows)
 	for idx, p := range t[2] {
@@ -659,7 +732,7 @@ func collectResources(c *client, d *model.Device) error {
 		}
 		break
 	}
-	return nil
+	return cpuErr
 }
 
 func guessRole(c *client, d *model.Device) model.DeviceRole {

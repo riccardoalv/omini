@@ -1043,7 +1043,7 @@ const ptBR: typeof en = {
       },
       snmp: {
         label: 'SNMP',
-        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Com uma community de escrita (ou um usuário v3 com permissão de escrita) também liga e desliga as portas deles.',
+        help: 'Lê portas, tráfego, vizinhos (LLDP), tabelas MAC e ARP de switches, roteadores e firewalls gerenciáveis com SNMP (v2c ou v3) ativado. Com uma community de escrita (ou um usuário v3 com permissão de escrita) também ativa e desativa as portas e muda as VLANs (Q-BRIDGE-MIB).',
       },
       snmp_communities: {
         label: 'Communities SNMP',
@@ -1051,7 +1051,7 @@ const ptBR: typeof en = {
       },
       snmp_write_community: {
         label: 'Community SNMP de escrita',
-        help: 'Para ligar e desligar portas de equipamentos SNMP pelo Omini: a community de "escrita" ou "read-write" do SNMP do equipamento. Vazio: os equipamentos SNMP v2c só são lidos (um usuário v3 com permissão de escrita também serve).',
+        help: 'Para mudar dispositivos SNMP pelo Omini (ativar e desativar portas, mudar VLANs): a community de "escrita" ou "leitura e escrita" configurada no SNMP do equipamento. Vazio: dispositivos SNMP v2c são só lidos (um usuário v3 com permissão de escrita também serve).',
       },
       ports: {
         label: 'Portas a testar',

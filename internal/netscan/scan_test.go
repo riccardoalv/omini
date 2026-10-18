@@ -5,11 +5,13 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/snmp/snmptest"
 )
 
@@ -190,5 +192,69 @@ func TestAutoAddsTheRoutersSubnets(t *testing.T) {
 	}
 	if msg, _ := s.Test(ctx, integration.Config{"subnets": "10.9.9.0/24"}); msg != "Will scan 10.9.9.0/24" {
 		t.Fatalf("listed: %q", msg)
+	}
+}
+
+// A probe that fails (the agent did not answer this time) keeps the
+// credential the host answered to before: the switch is read again as soon
+// as it answers, not after the next deep scan.
+func TestAFailedProbeKeepsTheCredential(t *testing.T) {
+	sw := model.Device{Key: "x", Name: "sw-core", Model: model.Ptr("Managed switch")}
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
+	clock := time.Unix(1_790_000_000, 0)
+	s := &Integration{
+		ARPPath: "testdata/arp", RoutePath: "testdata/route", Ports: []int{},
+		SettleTime: 10 * time.Millisecond, NoMulticast: true, NoPing: true, NoWebTitles: true,
+		SNMPPort: agent.Port, SNMPTimeout: 200 * time.Millisecond,
+		Locals: func() []localNet { return nil },
+	}
+	s.now = func() time.Time { return clock }
+	cfg := integration.Config{"subnets": "127.0.0.0/30", "snmp_communities": "homelab"}
+	read := func() bool {
+		t.Helper()
+		devices, err := s.Collect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(devices, func(d model.Device) bool { return d.Name == "sw-core" })
+	}
+	if !read() {
+		t.Fatal("the switch was not read")
+	}
+	// The next deep scan finds the agent silent...
+	agent.Drop(-1)
+	clock = clock.Add(7 * time.Hour)
+	if read() {
+		t.Fatal("a silent agent was read")
+	}
+	// ...and it answers again on the round after.
+	agent.Drop(0)
+	clock = clock.Add(time.Minute)
+	if !read() {
+		t.Fatal("the switch was forgotten until the next deep scan")
+	}
+}
+
+// The SNMP fields say what writing does (ports and VLANs), and offer every
+// v3 privacy protocol the client accepts.
+func TestSNMPFieldsMatchWhatItDoes(t *testing.T) {
+	for _, f := range fields() {
+		switch f.Key {
+		case "snmp", "snmp_write_community":
+			if !strings.Contains(model.Deref(f.Help), "VLANs") {
+				t.Errorf("%s does not say it changes VLANs: %s", f.Key, model.Deref(f.Help))
+			}
+		case "snmp_v3_priv":
+			for _, o := range []string{"none", "des", "aes", "aes192", "aes256", "aes192c", "aes256c"} {
+				if !slices.Contains(f.Options, o) {
+					t.Errorf("privacy %s is not offered", o)
+				}
+			}
+			for _, o := range f.Options {
+				if err := (&snmp.V3{User: "u", Auth: "sha", Priv: o}).Check(); err != nil {
+					t.Errorf("privacy %s is offered but refused: %v", o, err)
+				}
+			}
+		}
 	}
 }

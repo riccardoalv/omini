@@ -113,14 +113,14 @@ func fields() []model.FormField {
 		method("dhcp", "DHCP fingerprints", "Watches the address requests devices send when they join the network: what they ask for tells their operating system (Android, Windows, Apple, Linux...). Only watches, never answers; sees this server's own network; needs raw sockets (root in Docker)."),
 		method("dhcp_check", "DHCP check", "Every round, asks the network for an address (DHCPDISCOVER, never taking one) to check the DHCP server answers, and that no other one does. Needs raw sockets (root in Docker)."),
 		method("dns_check", "DNS check", "Every round, each DNS server of the network resolves an external name and a local one, timed."),
-		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP (v2c or v3) enabled. With a write community (or a v3 user allowed to write) it can also enable and disable their ports."),
+		method("snmp", "SNMP", "Reads ports, traffic, neighbors (LLDP), MAC tables and ARP from managed switches, routers and firewalls that have SNMP (v2c or v3) enabled. With a write community (or a v3 user allowed to write) it can also enable and disable their ports and change their VLANs (Q-BRIDGE-MIB)."),
 		{
 			Key: "snmp_communities", Type: model.FormFieldTypeSecret, Label: model.Ptr("SNMP communities"), Default: "public", Group: methods,
 			Help: model.Ptr(`Read-only communities to try, separated by commas (e.g. "public, homelab"). It is the "community" or "read community" set in the device's SNMP settings.`),
 		},
 		{
 			Key: "snmp_write_community", Type: model.FormFieldTypeSecret, Label: model.Ptr("SNMP write community"), Group: methods,
-			Help: model.Ptr(`To enable and disable ports of SNMP devices from Omini: the "write" or "read-write" community of the device's SNMP settings. Empty: SNMP v2c devices are only read (a v3 user allowed to write also works).`),
+			Help: model.Ptr(`To change SNMP devices from Omini (enable and disable ports, change VLANs): the "write" or "read-write" community of the device's SNMP settings. Empty: SNMP v2c devices are only read (a v3 user allowed to write also works).`),
 		},
 		{
 			Key: "snmp_v3_user", Type: model.FormFieldTypeString, Label: model.Ptr("User"), Group: v3,
@@ -133,7 +133,7 @@ func fields() []model.FormField {
 		{Key: "snmp_v3_auth_pass", Type: model.FormFieldTypeSecret, Label: model.Ptr("Authentication password"), Group: v3},
 		{
 			Key: "snmp_v3_priv", Type: model.FormFieldTypeSelect, Label: model.Ptr("Privacy (encryption)"), Group: v3, Default: "aes",
-			Options: []string{"none", "des", "aes", "aes192", "aes256"},
+			Options: []string{"none", "des", "aes", "aes192", "aes256", "aes192c", "aes256c"},
 		},
 		{Key: "snmp_v3_priv_pass", Type: model.FormFieldTypeSecret, Label: model.Ptr("Privacy password"), Group: v3},
 		{
@@ -632,6 +632,7 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	if ok && s.now().Sub(d.at) < opts.deepEvery && !integration.Forced(ctx) {
 		return d
 	}
+	remembered := d.snmp
 	d = deepInfo{at: s.now()}
 	if opts.ports {
 		d.ports = scanPorts(ctx, h.ip, opts.portList, s.PortTimeout)
@@ -646,7 +647,14 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 	if opts.snmp {
 		probe := s.snmpTarget(h.ip, "", nil)
 		probe.V3 = opts.v3
-		d.snmp, _ = snmp.Probe(ctx, probe, opts.communities)
+		var ok bool
+		d.snmp, ok = snmp.Probe(ctx, probe, opts.communities)
+		// A probe that got no answer (lost packets, a busy agent) keeps the
+		// credential the host answered to before, while it is still set:
+		// forgetting it would hide the device until the next deep scan.
+		if !ok && stillConfigured(remembered, opts) {
+			d.snmp = remembered
+		}
 	}
 	if opts.banners && slices.Contains(d.ports, 22) {
 		d.banner = sshBanner(ctx, h.ip, 1500*time.Millisecond)
@@ -671,6 +679,15 @@ func (s *Integration) deepScan(ctx context.Context, h *hostAcc, gateway netip.Ad
 		s.mu.Unlock()
 	}
 	return d
+}
+
+// stillConfigured reports whether a remembered SNMP credential is still in
+// the settings (a community listed, or the v3 user set).
+func stillConfigured(credential string, opts options) bool {
+	if credential == snmp.V3Credential {
+		return opts.v3 != nil
+	}
+	return credential != "" && slices.Contains(opts.communities, credential)
 }
 
 func (s *Integration) cached(h *hostAcc) deepInfo {

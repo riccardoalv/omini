@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/gosnmp/gosnmp"
 )
@@ -56,13 +58,15 @@ func SetPortEnabled(ctx context.Context, t Target, port string, enabled bool) er
 }
 
 // portIndex is the ifIndex of the port Collect names port (ifName, else
-// ifDescr, else "if<index>").
+// ifDescr, else "if<index>"). A name several interfaces share is refused:
+// changing one of them at random could cut the wrong port.
 func portIndex(c *client, port string) (string, error) {
 	ifRows, err := c.walk(oidIfTable + ".2")
 	if err != nil {
 		return "", err
 	}
 	xRows, _ := c.walk(oidIfXTable + ".1") // ifName (optional)
+	var found []int
 	for idx, p := range ifRows {
 		name := pduString(xRows[idx])
 		if name == "" {
@@ -71,11 +75,16 @@ func portIndex(c *client, port string) (string, error) {
 		if name == "" {
 			name = "if" + idx
 		}
-		if name == port {
-			if _, err := strconv.Atoi(idx); err == nil {
-				return idx, nil
-			}
+		if n, err := strconv.Atoi(idx); err == nil && name == port {
+			found = append(found, n)
 		}
 	}
-	return "", fmt.Errorf("the device has no port %q", port)
+	switch len(found) {
+	case 0:
+		return "", fmt.Errorf("the device has no port %q", port)
+	case 1:
+		return strconv.Itoa(found[0]), nil
+	}
+	slices.Sort(found)
+	return "", fmt.Errorf("the device has %d ports named %q (ifIndex %s): change it in the device's own interface", len(found), port, strings.Trim(fmt.Sprint(found), "[]"))
 }

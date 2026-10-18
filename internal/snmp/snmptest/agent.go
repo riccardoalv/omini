@@ -20,7 +20,10 @@ import (
 type Agent struct {
 	Community string
 	Port      int
-	write     string // the community allowed to Set (empty: none)
+	write     string   // the community allowed to Set (empty: none)
+	ignored   []string // OID prefixes whose Sets are answered but not applied
+	drop      int      // requests left to drop (negative: all)
+	mute      []string // OID prefixes whose reads are never answered
 
 	conn  net.PacketConn
 	mu    sync.RWMutex
@@ -76,6 +79,30 @@ func (a *Agent) AllowWrite(community string) {
 	a.views[community] = a.views[a.Community]
 }
 
+// Drop leaves the next n requests unanswered, like packets lost on the way;
+// a negative n drops every request until Drop(0).
+func (a *Agent) Drop(n int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.drop = n
+}
+
+// Mute leaves reads under an OID prefix unanswered, like agents that time
+// out on a table they cannot serve.
+func (a *Agent) Mute(prefix string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.mute = append(a.mute, "."+strings.Trim(prefix, ".")+".")
+}
+
+// IgnoreWrites makes Sets under an OID prefix answer noError without
+// changing anything, like agents that accept a write and drop it.
+func (a *Agent) IgnoreWrites(prefix string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ignored = append(a.ignored, "."+strings.Trim(prefix, ".")+".")
+}
+
 func (a *Agent) serve(t testing.TB) {
 	defer a.wg.Done()
 	decoder := &gosnmp.GoSNMP{Version: gosnmp.Version2c, Logger: gosnmp.NewLogger(nil)}
@@ -91,6 +118,19 @@ func (a *Agent) serve(t testing.TB) {
 		req, err := decoder.SnmpDecodePacket(buf[:n])
 		if err != nil {
 			continue
+		}
+		a.mu.Lock()
+		dropped := a.drop != 0
+		if req.PDUType != gosnmp.SetRequest && len(req.Variables) > 0 {
+			name := "." + strings.TrimPrefix(req.Variables[0].Name, ".")
+			dropped = dropped || slices.ContainsFunc(a.mute, func(p string) bool { return strings.HasPrefix(name+".", p) })
+		}
+		if a.drop > 0 {
+			a.drop--
+		}
+		a.mu.Unlock()
+		if dropped {
+			continue // a lost packet
 		}
 		a.mu.RLock()
 		vars, ok := a.views[req.Community]
@@ -233,6 +273,9 @@ func (a *Agent) set(req *gosnmp.SnmpPacket) (gosnmp.SNMPError, uint8) {
 	}
 	for i, v := range req.Variables {
 		name := "." + strings.TrimPrefix(v.Name, ".")
+		if slices.ContainsFunc(a.ignored, func(p string) bool { return strings.HasPrefix(name, p) }) {
+			continue
+		}
 		if vid, ok := strings.CutPrefix(name, vlanRowStatus); ok {
 			status, _ := v.Value.(int)
 			base := strings.TrimSuffix(vlanRowStatus, "5.")

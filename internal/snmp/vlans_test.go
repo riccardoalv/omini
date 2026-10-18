@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -117,5 +118,98 @@ func TestCreatesRenamesAndDeletesAVLAN(t *testing.T) {
 		if v.ID == 30 {
 			t.Fatal("VLAN 30 is still there")
 		}
+	}
+}
+
+// A switch whose bridge ports are not numbered as their ifIndex: the
+// management interface (ifIndex 1) is not a bridge port, 1/1 (ifIndex 2) is
+// bridge port 1 and 1/2 (ifIndex 3) is bridge port 2.
+func numberedBridge(t *testing.T, opts snmptest.Options) *snmptest.Agent {
+	sw := model.Device{
+		Key: "sw", Name: "sw",
+		Vlans: []model.Vlan{{ID: 1, Name: model.Ptr("default")}, {ID: 10, Name: model.Ptr("Office")}},
+		Interfaces: []model.Interface{
+			{Name: "mgmt"},
+			{Name: "1/1", Vlans: &model.PortVlans{Untagged: model.Ptr[uint16](10)}},
+			{Name: "1/2", Vlans: &model.PortVlans{Untagged: model.Ptr[uint16](1)}},
+		},
+	}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, opts))
+	agent.AllowWrite("private")
+	return agent
+}
+
+func TestChangesTheVLANsOfTheRightBridgePort(t *testing.T) {
+	ctx := context.Background()
+	agent := numberedBridge(t, snmptest.Options{BridgePorts: map[string]int{"1/1": 1, "1/2": 2}})
+	w := target(agent, "private")
+	d := readVlans(t, agent)
+	if p := portVlans(d, "1/1"); model.Deref(p.Untagged) != 10 {
+		t.Fatalf("1/1 read: %+v", p)
+	}
+	if err := snmp.SetPortVlans(ctx, w, "1/2", model.PortVlans{Untagged: model.Ptr[uint16](10)}); err != nil {
+		t.Fatal(err)
+	}
+	d = readVlans(t, agent)
+	if p := portVlans(d, "1/2"); model.Deref(p.Untagged) != 10 {
+		t.Fatalf("1/2: %+v", p)
+	}
+	// mgmt is ifIndex 1, which is not bridge port 1 (that is 1/1).
+	if err := snmp.SetPortVlans(ctx, w, "mgmt", model.PortVlans{Untagged: model.Ptr[uint16](1)}); err == nil {
+		t.Fatal("a port that is not a bridge port must be refused")
+	}
+	if p := portVlans(readVlans(t, agent), "1/1"); model.Deref(p.Untagged) != 10 || len(p.Tagged) != 0 {
+		t.Fatalf("1/1 changed through mgmt: %+v", p)
+	}
+}
+
+func TestChangesVLANsWithoutABridgePortTable(t *testing.T) {
+	agent := numberedBridge(t, snmptest.Options{NoBridgePortTable: true})
+	if err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/2", model.PortVlans{Untagged: model.Ptr[uint16](10)}); err != nil {
+		t.Fatal(err)
+	}
+	d := readVlans(t, agent)
+	if p := portVlans(d, "1/2"); model.Deref(p.Untagged) != 10 {
+		t.Fatalf("1/2: %+v", p)
+	}
+	if p := portVlans(d, "1/1"); model.Deref(p.Untagged) != 10 {
+		t.Fatalf("1/1: %+v", p)
+	}
+}
+
+// A trunk without a native VLAN: Q-BRIDGE always keeps a PVID, so the port
+// leaves every untagged membership and is read back with no native VLAN,
+// even though its PVID still names the old one.
+func TestATrunkWithoutANativeVLAN(t *testing.T) {
+	agent := qbridge(t)
+	if err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/1", model.PortVlans{Tagged: []uint16{10, 20}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := portVlans(readVlans(t, agent), "1/1"); p.Untagged != nil || !slices.Equal(p.Tagged, []uint16{10, 20}) {
+		t.Fatalf("1/1: untagged %v, tagged %v", model.Deref(p.Untagged), p.Tagged)
+	}
+}
+
+// An agent that takes the PVID write without applying it must not pass.
+func TestChecksThePVIDWasApplied(t *testing.T) {
+	agent := qbridge(t)
+	agent.IgnoreWrites("1.3.6.1.2.1.17.7.1.4.5.1.1")
+	err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/3", model.PortVlans{Untagged: model.Ptr[uint16](10)})
+	if err == nil {
+		t.Fatal("a PVID the agent did not apply must fail")
+	}
+}
+
+// dot1qVlanStaticName holds at most 32 octets.
+func TestRefusesAVLANNameTooLong(t *testing.T) {
+	w := target(qbridge(t), "private")
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("x", 33)); err == nil {
+		t.Fatal("a 33-octet name must be refused")
+	}
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("é", 17)); err == nil {
+		t.Fatal("34 octets in 17 characters must be refused")
+	}
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("x", 32)); err != nil {
+		t.Fatal(err)
 	}
 }

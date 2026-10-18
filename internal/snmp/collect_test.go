@@ -195,3 +195,90 @@ func TestCiscoStyleSwitch(t *testing.T) {
 		t.Errorf("VLAN 20's MAC table not read: %+v", got.Fdb)
 	}
 }
+
+// A Q-BRIDGE MAC table is indexed by filtering database id, which is not
+// always the VLAN id: dot1qVlanFdbId maps it back.
+func TestFdbIDIsMappedToItsVLAN(t *testing.T) {
+	sw := model.Device{
+		Key: "sw", Name: "sw",
+		Interfaces: []model.Interface{{Name: "1/1"}, {Name: "1/2"}},
+		Fdb: []model.FdbEntry{
+			{MAC: "b0:7b:25:18:1b:6d", Port: "1/1", Vlan: model.Ptr[uint16](20)},
+			{MAC: "b0:7b:25:18:1b:6e", Port: "1/2", Vlan: model.Ptr[uint16](1)},
+		},
+	}
+	vlans := func(opts snmptest.Options) map[model.MACAddress]uint16 {
+		agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, opts))
+		d, err := snmp.Collect(context.Background(), target(agent, "public"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[model.MACAddress]uint16{}
+		for _, f := range d.Fdb {
+			out[f.MAC] = model.Deref(f.Vlan)
+		}
+		return out
+	}
+	want := map[model.MACAddress]uint16{"b0:7b:25:18:1b:6d": 20, "b0:7b:25:18:1b:6e": 1}
+	if got := vlans(snmptest.Options{FdbIDs: map[uint16]int{1: 1, 20: 3}}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("with dot1qVlanFdbId: %v", got)
+	}
+	// Without dot1qVlanCurrentTable the fdbId is taken as the VLAN id.
+	if got := vlans(snmptest.Options{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("without it: %v", got)
+	}
+}
+
+// One lost packet must not hide an agent from the probe.
+func TestProbeRetriesALostPacket(t *testing.T) {
+	sw := demo.Network(time.Now())[1]
+	agent := snmptest.Start(t, "homelab", snmptest.FromDevice(sw, snmptest.Options{}))
+	agent.Drop(1)
+	if community, ok := snmp.Probe(context.Background(), target(agent, ""), []string{"homelab"}); !ok || community != "homelab" {
+		t.Fatalf("probe = %q %v", community, ok)
+	}
+}
+
+// Without LLDP the key must not depend on interface order: the bridge
+// address when the switch has one, else its lowest Ethernet MAC.
+func TestKeyWithoutLLDPIsStable(t *testing.T) {
+	sw := model.Device{Key: "sw", Name: "sw", Interfaces: []model.Interface{
+		{Name: "vlan1", Type: model.Ptr(model.InterfaceTypeVlan), MAC: model.Ptr[model.MACAddress]("02:00:00:00:00:01")},
+		{Name: "1/1", Type: model.Ptr(model.InterfaceTypeEthernet), MAC: model.Ptr[model.MACAddress]("00:11:22:33:44:66")},
+		{Name: "1/2", Type: model.Ptr(model.InterfaceTypeEthernet), MAC: model.Ptr[model.MACAddress]("00:11:22:33:44:55")},
+	}}
+	key := func(extra ...gosnmp.SnmpPDU) string {
+		agent := snmptest.Start(t, "public", append(snmptest.FromDevice(sw, snmptest.Options{}), extra...))
+		d, err := snmp.Collect(context.Background(), target(agent, "public"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d.Key
+	}
+	if k := key(); k != "00:11:22:33:44:55" {
+		t.Fatalf("lowest Ethernet MAC: %s", k)
+	}
+	bridge := gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.17.1.1.0", Type: gosnmp.OctetString, Value: []byte{0, 0x11, 0x22, 0x33, 0x44, 0x50}}
+	if k := key(bridge); k != "00:11:22:33:44:50" {
+		t.Fatalf("bridge address: %s", k)
+	}
+	// With LLDP the chassis MAC stays the key.
+	sw.Key = "00:11:22:33:44:77"
+	if k := key(bridge); k != "00:11:22:33:44:77" {
+		t.Fatalf("LLDP chassis: %s", k)
+	}
+}
+
+// A processor table that times out must not hide the memory.
+func TestMemoryIsReadWhenTheCPUTableFails(t *testing.T) {
+	d := model.Device{Key: "x", Name: "srv", CPUPct: model.Ptr(12.0), MemPct: model.Ptr(40.0)}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(d, snmptest.Options{}))
+	agent.Mute("1.3.6.1.2.1.25.3.3.1.2") // hrProcessorLoad
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CPUPct != nil || model.Deref(got.MemPct) != 40 {
+		t.Fatalf("cpu %v, memory %v", got.CPUPct, got.MemPct)
+	}
+}

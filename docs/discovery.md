@@ -103,22 +103,26 @@ its leases.
 ## SNMP
 
 SNMP is a method of the network scan, on by default. Every host found is
-probed once per deep scan with your SNMP credentials; the hosts that answer
-are read in full on every round:
+probed once per deep scan with your SNMP credentials (each request retried
+twice); the hosts that answer are read in full on every round:
 
 | Data | From |
 |---|---|
 | Name, description, uptime, vendor | `SNMPv2-MIB` |
 | Ports: name, status (enabled or disabled), speed, MAC, byte and error counters | `IF-MIB` |
+| Link aggregations: their member ports, the aggregate each port is in | `IF-MIB` (`ifStackTable`), `IEEE8023-LAG-MIB` |
 | Neighbors | `LLDP-MIB` |
 | MAC table (which device is on which port, VLAN) | `BRIDGE-MIB`, `Q-BRIDGE-MIB` |
+| VLANs: names, each port's native and tagged VLANs | `Q-BRIDGE-MIB` |
+| Spanning tree: each port's state, the root bridge | `BRIDGE-MIB` |
 | ARP | `IP-MIB` |
-| CPU, memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
+| CPU and memory | `HOST-RESOURCES-MIB`, when the agent has it (a profile's vendor OIDs win) |
+| Vendor CPU and memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
 
 To use it:
 
 1. Enable SNMP on the device, with a read-write community (or a v3 user
-   allowed to write) to enable and disable its ports from Omini, or
+   allowed to write) to change its ports and VLANs from Omini, or
    read-only for the map alone. Enable **LLDP** too if it has it:
    links between switches are then confirmed instead of inferred.
 2. In **Integrations → Network scan**, set **SNMP communities**: the
@@ -126,9 +130,11 @@ To use it:
    `public` is the default.
 3. For **SNMP v3**, fill in the **SNMP v3** group: user, authentication
    (none, MD5, SHA-1, SHA-224, SHA-256, SHA-384 or SHA-512) with its password,
-   and privacy (none, DES, AES-128, AES-192 or AES-256) with its password. v3
-   is tried before the communities. Omini remembers which credential each host
-   answered to.
+   and privacy (none, DES, AES-128, AES-192 or AES-256, and the Cisco-style
+   AES-192-C and AES-256-C) with its password. v3 is tried before the
+   communities. Omini remembers which credential each host answered to, and
+   keeps it when a later probe gets no answer (while that credential is still
+   in the settings).
 4. To **enable and disable ports** and **change VLANs** of SNMP devices from
    the map, set the **SNMP write community** (the device's "read-write"
    community). A device that answered to the v3 user is written with that
@@ -144,11 +150,12 @@ Communities and passwords are stored encrypted and never shown again.
 
 ### SNMP profiles
 
-Standard MIBs do not say a device's CPU, memory or temperatures. **Profiles**
-add them: YAML files matched by `sysObjectID`, `sysDescr` or an OID that
-exists. Omini ships profiles for Net-SNMP (Linux, with lm-sensors), MikroTik,
-Cisco IOS, Juniper, FortiGate, Synology, QNAP and HPE Aruba. You can add your
-own or replace a shipped one in `<data dir>/profiles/`. The format is in
+Standard MIBs do not say a device's temperatures or firmware, and many devices
+leave `HOST-RESOURCES-MIB` (CPU and memory) out. **Profiles** add them: YAML
+files matched by `sysObjectID`, `sysDescr` or an OID that exists. Omini ships
+profiles for Net-SNMP (Linux, with lm-sensors), MikroTik, Cisco IOS, Juniper,
+FortiGate, Synology, QNAP and HPE Aruba. You can add your own or replace a
+shipped one in `<data dir>/profiles/`. The format is in
 [SNMP profiles](snmp-profiles.md).
 
 ## nmap

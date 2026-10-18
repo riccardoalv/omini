@@ -3,6 +3,7 @@ package snmp_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -48,5 +49,21 @@ func TestDisableAndEnableAPort(t *testing.T) {
 	}
 	if err := snmp.SetPortEnabled(ctx, target(agent, "private"), "ge-0/0/9", true); err == nil {
 		t.Fatal("an unknown port must fail")
+	}
+}
+
+// Two interfaces with the same name: which one to change is unknown.
+func TestRefusesAnAmbiguousPortName(t *testing.T) {
+	sw := model.Device{Key: "sw", Name: "sw", Interfaces: []model.Interface{
+		{Name: "port"}, {Name: "uplink"}, {Name: "port"},
+	}}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, snmptest.Options{}))
+	agent.AllowWrite("private")
+	err := snmp.SetPortEnabled(context.Background(), target(agent, "private"), "port", false)
+	if err == nil || !strings.Contains(err.Error(), "ifIndex 1 3") {
+		t.Fatalf("an ambiguous name must be refused, got %v", err)
+	}
+	if err := snmp.SetPortEnabled(context.Background(), target(agent, "private"), "uplink", false); err != nil {
+		t.Fatal(err)
 	}
 }
