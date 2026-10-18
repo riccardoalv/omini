@@ -280,6 +280,8 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		}
 	}
 
+	out = append(out, entityMIB(d, ifIndex)...)
+
 	// HOST-RESOURCES-MIB: CPU load and RAM usage.
 	// One hrProcessorLoad row per processor (CPUCount, else one), all at
 	// CPUPct, indexed like Net-SNMP's (hrDeviceIndex 196608 on).
@@ -373,4 +375,60 @@ func bytesOID(b []byte) string {
 		parts = append(parts, fmt.Sprint(x))
 	}
 	return strings.Join(parts, ".")
+}
+
+// entityMIB renders ENTITY-MIB when the device has something it carries: a
+// chassis (index 1) with the device's model, serial number and software and
+// firmware versions, and for each port with a transceiver, the transceiver
+// (a module in the chassis) and the port inside it (Cisco's layout), the
+// port tied to its ifIndex by entAliasMappingTable.
+func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
+	transceivers := slices.ContainsFunc(d.Interfaces, func(i model.Interface) bool { return i.Transceiver != nil })
+	firmware := ""
+	if d.Firmware != nil {
+		firmware = model.Deref(d.Firmware.Current)
+	}
+	if d.Serial == nil && d.OSVersion == nil && firmware == "" && !transceivers {
+		return nil
+	}
+	var out []gosnmp.SnmpPDU
+	str := func(v string, col, idx int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.1.1.1.%d.%d", col, idx), Type: gosnmp.OctetString, Value: []byte(v)})
+	}
+	num := func(v, col, idx int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.1.1.1.%d.%d", col, idx), Type: gosnmp.Integer, Value: v})
+	}
+	// physical adds a row: descr, contained in, class, name, firmware,
+	// software, serial, manufacturer, model.
+	physical := func(idx int, descr string, parent, class int, name, fw, sw, serial, mfg, mdl string) {
+		str(descr, 2, idx)
+		num(parent, 4, idx)
+		num(class, 5, idx)
+		str(name, 7, idx)
+		str(fw, 9, idx)
+		str(sw, 10, idx)
+		str(serial, 11, idx)
+		str(mfg, 12, idx)
+		str(mdl, 13, idx)
+	}
+	physical(1, "Chassis", 0, 3, "Chassis", firmware, model.Deref(d.OSVersion), model.Deref(d.Serial),
+		model.Deref(d.Vendor), model.Deref(d.Model))
+	for i, iface := range d.Interfaces {
+		x := iface.Transceiver
+		if x == nil {
+			continue
+		}
+		module, port := 1000+2*i, 1001+2*i
+		descr := "SFP transceiver"
+		if x.Type != nil {
+			descr = *x.Type + " SFP"
+		}
+		physical(module, descr, 1, 9, iface.Name+" transceiver", "", "", model.Deref(x.Serial), model.Deref(x.Vendor), model.Deref(x.Part))
+		physical(port, iface.Name, module, 10, iface.Name, "", "", "", "", "")
+		out = append(out, gosnmp.SnmpPDU{
+			Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.3.2.1.2.%d.0", port), Type: gosnmp.ObjectIdentifier,
+			Value: fmt.Sprintf(".1.3.6.1.2.1.2.2.1.1.%d", ifIndex[iface.Name]),
+		})
+	}
+	return out
 }

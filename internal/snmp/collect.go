@@ -140,7 +140,8 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err := collectResources(c, &d); err != nil {
 		log.Debug("host resources unavailable", "err", err)
 	}
-	d.Role = model.Ptr(guessRole(c, &d))
+	d.Role = model.Ptr(guessRole(c, &d)) // on sysDescr, before ENTITY-MIB's model replaces it
+	collectEntity(c, &d, ifNames)
 	// Vendor profiles: what the standard MIBs lack (vendor CPU, temperatures...).
 	if sys, err := c.get(oidSysObjectID, oidSysDescr); err == nil {
 		used, perVLAN := applyProfiles(c, &d, pduString(sys[oidSysObjectID]), pduString(sys[oidSysDescr]))
