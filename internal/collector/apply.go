@@ -100,6 +100,9 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 	if req.Kind == model.ChangeKindNetworkSet || req.Kind == model.ChangeKindNetworkDelete {
 		p, guarded = networkGuard(n, req, c.opts.Self)
 	}
+	if req.Kind == model.ChangeKindWifiChannel {
+		p, guarded = radioGuard(n, c.opts.Self)
+	}
 	if guarded {
 		if allowed := c.AllowDestructive(ctx); !allowed || !req.Confirmed {
 			return store.ConfigChange{}, &DestructiveError{Protection: p, Allowed: allowed}
@@ -189,6 +192,8 @@ func checkChange(n topology.Node, req ChangeRequest) (json.RawMessage, any, erro
 		return pauseSet(n, req.Value)
 	case model.ChangeKindPauseDelete:
 		return pauseDelete(n, req.Value)
+	case model.ChangeKindWifiChannel:
+		return wifiChannel(n, req.Value)
 	}
 	i := slices.IndexFunc(n.Device.Interfaces, func(i model.Interface) bool { return i.Name == req.Port })
 	if i < 0 {
@@ -541,6 +546,8 @@ func offers(d *model.Device, k model.ChangeKind) bool {
 		return d.DnsRecords != nil || d.DnsDomain != nil
 	case model.ChangeKindWolSend, model.ChangeKindPauseSet, model.ChangeKindPauseDelete:
 		return len(d.Networks) > 0
+	case model.ChangeKindWifiChannel:
+		return slices.ContainsFunc(d.Radios, func(r model.Radio) bool { return r.Channel != nil })
 	}
 	return false
 }
