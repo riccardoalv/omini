@@ -353,7 +353,8 @@ for a day.
   rate now and the period's totals, the usage over time, a **world map** of
   where the traffic goes (countries shaded by traffic, lines from home to the
   busiest), **where it goes** by the networks' owners (Google, Netflix,
-  Amazon...; a country on the map narrows it), **who uses it most**, and every
+  Amazon...; a country on the map narrows it), **who uses it most**, the
+  [people](map.md#people) (the sum of each person's devices), and every
   device with where it went.
 - Each device's panel shows **Where it goes** and the devices it talks to on
   your network, which **Show on the map** highlights. The internet's node

@@ -21,6 +21,7 @@ import DeviceExtras from '@/components/map/DeviceExtras.vue'
 import ConfigBackups from '@/components/map/ConfigBackups.vue'
 import HostActions from '@/components/map/HostActions.vue'
 import NoteField from '@/components/map/NoteField.vue'
+import OwnerField from '@/components/map/OwnerField.vue'
 import NetworkPlace from '@/components/map/NetworkPlace.vue'
 import NodeTraffic from '@/components/map/NodeTraffic.vue'
 import PanelSection from '@/components/map/PanelSection.vue'
@@ -676,6 +677,13 @@ async function save(patch: {
           :node-id="n.id"
           :note="n.note"
           @saved="(note) => emit('changed', { note: note || undefined })"
+          @error="(m) => (error = m)"
+        />
+        <OwnerField
+          v-if="n.kind === 'client' || n.kind === 'device'"
+          :node-id="n.id"
+          :owner-id="n.owner_id"
+          @saved="(owner) => emit('changed', { owner_id: owner })"
           @error="(m) => (error = m)"
         />
 

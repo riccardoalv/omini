@@ -83,6 +83,9 @@ const orgs = computed(() =>
     .slice(0, 8),
 )
 const orgMax = computed(() => Math.max(1, ...orgs.value.map((o) => o.rx + o.tx)))
+/** Each person's use: the sum of their devices. */
+const people = computed(() => data.value?.people ?? [])
+const peopleMax = computed(() => Math.max(1, ...people.value.map((p) => p.rx + p.tx)))
 
 /** Where a device went: the last hour for the short periods, else the last day. */
 const destHours = computed(() => (range.value === '15m' || range.value === '1h' ? 1 : 24))
@@ -253,6 +256,21 @@ onBeforeUnmount(() => clearInterval(timer))
           </ul>
         </section>
       </div>
+
+      <section v-if="people.length" class="card block" data-test="internet-people">
+        <h2>{{ t('internet.people') }}</h2>
+        <ul class="ranking">
+          <li v-for="p in people" :key="p.id">
+            <span class="label">{{ p.name }}</span>
+            <span class="bar"
+              ><i class="down" :style="{ width: `${(p.rx / peopleMax) * 100}%` }" /><i
+                class="up"
+                :style="{ width: `${(p.tx / peopleMax) * 100}%` }"
+            /></span>
+            <span class="mono num">{{ formatBytes(p.rx + p.tx) }}</span>
+          </li>
+        </ul>
+      </section>
 
       <section class="card list">
         <button

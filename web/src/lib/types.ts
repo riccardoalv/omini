@@ -265,6 +265,8 @@ export interface TopoNode {
   hidden?: boolean
   /** The user's free note about the device. */
   note?: string
+  /** The person who owns the device. */
+  owner_id?: number
   last_seen?: string
   os?: string
   open_ports?: number[]
@@ -425,6 +427,8 @@ export interface InventoryEntry {
   icon?: string
   /** The user's free note about the device. */
   note?: string
+  /** The person who owns the device. */
+  owner_id?: number
 }
 
 /** An installed plugin (GET /api/plugins). */
@@ -577,6 +581,8 @@ export interface InternetUsage {
 
 export interface InternetResponse {
   devices: InternetUsage[]
+  /** Each person's use (the sum of their devices), busiest first. */
+  people?: PersonUsage[]
   total: { node: string; rx: number; tx: number }
   since: string
   seconds: number
@@ -834,4 +840,34 @@ export interface Backup {
   size: number
   /** Omini changed the device since the version before. */
   by_omini: boolean
+}
+
+/** Someone who owns devices on the network (GET /api/people). */
+export interface Person {
+  id: number
+  name: string
+  color?: string
+  created_at: string
+  /** Their devices (inventory ids). */
+  devices: string[]
+  /** One of their phones, tablets or wearables is online. */
+  home: boolean
+  /** The latest time one of their devices was seen. */
+  last_seen?: string
+}
+
+/** What pausing or resuming a person did to one of their devices. */
+export interface PersonDeviceResult {
+  node_id: string
+  status: 'done' | 'skipped' | 'failed'
+  error?: string
+  change?: ConfigChange
+}
+
+/** A person's internet use: the sum of their devices (bytes). */
+export interface PersonUsage {
+  id: number
+  name: string
+  rx: number
+  tx: number
 }
