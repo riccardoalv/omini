@@ -763,6 +763,14 @@ export default {
         detailAuto:
           'On 2.4 GHz: {aps}. On automatic channel (left to their controller): {auto_aps}.',
       },
+      port_forward: {
+        title: 'Port {ports}/{protocol} open to {target}',
+        detail: '{node} forwards it from the internet to {internal}. {description}',
+      },
+      upnp_forward: {
+        title: '{target} opened port {ports}/{protocol} by itself',
+        detail: 'Through UPnP or NAT-PMP on {node}, to {internal}. {description}',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -856,6 +864,10 @@ export default {
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
       wifi_channel_conflict:
         'Press Resolve: it moves the fewest access points to 1, 6 or 11, one at a time. Those on automatic channel are left to their controller.',
+      port_forward:
+        'Make sure the service behind it is up to date and must be reachable from the internet; a VPN is safer for your own access.',
+      upnp_forward:
+        'A device opened it without you. If you do not need it, turn UPnP off on the router (or for this device).',
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',

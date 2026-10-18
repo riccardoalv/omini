@@ -74,6 +74,8 @@ attention) and **info** (worth knowing).
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |
 | `dns_local` | warning | A DNS server resolves the internet name but not a local one |
 | `vlan_unknown` | warning | A device has a VLAN that is not one of the network's (created on the device, not in Omini) |
+| `port_forward` | info | A router forwards a port (or a range) from the internet to a device: one alert per enabled forward (protocol and external port), open while it exists, with where it goes (the device's name when Omini knows the address), who may use it and its description. The router's panel lists them under **Exposed to the internet**. Omini never changes them |
+| `upnp_forward` | warning | Like `port_forward`, for a forward a device opened by itself through UPnP or NAT-PMP |
 | `insecure_service` | warning | Telnet (23) or FTP (21) is open on a device, or a network device's admin page is served only over plain HTTP (no 443 or 8443). Telnet and FTP are found by [nmap](discovery.md#nmap): the network scan's default ports leave 21 and 23 out (its **Ports to check** replaces them: list 21 and 23 there with the others to have it look) |
 | `new_devices_burst` | warning | 5 or more devices never seen before appeared within 10 minutes |
 | `new_device` | info | A device is seen for the first time. Shown for 24 hours. Devices found in the first 15 minutes after Omini started tracking are the existing network, not new |

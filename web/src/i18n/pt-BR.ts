@@ -775,6 +775,14 @@ const ptBR: typeof en = {
         detailAuto:
           'Em 2,4 GHz: {aps}. Em canal automático (deixados com a controladora): {auto_aps}.',
       },
+      port_forward: {
+        title: 'Porta {ports}/{protocol} aberta para {target}',
+        detail: '{node} a encaminha da internet para {internal}. {description}',
+      },
+      upnp_forward: {
+        title: '{target} abriu a porta {ports}/{protocol} sozinho',
+        detail: 'Por UPnP ou NAT-PMP em {node}, para {internal}. {description}',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -869,6 +877,10 @@ const ptBR: typeof en = {
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
       wifi_channel_conflict:
         'Use Resolver: ele move o mínimo de pontos de acesso para 1, 6 ou 11, um de cada vez. Os que estão em canal automático ficam com a controladora.',
+      port_forward:
+        'Confira que o serviço por trás dela está atualizado e precisa mesmo ser acessível pela internet; uma VPN é mais segura para o seu próprio acesso.',
+      upnp_forward:
+        'Um dispositivo a abriu sem você. Se não precisa dela, desligue o UPnP no roteador (ou para este dispositivo).',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',

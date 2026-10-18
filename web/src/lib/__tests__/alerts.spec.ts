@@ -91,6 +91,8 @@ describe('alerts', () => {
       'new_device',
       'iot_with_trusted',
       'wifi_channel_conflict',
+      'port_forward',
+      'upnp_forward',
     ]
     for (const locale of ['en', 'pt-BR']) {
       const { global } = createAppI18n(locale)
@@ -98,7 +100,12 @@ describe('alerts', () => {
         expect(global.te(`insights.rules.${r}.title`), `${locale} ${r}`).toBe(true)
         expect(global.te(`insights.rules.${r}.detail`), `${locale} ${r}`).toBe(true)
       }
-      for (const tip of ['iot_with_trusted', 'wifi_channel_conflict'])
+      for (const tip of [
+        'iot_with_trusted',
+        'wifi_channel_conflict',
+        'port_forward',
+        'upnp_forward',
+      ])
         expect(global.te(`insights.tips.${tip}`), `${locale} ${tip}`).toBe(true)
     }
   })
@@ -146,5 +153,27 @@ describe('alerts', () => {
     expect(concerns(wifi, 'dev:hall')).toBe(true)
     expect(concerns(wifi, 'dev:attic')).toBe(false)
     expect(concerns(alert({ node_id: 'a' }), 'a')).toBe(true)
+  })
+
+  it('tells what a port forward exposes', () => {
+    const text = alertText(
+      alert({
+        rule: 'port_forward',
+        params: {
+          node: 'gw',
+          ports: '443',
+          protocol: 'tcp',
+          target: 'nas',
+          internal: '192.168.1.10:443',
+          description: 'Nextcloud',
+        },
+      }),
+      t,
+      'en',
+    )
+    expect(text).toEqual({
+      title: 'Port 443/tcp open to nas',
+      detail: 'gw forwards it from the internet to 192.168.1.10:443. Nextcloud',
+    })
   })
 })
