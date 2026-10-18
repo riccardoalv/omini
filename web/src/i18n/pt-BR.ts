@@ -892,6 +892,9 @@ const ptBR: typeof en = {
     average: 'Média',
     noData: 'Nenhum tráfego registrado neste período.',
     ranges: { '1': '1 h', '24': '24 h', '168': '7 d', '720': '30 d', '8760': '1 a' },
+    module: 'Módulo',
+    weakestSignal: 'Sinal óptico mais fraco',
+    hottestModule: 'Módulo mais quente',
     link: 'Tráfego de {name}',
   },
   devices: {

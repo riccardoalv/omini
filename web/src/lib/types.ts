@@ -526,6 +526,9 @@ export interface TrafficPoint {
   tx_bps: number
   rx_max_bps?: number
   tx_max_bps?: number
+  /** The port's optical module (hours: its average), when it has one. */
+  rx_power_dbm?: number
+  temperature_c?: number
 }
 
 /** A type of notification channel and its form. */

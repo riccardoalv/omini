@@ -133,7 +133,10 @@ and the link rate is in the client's panel. App links have none either.
 port, else of the device's port, else of the Wi-Fi client. The chart has
 ranges of 1 hour, 24 hours, 7 days, 30 days and 1 year, with average and peak,
 and gaps where there is no data. Omini keeps one point per minute for 24 hours
-and an hourly average and peak for a year.
+and an hourly average and peak for a year. A port with an SFP module keeps its
+received power and temperature the same way: the chart shows the weakest
+signal and the hottest temperature of the period, and both at the point under
+the cursor.
 
 ## The device panel
 

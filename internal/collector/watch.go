@@ -7,6 +7,7 @@ import (
 
 	"github.com/riccardoalv/omini/internal/insights"
 	"github.com/riccardoalv/omini/internal/integration"
+	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 	"github.com/riccardoalv/omini/internal/vlans"
@@ -214,8 +215,20 @@ func (c *Collector) trackPresence(ctx context.Context, topo topology.Topology, i
 func trafficSamples(topo topology.Topology) []store.TrafficSample {
 	var out []store.TrafficSample
 	for _, n := range topo.Nodes {
+		modules := map[string]*model.Transceiver{}
+		if n.Device != nil {
+			for _, i := range n.Device.Interfaces {
+				if i.Transceiver != nil {
+					modules[i.Name] = i.Transceiver
+				}
+			}
+		}
 		for name, r := range n.Traffic {
-			out = append(out, store.TrafficSample{NodeID: n.ID, Iface: name, RxBps: r.RxBps, TxBps: r.TxBps})
+			s := store.TrafficSample{NodeID: n.ID, Iface: name, RxBps: r.RxBps, TxBps: r.TxBps}
+			if m := modules[name]; m != nil {
+				s.RxPowerDBM, s.TempC = m.RxPowerDBM, m.TemperatureC
+			}
+			out = append(out, s)
 		}
 		if n.Flow != nil && n.Online {
 			out = append(out, store.TrafficSample{NodeID: n.ID, RxBps: n.Flow.RxBps, TxBps: n.Flow.TxBps})

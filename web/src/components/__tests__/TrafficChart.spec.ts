@@ -35,6 +35,42 @@ describe('TrafficChart', () => {
     expect(w.get('[data-test=chart-stats]').text()).toContain('4.0 Mbps') // peak down
   })
 
+  it("shows a port's optical module: its weakest signal and hottest temperature", async () => {
+    const now = Date.now()
+    vi.mocked(api.history).mockResolvedValue([
+      {
+        at: new Date(now - 120_000).toISOString(),
+        rx_bps: 1,
+        tx_bps: 1,
+        rx_power_dbm: -9.5,
+        temperature_c: 40,
+      },
+      {
+        at: new Date(now - 60_000).toISOString(),
+        rx_bps: 1,
+        tx_bps: 1,
+        rx_power_dbm: -12.25,
+        temperature_c: 38,
+      },
+    ])
+    const w = mount(TrafficChart, {
+      props: { node: 'dev:sw', iface: 'SFP 1' },
+      global: { plugins: plugins() },
+    })
+    await flushPromises()
+    expect(w.get('[data-test=chart-rx-power]').text()).toContain('-12.3 dBm')
+    expect(w.get('[data-test=chart-module-temp]').text()).toContain('40.0 °C')
+  })
+
+  it('shows no module for a port without one', async () => {
+    const w = mount(TrafficChart, {
+      props: { node: 'dev:fw', iface: 'igc0' },
+      global: { plugins: plugins() },
+    })
+    await flushPromises()
+    expect(w.find('[data-test=chart-rx-power]').exists()).toBe(false)
+  })
+
   it('changes the range, and says when there is no data', async () => {
     const w = mount(TrafficChart, {
       props: { node: 'dev:fw', iface: 'igc0', swap: true },

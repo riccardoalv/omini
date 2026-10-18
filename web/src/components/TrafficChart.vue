@@ -112,6 +112,21 @@ function onMove(ev: PointerEvent) {
   hover.value = best
 }
 const hovered = computed(() => (hover.value === null ? undefined : series.value[hover.value]))
+/** The optical module of the hovered point (series and points share their order). */
+const hoveredModule = computed(() => (hover.value === null ? undefined : points.value[hover.value]))
+
+/** A port's optical module over the period: its weakest signal and its hottest. */
+const module = computed(() => {
+  const power = points.value.flatMap((p) => (p.rx_power_dbm == null ? [] : [p.rx_power_dbm]))
+  const temp = points.value.flatMap((p) => (p.temperature_c == null ? [] : [p.temperature_c]))
+  if (!power.length && !temp.length) return undefined
+  return {
+    power: power.length ? Math.min(...power) : undefined,
+    temp: temp.length ? Math.max(...temp) : undefined,
+  }
+})
+const dbm = (v: number) => `${v.toFixed(1)} dBm`
+const celsius = (v: number) => `${v.toFixed(1)} °C`
 
 const stats = computed(() => {
   const s = series.value
@@ -196,6 +211,19 @@ const stats = computed(() => {
         <span v-if="hovered.downMax > hovered.down" class="muted">
           {{ t('traffic.peak') }} ↓ {{ formatRate(hovered.downMax) }}
         </span>
+        <span
+          v-if="hoveredModule?.rx_power_dbm != null || hoveredModule?.temperature_c != null"
+          class="muted"
+          data-test="chart-tip-module"
+        >
+          {{ t('traffic.module') }}
+          <template v-if="hoveredModule.rx_power_dbm != null">{{
+            dbm(hoveredModule.rx_power_dbm)
+          }}</template>
+          <template v-if="hoveredModule.temperature_c != null">
+            · {{ celsius(hoveredModule.temperature_c) }}</template
+          >
+        </span>
       </div>
       <p v-if="!loading && !series.length" class="empty muted" data-test="chart-empty">
         {{ failed ? t('common.error') : t('traffic.noData') }}
@@ -215,6 +243,14 @@ const stats = computed(() => {
           <span class="down">↓ {{ formatRate(stats.downPeak) }}</span>
           <span class="up">↑ {{ formatRate(stats.upPeak) }}</span>
         </dd>
+      </div>
+      <div v-if="module?.power !== undefined" data-test="chart-rx-power">
+        <dt>{{ t('traffic.weakestSignal') }}</dt>
+        <dd>{{ dbm(module.power) }}</dd>
+      </div>
+      <div v-if="module?.temp !== undefined" data-test="chart-module-temp">
+        <dt>{{ t('traffic.hottestModule') }}</dt>
+        <dd>{{ celsius(module.temp) }}</dd>
       </div>
     </dl>
   </div>

@@ -27,3 +27,27 @@ func TestObserveChangesRemembersVPNPeers(t *testing.T) {
 		t.Fatalf("kept after a day: %v", h.VPNConnected)
 	}
 }
+
+// A port's traffic sample carries its optical module's power and temperature.
+func TestTrafficSamplesCarryTheOpticalModule(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{{
+		ID: "dev:sw", Kind: topology.KindDevice, Online: true,
+		Traffic: map[string]topology.Rate{"SFP 1": {RxBps: 10}, "Port 1": {RxBps: 5}},
+		Device: &model.Device{Interfaces: []model.Interface{
+			{Name: "SFP 1", Transceiver: &model.Transceiver{RxPowerDBM: model.Ptr(-9.5), TemperatureC: model.Ptr(41.0)}},
+			{Name: "Port 1"},
+		}},
+	}}}
+	for _, s := range trafficSamples(topo) {
+		switch s.Iface {
+		case "SFP 1":
+			if s.RxPowerDBM == nil || *s.RxPowerDBM != -9.5 || s.TempC == nil || *s.TempC != 41 {
+				t.Errorf("SFP 1: %+v", s)
+			}
+		case "Port 1":
+			if s.RxPowerDBM != nil || s.TempC != nil {
+				t.Errorf("Port 1: %+v", s)
+			}
+		}
+	}
+}
