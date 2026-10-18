@@ -44,7 +44,13 @@ func (c *Collector) syncDNSNames(ctx context.Context) {
 		if !ok {
 			continue // not on the map now: its name stays until it is back
 		}
-		if err := c.SyncDNSName(ctx, id); err != nil {
+		key := "dns|" + id
+		if !c.retry.due(key, c.opts.Now()) {
+			continue // it refused lately: tried again later
+		}
+		err := c.SyncDNSName(ctx, id)
+		c.retry.done(key, c.opts.Now(), err)
+		if err != nil {
 			slog.Warn("could not update a DNS name", "node", id, "err", err)
 		}
 	}

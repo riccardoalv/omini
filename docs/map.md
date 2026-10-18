@@ -255,8 +255,12 @@ traffic), DHCP pool usage and firewall states (yellow from 75 %, red from
   devices it talks to, which **Show on the map** highlights (the rest of the
   map dims). The internet's node shows who is **using the internet now**.
 - Its last **Activity** (joined and left the network).
-- **Changes**: the changes made from Omini (kept a year), the refused ones
-  with the device's error.
+- **Changes**: the changes made from Omini (kept a year), on the device or for
+  it (a reservation, pause, DNS name or Wake-on-LAN its router or DNS server
+  made, with that node's name), the refused ones with the device's error. A
+  refusal repeated as it was (Omini retrying a DNS name or a paused device's
+  new address) is kept once; those retries wait longer after each refusal
+  (up to 6 hours).
 - **Hide** and **Delete**.
 
 ## The network's VLANs

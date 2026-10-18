@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/model"
@@ -85,5 +86,62 @@ func TestPausingADevice(t *testing.T) {
 	}
 	if _, err := coll.Pause(ctx, omini); !errors.Is(err, collector.ErrNotChangeable) {
 		t.Fatalf("omini: %v", err)
+	}
+}
+
+// A router that keeps refusing to follow a paused device's new address is
+// asked again less and less often, and its refusal is kept in the history
+// once, not every round.
+func TestARefusedRetryBacksOff(t *testing.T) {
+	var clock time.Time
+	coll, s, st := switchNetworkWith(t, func(o *collector.Options) {
+		now := o.Now
+		o.Now = func() time.Time {
+			if !clock.IsZero() {
+				return clock
+			}
+			return now()
+		}
+	})
+	ctx := context.Background()
+	phone := ""
+	for _, n := range coll.State().Topology.Nodes {
+		if n.MAC == string(phoneMAC) {
+			phone = n.ID
+		}
+	}
+	if _, err := coll.Pause(ctx, phone); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.devices[0].Arp = []model.ArpEntry{{IP: "192.168.1.2", MAC: swMAC}, {IP: "192.168.1.77", MAC: phoneMAC}}
+	s.mu.Unlock()
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.err = errors.New("the router refused")
+	s.mu.Unlock()
+	clock = time.Now()
+	n := len(s.applied)
+	coll.AfterRound(ctx)
+	coll.AfterRound(ctx) // a round later: not asked again yet
+	if got := len(s.applied) - n; got != 1 {
+		t.Fatalf("asked %d times, want 1", got)
+	}
+	clock = clock.Add(time.Hour) // past the wait
+	coll.AfterRound(ctx)
+	if got := len(s.applied) - n; got != 2 {
+		t.Fatalf("asked %d times after the wait, want 2", got)
+	}
+	failed := 0
+	h, _ := st.ConfigChanges(ctx, phone, 50)
+	for _, c := range h {
+		if c.Error != "" {
+			failed++
+		}
+	}
+	if failed != 1 {
+		t.Fatalf("%d failed entries in the history, want 1: %+v", failed, h)
 	}
 }

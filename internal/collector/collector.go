@@ -93,6 +93,8 @@ type Collector struct {
 
 	// slow counts the DNS servers' slow answers in a row.
 	slow slowDNS
+	// retry backs off the automatic retries a device keeps refusing.
+	retry retries
 
 	// Names for the places devices go, from the DNS servers' lookups.
 	names flowNames

@@ -130,7 +130,9 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 	} else {
 		slog.Info("configuration changed", "node", n.ID, "kind", req.Kind, "port", req.Port, "value", string(after))
 	}
-	if rec.ID, err = c.store.AddConfigChange(ctx, rec); err != nil {
+	if last, ok := c.repeatedFailure(ctx, rec); ok {
+		rec.ID = last.ID // the same refusal again: kept once
+	} else if rec.ID, err = c.store.AddConfigChange(ctx, rec); err != nil {
 		return rec, err
 	}
 	if applyErr != nil {
@@ -620,4 +622,19 @@ func destructive(req ChangeRequest, before json.RawMessage) bool {
 		return false
 	}
 	return false
+}
+
+// repeatedFailure is the last change kept for the same node, target, kind
+// and port when it failed the same way with the same value: a device that
+// keeps refusing an automatic retry (a DNS name, a paused device's new
+// address) is kept in the history once, not every round.
+func (c *Collector) repeatedFailure(ctx context.Context, rec store.ConfigChange) (store.ConfigChange, bool) {
+	if rec.Error == "" {
+		return store.ConfigChange{}, false
+	}
+	last, ok, err := c.store.LastConfigChange(ctx, rec.NodeID, rec.TargetID, rec.Kind, rec.Port)
+	if err != nil || !ok || last.Error != rec.Error || !bytes.Equal(last.After, rec.After) {
+		return store.ConfigChange{}, false
+	}
+	return last, true
 }

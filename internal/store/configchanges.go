@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -88,4 +90,28 @@ func (s *Store) ChangedByOmini(ctx context.Context, nodeID string, integrationID
 		WHERE (node_id = ? OR integration_id = ?) AND error = '' AND kind != 'wol.send' AND at > ?`,
 		nodeID, integrationID, since.Unix()).Scan(&n)
 	return n > 0, err
+}
+
+// LastConfigChange is the latest change of a kind made on a node (for a target
+// and port), if any.
+func (s *Store) LastConfigChange(ctx context.Context, nodeID, targetID, kind, port string) (ConfigChange, bool, error) {
+	var c ConfigChange
+	var before, after string
+	var at int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, node_id, target_id, integration_id, kind, port, before, after, error, at
+		FROM config_changes WHERE node_id = ? AND target_id = ? AND kind = ? AND port = ?
+		ORDER BY at DESC, id DESC LIMIT 1`, nodeID, targetID, kind, port).
+		Scan(&c.ID, &c.NodeID, &c.TargetID, &c.IntegrationID, &c.Kind, &c.Port, &before, &after, &c.Error, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return c, false, nil
+	}
+	if err != nil {
+		return c, false, err
+	}
+	if before != "" {
+		c.Before = json.RawMessage(before)
+	}
+	c.After, c.At = json.RawMessage(after), time.Unix(at, 0)
+	return c, true, nil
 }

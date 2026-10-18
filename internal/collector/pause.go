@@ -121,8 +121,14 @@ func (c *Collector) syncPaused(ctx context.Context) {
 			if len(ips) == 0 || slices.Equal(ips, have) {
 				continue
 			}
+			key := "pause|" + r.ID + "|" + string(mac)
+			if !c.retry.due(key, c.opts.Now()) {
+				continue // the router refused lately: tried again later
+			}
 			v := model.PausedDevice{MAC: mac, IPs: ips, Name: p.Name}
-			if _, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Target: id, Value: v}); err != nil {
+			_, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Target: id, Value: v})
+			c.retry.done(key, c.opts.Now(), err)
+			if err != nil {
 				slog.Warn("could not follow a paused device's new address", "node", id, "err", err)
 			}
 		}
