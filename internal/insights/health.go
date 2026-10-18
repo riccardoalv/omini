@@ -13,6 +13,7 @@ const VPNWindow = 24 * time.Hour
 func init() {
 	Rules["service_stopped"] = serviceStopped
 	Rules["vpn_down"] = vpnDown
+	Rules["reboot_pending"] = rebootPending
 }
 
 // serviceStopped: a service the device is configured to run is not running.
@@ -61,6 +62,18 @@ func vpnDown(in Input, _ index) []Insight {
 				params["endpoint"] = e
 			}
 			out = append(out, node("vpn_down", Warning, n, p.Name, params))
+		}
+	}
+	return out
+}
+
+// rebootPending: the device asks for a restart (to finish an update it
+// installed, or a change), whether or not an update is pending.
+func rebootPending(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if f := n.Device.Firmware; n.Online && f != nil && model.Deref(f.NeedsReboot) {
+			out = append(out, node("reboot_pending", Info, n, "", nil))
 		}
 	}
 	return out

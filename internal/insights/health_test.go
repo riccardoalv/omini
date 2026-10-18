@@ -83,3 +83,23 @@ func TestVPNDown(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestRebootPending(t *testing.T) {
+	dev := func(id string, f *model.Firmware) topology.Node {
+		return topology.Node{ID: id, Kind: topology.KindDevice, Label: id, Online: true, Device: &model.Device{Firmware: f}}
+	}
+	in := Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{
+		dev("dev:a", &model.Firmware{NeedsReboot: model.Ptr(true)}),                                    // no update pending
+		dev("dev:b", &model.Firmware{NeedsReboot: model.Ptr(true), UpdateAvailable: model.Ptr(true)}),  // and an update
+		dev("dev:c", &model.Firmware{NeedsReboot: model.Ptr(false), UpdateAvailable: model.Ptr(true)}), // no restart asked
+		dev("dev:d", nil),
+	}}}
+	got := keysOf(t, "reboot_pending", in)
+	if len(got) != 2 || got["reboot_pending|dev:a"] != Info || got["reboot_pending|dev:b"] != Info {
+		t.Fatalf("got %v", got)
+	}
+	// update_pending keeps its own logic.
+	if u := keysOf(t, "update_pending", in); len(u) != 2 {
+		t.Fatalf("update_pending: %v", u)
+	}
+}
