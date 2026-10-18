@@ -701,8 +701,8 @@ func capabilities(bits []byte) []model.NeighborCapability {
 	return out
 }
 
-// collectResources reads CPU load and RAM usage; each table is optional, and
-// one failing does not keep the other from being read.
+// collectResources reads CPU load and count, RAM and disks; each table is
+// optional, and one failing does not keep the other from being read.
 func collectResources(c *client, d *model.Device) error {
 	loads, cpuErr := c.walk(oidHrProcessorLoad)
 	var sum, n uint64
@@ -722,22 +722,60 @@ func collectResources(c *client, d *model.Device) error {
 		return errors.Join(cpuErr, err)
 	}
 	t := table(rows)
-	for idx, p := range t[2] {
-		if pduString(p) != oidHrStorageRAM {
-			continue
+	indexes := make([]int, 0, len(t[2]))
+	for idx := range t[2] {
+		if n, err := strconv.Atoi(idx); err == nil {
+			indexes = append(indexes, n)
 		}
+	}
+	slices.Sort(indexes)
+	ram := false
+	for _, n := range indexes {
+		idx := strconv.Itoa(n)
 		size, ok1 := pduUint(t[5][idx])
 		used, ok2 := pduUint(t[6][idx])
-		if ok1 && ok2 && size > 0 {
+		units, ok3 := pduUint(t[4][idx])
+		switch pduString(t[2][idx]) {
+		case oidHrStorageRAM:
+			if ram || !ok1 || !ok2 || size == 0 {
+				continue
+			}
+			ram = true
 			d.MemPct = model.Ptr(float64(used) * 100 / float64(size))
-			if units, ok := pduUint(t[4][idx]); ok && units > 0 {
+			if ok3 && units > 0 {
 				d.MemTotalBytes = model.Ptr(size * units)
 				d.MemUsedBytes = model.Ptr(used * units)
 			}
+		case oidHrStorageFixedDisk:
+			mount := storageMount(pduString(t[3][idx]))
+			if mount == "" || !ok1 || !ok2 || !ok3 || size == 0 || units == 0 || used > size {
+				continue
+			}
+			d.Storage = append(d.Storage, model.Storage{
+				Mount: mount, TotalBytes: model.Ptr(size * units), UsedBytes: model.Ptr(used * units),
+			})
 		}
-		break
 	}
 	return cpuErr
+}
+
+// pseudoMounts are file systems an agent lists as fixed disks that are not
+// disks: memory (tmpfs) and kernel ones, and read-only images that are
+// always full (snaps).
+var pseudoMounts = []string{"/dev", "/proc", "/run", "/snap", "/sys"}
+
+// storageMount is a disk's mount point from hrStorageDescr ("/volume1";
+// Windows' "C:\ Label:System  Serial Number 1a2b" is "C:\"), "" for a
+// pseudo file system.
+func storageMount(descr string) string {
+	mount, _, _ := strings.Cut(descr, " Label:")
+	mount = strings.TrimSpace(mount)
+	for _, p := range pseudoMounts {
+		if mount == p || strings.HasPrefix(mount, p+"/") {
+			return ""
+		}
+	}
+	return mount
 }
 
 func guessRole(c *client, d *model.Device) model.DeviceRole {

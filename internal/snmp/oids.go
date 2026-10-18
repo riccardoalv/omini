@@ -35,9 +35,10 @@ const (
 	oidLldpRemManAddr          = "1.0.8802.1.1.2.1.4.2.1.3" // index: timeMark.localPortNum.remIndex.subtype.len.addr
 
 	// HOST-RESOURCES-MIB
-	oidHrProcessorLoad = "1.3.6.1.2.1.25.3.3.1.2"
-	oidHrStorage       = "1.3.6.1.2.1.25.2.3.1" // .2 type, .4 alloc units, .5 size, .6 used
-	oidHrStorageRAM    = ".1.3.6.1.2.1.25.2.1.2"
+	oidHrProcessorLoad    = "1.3.6.1.2.1.25.3.3.1.2"
+	oidHrStorage          = "1.3.6.1.2.1.25.2.3.1" // .2 type, .3 descr, .4 alloc units, .5 size, .6 used
+	oidHrStorageRAM       = ".1.3.6.1.2.1.25.2.1.2"
+	oidHrStorageFixedDisk = ".1.3.6.1.2.1.25.2.1.4"
 )
 
 // lldpCapabilities names the bits of LLDP's system capabilities, in order

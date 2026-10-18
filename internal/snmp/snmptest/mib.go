@@ -256,6 +256,10 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 	case d.MemPct != nil:
 		storage(1, "2", "Physical memory", 1024, 1000, uint64(*d.MemPct*10))
 	}
+	// Disks: fixed disks in 4 KiB units, indexed like Net-SNMP's (31 on).
+	for i, s := range d.Storage {
+		storage(31+i, "4", s.Mount, 4096, model.Deref(s.TotalBytes)/4096, model.Deref(s.UsedBytes)/4096)
+	}
 	return out
 }
 

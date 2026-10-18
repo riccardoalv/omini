@@ -321,3 +321,43 @@ func TestMemoryBytesFromTheRAMRow(t *testing.T) {
 		t.Fatalf("memory total %v, used %v, pct %v", got.MemTotalBytes, got.MemUsedBytes, got.MemPct)
 	}
 }
+
+// A NAS's volumes are hrStorageFixedDisk rows; RAM, virtual memory, empty
+// rows and pseudo file systems are not disks.
+func TestStorageFromFixedDisks(t *testing.T) {
+	const gib = 1 << 30
+	disks := []model.Storage{
+		{Mount: "/", TotalBytes: model.Ptr(uint64(2 * gib)), UsedBytes: model.Ptr(uint64(gib))},
+		{Mount: "/volume1", TotalBytes: model.Ptr(uint64(4000 * gib)), UsedBytes: model.Ptr(uint64(3800 * gib))},
+		{Mount: `C:\ Label:System  Serial Number 1a2b`, TotalBytes: model.Ptr(uint64(100 * gib)), UsedBytes: model.Ptr(uint64(10 * gib))},
+		{Mount: "/run"},
+		{Mount: "/dev/shm"},
+		{Mount: "/snap/core22/1380"},
+		{Mount: "/empty"}, // size 0
+	}
+	for i := range disks[3:6] {
+		disks[3+i].TotalBytes, disks[3+i].UsedBytes = model.Ptr(uint64(gib)), model.Ptr(uint64(gib))
+	}
+	d := model.Device{Key: "x", Name: "nas", MemPct: model.Ptr(50.0), Storage: disks}
+	pdus := snmptest.FromDevice(d, snmptest.Options{})
+	// Virtual memory (hrStorageVirtualMemory), not a disk.
+	for col, v := range map[int]int{4: 1024, 5: 100, 6: 10} {
+		pdus = append(pdus, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.25.2.3.1.%d.3", col), Type: gosnmp.Integer, Value: v})
+	}
+	pdus = append(pdus,
+		gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.25.2.3.1.2.3", Type: gosnmp.ObjectIdentifier, Value: ".1.3.6.1.2.1.25.2.1.3"},
+		gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.25.2.3.1.3.3", Type: gosnmp.OctetString, Value: "Virtual memory"})
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append([]model.Storage{}, disks[:3]...)
+	want[2].Mount = `C:\` // Windows: the label and serial number are not the mount
+	if !reflect.DeepEqual(got.Storage, want) {
+		t.Fatalf("storage: %+v", got.Storage)
+	}
+	if model.Deref(got.MemPct) != 50 {
+		t.Fatalf("memory: %v", got.MemPct)
+	}
+}
