@@ -119,3 +119,45 @@ func TestUserProfilesReplaceAndAdd(t *testing.T) {
 		t.Fatal("a broken profile must be reported")
 	}
 }
+
+// A sensor at 0 °C is a reading (an outdoor or cold-room probe); values out
+// of any sensor's range are what absent sensors report (-127, 255...).
+func TestTemperaturesKeepZeroAndDropJunk(t *testing.T) {
+	dir := t.TempDir()
+	profile := `id: lab-sensors
+match: {sys_object_id: [1.3.6.1.4.1.99999]}
+temperatures:
+  - { sensor: Outdoor, oid: 1.3.6.1.4.1.99999.1.0 }
+  - { sensor: Missing low, oid: 1.3.6.1.4.1.99999.2.0 }
+  - { sensor: Missing high, oid: 1.3.6.1.4.1.99999.3.0 }
+  - { sensor: Board, oid: 1.3.6.1.4.1.99999.4.0 }
+`
+	if err := os.WriteFile(filepath.Join(dir, "lab.yaml"), []byte(profile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _, _ = snmp.LoadProfiles() }()
+	if _, err := snmp.LoadProfiles(dir); err != nil {
+		t.Fatal(err)
+	}
+	pdus := append(snmptest.FromDevice(model.Device{Key: "x", Name: "lab"}, snmptest.Options{Enterprise: 99999}),
+		pdu("1.3.6.1.4.1.99999.1.0", gosnmp.Integer, 0),
+		pdu("1.3.6.1.4.1.99999.2.0", gosnmp.Integer, -127),
+		pdu("1.3.6.1.4.1.99999.3.0", gosnmp.Integer, 255),
+		pdu("1.3.6.1.4.1.99999.4.0", gosnmp.Integer, 45),
+	)
+	agent := snmptest.Start(t, "public", pdus)
+	d, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]float64{}
+	for _, x := range d.Temperatures {
+		got[x.Sensor] = x.Celsius
+	}
+	if len(got) != 2 || got["Board"] != 45 {
+		t.Fatalf("temperatures: %v", got)
+	}
+	if v, ok := got["Outdoor"]; !ok || v != 0 {
+		t.Fatalf("a 0 °C reading was dropped: %v", got)
+	}
+}

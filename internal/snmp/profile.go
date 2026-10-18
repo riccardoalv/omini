@@ -322,7 +322,11 @@ func (p Profile) apply(c *client, d *model.Device) {
 	for i := range p.Temperatures {
 		t := p.Temperatures[i]
 		f, ok := r.number(&t.Value)
-		if !ok || f <= -50 || f >= 200 { // sensors report 0 or junk when absent
+		// Absent sensors report values out of any sensor's range (-127,
+		// 255...): those are dropped. 0 is kept: it is a real reading (an
+		// outdoor or cold-room probe), and a profile that reads a column with
+		// zeros for empty slots combines it with walk: max.
+		if !ok || f <= -50 || f >= 200 {
 			continue
 		}
 		temp := model.Temperature{Sensor: t.Sensor, Celsius: math.Round(f*10) / 10}
