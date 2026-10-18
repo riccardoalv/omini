@@ -107,3 +107,29 @@ func TestNoAnswerToOminiWhileTheServerRuns(t *testing.T) {
 		t.Fatalf("stopped: %+v", got)
 	}
 }
+
+// No DHCP answer on a network whose router says its DHCP is off: nobody
+// should answer, no alert. Another network keeps it.
+func TestDHCPNoOfferOnANetworkWithoutDHCP(t *testing.T) {
+	rt := &model.Device{Networks: []model.Network{
+		{Vlan: 1, Gateway: model.Ptr("192.168.1.1/24"), Dhcp: &model.NetworkDhcp{Enabled: true}},
+		{Vlan: 20, Gateway: model.Ptr("192.168.20.1/24"), Dhcp: &model.NetworkDhcp{Enabled: false}},
+	}}
+	topo := topology.Topology{
+		Nodes:      []topology.Node{{ID: "dev:rt", Kind: topology.KindDevice, Label: "rt", Online: true, Device: rt}},
+		DhcpChecks: []model.DhcpCheck{{Interface: "eth0"}, {Interface: "eth1"}},
+		DhcpCheckAddrs: map[string][]string{
+			"eth0": {"", "192.168.1.10"},
+			"eth1": {"192.168.20.10"},
+		},
+	}
+	var got []string
+	for _, i := range Evaluate(Input{Topology: topo, Now: time.Unix(0, 0)}) {
+		if i.Rule == "dhcp_no_offer" {
+			got = append(got, i.Params["iface"].(string))
+		}
+	}
+	if len(got) != 1 || got[0] != "eth0" {
+		t.Fatalf("got %v", got)
+	}
+}

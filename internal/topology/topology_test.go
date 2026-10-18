@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1100,4 +1101,17 @@ func TestRoutedScanEnrichesTheClientOfThatAddress(t *testing.T) {
 		}
 	}
 	t.Fatal("no printer node")
+}
+
+// Each DHCP check keeps the addresses of the network it ran on.
+func TestDHCPCheckKeepsItsNetworksAddresses(t *testing.T) {
+	scan := model.Device{
+		Key: "net:192.168.20.0/24", Name: "Network 192.168.20.0/24",
+		Hosts:      []model.Host{{IP: "192.168.20.10"}},
+		DhcpChecks: []model.DhcpCheck{{Interface: "eth1"}},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{scan}}})
+	if len(topo.DhcpChecks) != 1 || !slices.Contains(topo.DhcpCheckAddrs["eth1"], "192.168.20.10") {
+		t.Fatalf("checks %+v, addresses %v", topo.DhcpChecks, topo.DhcpCheckAddrs)
+	}
 }

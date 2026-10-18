@@ -73,7 +73,7 @@ attention) and **info** (worth knowing).
 | `lan_scan` | warning | With Traffic flows, a device reached 50 or more services (address and port) on your network within a minute in the last hour. Omini's own host and routers are left out; only traffic that crosses the router is seen |
 | `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can reserve it on ([Reserve IPs](discovery.md#dns-and-dhcp-checks)) |
 | `iot_with_trusted` | info | Once the network uses VLANs, IoT devices (cameras, TVs, media players, speakers, smart home gear, appliances, air conditioners, solar inverters) share a network with servers, NAS, hypervisors, VMs or computers: one alert per network, listing both. Printers, game consoles, desk phones and phones are left out; a type you corrected counts as corrected, hidden devices do not count |
-| `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
+| `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered. Not when a router serves DHCP and its server runs, nor on a network whose router says its DHCP is off |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |

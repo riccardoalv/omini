@@ -181,6 +181,9 @@ type Topology struct {
 	// holds them may be merged into another or dropped from the map).
 	DhcpChecks []model.DhcpCheck `json:"dhcp_checks,omitempty"`
 	DnsChecks  []model.DnsCheck  `json:"dns_checks,omitempty"`
+	// DhcpCheckAddrs: addresses on the network each DHCP check ran on (by its
+	// interface), from the device that holds it: which network it asked on.
+	DhcpCheckAddrs map[string][]string `json:"-"`
 }
 
 // Attachment is where a client was last seen for sure: the access point it
@@ -309,6 +312,16 @@ func BuildWith(sources []Source, opts Options) Topology {
 		for _, d := range src.Devices {
 			t.DhcpChecks = append(t.DhcpChecks, d.DhcpChecks...)
 			t.DnsChecks = append(t.DnsChecks, d.DnsChecks...)
+			for _, c := range d.DhcpChecks {
+				if t.DhcpCheckAddrs == nil {
+					t.DhcpCheckAddrs = map[string][]string{}
+				}
+				addrs := append([]string{model.Deref(d.Host)}, d.IPs...)
+				for _, h := range d.Hosts {
+					addrs = append(addrs, h.IP)
+				}
+				t.DhcpCheckAddrs[c.Interface] = append(t.DhcpCheckAddrs[c.Interface], addrs...)
+			}
 		}
 	}
 	markLinks(&t)
