@@ -686,7 +686,7 @@ func (s *Server) updateInventory(w http.ResponseWriter, r *http.Request) {
 	case isNotFound(err):
 		writeError(w, http.StatusNotFound, "device not found")
 		return
-	case errors.Is(err, store.ErrNoteTooLong):
+	case errors.Is(err, store.ErrNoteTooLong), errors.Is(err, store.ErrNoSuchPerson):
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	case err != nil:

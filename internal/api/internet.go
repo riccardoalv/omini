@@ -52,10 +52,13 @@ func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	labels := nodeLabels(s.Collector.State().Topology)
 	// A device no longer on the map keeps its name from the inventory.
-	known := map[string]string{}
+	known, owners := map[string]string{}, map[string]int64{}
 	if inv, err := s.Store.ListInventory(r.Context()); err == nil {
 		for _, e := range inv {
 			known[e.ID] = cmp.Or(e.Alias, e.Label)
+			if e.OwnerID != 0 {
+				owners[e.ID] = e.OwnerID
+			}
 		}
 	}
 	out := make([]usageView, 0, len(list))
@@ -83,8 +86,13 @@ func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	people, err := s.Store.ListPeople(r.Context())
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	resp := map[string]any{
-		"devices": out, "total": total, "since": since, "seconds": int(now.Sub(since).Seconds()),
+		"devices": out, "people": peopleUsage(people, owners, out), "total": total, "since": since, "seconds": int(now.Sub(since).Seconds()),
 		"series": series, "step_s": int(step.Seconds()), "now": s.rateNow(r, now),
 		"countries": countries(places), "orgs": orgs(places), "home": s.home(),
 		"listening": s.flowsListening(), "exporters": s.flowExporters(),
