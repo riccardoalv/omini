@@ -168,3 +168,42 @@ func TestHighSwap(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+// A gateway not tied by name to a WAN interface is told on its router; one a
+// WAN node carries is told there only.
+func TestWANGatewayWithoutWANInterface(t *testing.T) {
+	gw := func(name, iface string, s model.GatewayStatus) model.Gateway {
+		return model.Gateway{Name: name, Interface: model.Ptr(iface), Status: s}
+	}
+	dev := &model.Device{
+		Interfaces: []model.Interface{{Name: "igb0", Wan: model.Ptr(true)}, {Name: "igb1"}},
+		Gateways: []model.Gateway{
+			gw("WAN_DHCP", "igb0", model.GatewayStatusDown),  // on the WAN node
+			gw("LTE", "ue0", model.GatewayStatusDown),        // an interface not marked WAN
+			gw("VPN_GW", "wg0", model.GatewayStatusDegraded), // degraded
+			gw("SPARE", "igb2", model.GatewayStatusUp),
+			{Name: "NOIF", Status: model.GatewayStatusDown}, // no interface at all
+		},
+	}
+	fw := topology.Node{
+		ID: "dev:fw", Kind: topology.KindDevice, Label: "fw", Online: true, Device: dev,
+		Reports: []topology.Report{{IntegrationID: 1, Device: dev}},
+	}
+	wan := topology.Node{ID: "wan:dev:fw:igb0", Kind: topology.KindWAN, Label: "WAN", WAN: &topology.WANLink{
+		Interface: "igb0", Gateways: []model.Gateway{dev.Gateways[0]},
+	}}
+	in := Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{fw, wan}}}
+	down := sortedKeys(keysOf(t, "wan_down", in))
+	want := []string{"wan_down|dev:fw|LTE", "wan_down|dev:fw|NOIF", "wan_down|wan:dev:fw:igb0|WAN_DHCP"}
+	if len(down) != len(want) {
+		t.Fatalf("down: %v", down)
+	}
+	for i := range want {
+		if down[i] != want[i] {
+			t.Fatalf("down: %v", down)
+		}
+	}
+	if d := keysOf(t, "wan_degraded", in); len(d) != 1 || d["wan_degraded|dev:fw|VPN_GW"] != Warning {
+		t.Fatalf("degraded: %v", d)
+	}
+}

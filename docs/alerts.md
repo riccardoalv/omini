@@ -23,8 +23,8 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `device_offline` | critical | A device read by an integration is offline: its integration failed **two rounds in a row** (one failed round, a device busy for a moment, shows it offline on the map but is no alert yet). The integration's error is shown |
 | `integration_failed` | critical | An integration fails two rounds in a row and none of its devices is on the map yet |
-| `wan_down` | critical | A WAN gateway is down |
-| `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it) |
+| `wan_down` | critical | A WAN gateway is down. A gateway the router does not tie by name to one of its WAN interfaces is told on the router |
+| `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it); on the router too when it is not tied to a WAN interface |
 | `device_rebooted` | warning | A device's uptime went back: it restarted. Stays open for 1 hour |
 | `discovery_limited` | warning | The network scan is set up but cannot do everything where Omini runs (no host network, no multicast, no ping). See [What each method needs](discovery.md#what-each-method-needs) |
 | `vpn_down` | warning | A VPN peer (tunnel) that was connected in the last 24 hours is not now. Peers that have not connected in the last 24 hours (a phone that connects now and then) are not told |
