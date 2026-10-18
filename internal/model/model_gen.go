@@ -2001,8 +2001,8 @@ type Radio struct {
 	// Transmit power.
 	TxPowerDBM *float64 `json:"tx_power_dbm,omitempty,omitzero" yaml:"tx_power_dbm,omitempty"`
 
-	// Channel width.
-	WidthMhz *RadioWidthMhz `json:"width_mhz,omitempty,omitzero" yaml:"width_mhz,omitempty"`
+	// Channel width (20, 40, 80, 160 or 320).
+	WidthMhz *uint16 `json:"width_mhz,omitempty,omitzero" yaml:"width_mhz,omitempty"`
 }
 
 // A radio to move to another channel (wifi.channel).
@@ -2044,36 +2044,6 @@ func (j *RadioChange) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type RadioWidthMhz int64
-
-var enumValues_RadioWidthMhz = []interface{}{
-	20,
-	40,
-	80,
-	160,
-	320,
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (j *RadioWidthMhz) UnmarshalJSON(value []byte) error {
-	var v int64
-	if err := json.Unmarshal(value, &v); err != nil {
-		return err
-	}
-	var ok bool
-	for _, expected := range enumValues_RadioWidthMhz {
-		if reflect.DeepEqual(v, expected) {
-			ok = true
-			break
-		}
-	}
-	if !ok {
-		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_RadioWidthMhz, v)
-	}
-	*j = RadioWidthMhz(v)
-	return nil
-}
-
 // UnmarshalJSON implements json.Unmarshaler.
 func (j *Radio) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
@@ -2096,6 +2066,12 @@ func (j *Radio) UnmarshalJSON(value []byte) error {
 	}
 	if plain.Channel != nil && 1 > *plain.Channel {
 		return fmt.Errorf("field %s: must be >= %v", "channel", 1)
+	}
+	if plain.WidthMhz != nil && 320 < *plain.WidthMhz {
+		return fmt.Errorf("field %s: must be <= %v", "width_mhz", 320)
+	}
+	if plain.WidthMhz != nil && 20 > *plain.WidthMhz {
+		return fmt.Errorf("field %s: must be >= %v", "width_mhz", 20)
 	}
 	*j = Radio(plain)
 	return nil
