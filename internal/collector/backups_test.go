@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/riccardoalv/omini/internal/collector"
+	"github.com/riccardoalv/omini/internal/model"
 )
 
 // The firewall is backed up after a round, once a day, and after Omini
@@ -67,5 +68,28 @@ func TestConfigurationBackups(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no config_changed alert: %+v", coll.State().Alerts)
+	}
+}
+
+// A site's settings are backed up on one device (the gateway) while Omini
+// changes them through another of the same integration (a switch): the new
+// version is Omini's, not a change made outside it.
+func TestASiteChangeThroughAnotherDeviceIsOminis(t *testing.T) {
+	coll, s, st := switchNetwork(t)
+	ctx := context.Background()
+	fw := "dev:" + string(fwMAC)
+	s.config = "site\n"
+	coll.AfterRound(ctx)
+	if _, err := coll.Apply(ctx, collector.ChangeRequest{
+		NodeID: "dev:" + string(swMAC), Kind: model.ChangeKindPortEnabled, Port: "Port 2", Value: false,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.config += "port 2 off\n"
+	s.mu.Unlock()
+	coll.AfterRound(ctx)
+	if list, _ := st.Backups(ctx, fw); len(list) != 2 || !list[0].ByOmini {
+		t.Fatalf("the site's change counted as made outside Omini: %+v", list)
 	}
 }

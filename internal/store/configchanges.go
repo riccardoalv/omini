@@ -75,3 +75,17 @@ func (s *Store) ConfigChanges(ctx context.Context, nodeID string, limit int) ([]
 	}
 	return out, rows.Err()
 }
+
+// ChangedByOmini reports whether Omini changed a node's configuration after
+// since: a change applied on the node, or through the integration that backs
+// it up (a UniFi or Omada site's settings live in one device's backup, but
+// Omini changes them through whichever device of the site). Wake-on-LAN
+// changes nothing.
+func (s *Store) ChangedByOmini(ctx context.Context, nodeID string, integrationID int64, since time.Time) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM config_changes
+		WHERE (node_id = ? OR integration_id = ?) AND error = '' AND kind != 'wol.send' AND at > ?`,
+		nodeID, integrationID, since.Unix()).Scan(&n)
+	return n > 0, err
+}
