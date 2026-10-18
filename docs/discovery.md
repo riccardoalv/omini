@@ -105,7 +105,9 @@ its leases.
 The network scan sweeps IPv4 networks only (an IPv6 /64 is too large to
 sweep); IPv6 comes from the integrations. A device's IPv6 addresses are what
 it reports itself (its interfaces) and what the routers see: their **IPv6
-neighbor tables (NDP)**, read like ARP. A device seen only in NDP is on the
+neighbor tables (NDP)**, read like ARP, and their **DHCPv6 leases** (whose
+names name devices like IPv4 leases do; a lease alone, as in IPv4, does not
+make a device present). A device seen only in NDP is on the
 map like one seen only in ARP, under the router that sees it.
 
 Global and ULA addresses identify a device like an IPv4 address: a device an

@@ -1034,10 +1034,13 @@ func (b *builder) collectClientsOf(id string, d *model.Device,
 	}
 	b.collectNDP(id, d)
 	for _, l := range d.DhcpLeases {
-		if h := model.Deref(l.Hostname); h != "" {
+		v6 := IsIPv6(l.IP) // a DHCPv6 lease: its address goes to IPs6, its name names the client too
+		if h := model.Deref(l.Hostname); h != "" && (!v6 || hostnames[l.MAC] == "") {
 			hostnames[l.MAC] = h
 		}
-		leaseIPs[l.MAC] = l.IP
+		if !v6 {
+			leaseIPs[l.MAC] = l.IP
+		}
 	}
 	for _, h := range d.Hosts {
 		if h.MAC != nil && !h.MAC.IsGroup() {

@@ -150,7 +150,7 @@ func (b *builder) neighborOf(arp map[model.MACAddress]arpSeen, m model.MACAddres
 	return a, ok
 }
 
-// collectNDP records a device's IPv6 neighbors.
+// collectNDP records a device's IPv6 neighbors and DHCPv6 leases.
 func (b *builder) collectNDP(id string, d *model.Device) {
 	for _, a := range d.Ndp {
 		m := model.NormMAC(string(a.MAC))
@@ -161,6 +161,9 @@ func (b *builder) collectNDP(id string, d *model.Device) {
 		if _, ok := b.ndp[m]; !ok {
 			b.ndp[m] = arpSeen{node: id, iface: model.Deref(a.Interface)}
 		}
+	}
+	for _, l := range d.DhcpLeases {
+		b.seen6(l.MAC, l.IP)
 	}
 }
 

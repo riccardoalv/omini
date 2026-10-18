@@ -116,3 +116,28 @@ func TestScanByIPv6EnrichesTheNDPClient(t *testing.T) {
 		t.Fatalf("phone = %+v", p)
 	}
 }
+
+// A DHCPv6 lease gives its address to the node and its name names it, like
+// an IPv4 lease; it never takes the IPv4 address's place, and alone it makes
+// nothing present.
+func TestDHCPv6Leases(t *testing.T) {
+	r := router6()
+	r.DhcpLeases = []model.DhcpLease{
+		{IP: "2001:db8:1::abc", MAC: "f4:f5:d8:00:00:06", Hostname: model.Ptr("galaxy-s23")},
+		{IP: "192.168.1.20", MAC: "00:11:32:aa:00:01", Hostname: model.Ptr("nas")},
+		{IP: "2001:db8:1::21", MAC: "00:11:32:aa:00:01", Hostname: model.Ptr("nas-v6")},
+		{IP: "2001:db8:1::77", MAC: "00:24:e4:99:00:01", Hostname: model.Ptr("gone")},
+	}
+	nodes := build6(r)
+	phone := nodes["mac:f4:f5:d8:00:00:06"]
+	if phone.Label != "galaxy-s23" || phone.IP != "" || !slices.Equal(phone.IPs6, []string{"2001:db8:1::99", "2001:db8:1::abc", "fe80::1"}) {
+		t.Fatalf("phone = %q %q %v", phone.Label, phone.IP, phone.IPs6)
+	}
+	nas := nodes["mac:00:11:32:aa:00:01"]
+	if nas.Label != "nas" || nas.IP != "192.168.1.20" || !slices.Contains(nas.IPs6, "2001:db8:1::21") {
+		t.Fatalf("NAS = %q %q %v", nas.Label, nas.IP, nas.IPs6)
+	}
+	if _, ok := nodes["mac:00:24:e4:99:00:01"]; ok {
+		t.Fatal("a DHCPv6 lease alone made a device present")
+	}
+}
