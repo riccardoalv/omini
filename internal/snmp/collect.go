@@ -101,6 +101,10 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 		return d, err
 	}
 	log := slog.With("snmp", host)
+	var chassis model.MACAddress // LLDP's, the first MAC when there is one
+	if len(d.MACs) > 0 {
+		chassis = d.MACs[0]
+	}
 
 	// Everything below is optional: agents implement different subsets of MIBs.
 	ifNames, err := collectInterfaces(c, &d)
@@ -142,12 +146,48 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 			collectFDBPerVLAN(ctx, c, t, perVLAN, &d, ifNames)
 		}
 	}
-	// Stable identity: the chassis MAC (LLDP) or first interface MAC, else the host.
-	d.Key = host
-	if len(d.MACs) > 0 {
-		d.Key = string(d.MACs[0])
-	}
+	d.Key = deviceKey(c, &d, chassis, host)
 	return d, nil
+}
+
+// deviceKey is the device's stable identity, which must not change from one
+// round to the next: the LLDP chassis MAC (what neighbors know it by), else
+// the bridge address (BRIDGE-MIB dot1dBaseBridgeAddress), else the lowest
+// MAC of its Ethernet ports, else of any interface, else the host. Not the
+// first interface's MAC: a VLAN or tunnel interface added at a lower ifIndex
+// would change it.
+func deviceKey(c *client, d *model.Device, chassis model.MACAddress, host string) string {
+	if chassis != "" {
+		return string(chassis)
+	}
+	if r, err := c.get(oidBaseBridgeAddress); err == nil {
+		if mac := model.MACFromBytes(pduBytes(r[oidBaseBridgeAddress])); mac != "" {
+			if !slices.Contains(d.MACs, mac) {
+				d.MACs = append(d.MACs, mac)
+			}
+			return string(mac)
+		}
+	}
+	var ethernet, lowest model.MACAddress
+	for _, iface := range d.Interfaces {
+		mac := model.Deref(iface.MAC)
+		if mac == "" {
+			continue
+		}
+		if lowest == "" || mac < lowest {
+			lowest = mac
+		}
+		if model.Deref(iface.Type) == model.InterfaceTypeEthernet && (ethernet == "" || mac < ethernet) {
+			ethernet = mac
+		}
+	}
+	switch {
+	case ethernet != "":
+		return string(ethernet)
+	case lowest != "":
+		return string(lowest)
+	}
+	return host
 }
 
 func collectSystem(c *client, host string) (model.Device, error) {

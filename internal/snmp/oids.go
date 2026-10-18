@@ -21,10 +21,11 @@ const (
 	oidIfStackStatus   = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
 
 	// BRIDGE-MIB / Q-BRIDGE-MIB
-	oidBasePortIfIndex = "1.3.6.1.2.1.17.1.4.1.2"     // bridge port -> ifIndex
-	oidDot1dTpFdb      = "1.3.6.1.2.1.17.4.3.1"       // .2 port, .3 status; index: mac
-	oidDot1qTpFdb      = "1.3.6.1.2.1.17.7.1.2.2.1"   // .2 port, .3 status; index: fdbId.mac
-	oidVlanFdbID       = "1.3.6.1.2.1.17.7.1.4.2.1.3" // dot1qVlanFdbId; index: timeMark.vlan
+	oidBaseBridgeAddress = "1.3.6.1.2.1.17.1.1.0"       // dot1dBaseBridgeAddress
+	oidBasePortIfIndex   = "1.3.6.1.2.1.17.1.4.1.2"     // bridge port -> ifIndex
+	oidDot1dTpFdb        = "1.3.6.1.2.1.17.4.3.1"       // .2 port, .3 status; index: mac
+	oidDot1qTpFdb        = "1.3.6.1.2.1.17.7.1.2.2.1"   // .2 port, .3 status; index: fdbId.mac
+	oidVlanFdbID         = "1.3.6.1.2.1.17.7.1.4.2.1.3" // dot1qVlanFdbId; index: timeMark.vlan
 
 	// LLDP-MIB (802.1AB-2005)
 	oidLldpLocChassisIDSubtype = "1.0.8802.1.1.2.1.3.1.0"

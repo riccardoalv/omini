@@ -238,3 +238,33 @@ func TestProbeRetriesALostPacket(t *testing.T) {
 		t.Fatalf("probe = %q %v", community, ok)
 	}
 }
+
+// Without LLDP the key must not depend on interface order: the bridge
+// address when the switch has one, else its lowest Ethernet MAC.
+func TestKeyWithoutLLDPIsStable(t *testing.T) {
+	sw := model.Device{Key: "sw", Name: "sw", Interfaces: []model.Interface{
+		{Name: "vlan1", Type: model.Ptr(model.InterfaceTypeVlan), MAC: model.Ptr[model.MACAddress]("02:00:00:00:00:01")},
+		{Name: "1/1", Type: model.Ptr(model.InterfaceTypeEthernet), MAC: model.Ptr[model.MACAddress]("00:11:22:33:44:66")},
+		{Name: "1/2", Type: model.Ptr(model.InterfaceTypeEthernet), MAC: model.Ptr[model.MACAddress]("00:11:22:33:44:55")},
+	}}
+	key := func(extra ...gosnmp.SnmpPDU) string {
+		agent := snmptest.Start(t, "public", append(snmptest.FromDevice(sw, snmptest.Options{}), extra...))
+		d, err := snmp.Collect(context.Background(), target(agent, "public"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d.Key
+	}
+	if k := key(); k != "00:11:22:33:44:55" {
+		t.Fatalf("lowest Ethernet MAC: %s", k)
+	}
+	bridge := gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.17.1.1.0", Type: gosnmp.OctetString, Value: []byte{0, 0x11, 0x22, 0x33, 0x44, 0x50}}
+	if k := key(bridge); k != "00:11:22:33:44:50" {
+		t.Fatalf("bridge address: %s", k)
+	}
+	// With LLDP the chassis MAC stays the key.
+	sw.Key = "00:11:22:33:44:77"
+	if k := key(bridge); k != "00:11:22:33:44:77" {
+		t.Fatalf("LLDP chassis: %s", k)
+	}
+}
