@@ -1041,6 +1041,39 @@ func TestSiteToSiteVPNJoinsTheBranch(t *testing.T) {
 	}
 }
 
+// A tunnel whose peer is not connected is down (drawn dashed in red).
+func TestVPNLinkDownWhenItsPeerIsNotConnected(t *testing.T) {
+	for _, connected := range []bool{true, false} {
+		fw := model.Device{
+			Key: "58:9c:fc:00:00:01", Name: "fw", MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+			Interfaces: []model.Interface{{Name: "wan", Wan: model.Ptr(true), IPs: []string{"198.51.100.2/24"}}, {Name: "lan", IPs: []string{"192.168.1.1/24"}}},
+			VpnPeers: []model.VpnPeer{
+				{Name: "branch", Protocol: model.VpnPeerProtocolIpsec, Endpoint: model.Ptr("203.0.113.200"), Connected: model.Ptr(connected)},
+			},
+		}
+		br := model.Device{
+			Key: "48:8f:5a:00:00:01", Name: "br-gw", Host: model.Ptr("10.20.0.1"), MACs: []model.MACAddress{"48:8f:5a:00:00:01"}, Role: model.Ptr(model.DeviceRoleRouter),
+			Interfaces: []model.Interface{{Name: "ether1", Wan: model.Ptr(true), IPs: []string{"203.0.113.200/24"}}, {Name: "bridge", IPs: []string{"10.20.0.1/24"}}},
+		}
+		topo := topology.Build([]topology.Source{
+			{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+			{IntegrationID: 2, Online: true, Devices: []model.Device{br}},
+		})
+		found := false
+		for _, e := range topo.Edges {
+			if e.Kind == topology.EdgeVPN {
+				found = true
+				if e.Down == connected {
+					t.Errorf("connected %v: down %v", connected, e.Down)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("no VPN link: %+v", topo.Edges)
+		}
+	}
+}
+
 // A printer in another VLAN: the firewall's ARP knows its MAC, the scan of
 // that routed network only its address — with its name, ports and page title.
 // The client takes them.

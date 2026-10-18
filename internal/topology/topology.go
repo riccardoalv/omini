@@ -166,6 +166,8 @@ type Edge struct {
 	Lag int `json:"lag,omitempty"`
 	// Standby: spanning tree blocks one of its ports (a redundant link).
 	Standby bool `json:"standby,omitempty"`
+	// Down: a VPN tunnel whose peer is not connected (no end says it is).
+	Down bool `json:"down,omitempty"`
 }
 
 type Topology struct {

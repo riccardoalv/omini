@@ -96,7 +96,7 @@ Marks on a node:
 | Line | Meaning |
 |---|---|
 | Solid | Confirmed: LLDP/CDP/MNDP neighbors, a switch's MAC table, or a link an integration declared (a VM on its host) |
-| Dashed | Inferred (ARP, a MAC seen behind an uplink), a site-to-site VPN tunnel between two routers, or a link spanning tree keeps on standby (one of its ports is blocked) |
+| Dashed | Inferred (ARP, a MAC seen behind an uplink), a site-to-site VPN tunnel between two routers (purple; red when its peer is not connected), or a link spanning tree keeps on standby (one of its ports is blocked) |
 | Dotted | Wi-Fi |
 
 A link made of a LAG (bond, aggregate) shows its number of ports and their

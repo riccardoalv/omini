@@ -122,6 +122,7 @@ func (b *builder) addVPNLinks(managed []string) {
 			}
 		}
 	}
+	up, down := map[string]bool{}, map[string]bool{} // edge key → a peer on it says so
 	for _, id := range managed {
 		for _, d := range b.sources[id] {
 			for _, peer := range d.VpnPeers {
@@ -134,12 +135,21 @@ func (b *builder) addVPNLinks(managed []string) {
 					for _, a := range addrs[other] {
 						if (endpoint.IsValid() && a == endpoint) || (netErr == nil && network.Bits() < 32 && network.Contains(a)) {
 							b.addEdge(id, "", other, "", EdgeVPN, 0)
+							if key := min(id, other) + "|" + max(id, other); peer.Connected != nil {
+								up[key] = up[key] || *peer.Connected
+								down[key] = down[key] || !*peer.Connected
+							}
 							goto next
 						}
 					}
 				}
 			next:
 			}
+		}
+	}
+	for key := range down {
+		if e := b.edges[key]; e != nil && e.Kind == EdgeVPN && !up[key] {
+			e.Down = true
 		}
 	}
 }

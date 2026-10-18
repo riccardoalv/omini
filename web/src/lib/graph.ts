@@ -143,6 +143,8 @@ export interface EdgeLook {
   dotted: boolean
   /** A site-to-site VPN tunnel between two routers (another site). */
   vpn: boolean
+  /** A VPN tunnel that is down (its peer is not connected): drawn dashed in red. */
+  vpnDown: boolean
   /** An infrastructure link negotiated below 1 Gbps: likely a bad cable or port. */
   slow: boolean
 }
@@ -160,6 +162,7 @@ export function edgeLook(edge: TopoEdge, source?: TopoNode, target?: TopoNode): 
     dashed: edge.kind === 'inferred' || edge.kind === 'vpn' || !!edge.standby,
     dotted: edge.kind === 'wifi',
     vpn: edge.kind === 'vpn',
+    vpnDown: edge.kind === 'vpn' && !!edge.down,
     slow: infra && speed > 0 && speed < 1000 && edge.kind !== 'vpn',
   }
 }

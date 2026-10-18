@@ -563,6 +563,9 @@ onBeforeUnmount(() => {
   stroke: #a371f7;
   stroke-dasharray: 8 5;
 }
+.flow :deep(.vue-flow__edge.vpn-down .vue-flow__edge-path) {
+  stroke: var(--danger);
+}
 .flow :deep(.vue-flow__edge.slow .vue-flow__edge-path) {
   stroke: var(--warn);
 }

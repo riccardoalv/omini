@@ -140,6 +140,7 @@ export function useFlowElements(options: {
         class: {
           slow: look.slow,
           vpn: look.vpn,
+          'vpn-down': look.vpnDown,
           offline: target ? !target.online : false,
           'net-dim': !!inNet.value && !(inNet.value.has(e.source) && inNet.value.has(e.target)),
         },
