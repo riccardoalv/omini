@@ -126,10 +126,11 @@ To use it:
    `public` is the default.
 3. For **SNMP v3**, fill in the **SNMP v3** group: user, authentication
    (none, MD5, SHA-1, SHA-224, SHA-256, SHA-384 or SHA-512) with its password,
-   and privacy (none, DES, AES-128, AES-192 or AES-256) with its password. v3
-   is tried before the communities. Omini remembers which credential each host
-   answered to, and keeps it when a later probe gets no answer (while that
-   credential is still in the settings).
+   and privacy (none, DES, AES-128, AES-192 or AES-256, and the Cisco-style
+   AES-192-C and AES-256-C) with its password. v3 is tried before the
+   communities. Omini remembers which credential each host answered to, and
+   keeps it when a later probe gets no answer (while that credential is still
+   in the settings).
 4. To **enable and disable ports** and **change VLANs** of SNMP devices from
    the map, set the **SNMP write community** (the device's "read-write"
    community). A device that answered to the v3 user is written with that

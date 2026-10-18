@@ -5,11 +5,13 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/snmp"
 	"github.com/riccardoalv/omini/internal/snmp/snmptest"
 )
 
@@ -230,5 +232,29 @@ func TestAFailedProbeKeepsTheCredential(t *testing.T) {
 	clock = clock.Add(time.Minute)
 	if !read() {
 		t.Fatal("the switch was forgotten until the next deep scan")
+	}
+}
+
+// The SNMP fields say what writing does (ports and VLANs), and offer every
+// v3 privacy protocol the client accepts.
+func TestSNMPFieldsMatchWhatItDoes(t *testing.T) {
+	for _, f := range fields() {
+		switch f.Key {
+		case "snmp", "snmp_write_community":
+			if !strings.Contains(model.Deref(f.Help), "VLANs") {
+				t.Errorf("%s does not say it changes VLANs: %s", f.Key, model.Deref(f.Help))
+			}
+		case "snmp_v3_priv":
+			for _, o := range []string{"none", "des", "aes", "aes192", "aes256", "aes192c", "aes256c"} {
+				if !slices.Contains(f.Options, o) {
+					t.Errorf("privacy %s is not offered", o)
+				}
+			}
+			for _, o := range f.Options {
+				if err := (&snmp.V3{User: "u", Auth: "sha", Priv: o}).Check(); err != nil {
+					t.Errorf("privacy %s is offered but refused: %v", o, err)
+				}
+			}
+		}
 	}
 }
