@@ -110,15 +110,19 @@ twice); the hosts that answer are read in full on every round:
 |---|---|
 | Name, description, uptime, vendor | `SNMPv2-MIB` |
 | Ports: name, status (enabled or disabled), speed, MAC, byte and error counters | `IF-MIB` |
+| Link aggregations: their member ports, the aggregate each port is in | `IF-MIB` (`ifStackTable`), `IEEE8023-LAG-MIB` |
 | Neighbors | `LLDP-MIB` |
 | MAC table (which device is on which port, VLAN) | `BRIDGE-MIB`, `Q-BRIDGE-MIB` |
+| VLANs: names, each port's native and tagged VLANs | `Q-BRIDGE-MIB` |
+| Spanning tree: each port's state, the root bridge | `BRIDGE-MIB` |
 | ARP | `IP-MIB` |
-| CPU, memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
+| CPU and memory | `HOST-RESOURCES-MIB`, when the agent has it (a profile's vendor OIDs win) |
+| Vendor CPU and memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
 
 To use it:
 
 1. Enable SNMP on the device, with a read-write community (or a v3 user
-   allowed to write) to enable and disable its ports from Omini, or
+   allowed to write) to change its ports and VLANs from Omini, or
    read-only for the map alone. Enable **LLDP** too if it has it:
    links between switches are then confirmed instead of inferred.
 2. In **Integrations → Network scan**, set **SNMP communities**: the
@@ -146,11 +150,12 @@ Communities and passwords are stored encrypted and never shown again.
 
 ### SNMP profiles
 
-Standard MIBs do not say a device's CPU, memory or temperatures. **Profiles**
-add them: YAML files matched by `sysObjectID`, `sysDescr` or an OID that
-exists. Omini ships profiles for Net-SNMP (Linux, with lm-sensors), MikroTik,
-Cisco IOS, Juniper, FortiGate, Synology, QNAP and HPE Aruba. You can add your
-own or replace a shipped one in `<data dir>/profiles/`. The format is in
+Standard MIBs do not say a device's temperatures or firmware, and many devices
+leave `HOST-RESOURCES-MIB` (CPU and memory) out. **Profiles** add them: YAML
+files matched by `sysObjectID`, `sysDescr` or an OID that exists. Omini ships
+profiles for Net-SNMP (Linux, with lm-sensors), MikroTik, Cisco IOS, Juniper,
+FortiGate, Synology, QNAP and HPE Aruba. You can add your own or replace a
+shipped one in `<data dir>/profiles/`. The format is in
 [SNMP profiles](snmp-profiles.md).
 
 ## nmap
