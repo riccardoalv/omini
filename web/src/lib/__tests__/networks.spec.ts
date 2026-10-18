@@ -132,6 +132,63 @@ describe('network groups', () => {
     expect([...lan!.members]).toEqual(['phone'])
   })
 
+  it("uses a router's networks (VLAN and gateway) for membership by address", () => {
+    const rt: TopoNode = {
+      id: 'rt',
+      kind: 'device',
+      label: 'rt',
+      online: true,
+      device: {
+        key: 'rt',
+        name: 'rt',
+        networks: [
+          { vlan: 1, name: 'LAN', gateway: '192.168.1.1/24' },
+          { vlan: 30, interface: 'opt3', gateway: '192.168.30.1/24' },
+        ],
+      },
+    }
+    expect(networkSubnets([rt]).map((s) => [s.cidr, s.vlan, s.label])).toEqual([
+      ['192.168.1.0/24', 1, 'LAN'],
+      ['192.168.30.0/24', 30, 'opt3'],
+    ])
+    const groups = groupNetworks(
+      [rt, client('tv', '192.168.30.20'), client('pc', '192.168.1.20')],
+      [],
+      new Set(),
+      'inclusive',
+    )
+    expect(groups.find((g) => g.key === 'subnet:192.168.30.0/24')?.members.has('tv')).toBe(true)
+  })
+
+  it("puts a Wi-Fi client in its SSID's VLAN", () => {
+    const ap: TopoNode = {
+      id: 'ap',
+      kind: 'device',
+      label: 'ap',
+      online: true,
+      device: {
+        key: 'ap',
+        name: 'ap',
+        wifi_networks: [{ ssid: 'Home' }, { ssid: 'Guest', vlan: 20 }],
+      },
+    }
+    const guest: TopoNode = { ...client('guest'), ssid: 'Guest' }
+    const home: TopoNode = { ...client('home'), ssid: 'Home' }
+    const all = [...nodes, ap, guest, home]
+    const wifi: TopoEdge[] = [
+      ...edges,
+      { id: 'w0', source: 'sw', target: 'ap', source_port: 'Port 1', kind: 'fdb' },
+      { id: 'w1', source: 'ap', target: 'guest', kind: 'wifi' },
+      { id: 'w2', source: 'ap', target: 'home', kind: 'wifi' },
+    ]
+    for (const mode of ['inclusive', 'exclusive'] as const) {
+      const groups = groupNetworks(all, wifi, new Set(), mode)
+      const in20 = groups.find((g) => g.key === 'vlan:20')!.members
+      expect(in20.has('guest')).toBe(true)
+      expect(in20.has('home')).toBe(false)
+    }
+  })
+
   it('makes none for a network with a single subnet', () => {
     const flat: TopoNode = {
       ...fw,

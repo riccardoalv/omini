@@ -390,9 +390,12 @@ with its color, address range and number of devices. A click on one
 closes to show it); a click on it again, or the × next to the menu, clears
 it. What is highlighted:
 
-- devices with an interface in it,
+- devices with an interface in it, or an address in a network a router
+  reports (its VLAN and gateway),
 - links whose port carries it (untagged or tagged),
 - clients seen in it in a MAC table,
+- Wi-Fi clients of an SSID that puts its clients in it (as their access
+  point, or its controller, reports the SSID's VLAN),
 - and what hangs below a device that is only in that network.
 
 A router with addresses in several networks lights up alone, without
