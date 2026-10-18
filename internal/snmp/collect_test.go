@@ -506,3 +506,38 @@ func TestDuplexFromEtherLikeMIB(t *testing.T) {
 		}
 	}
 }
+
+// TestLLDPIPv6ManagementAddress: a neighbor that gives only an IPv6
+// management address is reached by it; IPv4 is preferred when both are
+// given, and a link-local one is no address.
+func TestLLDPIPv6ManagementAddress(t *testing.T) {
+	mac := func(s string) *model.MACAddress { return model.Ptr(model.MACAddress(s)) }
+	sw := model.Device{
+		Key: "aa:bb:cc:00:00:01", Name: "sw",
+		Interfaces: []model.Interface{{Name: "p1"}, {Name: "p2"}, {Name: "p3"}},
+		Neighbors: []model.Neighbor{
+			{LocalPort: "p1", RemoteMAC: mac("aa:bb:cc:00:00:02"), RemoteIP: model.Ptr("2001:db8::2")},
+			{LocalPort: "p2", RemoteMAC: mac("aa:bb:cc:00:00:03"), RemoteIP: model.Ptr("10.0.0.3")},
+			{LocalPort: "p3", RemoteMAC: mac("aa:bb:cc:00:00:04"), RemoteIP: model.Ptr("fe80::4")},
+		},
+	}
+	pdus := snmptest.FromDevice(sw, snmptest.Options{})
+	// p2 also gives an IPv6 address.
+	pdus = append(pdus, gosnmp.SnmpPDU{
+		Name: ".1.0.8802.1.1.2.1.4.2.1.3.0.2.2.2.16.32.1.13.184.0.0.0.0.0.0.0.0.0.0.0.3", Type: gosnmp.Integer, Value: 2,
+	})
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"p1": "2001:db8::2", "p2": "10.0.0.3", "p3": ""}
+	for _, nb := range got.Neighbors {
+		if model.Deref(nb.RemoteIP) != want[nb.LocalPort] {
+			t.Errorf("%s: %q, want %q", nb.LocalPort, model.Deref(nb.RemoteIP), want[nb.LocalPort])
+		}
+	}
+	if len(got.Neighbors) != 3 {
+		t.Errorf("neighbors: %+v", got.Neighbors)
+	}
+}

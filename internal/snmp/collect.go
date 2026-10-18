@@ -784,17 +784,7 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 		return "port" + num
 	}
 
-	mgmt := map[string]string{} // timeMark.localPort.remIndex -> IPv4
-	if rows, err := c.walk(oidLldpRemManAddr); err == nil {
-		for idx := range rows {
-			n := splitOID(idx)
-			// timeMark.localPort.remIndex.subtype(1=ipv4).len(4).a.b.c.d
-			if len(n) == 9 && n[3] == 1 && n[4] == 4 {
-				key := fmt.Sprintf("%d.%d.%d", n[0], n[1], n[2])
-				mgmt[key] = fmt.Sprintf("%d.%d.%d.%d", n[5], n[6], n[7], n[8])
-			}
-		}
-	}
+	mgmt := lldpManagementAddrs(c)
 
 	t := table(rem)
 	for idx := range t[5] { // lldpRemChassisId
@@ -812,7 +802,8 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 				nb.RemoteMAC = &mac
 			}
 		case chassisSubtypeNetAddr:
-			if b := pduBytes(t[5][idx]); len(b) == 5 && b[0] == 1 {
+			// An address family number (1 IPv4, 2 IPv6) and the address.
+			if b := pduBytes(t[5][idx]); (len(b) == 5 && b[0] == 1) || (len(b) == 17 && b[0] == 2) {
 				nb.RemoteIP = model.Ptr(net.IP(b[1:]).String())
 			}
 		}
@@ -847,6 +838,41 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 	}
 	sort.Slice(d.Neighbors, func(a, b int) bool { return d.Neighbors[a].LocalPort < d.Neighbors[b].LocalPort })
 	return nil
+}
+
+// lldpManagementAddrs reads lldpRemManAddrTable (index timeMark.localPort.
+// remIndex.subtype.len.addr): each remote system's management address,
+// IPv4 (subtype 1) first, else IPv6 (2) that is not link-local (useless
+// without its zone).
+func lldpManagementAddrs(c *client) map[string]string {
+	rows, err := c.walk(oidLldpRemManAddr)
+	if err != nil {
+		return nil
+	}
+	v4, v6 := map[string]string{}, map[string]string{}
+	for idx := range rows {
+		n := splitOID(idx)
+		if len(n) < 5 || len(n) != 5+n[4] || slices.ContainsFunc(n[5:], func(b int) bool { return b < 0 || b > 255 }) {
+			continue
+		}
+		key := fmt.Sprintf("%d.%d.%d", n[0], n[1], n[2])
+		ip := make(net.IP, n[4])
+		for i := range ip {
+			ip[i] = byte(n[5+i]) //nolint:gosec // checked above
+		}
+		switch {
+		case n[3] == 1 && n[4] == 4:
+			v4[key] = ip.String()
+		case n[3] == 2 && n[4] == 16 && !ip.IsLinkLocalUnicast() && (v6[key] == "" || ip.String() < v6[key]):
+			v6[key] = ip.String()
+		}
+	}
+	for key, ip := range v6 {
+		if v4[key] == "" {
+			v4[key] = ip
+		}
+	}
+	return v4
 }
 
 // capabilities reads LLDP's capability BITS (the first bit is the first

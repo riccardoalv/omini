@@ -283,6 +283,8 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		}
 		if ip := net.ParseIP(model.Deref(nb.RemoteIP)).To4(); ip != nil {
 			add(gosnmp.Integer, 2, "1.0.8802.1.1.2.1.4.2.1.3.%s.1.4.%d.%d.%d.%d", idx, ip[0], ip[1], ip[2], ip[3])
+		} else if ip := net.ParseIP(model.Deref(nb.RemoteIP)); ip != nil {
+			add(gosnmp.Integer, 2, "1.0.8802.1.1.2.1.4.2.1.3.%s.2.16.%s", idx, bytesOID(ip))
 		}
 	}
 
