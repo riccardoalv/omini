@@ -15,8 +15,3 @@ export function pauseOf(node: TopoNode, nodes: TopoNode[]): PausedDevice | undef
     for (const p of r.device?.paused ?? []) if (p.mac.toLowerCase() === mac) return p
   return undefined
 }
-
-/** Whether a router pauses this device's internet. */
-export function pausedOn(node: TopoNode, nodes: TopoNode[]): boolean {
-  return !!node.mac && pausedMacs(nodes).has(node.mac.toLowerCase())
-}

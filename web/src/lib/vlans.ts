@@ -1,5 +1,5 @@
 import { areaHex } from './areas'
-import type { Interface, TopoEdge, TopoNode, Vlan } from './types'
+import type { Interface, TopoNode, Vlan } from './types'
 
 /** Whether a port carries a VLAN: it is that VLAN's interface, or a member (untagged or tagged). */
 export function portCarries(iface: Interface | undefined, vlan: number): boolean {
@@ -54,54 +54,6 @@ export function networkVlans(nodes: TopoNode[]): Vlan[] {
   return [...out.values()]
     .filter((v) => (v.id !== 1 || v.name) && !wan.has(v.id))
     .sort((a, b) => a.id - b.id)
-}
-
-/**
- * The nodes and links in a VLAN: devices with an interface in it, clients
- * reached through a port that carries it (or seen in it in a MAC table), and
- * links whose upstream port carries it.
- */
-export function vlanMembers(
-  vlan: number,
-  nodes: TopoNode[],
-  edges: TopoEdge[],
-): { nodes: Set<string>; edges: Set<string> } {
-  const byId = new Map(nodes.map((n) => [n.id, n]))
-  const inNodes = new Set<string>()
-  const inEdges = new Set<string>()
-  const ifaceOf = (n: TopoNode | undefined, port?: string) =>
-    port ? n?.device?.interfaces?.find((i) => i.name === port) : undefined
-  for (const n of nodes) {
-    const d = n.device
-    if (!d) continue
-    if (
-      (d.vlans ?? []).some((v) => v.id === vlan) ||
-      (d.interfaces ?? []).some((i) => portCarries(i, vlan))
-    )
-      inNodes.add(n.id)
-  }
-  for (const e of edges) {
-    const source = byId.get(e.source)
-    const target = byId.get(e.target)
-    const port = ifaceOf(source, e.source_port)
-    const seen =
-      !!target?.mac &&
-      (source?.device?.fdb ?? []).some(
-        (f) => f.vlan === vlan && f.mac.toLowerCase() === target.mac!.toLowerCase(),
-      )
-    if (portCarries(port, vlan) || seen || portCarries(ifaceOf(target, e.target_port), vlan)) {
-      inEdges.add(e.id)
-      inNodes.add(e.source)
-      inNodes.add(e.target)
-    }
-  }
-  // Apps run on their device: they follow it.
-  for (const e of edges)
-    if (inNodes.has(e.source) && byId.get(e.target)?.kind === 'app') {
-      inEdges.add(e.id)
-      inNodes.add(e.target)
-    }
-  return { nodes: inNodes, edges: inEdges }
 }
 
 /** The colors a VLAN can have (the areas' presets). */
