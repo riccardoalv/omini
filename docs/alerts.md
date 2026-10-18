@@ -108,7 +108,8 @@ it is a new alert and shows again. "Show again" undoes a dismissal.
 
 - open alerts, most severe first, each with what happened, a tip on what to
   do, since when, and **Show on the map** (opens the device's panel and
-  centers it),
+  centers it); a Wi-Fi channel conflict has **Resolve** ([Wi-Fi
+  channels](map.md#wi-fi-channels)),
 - a severity filter (all, critical, warning, info),
 - **Show dismissed**,
 - **Resolved in the last 7 days**.

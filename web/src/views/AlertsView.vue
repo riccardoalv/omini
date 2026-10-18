@@ -14,7 +14,15 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { alertsState, alertText, refreshAlerts, SEVERITIES, sortAlerts } from '@/lib/alerts'
+import WifiChannelsDialog from '@/components/map/WifiChannelsDialog.vue'
+import {
+  alertsState,
+  alertText,
+  refreshAlerts,
+  resolvable,
+  SEVERITIES,
+  sortAlerts,
+} from '@/lib/alerts'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
 import { displayName as nodeName } from '@/lib/names'
@@ -72,6 +80,9 @@ async function toggleDismiss(a: Alert) {
     x.id === a.id ? { ...x, dismissed: !a.dismissed } : x,
   )
 }
+
+// The Wi-Fi channels plan, opened from its alert.
+const resolving = ref(false)
 
 function showOnMap(nodeId: string) {
   void router.push({ name: 'map', query: { node: nodeId } })
@@ -253,6 +264,15 @@ onBeforeUnmount(() => clearInterval(timer))
           </div>
           <div class="row-actions">
             <button
+              v-if="resolvable(a)"
+              class="btn small primary"
+              type="button"
+              data-test="alert-resolve"
+              @click="resolving = true"
+            >
+              {{ t('wifiChannels.resolve') }}
+            </button>
+            <button
               v-if="a.node_id"
               class="btn ghost icon small"
               :title="t('insights.onMap')"
@@ -323,6 +343,7 @@ onBeforeUnmount(() => clearInterval(timer))
         {{ t('insights.loadMore') }}
       </button>
     </template>
+    <WifiChannelsDialog v-if="resolving" @close="resolving = false" @applied="refreshAlerts" />
   </div>
 </template>
 

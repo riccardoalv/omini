@@ -78,3 +78,15 @@ export async function refreshAlerts(): Promise<void> {
     // shown again on the next refresh
   }
 }
+
+/** An alert with a Resolve button: a Wi-Fi channel conflict with radios Omini can move. */
+export function resolvable(a: Alert): boolean {
+  return a.rule === 'wifi_channel_conflict' && !a.resolved_at && Number(a.params.movable ?? 0) > 0
+}
+
+/** Whether an alert is about a node: its own, or one of the nodes it lists (the network's access points). */
+export function concerns(a: Alert, id: string | undefined): boolean {
+  if (!id) return false
+  const nodes = a.params.nodes
+  return a.node_id === id || (Array.isArray(nodes) && nodes.includes(id))
+}

@@ -26,7 +26,8 @@ import NodeTraffic from '@/components/map/NodeTraffic.vue'
 import PanelSection from '@/components/map/PanelSection.vue'
 import PortPanel from '@/components/map/PortPanel.vue'
 import ResourceBars from '@/components/map/ResourceBars.vue'
-import { alertsState, alertText, sortAlerts } from '@/lib/alerts'
+import WifiChannelsDialog from '@/components/map/WifiChannelsDialog.vue'
+import { alertsState, alertText, concerns, resolvable, sortAlerts } from '@/lib/alerts'
 import { api, ApiError } from '@/lib/api'
 import { ui } from '@/lib/ui'
 import { formatAgo, formatSpeed, formatUptime } from '@/lib/format'
@@ -176,10 +177,12 @@ watch(
   { immediate: true },
 )
 
-/** Open alerts about this node. */
+/** Open alerts about this node (or the network's access points it is one of). */
 const nodeAlerts = computed(() =>
-  sortAlerts(alertsState.list.filter((a) => a.node_id === props.node?.id && !a.resolved_at)),
+  sortAlerts(alertsState.list.filter((a) => concerns(a, props.node?.id) && !a.resolved_at)),
 )
+/** The Wi-Fi channels plan, opened from its alert. */
+const resolving = ref(false)
 /** Whose history the panel charts: a Wi-Fi client's own traffic, or a WAN's uplink. */
 const chart = computed(() => {
   const node = n.value
@@ -730,9 +733,25 @@ async function save(patch: {
             >
               <strong>{{ alertText(a, t, locale).title }}</strong>
               <span>{{ alertText(a, t, locale).detail }}</span>
+              <button
+                v-if="resolvable(a)"
+                class="btn small primary resolve"
+                type="button"
+                data-test="node-alert-resolve"
+                @click="resolving = true"
+              >
+                {{ t('wifiChannels.resolve') }}
+              </button>
             </li>
           </ul>
         </section>
+        <Teleport to="body">
+          <WifiChannelsDialog
+            v-if="resolving"
+            @close="resolving = false"
+            @applied="emit('scanned')"
+          />
+        </Teleport>
 
         <PanelSection
           v-if="n.kind === 'device'"
@@ -1092,6 +1111,10 @@ async function save(patch: {
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--sev) 10%, transparent);
   font-size: 13px;
+}
+.node-alerts .resolve {
+  justify-self: start;
+  margin-top: 4px;
 }
 .node-alerts li span {
   color: var(--text-muted);

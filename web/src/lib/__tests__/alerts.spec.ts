@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { createAppI18n } from '@/i18n'
-import { alertText, attentionCount, sortAlerts, worstByNode } from '@/lib/alerts'
+import {
+  alertText,
+  attentionCount,
+  concerns,
+  resolvable,
+  sortAlerts,
+  worstByNode,
+} from '@/lib/alerts'
 import type { Alert } from '@/lib/types'
 
 const i18n = createAppI18n('en')
@@ -97,7 +104,7 @@ describe('alerts', () => {
   })
 
   it('tells the access points left on automatic channel', () => {
-    const wifi = (params: Record<string, unknown>) =>
+    const wifi = (params: Alert['params']) =>
       alertText(alert({ rule: 'wifi_channel_conflict', params }), t, 'en').detail
     expect(wifi({ aps: 'hall (6), office (6)' })).toBe('On 2.4 GHz: hall (6), office (6).')
     expect(wifi({ aps: 'hall (6), attic (6)', auto_aps: 'attic' })).toBe(
@@ -123,5 +130,21 @@ describe('alerts', () => {
     ]
     expect([...worstByNode(list)]).toEqual([['a', 'warning']])
     expect(attentionCount(list)).toBe(2)
+  })
+
+  it('offers Resolve on a channel conflict with radios to move, on every access point it lists', () => {
+    const wifi = alert({
+      rule: 'wifi_channel_conflict',
+      node_id: 'dev:hall',
+      params: { movable: 2, nodes: ['dev:hall', 'dev:office'] },
+    })
+    expect(resolvable(wifi)).toBe(true)
+    expect(resolvable({ ...wifi, params: { movable: 0 } })).toBe(false)
+    expect(resolvable({ ...wifi, resolved_at: '2026-10-08T00:00:00Z' })).toBe(false)
+    expect(resolvable(alert({}))).toBe(false)
+    expect(concerns(wifi, 'dev:office')).toBe(true)
+    expect(concerns(wifi, 'dev:hall')).toBe(true)
+    expect(concerns(wifi, 'dev:attic')).toBe(false)
+    expect(concerns(alert({ node_id: 'a' }), 'a')).toBe(true)
   })
 })

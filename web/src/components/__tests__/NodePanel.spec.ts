@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { alertsState } from '@/lib/alerts'
 import { api } from '@/lib/api'
 import { prefs } from '@/lib/prefs'
 import type { TopoNode } from '@/lib/types'
@@ -19,6 +20,7 @@ vi.mock('@/lib/api', async (orig) => {
       deleteInventory: vi.fn<typeof mod.api.deleteInventory>(),
       setPortLabel: vi.fn<typeof mod.api.setPortLabel>(),
       scanNode: vi.fn<typeof mod.api.scanNode>(),
+      wifiChannelPlan: vi.fn<typeof mod.api.wifiChannelPlan>(),
     },
   }
 })
@@ -508,5 +510,44 @@ describe('NodePanel idle Wi-Fi client', () => {
       flow: { rx_bps: 0, tx_bps: 0 },
     })
     expect(w.get('[data-test=flow]').text()).toContain('0 bps')
+  })
+})
+
+describe('NodePanel Wi-Fi channels', () => {
+  it("shows the network's channel alert on every access point it lists, with Resolve", async () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    vi.mocked(api.wifiChannelPlan).mockResolvedValue({ steps: [], skipped: [] })
+    alertsState.list = [
+      {
+        id: 9,
+        key: 'wifi_channel_conflict',
+        rule: 'wifi_channel_conflict',
+        severity: 'warning',
+        node_id: 'dev:hall',
+        params: { aps: 'hall (6), office (6)', movable: 1, nodes: ['dev:hall', 'dev:office'] },
+        opened_at: '2026-10-18T10:00:00Z',
+        updated_at: '2026-10-18T10:00:00Z',
+        dismissed: false,
+      },
+    ]
+    const office: TopoNode = {
+      id: 'dev:office',
+      kind: 'device',
+      label: 'office',
+      role: 'ap',
+      online: true,
+    }
+    const w = mount(NodePanel, {
+      props: { node: office, nodes: [office], edges: [] },
+      global: { plugins: plugins(), stubs: { RouterLink: true, teleport: true } },
+    })
+    await flushPromises()
+    expect(w.get('[data-test=node-alerts]').text()).toContain(
+      'Wi-Fi channels of your access points overlap',
+    )
+    await w.get('[data-test=node-alert-resolve]').trigger('click')
+    await flushPromises()
+    expect(api.wifiChannelPlan).toHaveBeenCalled()
+    alertsState.list = []
   })
 })
