@@ -4,6 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/riccardoalv/omini/internal/insights"
+	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/topology"
 )
 
 func TestBundleHidesWhatIdentifiesTheNetwork(t *testing.T) {
@@ -64,5 +69,65 @@ func TestPlaceholdersAreStable(t *testing.T) {
 	}
 	if got := a.Text("at 10:30:00 on 2026-10-13"); got != "at 10:30:00 on 2026-10-13" {
 		t.Errorf("a time was taken for an address: %q", got)
+	}
+}
+
+// TestAlertParamsFromTheRules runs the real rules and checks that none of the
+// names they put in an alert's parameters (the device, its parent, the
+// access point, the gateway, a sensor, a mount point...) reaches the bundle.
+func TestAlertParamsFromTheRules(t *testing.T) {
+	now := time.Unix(1_790_000_000, 0).UTC()
+	fw := topology.Node{
+		ID: "dev:fw", Kind: topology.KindDevice, Role: "firewall", Label: "Silva Firewall", Online: true, IntegrationID: 2,
+		Device: &model.Device{
+			CPUPct:       model.Ptr(97.0),
+			Storage:      []model.Storage{{Mount: "/mnt/ricardo-photos", TotalBytes: model.Ptr(uint64(100)), UsedBytes: model.Ptr(uint64(95))}},
+			Temperatures: []model.Temperature{{Sensor: "Silva board sensor", Celsius: 90, Kind: model.Ptr(model.TemperatureKindCPU)}},
+			Paused:       []model.PausedDevice{{MAC: "aa:00:00:00:00:01", Rule: model.Ptr("Block Ricardo's kids")}},
+		},
+	}
+	topo := topology.Topology{
+		Nodes: []topology.Node{
+			fw,
+			{ID: "dev:ap", Kind: topology.KindDevice, Role: "ap", Label: "Silva Office AP", Online: true, Device: &model.Device{}},
+			{ID: "wan:dev:fw|pppoe0", Kind: topology.KindWAN, Label: "WAN", WAN: &topology.WANLink{
+				Interface: "pppoe0", Gateways: []model.Gateway{{Name: "Silva ISP gateway", Status: model.GatewayStatusDown}},
+			}},
+			{ID: "mac:01", Kind: topology.KindClient, Label: "Ricardo's Phone", Online: true, IP: "192.168.1.10", MAC: "aa:00:00:00:00:01", ParentID: "dev:ap", SignalDBM: model.Ptr(int64(-85)), SSID: "Casa Silva"},
+			{ID: "mac:02", Kind: topology.KindClient, Label: "Ricardo's TV", Online: true, IP: "192.168.1.10", MAC: "aa:00:00:00:00:02"},
+			{ID: "seg:ap|Port 5", Kind: topology.KindSegment, Label: "Unmanaged", ParentID: "dev:ap", Port: "Port 5", MACCount: 4},
+		},
+		Edges: []topology.Edge{{ID: "e1", Source: "dev:fw", Target: "dev:ap", SourcePort: "igc1", SpeedMbps: 100, Kind: topology.EdgeLLDP}},
+	}
+	got := insights.Evaluate(insights.Input{
+		Topology: topo, Now: now,
+		Integrations: []insights.Integration{{ID: 2, OK: true}, {ID: 9, Name: "Silva Controller", Error: "timeout", Failures: 3}},
+	})
+	rules := map[string]bool{}
+	var alerts []Alert
+	for _, i := range got {
+		rules[i.Rule] = true
+		alerts = append(alerts, Alert{Rule: i.Rule, Severity: i.Severity, NodeID: i.NodeID, Params: i.Params})
+	}
+	for _, r := range []string{"weak_wifi", "slow_uplink", "unmanaged_switch", "wan_down", "duplicate_ip", "integration_failed", "disk_full", "hot_cpu"} {
+		if !rules[r] {
+			t.Fatalf("the rules did not raise %s: %v", r, rules)
+		}
+	}
+	out, err := Bundle(Input{Alerts: alerts, Topology: map[string]any{"nodes": []any{fw}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out)
+	s := string(raw)
+	for _, secret := range []string{"Silva", "Ricardo", "ricardo"} {
+		if strings.Contains(s, secret) {
+			t.Errorf("bundle still holds %q:\n%s", secret, s)
+		}
+	}
+	for _, kept := range []string{`"igc1"`, `"Port 5"`, `"192.168.1.10"`, `"weak_wifi"`} {
+		if !strings.Contains(s, kept) {
+			t.Errorf("bundle lost %s:\n%s", kept, s)
+		}
 	}
 }

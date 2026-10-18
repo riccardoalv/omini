@@ -42,6 +42,18 @@ var named = map[string]bool{
 	"serial": true, "remote_name": true, "domain": true, "dns_domain": true, "titles": true,
 	"user": true, "username": true, "comment": true, "location": true, "contact": true,
 	"sys_name": true, "author": true, "port_labels": true, "fqdn": true, "title": true,
+	"mount": true, "sensor": true, // may carry the owner's names (/mnt/ricardo-photos)
+}
+
+// safeParams are the alert parameters that never hold a name someone chose:
+// ports, services, addresses (anonymized as text), times, versions. Every
+// other string parameter (the device, its parent, an access point, a
+// gateway, a sensor, a mount point...) becomes a placeholder, so a rule that
+// adds a parameter cannot leak a name.
+var safeParams = map[string]bool{
+	"iface": true, "port": true, "lag": true, "service": true, "type": true, "network": true,
+	"ip": true, "mac": true, "error": true, "at": true, "first_seen": true, "limits": true,
+	"current": true, "latest": true,
 }
 
 // kept are the parents whose "name" is a port or interface name (igc0,
@@ -104,7 +116,7 @@ func (a *Anonymizer) String(s, key, parent string) string {
 	if s == "" {
 		return s
 	}
-	if named[key] && (key != "name" || !kept[parent]) {
+	if named[key] && (key != "name" || !kept[parent]) || key == "rule" && parent == "paused" { // a firewall rule's name
 		return a.Name(s)
 	}
 	if versions[key] {
@@ -257,9 +269,13 @@ func Bundle(in Input) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	alerts, err := a.Value(in.Alerts)
-	if err != nil {
-		return nil, err
+	alerts := make([]any, 0, len(in.Alerts))
+	for _, al := range in.Alerts {
+		x, err := a.alert(al)
+		if err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, x)
 	}
 	topo, err := a.Value(in.Topology)
 	if err != nil {
@@ -274,4 +290,34 @@ func Bundle(in Input) (map[string]any, error) {
 		"round":         in.Round,
 		"topology":      topo,
 	}, nil
+}
+
+// alert anonymizes an alert: its string parameters become placeholders
+// unless they are known to be safe (see safeParams).
+func (a *Anonymizer) alert(al Alert) (map[string]any, error) {
+	out := map[string]any{"rule": al.Rule, "severity": al.Severity}
+	if al.NodeID != "" {
+		out["node_id"] = a.String(al.NodeID, "node_id", "")
+	}
+	if len(al.Params) == 0 {
+		return out, nil
+	}
+	params := make(map[string]any, len(al.Params))
+	for k, v := range al.Params {
+		s, ok := v.(string)
+		switch {
+		case ok && (s == "" || safeParams[k]):
+			params[k] = a.Text(s)
+		case ok:
+			params[k] = a.Name(s)
+		default:
+			x, err := a.Value(v)
+			if err != nil {
+				return nil, err
+			}
+			params[k] = x
+		}
+	}
+	out["params"] = params
+	return out, nil
 }
