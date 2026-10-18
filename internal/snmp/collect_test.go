@@ -398,3 +398,41 @@ func TestNDPFromIPNetToPhysical(t *testing.T) {
 		t.Fatalf("arp from ipNetToPhysicalTable: %+v", got.Arp)
 	}
 }
+
+// Interface addresses carry their prefix: IPv4 from ipAdEntNetMask, IPv6
+// from ipAddressTable's prefix pointer. Without a prefix (or on loopback) an
+// address stays off its interface.
+func TestInterfaceAddresses(t *testing.T) {
+	d := model.Device{
+		Key: "x", Name: "router", IPs: []string{"10.9.9.9"}, // no mask: the device's only
+		Interfaces: []model.Interface{
+			{Name: "lan", IPs: []string{"192.168.1.1/24", "2804:1128:bd79:3e00::1/64", "fe80::1/64"}},
+			{Name: "wan", IPs: []string{"203.0.113.2/30"}},
+			{Name: "lo0", IPs: []string{"127.0.0.1/8", "::1/128"}},
+		},
+	}
+	pdus := snmptest.FromDevice(d, snmptest.Options{})
+	// An IPv6 address whose prefix the agent does not know (0.0).
+	unknown := ".1.3.6.1.2.1.4.34.1.%d.2.16.32.1.13.184.0.0.0.0.0.0.0.0.0.0.0.9"
+	pdus = append(pdus,
+		gosnmp.SnmpPDU{Name: fmt.Sprintf(unknown, 3), Type: gosnmp.Integer, Value: 2},
+		gosnmp.SnmpPDU{Name: fmt.Sprintf(unknown, 5), Type: gosnmp.ObjectIdentifier, Value: ".0.0"})
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][]string{
+		"lan": {"192.168.1.1/24", "2804:1128:bd79:3e00::1/64", "fe80::1/64"},
+		"wan": {"203.0.113.2/30"},
+		"lo0": nil,
+	}
+	for _, i := range got.Interfaces {
+		if !reflect.DeepEqual(i.IPs, want[i.Name]) {
+			t.Errorf("%s: %v", i.Name, i.IPs)
+		}
+	}
+	if !reflect.DeepEqual(got.IPs, []string{"10.9.9.9", "192.168.1.1", "203.0.113.2"}) {
+		t.Errorf("device addresses: %v", got.IPs)
+	}
+}

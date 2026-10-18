@@ -12,13 +12,17 @@ const (
 	oidSysServices = "1.3.6.1.2.1.1.7.0"
 
 	// IP-MIB
-	oidIPForwarding    = "1.3.6.1.2.1.4.1.0"
-	oidIPAddrIfIndex   = "1.3.6.1.2.1.4.20.1.2"   // index: IPv4 address
-	oidIPNetToMedia    = "1.3.6.1.2.1.4.22.1"     // ARP: .2 phys address, .4 type; index ifIndex.a.b.c.d
-	oidIPNetToPhysical = "1.3.6.1.2.1.4.35.1.4"   // ARP and NDP: index ifIndex.addrType.len.addr...
-	oidIfTable         = "1.3.6.1.2.1.2.2.1"      // IF-MIB ifEntry
-	oidIfXTable        = "1.3.6.1.2.1.31.1.1.1"   // IF-MIB ifXEntry
-	oidIfStackStatus   = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
+	oidIPForwarding         = "1.3.6.1.2.1.4.1.0"
+	oidIPAddrIfIndex        = "1.3.6.1.2.1.4.20.1.2"   // index: IPv4 address
+	oidIPAddrNetMask        = "1.3.6.1.2.1.4.20.1.3"   // ipAdEntNetMask; index: IPv4 address
+	oidIPAddressIfIndex     = "1.3.6.1.2.1.4.34.1.3"   // ipAddressIfIndex; index: addrType.len.addr
+	oidIPAddressPrefix      = "1.3.6.1.2.1.4.34.1.5"   // ipAddressPrefix: a row of ipAddressPrefixTable
+	oidIPAddressPrefixTable = "1.3.6.1.2.1.4.32.1"     // ipAddressPrefixEntry; index ends with the prefix length
+	oidIPNetToMedia         = "1.3.6.1.2.1.4.22.1"     // ARP: .2 phys address, .4 type; index ifIndex.a.b.c.d
+	oidIPNetToPhysical      = "1.3.6.1.2.1.4.35.1.4"   // ARP and NDP: index ifIndex.addrType.len.addr...
+	oidIfTable              = "1.3.6.1.2.1.2.2.1"      // IF-MIB ifEntry
+	oidIfXTable             = "1.3.6.1.2.1.31.1.1.1"   // IF-MIB ifXEntry
+	oidIfStackStatus        = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
 
 	// BRIDGE-MIB / Q-BRIDGE-MIB
 	oidBaseBridgeAddress = "1.3.6.1.2.1.17.1.1.0"       // dot1dBaseBridgeAddress

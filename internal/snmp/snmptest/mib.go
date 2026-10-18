@@ -107,8 +107,32 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 	}
 
 	// IP-MIB addresses and ARP.
+	// Interface addresses: IPv4 in ipAddrTable with its mask, IPv6 in
+	// ipAddressTable pointing to its ipAddressPrefixTable row.
+	onIface := map[string]bool{}
+	for _, iface := range d.Interfaces {
+		idx := ifIndex[iface.Name]
+		for _, s := range iface.IPs {
+			ip, prefix, err := net.ParseCIDR(s)
+			if err != nil {
+				continue
+			}
+			if v4 := ip.To4(); v4 != nil {
+				onIface[v4.String()] = true
+				add(gosnmp.Integer, idx, "1.3.6.1.2.1.4.20.1.2.%s", v4)
+				add(gosnmp.IPAddress, net.IP(prefix.Mask).String(), "1.3.6.1.2.1.4.20.1.3.%s", v4)
+				continue
+			}
+			bits, _ := prefix.Mask.Size()
+			add(gosnmp.Integer, idx, "1.3.6.1.2.1.4.34.1.3.2.16.%s", bytesOID(ip))
+			add(gosnmp.ObjectIdentifier, fmt.Sprintf(".1.3.6.1.2.1.4.32.1.5.%d.2.16.%s.%d", idx, bytesOID(prefix.IP), bits),
+				"1.3.6.1.2.1.4.34.1.5.2.16.%s", bytesOID(ip))
+		}
+	}
 	for _, ip := range d.IPs {
-		add(gosnmp.Integer, 1, "1.3.6.1.2.1.4.20.1.2.%s", ip)
+		if !onIface[ip] {
+			add(gosnmp.Integer, 1, "1.3.6.1.2.1.4.20.1.2.%s", ip)
+		}
 	}
 	for _, a := range d.Arp {
 		idx := ifIndex[model.Deref(a.Interface)]

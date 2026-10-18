@@ -112,7 +112,7 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err != nil {
 		log.Debug("interfaces unavailable", "err", err)
 	}
-	if err := collectIPs(c, &d); err != nil {
+	if err := collectIPs(c, &d, ifNames); err != nil {
 		log.Debug("ip addresses unavailable", "err", err)
 	}
 	if err := collectARP(c, &d, ifNames); err != nil {
@@ -362,20 +362,87 @@ func collectLagMembers(c *client, d *model.Device, names map[string]string) {
 	}
 }
 
-func collectIPs(c *client, d *model.Device) error {
+// collectIPs reads the device's IPv4 addresses (ipAddrTable) and each
+// interface's addresses with their prefix: IPv4 from ipAdEntNetMask, IPv6
+// from ipAddressTable's prefix pointer. An address without a prefix stays
+// off its interface (the model's are "address/length").
+func collectIPs(c *client, d *model.Device, ifNames map[string]string) error {
 	rows, err := c.walk(oidIPAddrIfIndex)
 	if err != nil {
 		return err
 	}
+	masks, _ := c.walk(oidIPAddrNetMask) // optional
+	byIf := map[string][]string{}        // interface name -> address/length
 	ips := make([]string, 0, len(rows))
-	for ip := range rows {
-		if parsed := net.ParseIP(ip); parsed != nil && !parsed.IsLoopback() {
-			ips = append(ips, ip)
+	for ip, p := range rows {
+		parsed := net.ParseIP(ip).To4()
+		if parsed == nil || parsed.IsLoopback() {
+			continue
+		}
+		ips = append(ips, ip)
+		mask := net.ParseIP(pduString(masks[ip])).To4()
+		ifIdx, ok := pduInt(p)
+		if mask == nil || !ok {
+			continue
+		}
+		bits, size := net.IPMask(mask).Size()
+		if name := ifNames[strconv.FormatInt(ifIdx, 10)]; name != "" && size == 32 {
+			byIf[name] = append(byIf[name], fmt.Sprintf("%s/%d", ip, bits))
 		}
 	}
 	sort.Strings(ips)
 	d.IPs = ips
+	for _, addrs := range byIf {
+		sort.Strings(addrs)
+	}
+	for name, addrs := range ipv6Addresses(c, ifNames) { // after IPv4
+		sort.Strings(addrs)
+		byIf[name] = append(byIf[name], addrs...)
+	}
+	for i := range d.Interfaces {
+		if addrs := byIf[d.Interfaces[i].Name]; len(addrs) > 0 {
+			d.Interfaces[i].IPs = addrs
+		}
+	}
 	return nil
+}
+
+// ipv6Addresses reads IP-MIB's ipAddressTable (index addrType.len.addr): each
+// interface's IPv6 addresses with the prefix length ipAddressPrefix points
+// to (the last arc of an ipAddressPrefixTable row).
+func ipv6Addresses(c *client, ifNames map[string]string) map[string][]string {
+	rows, err := c.walk(oidIPAddressIfIndex)
+	if err != nil || len(rows) == 0 {
+		return nil
+	}
+	prefixes, _ := c.walk(oidIPAddressPrefix)
+	out := map[string][]string{}
+	for idx, p := range rows {
+		n := splitOID(idx)
+		if len(n) != 18 || n[0] != 2 || n[1] != 16 { // ipv6
+			continue
+		}
+		ip := make(net.IP, 16)
+		for i := range ip {
+			ip[i] = byte(n[2+i]) //nolint:gosec // checked below
+		}
+		if slices.ContainsFunc(n[2:], func(b int) bool { return b < 0 || b > 255 }) || ip.IsLoopback() {
+			continue
+		}
+		ptr := strings.TrimPrefix(pduString(prefixes[idx]), ".")
+		if !strings.HasPrefix(ptr, oidIPAddressPrefixTable+".") {
+			continue // no prefix (0.0)
+		}
+		arcs := splitOID(ptr)
+		bits := arcs[len(arcs)-1]
+		ifIdx, ok := pduInt(p)
+		name := ifNames[strconv.FormatInt(ifIdx, 10)]
+		if !ok || name == "" || bits < 1 || bits > 128 {
+			continue
+		}
+		out[name] = append(out[name], fmt.Sprintf("%s/%d", ip, bits))
+	}
+	return out
 }
 
 // collectARP reads ARP from ipNetToMediaTable and IPv6 neighbors (NDP) from
