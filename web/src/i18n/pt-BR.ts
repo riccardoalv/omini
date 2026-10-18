@@ -343,6 +343,7 @@ const ptBR: typeof en = {
     woken: 'Pacote Wake-on-LAN enviado. Ele aparece online quando responder.',
     pause: 'Pausar internet',
     pauseHint: 'O roteador corta a internet dele; a sua rede continua acessível.',
+    confirmPause: 'Pausar a internet de {name}?',
     pausedNow: 'Internet pausada: o roteador está bloqueando.',
     resume: 'Retomar internet',
     resumed: 'Internet de volta.',

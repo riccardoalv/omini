@@ -339,6 +339,7 @@ export default {
     woken: 'Wake-on-LAN packet sent. It shows online when it answers.',
     pause: 'Pause internet',
     pauseHint: 'The router cuts its internet; your network stays reachable.',
+    confirmPause: 'Pause the internet of {name}?',
     pausedNow: 'Internet paused: the router blocks it.',
     resume: 'Resume internet',
     resumed: 'Internet back.',

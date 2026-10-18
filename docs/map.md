@@ -205,8 +205,8 @@ own it cannot, and then only the way to the internet is protected.
   (OPNsense with os-wol, pfSense, MikroTik, OpenWrt with etherwake). It is
   kept in the device's **Changes**; the device shows online when it answers.
 - **Pause internet** / **Resume internet** (a client on a network whose router
-  Omini manages: OPNsense 26.7+, pfSense, MikroTik, OpenWrt): the router blocks
-  it toward the internet over IPv4 and IPv6 (by its MAC where the router can,
+  Omini manages: OPNsense 26.7+, pfSense, MikroTik, OpenWrt): after one short
+  confirmation, the router blocks it toward the internet over IPv4 and IPv6 (by its MAC where the router can,
   so its changing IPv6 addresses are covered); your own networks stay
   reachable. If the
   device gets another address, Omini blocks the new one after the next round.

@@ -58,10 +58,15 @@ describe('HostActions', () => {
     await flushPromises()
     expect(api.wake).toHaveBeenCalledWith('mac:pc')
     expect(w.emitted('done')![0]).toEqual([expect.stringContaining('Wake-on-LAN')])
+    // Pausing asks once first.
     await w.get('[data-test=pause]').trigger('click')
+    expect(api.pause).not.toHaveBeenCalled()
+    expect(w.get('[data-test=pause-confirm]').text()).toContain('Pause the internet of Desktop?')
+    await w.get('[data-test=confirm-pause]').trigger('click')
     await flushPromises()
     expect(api.pause).toHaveBeenCalledWith('mac:pc')
     expect(w.emitted('applied')).toHaveLength(2)
+    expect(w.find('[data-test=pause-confirm]').exists()).toBe(false)
   })
 
   it('an online device has no wake button; a paused one resumes', async () => {
@@ -93,6 +98,7 @@ describe('HostActions', () => {
     const w = mountIt(pc(true), [fw(false)])
     await flushPromises()
     await w.get('[data-test=pause]').trigger('click')
+    await w.get('[data-test=confirm-pause]').trigger('click')
     await flushPromises()
     expect(w.emitted('error')).toHaveLength(1)
   })
