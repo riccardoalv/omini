@@ -260,7 +260,8 @@ become alerts.
 - **DNS**: the servers are those DHCP hands out, the gateway, and the hosts
   listening on port 53. Each one resolves an internet name (**Advanced →
   External name for the DNS check**, `example.com` by default) and a local
-  name the scan learned from reverse DNS, timed. Alerts: `dns_down` (the
+  name, timed: one of the DNS names Omini set (the first in order) once it
+  has set any, else a name the scan learned from reverse DNS. Alerts: `dns_down` (the
   internet name does not resolve), `dns_slow` (over 500 ms in two checks in a row), `dns_local`
   (the internet name resolves, the local one does not).
 

@@ -69,6 +69,9 @@ type Options struct {
 	// Resolve looks a name up on a DNS server, for the names of flows (nil:
 	// a real lookup; tests set it).
 	Resolve Resolver
+	// QueryDNS checks a name on a DNS server, for the local name of the DNS
+	// checks (nil: dnscheck.Query; tests set it).
+	QueryDNS QueryDNS
 	// Flows is the flow collector, whose scans become alerts (nil: none).
 	Flows interface {
 		Scans(since time.Time) []flows.Scan
@@ -497,6 +500,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	}
 	c.traffic.attach(&topo)
 	c.markChangeable(ctx, &topo)
+	c.checkOwnDNSName(ctx, &topo)
 	alerts := c.watch(ctx, topo, inventory, statuses, now)
 
 	c.mu.Lock()
