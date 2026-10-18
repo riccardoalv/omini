@@ -724,6 +724,10 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      high_swap: {
+        title: '{node} is swapping',
+        detail: 'Swap at {pct}%: the device is short of memory and slows down.',
+      },
       hot_sensor: {
         title: '{sensor} is running hot on {node}',
         detail: 'At {celsius} °C, above {limit_c} °C.',
@@ -835,6 +839,7 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      high_swap: 'See what uses the memory on the device, stop what is not needed, or add memory.',
       hot_sensor:
         'Check the fans, the dust and the airflow around it; a disk that stays hot wears out sooner.',
       wifi_open:

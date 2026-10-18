@@ -736,6 +736,10 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      high_swap: {
+        title: '{node} está usando muito swap',
+        detail: 'Swap em {pct}%: o equipamento está sem memória e fica lento.',
+      },
       hot_sensor: {
         title: '{sensor} está quente em {node}',
         detail: 'A {celsius} °C, acima de {limit_c} °C.',
@@ -849,6 +853,8 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      high_swap:
+        'Veja o que usa a memória no equipamento, pare o que não é necessário, ou aumente a memória.',
       hot_sensor:
         'Verifique as ventoinhas, a poeira e a ventilação em volta; um disco que fica quente se desgasta mais cedo.',
       wifi_open:

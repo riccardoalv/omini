@@ -35,6 +35,7 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `high_cpu` | warning above 80 %, critical from 95 % | CPU use of an online device |
 | `high_memory` | warning from 90 % | Memory use of an online device |
+| `high_swap` | warning above 50 % | Swap use of an online device |
 | `hot_cpu` | warning from 70 °C, critical from 85 °C | The hottest CPU temperature sensor |
 | `hot_sensor` | warning | A disk sensor above 55 °C or a board sensor above 80 °C (CPUs are `hot_cpu`'s) |
 | `disk_full` | warning from 80 %, critical from 90 % | Use of a disk or filesystem |

@@ -156,3 +156,15 @@ func TestHotSensor(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestHighSwap(t *testing.T) {
+	dev := func(id string, swap *float64) topology.Node {
+		return topology.Node{ID: id, Kind: topology.KindDevice, Label: id, Online: true, Device: &model.Device{SwapPct: swap}}
+	}
+	in := Input{Now: time.Unix(0, 0), Topology: topology.Topology{Nodes: []topology.Node{
+		dev("dev:a", model.Ptr(72.0)), dev("dev:b", model.Ptr(50.0)), dev("dev:c", nil),
+	}}}
+	if got := keysOf(t, "high_swap", in); len(got) != 1 || got["high_swap|dev:a"] != Warning {
+		t.Fatalf("got %v", got)
+	}
+}

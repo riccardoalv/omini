@@ -20,12 +20,16 @@ const (
 	BoardHotC = 80.0
 )
 
+// SwapWarnPct: swap in use above this is a device short of memory.
+const SwapWarnPct = 50.0
+
 func init() {
 	Rules["service_stopped"] = serviceStopped
 	Rules["vpn_down"] = vpnDown
 	Rules["reboot_pending"] = rebootPending
 	Rules["wifi_open"] = wifiOpen
 	Rules["hot_sensor"] = hotSensor
+	Rules["high_swap"] = highSwap
 }
 
 // serviceStopped: a service the device is configured to run is not running.
@@ -158,6 +162,16 @@ func hotSensor(in Input, _ index) []Insight {
 					"sensor": t.Sensor, "kind": string(*t.Kind), "celsius": round1(t.Celsius), "limit_c": limit,
 				}))
 			}
+		}
+	}
+	return out
+}
+
+func highSwap(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if s := n.Device.SwapPct; n.Online && s != nil && *s > SwapWarnPct {
+			out = append(out, node("high_swap", Warning, n, "", map[string]any{"pct": round1(*s)}))
 		}
 	}
 	return out
