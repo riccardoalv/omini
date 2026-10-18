@@ -355,6 +355,11 @@ var migrations = []string{
 	ALTER TABLE config_changes ADD COLUMN target_id TEXT NOT NULL DEFAULT '';
 	CREATE INDEX config_changes_target ON config_changes (target_id, at);
 	`,
+	// 27: the user's free note about a device ("NAS in the living room, bought
+	// 2024").
+	`
+	ALTER TABLE inventory ADD COLUMN note TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

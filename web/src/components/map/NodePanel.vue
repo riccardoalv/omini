@@ -20,6 +20,7 @@ import TrafficChart from '@/components/TrafficChart.vue'
 import DeviceExtras from '@/components/map/DeviceExtras.vue'
 import ConfigBackups from '@/components/map/ConfigBackups.vue'
 import HostActions from '@/components/map/HostActions.vue'
+import NoteField from '@/components/map/NoteField.vue'
 import NetworkPlace from '@/components/map/NetworkPlace.vue'
 import NodeTraffic from '@/components/map/NodeTraffic.vue'
 import PanelSection from '@/components/map/PanelSection.vue'
@@ -669,6 +670,14 @@ async function save(patch: {
             <X :size="18" />
           </button>
         </header>
+
+        <NoteField
+          v-if="n.kind !== 'wan'"
+          :node-id="n.id"
+          :note="n.note"
+          @saved="(note) => emit('changed', { note: note || undefined })"
+          @error="(m) => (error = m)"
+        />
 
         <div class="actions">
           <button

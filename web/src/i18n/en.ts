@@ -203,6 +203,9 @@ export default {
     ports: 'Ports',
     clients: 'Connected devices',
     rename: 'Rename',
+    note: 'Note',
+    notePlaceholder: 'Add a note (where it is, what it is for…)',
+    noteLeft: '{n} character left | {n} characters left',
     hide: 'Hide',
     unhide: 'Show on map',
     hideHint:

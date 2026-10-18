@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // InventoryEntry is a device ever seen on the network. Entries are kept until
@@ -23,10 +24,12 @@ type InventoryEntry struct {
 	Alias    string `json:"alias,omitempty"`
 	Hidden   bool   `json:"hidden"` // hidden from the map (kept in the inventory)
 	// User corrections of the classification; empty means automatic.
-	DeviceType string    `json:"device_type,omitempty"`
-	Icon       string    `json:"icon,omitempty"`
-	FirstSeen  time.Time `json:"first_seen"`
-	LastSeen   time.Time `json:"last_seen"`
+	DeviceType string `json:"device_type,omitempty"`
+	Icon       string `json:"icon,omitempty"`
+	// Note is the user's free text about the device (NoteMax characters at most).
+	Note      string    `json:"note,omitempty"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
 }
 
 // MarkSeen records that entries were present at time at. New entries are
@@ -69,7 +72,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, label, COALESCE(mac, ''), COALESCE(ip, ''), COALESCE(hostname, ''), COALESCE(vendor, ''),
 		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), first_seen, last_seen,
-		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden
+		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden, note
 		FROM inventory ORDER BY last_seen DESC, id`)
 	if err != nil {
 		return nil, err
@@ -83,7 +86,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 			first, latest int64
 		)
 		if err := rows.Scan(&e.ID, &e.Kind, &e.Label, &e.MAC, &e.IP, &e.Hostname, &e.Vendor,
-			&e.ParentID, &e.Port, &e.Alias, &first, &latest, &e.DeviceType, &e.Icon, &hidden); err != nil {
+			&e.ParentID, &e.Port, &e.Alias, &first, &latest, &e.DeviceType, &e.Icon, &hidden, &e.Note); err != nil {
 			return nil, err
 		}
 		e.Hidden, e.FirstSeen, e.LastSeen = hidden == 1, fromUnix(first), fromUnix(latest)
@@ -99,10 +102,26 @@ type InventoryUpdate struct {
 	Hidden     *bool   `json:"hidden"`
 	DeviceType *string `json:"device_type"`
 	Icon       *string `json:"icon"`
+	Note       *string `json:"note"`
 }
+
+// NoteMax is the longest note a device can have, in characters.
+const NoteMax = 1000
+
+// ErrNoteTooLong: a note over NoteMax characters.
+var ErrNoteTooLong = errors.New("the note is longer than 1000 characters")
 
 // UpdateInventory changes the user fields of an entry.
 func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdate) (InventoryEntry, error) {
+	if u.Note != nil {
+		note := strings.TrimSpace(*u.Note)
+		if utf8.RuneCountInString(note) > NoteMax {
+			return InventoryEntry{}, ErrNoteTooLong
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE inventory SET note = ? WHERE id = ?`, note, id); err != nil {
+			return InventoryEntry{}, err
+		}
+	}
 	alias := u.Alias
 	for col, v := range map[string]*string{"device_type": u.DeviceType, "icon": u.Icon} {
 		if v == nil {

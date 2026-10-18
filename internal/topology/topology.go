@@ -126,6 +126,7 @@ type Node struct {
 	ChangeVia map[model.ChangeKind]Report `json:"-"`
 
 	Hidden   bool       `json:"hidden,omitempty"`    // hidden from the map by the user
+	Note     string     `json:"note,omitempty"`      // the user's free note about the device
 	LastSeen *time.Time `json:"last_seen,omitempty"` // offline nodes: when they were last present
 }
 

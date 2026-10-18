@@ -146,6 +146,12 @@ it). Everything else folds to its title and a short summary (**Details** shows
 the version and uptime, **Changes** how many there were); click a title to
 open it. The sections you open stay open, for every device (per browser).
 
+**Note.** At the top of the panel, a free note about the device ("in the
+living room, bought 2024"), saved when you leave the field: up to 1,000
+characters of plain text. It stays while the device is offline or off the map;
+a note mark on the map shows it on hover, the device list's search finds it
+and the JSON export carries it. The diagnostics file never includes it.
+
 **Details.** Name (click to rename; the name is kept by Omini, never written
 to the device), type, IP and MAC addresses, vendor, model, serial, version,
 uptime, the integration that reads it, **Connected to** (its parent and port),

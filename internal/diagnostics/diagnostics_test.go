@@ -131,3 +131,15 @@ func TestAlertParamsFromTheRules(t *testing.T) {
 		}
 	}
 }
+
+func TestBundleLeavesDeviceNotesOut(t *testing.T) {
+	topo := map[string]any{"nodes": []any{map[string]any{"id": "dev:00:11:32:aa:bb:cc", "note": "admin password is hunter2"}}}
+	out, err := Bundle(Input{Version: "1.6.1", Topology: topo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out)
+	if strings.Contains(string(raw), "hunter2") || strings.Contains(string(raw), `"note"`) {
+		t.Fatalf("a device's note never reaches the bundle: %s", raw)
+	}
+}

@@ -263,6 +263,8 @@ export interface TopoNode {
   protected?: Record<string, Protection>
   /** Hidden from the map by the user. */
   hidden?: boolean
+  /** The user's free note about the device. */
+  note?: string
   last_seen?: string
   os?: string
   open_ports?: number[]
@@ -421,6 +423,8 @@ export interface InventoryEntry {
   product?: string
   device_type?: string
   icon?: string
+  /** The user's free note about the device. */
+  note?: string
 }
 
 /** An installed plugin (GET /api/plugins). */

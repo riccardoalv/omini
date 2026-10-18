@@ -77,3 +77,20 @@ describe('TopologyNode alert', () => {
     expect(w.find('[data-test=node-alert]').exists()).toBe(false)
   })
 })
+
+describe('TopologyNode note', () => {
+  const withNote = (note?: string) =>
+    mount(TopologyNode, {
+      props: { data: { node: { id: 'x', kind: 'client', label: 'NAS', online: true, note } } },
+      global: { plugins: plugins(), stubs: { Handle: true } },
+    })
+
+  it('marks a node that has a note, which shows on hover', () => {
+    const mark = withNote('Living room, bought 2024').get('[data-test=node-note]')
+    expect(mark.attributes('title')).toBe('Living room, bought 2024')
+  })
+
+  it('does not mark a node without a note', () => {
+    expect(withNote().find('[data-test=node-note]').exists()).toBe(false)
+  })
+})

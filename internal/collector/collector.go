@@ -643,6 +643,7 @@ func classifyWith(n *topology.Node, upstream bool) {
 
 // applyOverrides applies the user's corrections of the classification.
 func applyOverrides(n *topology.Node, e store.InventoryEntry) {
+	n.Note = e.Note
 	if e.DeviceType != "" {
 		n.Type = e.DeviceType
 		n.Reasons = append([]string{"user"}, n.Reasons...)

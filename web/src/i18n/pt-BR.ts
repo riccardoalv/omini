@@ -211,6 +211,9 @@ const ptBR: typeof en = {
     ports: 'Portas',
     clients: 'Dispositivos conectados',
     rename: 'Renomear',
+    note: 'Nota',
+    notePlaceholder: 'Adicione uma nota (onde fica, para que serve…)',
+    noteLeft: '{n} caractere restante | {n} caracteres restantes',
     hide: 'Ocultar',
     unhide: 'Mostrar no mapa',
     hideHint:

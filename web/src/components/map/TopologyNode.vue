@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Handle, Position } from '@vue-flow/core'
-import { AlertTriangle, Pause, SignalLow, Wifi } from 'lucide-vue-next'
+import { AlertTriangle, Pause, SignalLow, StickyNote, Wifi } from 'lucide-vue-next'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -94,6 +94,9 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
       <span class="up">↑ {{ formatRate(data.flow.up) }}</span>
     </div>
 
+    <span v-if="n?.note" class="note-mark" data-test="node-note" :title="n.note">
+      <StickyNote :size="10" :stroke-width="2.5" />
+    </span>
     <span v-if="data.paused" class="paused-mark" data-test="node-paused" :title="t('host.paused')">
       <Pause :size="10" :stroke-width="3" />
     </span>
@@ -185,6 +188,21 @@ const weak = computed(() => (n.value?.signal_dbm ?? 0) < -75)
   background: var(--warn);
   color: #fff;
   pointer-events: none;
+}
+.note-mark {
+  position: absolute;
+  bottom: -7px;
+  right: -7px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 .alert-mark.critical {
   background: var(--danger);

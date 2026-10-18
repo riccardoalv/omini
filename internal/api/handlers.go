@@ -682,10 +682,14 @@ func (s *Server) updateInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	e, err := s.Store.UpdateInventory(r.Context(), r.PathValue("id"), in)
-	if isNotFound(err) {
+	switch {
+	case isNotFound(err):
 		writeError(w, http.StatusNotFound, "device not found")
 		return
-	} else if err != nil {
+	case errors.Is(err, store.ErrNoteTooLong):
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	case err != nil:
 		internalError(w, err)
 		return
 	}

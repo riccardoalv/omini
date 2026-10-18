@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,5 +195,37 @@ func TestSettingsWithPrefix(t *testing.T) {
 	got, err := s.SettingsWithPrefix(ctx, "dns_name:")
 	if err != nil || len(got) != 2 || got["dns_name:aa"] != "nas" || got["dns_name:bb"] != "-" {
 		t.Fatalf("%v %v", got, err)
+	}
+}
+
+func TestInventoryNote(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: "dev:nas", Kind: "device", Label: "nas"}}, time.Unix(1_800_000_000, 0)); err != nil {
+		t.Fatal(err)
+	}
+	note := "  NAS in the living room\nbought 2024  "
+	e, err := s.UpdateInventory(ctx, "dev:nas", InventoryUpdate{Note: &note})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Note != "NAS in the living room\nbought 2024" {
+		t.Fatalf("the note is kept, trimmed, with its lines: %q", e.Note)
+	}
+	alias := "NAS"
+	if e, err = s.UpdateInventory(ctx, "dev:nas", InventoryUpdate{Alias: &alias}); err != nil || e.Note == "" {
+		t.Fatalf("changing another field keeps the note: %+v %v", e, err)
+	}
+	long := strings.Repeat("é", NoteMax+1)
+	if _, err := s.UpdateInventory(ctx, "dev:nas", InventoryUpdate{Note: &long}); !errors.Is(err, ErrNoteTooLong) {
+		t.Fatalf("a note over %d characters is refused: %v", NoteMax, err)
+	}
+	fits := strings.Repeat("é", NoteMax)
+	if _, err := s.UpdateInventory(ctx, "dev:nas", InventoryUpdate{Note: &fits}); err != nil {
+		t.Fatalf("a note of exactly %d characters (not bytes) fits: %v", NoteMax, err)
+	}
+	empty := ""
+	if e, err = s.UpdateInventory(ctx, "dev:nas", InventoryUpdate{Note: &empty}); err != nil || e.Note != "" {
+		t.Fatalf("an empty note clears it: %+v %v", e, err)
 	}
 }

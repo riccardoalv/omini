@@ -165,6 +165,7 @@ export const api = {
       hidden?: boolean
       device_type?: string
       icon?: string
+      note?: string
     },
   ) => request<InventoryEntry>('PATCH', `/api/inventory/${encodeURIComponent(id)}`, input),
   deleteInventory: (ids: string[]) => request<void>('POST', '/api/inventory/delete', { ids }),

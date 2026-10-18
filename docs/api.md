@@ -135,8 +135,8 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `first_seen`, `last_seen`, plus `online` and the current identification |
-| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic) |
+| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `note`, `first_seen`, `last_seen`, plus `online` and the current identification |
+| `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic), `note` (plain text, up to 1,000 characters; `""` clears it; longer is a 400) |
 | `POST` | `/api/inventory/delete` | Body `{ids: [...]}`: delete entries and their history (they come back if seen again) |
 
 ## Integrations and collection

@@ -31,6 +31,12 @@ describe('inventory', () => {
     expect(ids(filterInventory(entries, { ...f, query: '' }))).toHaveLength(3)
   })
 
+  it('searches the notes too', () => {
+    const noted = [...entries, entry('pi', { note: 'Pi-hole in the hallway closet' })]
+    const f = { status: 'all' as const, randomOnly: false }
+    expect(ids(filterInventory(noted, { ...f, query: 'closet' }))).toEqual(['pi'])
+  })
+
   it('filters by status and randomized MACs', () => {
     expect(
       ids(filterInventory(entries, { query: '', status: 'offline', randomOnly: false })),

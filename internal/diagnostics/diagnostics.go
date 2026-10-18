@@ -32,6 +32,7 @@ func NewAnonymizer() *Anonymizer {
 var dropped = map[string]bool{
 	"password": true, "secret": true, "token": true, "community": true, "psk": true,
 	"content": true, // configuration backups
+	"note":    true, // the user's notes about devices (names, passwords)
 	"config":  true, // integration settings (hosts, users)
 	"layout":  true,
 }

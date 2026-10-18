@@ -42,7 +42,10 @@ describe('map export', () => {
   it('names files by date and exports the data as JSON', () => {
     expect(exportName('png', new Date('2026-10-07T12:00:00Z'))).toBe('omini-map-2026-10-07.png')
     const data = {
-      topology: { nodes: [{ id: 'a', kind: 'device', label: 'a', online: true }], edges: [] },
+      topology: {
+        nodes: [{ id: 'a', kind: 'device', label: 'a', online: true, note: 'Rack, top shelf' }],
+        edges: [],
+      },
       statuses: [],
       generated_at: '2026-10-07T00:00:00Z',
       layout: { a: { x: 1, y: 2 } },
@@ -51,6 +54,7 @@ describe('map export', () => {
     const json = JSON.parse(mapJSON(data))
     expect(Object.keys(json).sort()).toEqual(['areas', 'generated_at', 'layout', 'topology'])
     expect(json.topology.nodes[0].id).toBe('a')
+    expect(json.topology.nodes[0].note).toBe('Rack, top shelf')
     vi.restoreAllMocks()
   })
 })

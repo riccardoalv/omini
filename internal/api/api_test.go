@@ -710,3 +710,37 @@ func TestRunRound(t *testing.T) {
 		t.Fatalf("run a round: %d, want 202", code)
 	}
 }
+
+func TestDeviceNote(t *testing.T) {
+	h := newHarness(t, nil)
+	h.login()
+	h.do("POST", "/api/integrations", map[string]any{"name": "demo", "type": "demo", "config": map[string]any{}}, nil)
+	if err := h.coll.CollectNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	nas := "mac:00:11:32:aa:00:01"
+	var entry map[string]any
+	if code := h.do("PATCH", "/api/inventory/"+url.PathEscape(nas), map[string]any{"note": "Living room, bought 2024"}, &entry); code != 200 {
+		t.Fatalf("patch the note: %d %v", code, entry)
+	}
+	if entry["note"] != "Living room, bought 2024" {
+		t.Fatalf("the entry has its note: %v", entry)
+	}
+	if code := h.do("PATCH", "/api/inventory/"+url.PathEscape(nas), map[string]any{"note": strings.Repeat("x", 1001)}, nil); code != http.StatusBadRequest {
+		t.Fatalf("a note too long is a bad request: %d", code)
+	}
+	if err := h.coll.CollectNow(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var topo struct {
+		Topology struct {
+			Nodes []map[string]any `json:"nodes"`
+		} `json:"topology"`
+	}
+	h.do("GET", "/api/topology", nil, &topo)
+	for _, n := range topo.Topology.Nodes {
+		if n["id"] == nas && n["note"] != "Living room, bought 2024" {
+			t.Fatalf("the map node carries the note: %v", n)
+		}
+	}
+}
