@@ -581,9 +581,9 @@ class Radio(BaseModel):
     """
     The channel it is on now.
     """
-    width_mhz: Literal[20, 40, 80, 160, 320] | None = None
+    width_mhz: Annotated[int | None, Field(ge=20, le=320)] = None
     """
-    Channel width.
+    Channel width: 20, 40, 80, 160 or 320.
     """
     auto: bool | None = None
     """

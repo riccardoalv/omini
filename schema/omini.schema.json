@@ -1742,14 +1742,9 @@
         },
         "width_mhz": {
           "type": "integer",
-          "enum": [
-            20,
-            40,
-            80,
-            160,
-            320
-          ],
-          "description": "Channel width."
+          "minimum": 20,
+          "maximum": 320,
+          "description": "Channel width: 20, 40, 80, 160 or 320."
         },
         "auto": {
           "type": "boolean",

@@ -69,7 +69,7 @@ func ap(mac, name string, ch uint8, clients ...model.MACAddress) model.Device {
 	d := model.Device{
 		Key: mac, Name: name, Role: model.Ptr(model.DeviceRoleAp), MACs: []model.MACAddress{model.MACAddress(mac)},
 		Radios: []model.Radio{
-			{Name: "wifi0", Band: b24, Channel: model.Ptr(ch), WidthMhz: model.Ptr(model.RadioWidthMhz(20))},
+			{Name: "wifi0", Band: b24, Channel: model.Ptr(ch), WidthMhz: model.Ptr[uint16](20)},
 			{Name: "wifi1", Band: model.WifiBandA5Ghz, Channel: model.Ptr[uint8](36)},
 		},
 	}

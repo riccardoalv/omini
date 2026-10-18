@@ -141,7 +141,7 @@ func TestAFixedRadioCountsWhereItOverlaps(t *testing.T) {
 
 func TestRadiosFromTheTopology(t *testing.T) {
 	b24, b5 := model.WifiBandA24Ghz, model.WifiBandA5Ghz
-	w40 := model.RadioWidthMhz(40)
+	w40 := uint16(40)
 	ap := func(id string, d model.Device, changes ...model.ChangeKind) topology.Node {
 		return topology.Node{ID: id, Label: id, Kind: topology.KindDevice, Online: true, Device: &d, Changes: changes}
 	}
