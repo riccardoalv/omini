@@ -27,6 +27,7 @@ type announce struct {
 	Manufacturer string
 	Model        string
 	Name         string // friendly name (UPnP)
+	IGD          igd    // a UPnP gateway's port mapping service
 }
 
 func (a *announce) merge(b announce) {
@@ -40,6 +41,9 @@ func (a *announce) merge(b announce) {
 	}
 	if a.Name == "" {
 		a.Name = b.Name
+	}
+	if a.IGD == (igd{}) {
+		a.IGD = b.IGD
 	}
 }
 
@@ -287,13 +291,8 @@ func parseSSDP(b []byte) (location, server string) {
 }
 
 type upnpRoot struct {
-	Device struct {
-		DeviceType   string `xml:"deviceType"`
-		FriendlyName string `xml:"friendlyName"`
-		Manufacturer string `xml:"manufacturer"`
-		ModelName    string `xml:"modelName"`
-		ModelNumber  string `xml:"modelNumber"`
-	} `xml:"device"`
+	URLBase string     `xml:"URLBase"`
+	Device  upnpDevice `xml:"device"`
 }
 
 func fetchDescription(ctx context.Context, client *http.Client, loc string) (announce, bool) {
@@ -310,14 +309,17 @@ func fetchDescription(ctx context.Context, client *http.Client, loc string) (ann
 	if err != nil {
 		return announce{}, false
 	}
-	return parseDescription(body)
+	return parseDescription(body, loc)
 }
 
-func parseDescription(body []byte) (announce, bool) {
+// parseDescription reads a UPnP description fetched from loc: what the device
+// is and, for an Internet gateway, its port mapping service.
+func parseDescription(body []byte, loc string) (announce, bool) {
 	var root upnpRoot
 	if err := xml.Unmarshal(body, &root); err != nil {
 		return announce{}, false
 	}
+	g, isIGD := findIGD(root, loc)
 	d := root.Device
 	model := strings.TrimSpace(strings.TrimSpace(d.ModelName) + " " + strings.TrimSpace(d.ModelNumber))
 	a := announce{
@@ -328,7 +330,10 @@ func parseDescription(body []byte) (announce, bool) {
 	if t := upnpDeviceType(d.DeviceType); t != "" {
 		a.Services = []string{"upnp:" + t}
 	}
-	return a, a.Manufacturer != "" || a.Model != "" || a.Name != ""
+	if isIGD {
+		a.IGD = g
+	}
+	return a, a.Manufacturer != "" || a.Model != "" || a.Name != "" || isIGD
 }
 
 // upnpDeviceType extracts "MediaRenderer" from "urn:schemas-upnp-org:device:MediaRenderer:1".

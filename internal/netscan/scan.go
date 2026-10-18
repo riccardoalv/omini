@@ -54,6 +54,8 @@ type Integration struct {
 	// SNMP devices read, by device key: where to send a change.
 	agents map[string]agent
 	now    func() time.Time
+	// ssdp browses SSDP (default browseSSDP; tests replace it).
+	ssdp func(ctx context.Context, wait time.Duration, allowed func(netip.Addr) bool) map[netip.Addr]announce
 }
 
 type deepInfo struct {
@@ -107,7 +109,7 @@ func fields() []model.FormField {
 		method("dns", "Reverse DNS", "Asks this server's DNS and the router's DNS for device names."),
 		method("netbios", "NetBIOS", "Asks Windows and Samba machines for their names."),
 		method("mdns", "mDNS / Bonjour", "Listens to what devices announce: names, models and services (AirPlay, Chromecast, printers...)."),
-		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players."),
+		method("ssdp", "SSDP / UPnP", "Reads manufacturer and model from TVs, routers and media players, and the port mappings devices opened on the router through UPnP (only read, never changed)."),
 		method("web_titles", "Web page titles", "Reads the title of web interfaces to recognize apps (Proxmox, TrueNAS, Home Assistant...)."),
 		method("ssh_banners", "SSH banners", "Reads the SSH version line, which often names the operating system."),
 		method("dhcp", "DHCP fingerprints", "Watches the address requests devices send when they join the network: what they ask for tells their operating system (Android, Windows, Apple, Linux...). Only watches, never answers; sees this server's own network; needs raw sockets (root in Docker)."),
@@ -372,6 +374,8 @@ type hostAcc struct {
 	src []string
 	ttl int
 	os  string
+	// forwards are the UPnP port mappings of a gateway (its IGD service).
+	forwards []model.PortForward
 }
 
 func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]model.Device, error) {
@@ -440,7 +444,11 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 	}
 	if opts.ssdp {
 		wg.Add(1)
-		go func() { defer wg.Done(); ssdpRes = browseSSDP(ctx, 3*time.Second, inScope) }()
+		browse := s.ssdp
+		if browse == nil {
+			browse = browseSSDP
+		}
+		go func() { defer wg.Done(); ssdpRes = browse(ctx, 3*time.Second, inScope) }()
 	}
 	var dhcpRes map[string]model.DhcpCheck
 	if opts.dhcpCheck {
@@ -527,6 +535,9 @@ func (s *Integration) Collect(ctx context.Context, cfg integration.Config) ([]mo
 		list = append(list, h)
 	}
 	gateway, _, _ := defaultGateway(s.RoutePath)
+	if gw := hosts[gateway]; gw != nil && gw.ann.IGD != (igd{}) {
+		gw.forwards = readPortMappings(ctx, gw.ann.IGD)
+	}
 	sweepHosts(ctx, list, 32, func(h *hostAcc) {
 		d := s.deepScan(ctx, h, gateway, opts)
 		if len(d.ports) > 0 {
@@ -718,10 +729,11 @@ func (s *Integration) devices(prefixes []netip.Prefix, locals []localNet, hosts 
 
 	byPrefix := map[netip.Prefix][]model.Host{}
 	var gateway *model.Host
+	var forwards []model.PortForward
 	for _, h := range hosts {
 		mh := s.toHost(h)
 		if gwErr == nil && h.ip == gwIP {
-			gateway = &mh
+			gateway, forwards = &mh, h.forwards
 			continue
 		}
 		for _, p := range prefixes {
@@ -739,7 +751,9 @@ func (s *Integration) devices(prefixes []netip.Prefix, locals []localNet, hosts 
 			return netip.MustParseAddr(list[i].IP).Less(netip.MustParseAddr(list[j].IP))
 		})
 		if gateway != nil && p.Contains(gwIP) {
-			out = append(out, gatewayDevice(*gateway, list))
+			d := gatewayDevice(*gateway, list)
+			d.PortForwards = forwards
+			out = append(out, d)
 			continue
 		}
 		out = append(out, model.Device{
