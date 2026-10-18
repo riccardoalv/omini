@@ -7,7 +7,7 @@ import { formatAgo, formatBytes } from '@/lib/format'
 import type { Device } from '@/lib/types'
 
 /**
- * What some devices report besides ports and health: VLANs, services, VPN
+ * What some devices report besides ports and health: Wi-Fi radios, VLANs, services, VPN
  * peers, DHCP pool usage and the firewall's state table.
  */
 const props = defineProps<{ device: Device }>()
@@ -26,10 +26,48 @@ const statesPct = computed(() => {
 })
 const pct = (used?: number, total?: number) =>
   used !== undefined && total ? Math.round((used / total) * 100) : undefined
+const bands: Record<string, string> = { '2.4ghz': '2.4 GHz', '5ghz': '5 GHz', '6ghz': '6 GHz' }
+/** The radios' channels at a glance: "2.4 GHz 6 · 5 GHz 36". */
+const radiosSummary = computed(() =>
+  (d.value.radios ?? [])
+    .filter((r) => r.enabled !== false)
+    .map((r) => `${bands[r.band] ?? r.band} ${r.channel ?? '?'}`)
+    .join(' · '),
+)
 const tone = (p?: number) => (p === undefined ? '' : p >= 90 ? 'bad' : p >= 75 ? 'warn' : 'ok')
 </script>
 
 <template>
+  <PanelSection
+    v-if="d.radios?.length"
+    id="radios"
+    :title="t('panel.radios')"
+    :summary="radiosSummary"
+    data-test="radios"
+  >
+    <p v-if="d.wireless_uplink" class="muted small mesh">{{ t('panel.meshUnit') }}</p>
+    <ul class="rows">
+      <li
+        v-for="r in d.radios"
+        :key="r.name"
+        :class="{ off: r.enabled === false }"
+        data-test="radio"
+      >
+        <span class="tag band">{{ bands[r.band] ?? r.band }}</span>
+        <span class="grow">
+          <strong v-if="r.channel !== undefined">{{ t('panel.channel', { n: r.channel }) }}</strong>
+          <span v-if="r.width_mhz" class="muted"> · {{ r.width_mhz }} MHz</span>
+          <span v-if="r.auto" class="badge">{{ t('panel.radioAuto') }}</span>
+          <span v-if="r.enabled === false" class="badge off">{{ t('panel.radioOff') }}</span>
+        </span>
+        <span class="muted small mono">
+          <template v-if="r.tx_power_dbm !== undefined">{{ r.tx_power_dbm }} dBm · </template
+          >{{ r.name }}
+        </span>
+      </li>
+    </ul>
+  </PanelSection>
+
   <PanelSection
     v-if="d.firewall_states || d.dhcp_pools?.length"
     id="usage"
@@ -184,6 +222,24 @@ const tone = (p?: number) => (p === undefined ? '' : p >= 90 ? 'bad' : p >= 75 ?
 }
 .meter.bad i {
   background: var(--danger);
+}
+.band {
+  min-width: 56px;
+}
+.badge {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.badge.off,
+.rows li.off {
+  color: var(--danger);
+}
+.mesh {
+  margin: 0 0 6px;
 }
 .services {
   display: grid;

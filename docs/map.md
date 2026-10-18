@@ -245,6 +245,12 @@ makes, kept when they changed (the last 50), each marked **by Omini** or
 saves one. Secrets are left out where the device allows it. Omini never
 restores a configuration.
 
+**Wi-Fi radios**, folded, for an access point whose integration reports them:
+each radio's band, channel, width, **auto** when the channel is automatic,
+transmit power and whether it is off; the summary lists the channels
+("2.4 GHz 6 · 5 GHz 36"). A mesh unit says so. A conflict between access
+points is settled from its alert ([Wi-Fi channels](#wi-fi-channels)).
+
 **Extras**, folded, when an integration reports them: services (stopped ones first),
 VPN peers (WireGuard, OpenVPN, IPsec: connected, endpoint, last handshake,
 traffic), DHCP pool usage and firewall states (yellow from 75 %, red from

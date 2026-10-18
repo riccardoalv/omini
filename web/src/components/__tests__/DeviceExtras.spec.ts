@@ -41,4 +41,31 @@ describe('DeviceExtras', () => {
     })
     expect(w.text()).toBe('')
   })
+
+  it("shows an access point's radios compactly, with the channels in the summary", () => {
+    const w = mount(DeviceExtras, {
+      props: {
+        device: {
+          key: 'ap',
+          name: 'ap',
+          wireless_uplink: true,
+          radios: [
+            { name: 'wifi0', band: '2.4ghz', channel: 6, width_mhz: 20, tx_power_dbm: 17 },
+            { name: 'wifi1', band: '5ghz', channel: 36, width_mhz: 80, auto: true },
+            { name: 'wifi2', band: '6ghz', enabled: false },
+          ],
+        },
+      },
+      global: { plugins: plugins() },
+    })
+    const section = w.get('[data-test=radios]')
+    expect(section.get('.summary').text()).toBe('2.4 GHz 6 · 5 GHz 36')
+    const rows = section.findAll('[data-test=radio]')
+    expect(rows[0]!.text()).toContain('2.4 GHz')
+    expect(rows[0]!.text()).toContain('Channel 6 · 20 MHz')
+    expect(rows[0]!.text()).toContain('17 dBm · wifi0')
+    expect(rows[1]!.text()).toContain('auto')
+    expect(rows[2]!.classes()).toContain('off')
+    expect(section.text()).toContain('A mesh unit')
+  })
 })
