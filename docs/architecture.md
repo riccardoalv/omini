@@ -40,10 +40,16 @@ Raspberry Pi.
 | nmap | `internal/nmapscan` | Runs the host's nmap in the background, and on one device on demand |
 | Flows | `internal/flows` | NetFlow v5/v9, IPFIX and sFlow v5 listeners; conversations per minute |
 | Plugins | `internal/plugins` | Install from GitHub, uv environments, run with the JSON protocol, store index |
-| Collector | `internal/collector` | Collection rounds, snapshots, traffic rates, MAC table memory, presence, traffic history, alerts |
+| Collector | `internal/collector` | Collection rounds, snapshots, traffic rates, MAC table and attachment memory, presence, traffic history, alerts; configuration changes (apply, history), backups, local DNS names, paused devices, Wake-on-LAN |
 | Topology | `internal/topology` | A pure function from devices to a map |
 | Identification | `internal/classify`, `internal/oui`, `internal/models`, `internal/appicons` | Type, OS, brand, product; MAC vendors; model names; app icons |
 | Insights | `internal/insights` | Alert rules: pure functions of the map |
+| DHCP check | `internal/dhcpcheck` | Broadcasts a DHCPDISCOVER (never a REQUEST) and collects the offers: no answer, or a rogue server |
+| DNS check | `internal/dnscheck` | Resolves a name with one DNS server alone and times the answer |
+| Fixing addresses | `internal/fixip` | Devices on DHCP without a reservation, and the address each would keep (or one proposed outside the range) |
+| VLAN plans | `internal/vlans` | What each device on the way to the router changes for a port's VLANs (pure functions of the map and the catalog) |
+| Diagnostics | `internal/diagnostics` | The anonymized diagnostics file testers attach to issues |
+| Places | `internal/geoip` | Countries and network owners of internet addresses (DB-IP Lite, embedded by `make geoip`) |
 | Notifications | `internal/notify` | Webhook, Telegram and e-mail senders; grouping and cooldown |
 | Store | `internal/store` | SQLite (pure Go driver, WAL), migrations |
 | Secrets | `internal/secret` | Encrypts credentials at rest with the secret key |
@@ -65,11 +71,18 @@ Raspberry Pi.
 3. Each result (a list of devices) is saved as the integration's **snapshot**
    and fed to the traffic meter.
 4. The map is **rebuilt once**, from every snapshot:
-   topology → MAC table memory → inventory (first/last seen) →
+   topology → MAC table and attachment memory → inventory (first/last seen) →
    identification → apps and VMs → user overrides and port names → traffic →
-   presence events and traffic history → insights → alerts.
+   the changes each device can apply and its protected ports
+   (`markChangeable`) → presence events and traffic history → insights →
+   alerts.
 5. Alerts opened or resolved in the round are handed to the notification
    dispatcher, which delivers them in the background.
+6. After the round (`afterRound`), Omini keeps what it set on the devices in
+   step with the network: names learned from the DNS servers for the flows,
+   the local DNS names of renamed devices, paused devices that got another
+   address (automatic retries back off while a device refuses them), and the
+   configuration backups that are due.
 
 Snapshots are stored, so after a restart the last map is available at once.
 
@@ -186,10 +199,18 @@ start (`PRAGMA user_version`).
 | `inventory` | Every device ever seen, first/last seen, user fields | until deleted |
 | `layout`, `areas`, `port_labels` | Positions, areas, port names | until changed |
 | `mac_ports` | Where each MAC was last learned | 6 hours |
+| `attachments` | Where each client was last seen for sure (an access point's list, a switch port of its own) | 1 year |
+| `dhcp_fingerprints` | What each MAC asks for when it requests an address (identification) | replaced when it asks again |
 | `traffic_minutes`, `traffic_hours` | Traffic history | 24 hours, 1 year |
 | `presence_events` | Joined / left | 1 year |
 | `alerts` | Open and resolved alerts | 90 days after resolution |
 | `flow_minutes` | Top conversations per minute | 24 hours |
+| `internet_minutes`, `internet_hours` | Internet traffic per device (from flows) | 24 hours, 35 days |
+| `internet_destinations` | Where each device goes on the internet, per hour | 24 hours |
+| `internet_places` | The network's internet traffic per country and owner, per hour | 35 days |
+| `config_changes` | Every change made from Omini: on which node, for which device, before and after, the error | 1 year |
+| `config_backups` | Each device's configuration when it changed (compressed and sealed) | the last 50 per device |
+| `vlans` | The network's VLAN catalog and each VLAN's network | until deleted |
 | `notifiers` | Notification channels (secrets encrypted) | until deleted |
 | `users`, `sessions` | The admin and its sessions | sessions 30 days |
 | `settings` | Round interval, when presence tracking started | |
