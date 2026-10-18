@@ -147,6 +147,12 @@ const ptBR: typeof en = {
       disabled: 'Desligado',
     },
     stpRole: 'porta {role}',
+    stpRoles: {
+      root: 'raiz',
+      designated: 'designada',
+      alternate: 'alternativa',
+      backup: 'reserva',
+    },
     trafficNow: 'Tráfego agora',
     band: 'Banda Wi-Fi',
     linkRate: 'link de {rate} Mbps',

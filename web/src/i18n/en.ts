@@ -144,6 +144,7 @@ export default {
       disabled: 'Off',
     },
     stpRole: '{role} port',
+    stpRoles: { root: 'Root', designated: 'Designated', alternate: 'Alternate', backup: 'Backup' },
     trafficNow: 'Traffic now',
     band: 'Wi-Fi band',
     linkRate: '{rate} Mbps link',

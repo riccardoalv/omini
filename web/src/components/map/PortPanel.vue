@@ -39,7 +39,10 @@ const emit = defineEmits<{
   /** A change was applied: the map reloads. */
   applied: []
 }>()
-const { t } = useI18n()
+const { t, te } = useI18n()
+/** A spanning tree role in words; one Omini does not know stays as reported. */
+const stpRole = (role: string) =>
+  te(`panel.stpRoles.${role}`) ? t(`panel.stpRoles.${role}`) : role
 
 /** One row, in order: ports shrink to fit (and the row scrolls past that). */
 const rows = computed(() => [props.ports.map((p, i) => ({ p, n: i + 1 }))])
@@ -172,7 +175,7 @@ function details(p: Interface) {
       label: 'STP',
       value: [
         t(`panel.stp.${p.stp.state}`),
-        p.stp.role ? t('panel.stpRole', { role: p.stp.role }) : '',
+        p.stp.role ? t('panel.stpRole', { role: stpRole(p.stp.role) }) : '',
       ]
         .filter(Boolean)
         .join(' · '),

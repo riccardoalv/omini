@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import { createAppI18n } from '@/i18n'
 import type { Interface, TopoNode } from '@/lib/types'
 
 import PortPanel from '../map/PortPanel.vue'
@@ -57,6 +58,23 @@ describe('PortPanel', () => {
       const w = mountPanel([p])
       await w.get('.port').trigger('click')
       expect(w.find('[data-test=port-card] dd.err').exists()).toBe(hot)
+      w.unmount()
+    }
+  })
+
+  it('says the spanning tree role in words, in both languages', async () => {
+    const ports = [port('p1', { up: true, stp: { state: 'forwarding', role: 'root' } })]
+    for (const [lang, want] of [
+      ['en', 'Forwarding · Root port'],
+      ['pt-BR', 'Encaminhando · porta raiz'],
+    ] as const) {
+      const w = mount(PortPanel, {
+        props: { ports, links: {} },
+        global: { plugins: [createAppI18n(lang)] },
+        attachTo: document.body,
+      })
+      await w.get('.port').trigger('click')
+      expect(w.get('[data-test=port-card]').text()).toContain(want)
       w.unmount()
     }
   })
