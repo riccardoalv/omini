@@ -255,11 +255,22 @@ func duplicateIP(in Input, idx index) []Insight {
 	byIP := map[string][]*topology.Node{}
 	for i := range in.Topology.Nodes {
 		n := &in.Topology.Nodes[i]
-		if !n.Online || n.IP == "" || n.MAC == "" ||
-			(n.Kind != topology.KindClient && n.Kind != topology.KindDevice) {
+		if !n.Online || n.MAC == "" || (n.Kind != topology.KindClient && n.Kind != topology.KindDevice) {
 			continue
 		}
-		byIP[n.IP] = append(byIP[n.IP], n)
+		if n.IP != "" {
+			byIP[n.IP] = append(byIP[n.IP], n)
+		}
+		// A client's global IPv6 addresses too (NDP, DHCPv6): never link-local
+		// ones (fe80::1 is on many machines), nor a device's own interface
+		// addresses (a router pair shares its virtual ones).
+		if n.Kind == topology.KindClient {
+			for _, ip := range topology.GlobalIPv6(n.IPs6) {
+				if ip != n.IP {
+					byIP[ip] = append(byIP[ip], n)
+				}
+			}
+		}
 	}
 	var out []Insight
 	for ip, nodes := range byIP {
