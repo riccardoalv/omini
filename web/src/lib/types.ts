@@ -294,6 +294,8 @@ export interface TopoEdge {
   lag?: number
   /** Spanning tree blocks one of its ports: a redundant link on standby. */
   standby?: boolean
+  /** A VPN tunnel whose peer is not connected. */
+  down?: boolean
 }
 
 /** What the network scan can do where Omini runs (see the README). */
@@ -528,6 +530,9 @@ export interface TrafficPoint {
   tx_bps: number
   rx_max_bps?: number
   tx_max_bps?: number
+  /** The port's optical module (hours: its average), when it has one. */
+  rx_power_dbm?: number
+  temperature_c?: number
 }
 
 /** A type of notification channel and its form. */

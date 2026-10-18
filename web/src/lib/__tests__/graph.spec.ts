@@ -146,6 +146,13 @@ describe('edgeLook', () => {
     expect(edgeLook(edge('a', 'b', { kind: 'lldp' })).dashed).toBe(false)
   })
 
+  it('marks a VPN tunnel that is down', () => {
+    const down = edgeLook(edge('a', 'b', { kind: 'vpn', down: true }))
+    expect(down.vpnDown && down.dashed).toBe(true)
+    expect(edgeLook(edge('a', 'b', { kind: 'vpn' })).vpnDown).toBe(false)
+    expect(edgeLook(edge('a', 'b', { kind: 'lldp', down: true })).vpnDown).toBe(false)
+  })
+
   it('dashes a link spanning tree keeps on standby', () => {
     expect(edgeLook(edge('a', 'b', { kind: 'lldp', standby: true })).dashed).toBe(true)
   })

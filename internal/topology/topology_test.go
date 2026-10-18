@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1041,6 +1042,39 @@ func TestSiteToSiteVPNJoinsTheBranch(t *testing.T) {
 	}
 }
 
+// A tunnel whose peer is not connected is down (drawn dashed in red).
+func TestVPNLinkDownWhenItsPeerIsNotConnected(t *testing.T) {
+	for _, connected := range []bool{true, false} {
+		fw := model.Device{
+			Key: "58:9c:fc:00:00:01", Name: "fw", MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+			Interfaces: []model.Interface{{Name: "wan", Wan: model.Ptr(true), IPs: []string{"198.51.100.2/24"}}, {Name: "lan", IPs: []string{"192.168.1.1/24"}}},
+			VpnPeers: []model.VpnPeer{
+				{Name: "branch", Protocol: model.VpnPeerProtocolIpsec, Endpoint: model.Ptr("203.0.113.200"), Connected: model.Ptr(connected)},
+			},
+		}
+		br := model.Device{
+			Key: "48:8f:5a:00:00:01", Name: "br-gw", Host: model.Ptr("10.20.0.1"), MACs: []model.MACAddress{"48:8f:5a:00:00:01"}, Role: model.Ptr(model.DeviceRoleRouter),
+			Interfaces: []model.Interface{{Name: "ether1", Wan: model.Ptr(true), IPs: []string{"203.0.113.200/24"}}, {Name: "bridge", IPs: []string{"10.20.0.1/24"}}},
+		}
+		topo := topology.Build([]topology.Source{
+			{IntegrationID: 1, Online: true, Devices: []model.Device{fw}},
+			{IntegrationID: 2, Online: true, Devices: []model.Device{br}},
+		})
+		found := false
+		for _, e := range topo.Edges {
+			if e.Kind == topology.EdgeVPN {
+				found = true
+				if e.Down == connected {
+					t.Errorf("connected %v: down %v", connected, e.Down)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("no VPN link: %+v", topo.Edges)
+		}
+	}
+}
+
 // A printer in another VLAN: the firewall's ARP knows its MAC, the scan of
 // that routed network only its address — with its name, ports and page title.
 // The client takes them.
@@ -1067,4 +1101,60 @@ func TestRoutedScanEnrichesTheClientOfThatAddress(t *testing.T) {
 		}
 	}
 	t.Fatal("no printer node")
+}
+
+// Each DHCP check keeps the addresses of the network it ran on.
+func TestDHCPCheckKeepsItsNetworksAddresses(t *testing.T) {
+	scan := model.Device{
+		Key: "net:192.168.20.0/24", Name: "Network 192.168.20.0/24",
+		Hosts:      []model.Host{{IP: "192.168.20.10"}},
+		DhcpChecks: []model.DhcpCheck{{Interface: "eth1"}},
+	}
+	topo := topology.Build([]topology.Source{{IntegrationID: 1, Online: true, Devices: []model.Device{scan}}})
+	if len(topo.DhcpChecks) != 1 || !slices.Contains(topo.DhcpCheckAddrs["eth1"], "192.168.20.10") {
+		t.Fatalf("checks %+v, addresses %v", topo.DhcpChecks, topo.DhcpCheckAddrs)
+	}
+}
+
+// A client's label: a DNS record of its address, else its reservation's
+// name, else its lease hostname; among DHCP servers, the router's lease first.
+func TestClientLabelFromDNSReservationAndLeases(t *testing.T) {
+	const a, b, c = "aa:00:00:00:00:0a", "aa:00:00:00:00:0b", "aa:00:00:00:00:0c"
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", MACs: []model.MACAddress{"58:9c:fc:00:00:01"}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{{Name: "lan", IPs: []string{"192.168.1.1/24"}}},
+		Arp: []model.ArpEntry{
+			{MAC: a, IP: "192.168.1.10", Interface: model.Ptr("lan")},
+			{MAC: b, IP: "192.168.1.11", Interface: model.Ptr("lan")},
+			{MAC: c, IP: "192.168.1.12", Interface: model.Ptr("lan")},
+		},
+		DhcpLeases: []model.DhcpLease{
+			{MAC: a, IP: "192.168.1.10", Hostname: model.Ptr("fw-a")},
+			{MAC: b, IP: "192.168.1.11", Hostname: model.Ptr("fw-b")},
+			{MAC: c, IP: "192.168.1.12", Hostname: model.Ptr("fw-c")},
+		},
+		DhcpReservations: []model.DhcpReservation{{MAC: b, IP: "192.168.1.11", Name: model.Ptr("printer")}},
+	}
+	// Another DHCP server (a Pi-hole, read first) with its own names.
+	pi := model.Device{
+		Key: "b8:27:eb:00:00:01", Name: "pihole", MACs: []model.MACAddress{"b8:27:eb:00:00:01"},
+		DhcpLeases: []model.DhcpLease{{MAC: a, IP: "192.168.1.10", Hostname: model.Ptr("pi-a")}},
+		DnsRecords: []model.DnsRecord{{Name: "nas.home.arpa", IP: "192.168.1.12"}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 1, Online: true, Devices: []model.Device{pi}},
+		{IntegrationID: 2, Online: true, Devices: []model.Device{fw}},
+	})
+	got := map[string]string{}
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindClient {
+			got[n.MAC] = n.Label + "/" + n.Hostname
+		}
+	}
+	want := map[string]string{a: "fw-a/fw-a", b: "printer/fw-b", c: "nas/fw-c"}
+	for m, w := range want {
+		if got[m] != w {
+			t.Errorf("%s: %q, want %q", m, got[m], w)
+		}
+	}
 }

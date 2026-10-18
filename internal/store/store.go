@@ -383,6 +383,14 @@ var migrations = []string{
 		last_used_at INTEGER                  -- NULL: never used
 	);
 	`,
+	// 30: a port's optical module over time: received power and temperature,
+	// beside its traffic (NULL for ports without one).
+	`
+	ALTER TABLE traffic_minutes ADD COLUMN rx_power_dbm REAL;
+	ALTER TABLE traffic_minutes ADD COLUMN temp_c REAL;
+	ALTER TABLE traffic_hours ADD COLUMN rx_power_dbm REAL;
+	ALTER TABLE traffic_hours ADD COLUMN temp_c REAL;
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

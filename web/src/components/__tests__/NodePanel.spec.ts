@@ -510,3 +510,32 @@ describe('NodePanel idle Wi-Fi client', () => {
     expect(w.get('[data-test=flow]').text()).toContain('0 bps')
   })
 })
+
+describe('NodePanel spanning tree', () => {
+  it('shows the root the switch sees, linked when it is on the map', async () => {
+    const core: TopoNode = {
+      id: 'dev:core',
+      kind: 'device',
+      label: 'core',
+      online: true,
+      mac: 'AA:BB:CC:00:00:01',
+    }
+    const acc: TopoNode = {
+      id: 'dev:acc',
+      kind: 'device',
+      label: 'acc',
+      role: 'switch',
+      online: true,
+      device: { key: 'acc', name: 'acc', stp_root: '32768.aa:bb:cc:00:00:01' },
+    }
+    const w = mount(NodePanel, {
+      props: { node: acc, nodes: [core, acc], edges: [] },
+      global: { plugins: plugins(), stubs: { RouterLink: true } },
+    })
+    const root = w.get('[data-test=stp-root]')
+    expect(root.text()).toContain('core')
+    expect(root.text()).toContain('32768.aa:bb:cc:00:00:01')
+    await root.get('a').trigger('click')
+    expect(w.emitted('select')?.[0]).toEqual(['dev:core'])
+  })
+})

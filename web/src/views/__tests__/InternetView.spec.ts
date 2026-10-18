@@ -143,6 +143,30 @@ describe('InternetView', () => {
     w.unmount()
   })
 
+  it('marks the devices whose internet a router pauses, like the map', async () => {
+    vi.mocked(api.topology).mockResolvedValue({
+      topology: {
+        nodes: [
+          { id: 'mac:aa', label: 'Phone', kind: 'client', online: true, mac: 'AA:00:00:00:00:01' },
+          {
+            id: 'dev:fw',
+            label: 'fw',
+            kind: 'device',
+            online: true,
+            device: { key: 'fw', name: 'fw', paused: [{ mac: 'aa:00:00:00:00:01' }] },
+          },
+        ],
+        edges: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof api.topology>>)
+    vi.mocked(api.internet).mockResolvedValue(usage())
+    const { w } = await mountIt()
+    expect(w.findAll('[data-test=internet-top] [data-test=internet-paused]')).toHaveLength(1)
+    await w.get('[data-test=internet-all]').trigger('click')
+    expect(w.findAll('[data-test=internet-device] [data-test=internet-paused]')).toHaveLength(1)
+    w.unmount()
+  })
+
   it('says when places are unknown, and how to turn flows on', async () => {
     vi.mocked(api.internet).mockResolvedValue(usage({ attribution: undefined, countries: [] }))
     const { w } = await mountIt()

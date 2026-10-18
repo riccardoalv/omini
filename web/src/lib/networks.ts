@@ -67,7 +67,8 @@ export function subnetOf(cidr: string): Omit<Subnet, 'vlan' | 'label'> | undefin
 
 /**
  * The networks routers and servers report on their interfaces (WAN ones
- * left out), with the VLAN each one is on.
+ * left out) and routers in their networks (VLAN and gateway), with the VLAN
+ * each one is on.
  */
 export function networkSubnets(nodes: TopoNode[]): Subnet[] {
   const out = new Map<string, Subnet>()
@@ -95,6 +96,16 @@ export function networkSubnets(nodes: TopoNode[]): Subnet[] {
     for (const [cidr, vlan] of vlanBySubnet) {
       const s = subnetOf(cidr)
       if (s && !out.has(cidr)) out.set(cidr, { ...s, vlan })
+    }
+    for (const nw of d.networks ?? []) {
+      const s = nw.gateway ? subnetOf(nw.gateway) : undefined
+      if (!s) continue
+      const cur = out.get(s.cidr)
+      out.set(s.cidr, {
+        ...s,
+        vlan: cur?.vlan ?? nw.vlan,
+        label: cur?.label ?? (nw.name || nw.interface),
+      })
     }
   }
   return [...out.values()].sort((a, b) => a.net - b.net || a.bits - b.bits)
@@ -149,6 +160,37 @@ function vlansOf(vlan: number, nodes: TopoNode[], edges: TopoEdge[]): Set<string
 }
 
 /**
+ * The VLAN of each Wi-Fi client: its SSID's, as the access point it hangs
+ * from (or the controller of its site) reports it; an SSID without a VLAN is
+ * on the untagged LAN (VLAN 1).
+ */
+function ssidVlans(nodes: TopoNode[], edges: TopoEdge[]): Map<string, number> {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const parentOf = new Map<string, string>()
+  for (const e of edges)
+    if (e.kind !== 'vpn' && !parentOf.has(e.target)) parentOf.set(e.target, e.source)
+  const vlanOn = (n: TopoNode | undefined, ssid: string) =>
+    n?.device?.wifi_networks?.find((w) => w.ssid === ssid)
+  const anywhere = new Map<string, number>()
+  for (const n of nodes)
+    for (const w of n.device?.wifi_networks ?? [])
+      if (!anywhere.has(w.ssid) || w.vlan !== undefined) anywhere.set(w.ssid, w.vlan ?? 1)
+  const out = new Map<string, number>()
+  for (const n of nodes) {
+    if (!n.ssid || n.device) continue
+    let found: { vlan?: number } | undefined
+    // Up the tree (an SSID node may sit between the client and its access point).
+    for (let id = parentOf.get(n.id) ?? n.parent_id, i = 0; id && !found && i < 3; i++) {
+      found = vlanOn(byId.get(id), n.ssid)
+      id = parentOf.get(id)
+    }
+    const vlan = found ? (found.vlan ?? 1) : anywhere.get(n.ssid)
+    if (vlan !== undefined) out.set(n.id, vlan)
+  }
+  return out
+}
+
+/**
  * The automatic areas of a network: one per VLAN and per subnet (a subnet on
  * a VLAN is that VLAN's area), each with the nodes that are only in it.
  * Nodes in `exclude` (already in an area the user drew) are left out. None
@@ -190,6 +232,8 @@ function networkKeys(nodes: TopoNode[], edges: TopoEdge[], exclude: Set<string>)
   // another VLAN (a trunk) is still in two.
   for (const id of [...listed, ...(listed.has(1) ? [] : [1])])
     for (const n of vlansOf(id, nodes, edges)) add(keys, n, `vlan:${id}`)
+  for (const [n, vlan] of ssidVlans(nodes, edges))
+    if (listed.has(vlan) || vlan === 1) add(keys, n, `vlan:${vlan}`)
   for (const n of nodes)
     for (const ip of addressesOf(n))
       for (const s of subnets)

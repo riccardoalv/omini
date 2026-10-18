@@ -284,7 +284,8 @@ become alerts.
 - **DNS**: the servers are those DHCP hands out, the gateway, and the hosts
   listening on port 53. Each one resolves an internet name (**Advanced →
   External name for the DNS check**, `example.com` by default) and a local
-  name the scan learned from reverse DNS, timed. Alerts: `dns_down` (the
+  name, timed: one of the DNS names Omini set (the first in order) once it
+  has set any, else a name the scan learned from reverse DNS. Alerts: `dns_down` (the
   internet name does not resolve), `dns_slow` (over 500 ms in two checks in a row), `dns_local`
   (the internet name resolves, the local one does not).
 
@@ -379,7 +380,8 @@ for a day.
   busiest), **where it goes** by the networks' owners (Google, Netflix,
   Amazon...; a country on the map narrows it), **who uses it most**, the
   [people](map.md#people) (the sum of each person's devices), and every
-  device with where it went.
+  device with where it went. A device whose internet a router pauses carries
+  the same pause mark as on the map.
 - Each device's panel shows **Where it goes** and the devices it talks to on
   your network, which **Show on the map** highlights. The internet's node
   shows who is using the internet now.

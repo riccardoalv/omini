@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -18,6 +19,10 @@ type TrafficSample struct {
 	Iface  string
 	RxBps  uint64
 	TxBps  uint64
+	// The port's optical module, when it has one: received power and
+	// temperature.
+	RxPowerDBM *float64
+	TempC      *float64
 }
 
 // TrafficPoint is one point of a traffic chart: the average over its minute
@@ -28,6 +33,9 @@ type TrafficPoint struct {
 	TxBps    uint64    `json:"tx_bps"`
 	RxMaxBps uint64    `json:"rx_max_bps,omitempty"`
 	TxMaxBps uint64    `json:"tx_max_bps,omitempty"`
+	// The port's optical module (averages for hours), when it has one.
+	RxPowerDBM *float64 `json:"rx_power_dbm,omitempty"`
+	TempC      *float64 `json:"temperature_c,omitempty"`
 }
 
 // RecordTraffic stores the rates seen at time at: one point per minute (a
@@ -42,8 +50,9 @@ func (s *Store) RecordTraffic(ctx context.Context, samples []TrafficSample, at t
 	minute := at.Truncate(time.Minute).Unix()
 	hour := at.Truncate(time.Hour).Unix()
 	minStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO traffic_minutes (node_id, iface, at, rx_bps, tx_bps) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT (node_id, iface, at) DO UPDATE SET rx_bps = excluded.rx_bps, tx_bps = excluded.tx_bps`)
+		INSERT INTO traffic_minutes (node_id, iface, at, rx_bps, tx_bps, rx_power_dbm, temp_c) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (node_id, iface, at) DO UPDATE SET rx_bps = excluded.rx_bps, tx_bps = excluded.tx_bps,
+			rx_power_dbm = excluded.rx_power_dbm, temp_c = excluded.temp_c`)
 	if err != nil {
 		return err
 	}
@@ -51,19 +60,20 @@ func (s *Store) RecordTraffic(ctx context.Context, samples []TrafficSample, at t
 	// The hourly row is rebuilt from the minutes of that hour: replacing a
 	// minute never counts it twice.
 	hourStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO traffic_hours (node_id, iface, at, rx_bps, tx_bps, rx_max_bps, tx_max_bps, samples)
-		SELECT node_id, iface, ?, AVG(rx_bps), AVG(tx_bps), MAX(rx_bps), MAX(tx_bps), COUNT(*)
+		INSERT INTO traffic_hours (node_id, iface, at, rx_bps, tx_bps, rx_max_bps, tx_max_bps, samples, rx_power_dbm, temp_c)
+		SELECT node_id, iface, ?, AVG(rx_bps), AVG(tx_bps), MAX(rx_bps), MAX(tx_bps), COUNT(*), AVG(rx_power_dbm), AVG(temp_c)
 		FROM traffic_minutes WHERE node_id = ? AND iface = ? AND at >= ? AND at < ?
 		GROUP BY node_id, iface
 		ON CONFLICT (node_id, iface, at) DO UPDATE SET
 			rx_bps = excluded.rx_bps, tx_bps = excluded.tx_bps,
-			rx_max_bps = excluded.rx_max_bps, tx_max_bps = excluded.tx_max_bps, samples = excluded.samples`)
+			rx_max_bps = excluded.rx_max_bps, tx_max_bps = excluded.tx_max_bps, samples = excluded.samples,
+			rx_power_dbm = excluded.rx_power_dbm, temp_c = excluded.temp_c`)
 	if err != nil {
 		return err
 	}
 	defer hourStmt.Close()
 	for _, p := range samples {
-		if _, err := minStmt.ExecContext(ctx, p.NodeID, p.Iface, minute, clamp(p.RxBps), clamp(p.TxBps)); err != nil {
+		if _, err := minStmt.ExecContext(ctx, p.NodeID, p.Iface, minute, clamp(p.RxBps), clamp(p.TxBps), p.RxPowerDBM, p.TempC); err != nil {
 			return err
 		}
 		if _, err := hourStmt.ExecContext(ctx, hour, p.NodeID, p.Iface, hour, hour+3600); err != nil {
@@ -83,10 +93,10 @@ func (s *Store) RecordTraffic(ctx context.Context, samples []TrafficSample, at t
 // per minute when since is within the last day, else per hour.
 func (s *Store) TrafficHistory(ctx context.Context, nodeID, iface string, since, now time.Time) ([]TrafficPoint, error) {
 	hourly := now.Sub(since) > HistoryDay
-	q := `SELECT at, rx_bps, tx_bps, rx_bps, tx_bps FROM traffic_minutes
+	q := `SELECT at, rx_bps, tx_bps, rx_bps, tx_bps, rx_power_dbm, temp_c FROM traffic_minutes
 		WHERE node_id = ? AND iface = ? AND at >= ? ORDER BY at`
 	if hourly {
-		q = `SELECT at, rx_bps, tx_bps, rx_max_bps, tx_max_bps FROM traffic_hours
+		q = `SELECT at, rx_bps, tx_bps, rx_max_bps, tx_max_bps, rx_power_dbm, temp_c FROM traffic_hours
 			WHERE node_id = ? AND iface = ? AND at >= ? ORDER BY at`
 	}
 	rows, err := s.db.QueryContext(ctx, q, nodeID, iface, since.Unix())
@@ -99,11 +109,18 @@ func (s *Store) TrafficHistory(ctx context.Context, nodeID, iface string, since,
 		var (
 			at                 int64
 			rx, tx, rxMx, txMx int64
+			power, temp        sql.NullFloat64
 		)
-		if err := rows.Scan(&at, &rx, &tx, &rxMx, &txMx); err != nil {
+		if err := rows.Scan(&at, &rx, &tx, &rxMx, &txMx, &power, &temp); err != nil {
 			return nil, err
 		}
 		p := TrafficPoint{At: fromUnix(at), RxBps: uint64(rx), TxBps: uint64(tx)} //nolint:gosec // stored from uint64
+		if power.Valid {
+			p.RxPowerDBM = &power.Float64
+		}
+		if temp.Valid {
+			p.TempC = &temp.Float64
+		}
 		if hourly {
 			p.RxMaxBps, p.TxMaxBps = uint64(rxMx), uint64(txMx) //nolint:gosec // stored from uint64
 		}

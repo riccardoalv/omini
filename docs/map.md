@@ -98,7 +98,7 @@ Marks on a node:
 | Line | Meaning |
 |---|---|
 | Solid | Confirmed: LLDP/CDP/MNDP neighbors, a switch's MAC table, or a link an integration declared (a VM on its host) |
-| Dashed | Inferred (ARP, a MAC seen behind an uplink), a site-to-site VPN tunnel between two routers, or a link spanning tree keeps on standby (one of its ports is blocked) |
+| Dashed | Inferred (ARP, a MAC seen behind an uplink), a site-to-site VPN tunnel between two routers (purple; red when its peer is not connected), or a link spanning tree keeps on standby (one of its ports is blocked) |
 | Dotted | Wi-Fi |
 
 A link made of a LAG (bond, aggregate) shows its number of ports and their
@@ -135,7 +135,10 @@ and the link rate is in the client's panel. App links have none either.
 port, else of the device's port, else of the Wi-Fi client. The chart has
 ranges of 1 hour, 24 hours, 7 days, 30 days and 1 year, with average and peak,
 and gaps where there is no data. Omini keeps one point per minute for 24 hours
-and an hourly average and peak for a year.
+and an hourly average and peak for a year. A port with an SFP module keeps its
+received power and temperature the same way: the chart shows the weakest
+signal and the hottest temperature of the period, and both at the point under
+the cursor.
 
 ## The device panel
 
@@ -160,8 +163,12 @@ the [people](#people), to **Nobody**, or to a **New person…** named there
 has at most one owner.
 
 **Details.** Name (click to rename; the name is kept by Omini, never written
-to the device), type, IP and MAC addresses, vendor, model, serial, version,
-uptime, the integration that reads it, **Connected to** (its parent and port),
+to the device; until then a client is named by a DNS record of its address,
+else its DHCP reservation's name, else its DHCP lease's host name, a
+router's first, else the names the scan found), type, IP and MAC addresses,
+vendor, model, serial, the spanning tree root a switch sees (a link to it
+when it is on the map), version, uptime, the integration that reads it,
+**Connected to** (its parent and port),
 **Runs on** (for a router or firewall running as a VM: the host it runs on,
 which is not linked on the map), Wi-Fi network, band, signal and link rate for
 Wi-Fi clients, and **Last seen**.
@@ -398,9 +405,12 @@ with its color, address range and number of devices. A click on one
 closes to show it); a click on it again, or the × next to the menu, clears
 it. What is highlighted:
 
-- devices with an interface in it,
+- devices with an interface in it, or an address in a network a router
+  reports (its VLAN and gateway),
 - links whose port carries it (untagged or tagged),
 - clients seen in it in a MAC table,
+- Wi-Fi clients of an SSID that puts its clients in it (as their access
+  point, or its controller, reports the SSID's VLAN),
 - and what hangs below a device that is only in that network.
 
 A router with addresses in several networks lights up alone, without

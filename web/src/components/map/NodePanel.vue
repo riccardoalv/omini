@@ -201,6 +201,18 @@ const byId = computed(() => new Map(props.nodes.map((x) => [x.id, x])))
 const parent = computed(() => (n.value?.parent_id ? byId.value.get(n.value.parent_id) : undefined))
 // A router or firewall running as a VM: the host it runs on (no link on the map).
 const runsOn = computed(() => (n.value?.runs_on ? byId.value.get(n.value.runs_on) : undefined))
+/** The spanning tree root this switch sees ("32768.aa:bb:..."), and its node when on the map. */
+const stpRoot = computed(() => {
+  const id = n.value?.device?.stp_root
+  if (!id) return undefined
+  const mac = id.split('.').pop()?.toLowerCase()
+  const node = props.nodes.find(
+    (x) =>
+      x.kind === 'device' &&
+      (x.mac?.toLowerCase() === mac || x.device?.macs?.some((m) => m.toLowerCase() === mac)),
+  )
+  return { id, node }
+})
 const children = computed(() =>
   n.value
     ? childrenOf(n.value.id, props.nodes, props.edges).filter((c) => c.kind === 'client')
@@ -944,6 +956,19 @@ async function save(patch: {
               ><dt>{{ t('panel.serial') }}</dt>
               <dd class="mono">{{ n.device.serial }}</dd></template
             >
+            <template v-if="stpRoot">
+              <dt>{{ t('panel.stpRoot') }}</dt>
+              <dd data-test="stp-root">
+                <a
+                  v-if="stpRoot.node && stpRoot.node.id !== n.id"
+                  href="#"
+                  @click.prevent="emit('select', stpRoot.node.id)"
+                  >{{ stpRoot.node.label }}</a
+                >
+                <template v-else-if="stpRoot.node">{{ t('panel.stpRootSelf') }}</template>
+                <span class="mono muted small"> {{ stpRoot.id }}</span>
+              </dd>
+            </template>
             <template v-if="parent">
               <dt>{{ t('panel.connectedTo') }}</dt>
               <dd>

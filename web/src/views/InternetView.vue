@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, Globe } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Globe, Pause } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import { countryName, flag } from '@/lib/flags'
 import { formatAgo, formatBytes } from '@/lib/format'
 import { displayName } from '@/lib/names'
+import { pausedMacs } from '@/lib/paused'
 import { serviceName } from '@/lib/services'
 import { formatRate } from '@/lib/traffic'
 import type {
@@ -75,6 +76,12 @@ const nameOf = (u: InternetUsage) => {
   return n ? displayName(n, t) : u.label
 }
 const devices = computed(() => data.value?.devices ?? [])
+/** Devices whose internet a router pauses (as the map marks them). */
+const paused = computed(() => pausedMacs([...nodes.value.values()]))
+const isPaused = (id: string) => {
+  const mac = nodes.value.get(id)?.mac?.toLowerCase()
+  return !!mac && paused.value.has(mac)
+}
 const topDevices = computed(() => devices.value.slice(0, 8))
 const deviceMax = computed(() => Math.max(1, ...devices.value.map((u) => u.rx + u.tx)))
 const orgs = computed(() =>
@@ -245,6 +252,13 @@ onBeforeUnmount(() => clearInterval(timer))
               <button class="label link" type="button" @click="showDevice(u.node)">
                 <DeviceIcon v-if="nodes.get(u.node)" :device="nodes.get(u.node)!" :size="14" />
                 {{ nameOf(u) }}
+                <span
+                  v-if="isPaused(u.node)"
+                  class="paused-mark"
+                  data-test="internet-paused"
+                  :title="t('host.paused')"
+                  ><Pause :size="9" :stroke-width="3"
+                /></span>
               </button>
               <span class="bar"
                 ><i class="down" :style="{ width: `${(u.rx / deviceMax) * 100}%` }" /><i
@@ -303,7 +317,15 @@ onBeforeUnmount(() => clearInterval(timer))
                 class="muted"
               />
               <DeviceIcon v-if="nodes.get(u.node)" :device="nodes.get(u.node)!" :size="16" />
-              <span class="name">{{ nameOf(u) }}</span>
+              <span class="name"
+                >{{ nameOf(u) }}
+                <span
+                  v-if="isPaused(u.node)"
+                  class="paused-mark"
+                  data-test="internet-paused"
+                  :title="t('host.paused')"
+                  ><Pause :size="9" :stroke-width="3" /></span
+              ></span>
               <span class="mono num">↓ {{ formatBytes(u.rx) }}</span>
               <span class="mono num muted">↑ {{ formatBytes(u.tx) }}</span>
             </button>
@@ -541,6 +563,18 @@ onBeforeUnmount(() => clearInterval(timer))
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.paused-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--warn);
+  color: #fff;
+  vertical-align: middle;
 }
 .name {
   overflow: hidden;

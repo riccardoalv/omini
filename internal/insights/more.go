@@ -1,7 +1,10 @@
 package insights
 
 import (
+	"cmp"
+	"encoding/binary"
 	"fmt"
+	"net/netip"
 	"slices"
 	"strings"
 	"time"
@@ -41,6 +44,8 @@ type History struct {
 	Reboots map[string]time.Time
 	// RootChanges: the spanning tree root a device sees changed, recently.
 	RootChanges map[string]RootChange
+	// VPNConnected: when each VPN peer ("node|peer") was last seen connected.
+	VPNConnected map[string]time.Time
 }
 
 // RootChange is a spanning tree root that changed: a new switch won the
@@ -199,7 +204,11 @@ func sfpLowRx(in Input, _ index) []Insight {
 func dhcpPoolFull(in Input, _ index) []Insight {
 	var out []Insight
 	for _, n := range devices(in) {
-		for _, p := range n.Device.DhcpPools {
+		pools := n.Device.DhcpPools
+		if len(pools) == 0 {
+			pools = rangePools(n)
+		}
+		for _, p := range pools {
 			if p.Total == nil || *p.Total == 0 || p.Used == nil {
 				continue
 			}
@@ -209,6 +218,63 @@ func dhcpPoolFull(in Input, _ index) []Insight {
 				}))
 			}
 		}
+	}
+	return out
+}
+
+// rangePools: the usage of a router's DHCP ranges when it reports its
+// networks' ranges (from, to) but no pools: its leases and reservations
+// inside each range, against the addresses in it.
+func rangePools(n *topology.Node) []model.DhcpPool {
+	var leases, reserved []string
+	var nets []model.Network
+	for _, r := range n.Reports {
+		if r.Device == nil {
+			continue
+		}
+		for _, l := range r.Device.DhcpLeases {
+			leases = append(leases, l.IP)
+		}
+		for _, x := range r.Device.DhcpReservations {
+			reserved = append(reserved, x.IP)
+		}
+		nets = append(nets, r.Device.Networks...)
+	}
+	if len(n.Reports) == 0 {
+		for _, l := range n.Device.DhcpLeases {
+			leases = append(leases, l.IP)
+		}
+		for _, x := range n.Device.DhcpReservations {
+			reserved = append(reserved, x.IP)
+		}
+		nets = n.Device.Networks
+	}
+	var out []model.DhcpPool
+	seenNet := map[string]bool{}
+	for _, nw := range nets {
+		d := nw.Dhcp
+		if d == nil || !d.Enabled {
+			continue
+		}
+		from, err1 := netip.ParseAddr(model.Deref(d.From))
+		to, err2 := netip.ParseAddr(model.Deref(d.To))
+		if err1 != nil || err2 != nil || !from.Is4() || !to.Is4() || to.Less(from) {
+			continue
+		}
+		name := cmp.Or(model.Deref(nw.Name), model.Deref(nw.Interface), model.Deref(nw.Gateway), from.String()+"-"+to.String())
+		if seenNet[name] {
+			continue
+		}
+		seenNet[name] = true
+		f, t := from.As4(), to.As4()
+		total := uint64(binary.BigEndian.Uint32(t[:])-binary.BigEndian.Uint32(f[:])) + 1
+		used := map[netip.Addr]bool{}
+		for _, s := range append(append([]string(nil), leases...), reserved...) {
+			if a, err := netip.ParseAddr(s); err == nil && !a.Less(from) && !to.Less(a) {
+				used[a] = true
+			}
+		}
+		out = append(out, model.DhcpPool{Network: name, Total: model.Ptr(total), Used: model.Ptr(uint64(len(used)))})
 	}
 	return out
 }

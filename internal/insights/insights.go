@@ -224,28 +224,62 @@ func integrationFailed(in Input, _ index) []Insight {
 }
 
 // wanStatus reports internet uplinks whose gateway is down (critical) or
-// degraded (warning).
+// degraded (warning). A gateway not tied by name to one of its router's WAN
+// interfaces (no WAN node carries it) is told on the router itself.
 func wanStatus(in Input, _ index) []Insight {
 	var out []Insight
+	gateway := func(n *topology.Node, g model.Gateway) {
+		p := map[string]any{"gateway": g.Name}
+		if g.LossPct != nil {
+			p["loss_pct"] = *g.LossPct
+		}
+		if g.RttMs != nil {
+			p["rtt_ms"] = *g.RttMs
+		}
+		switch g.Status {
+		case model.GatewayStatusDown:
+			out = append(out, node("wan_down", Critical, n, g.Name, p))
+		case model.GatewayStatusDegraded:
+			out = append(out, node("wan_degraded", Warning, n, g.Name, p))
+		}
+	}
 	for i := range in.Topology.Nodes {
 		n := &in.Topology.Nodes[i]
 		if n.Kind != topology.KindWAN || n.WAN == nil {
 			continue
 		}
 		for _, g := range n.WAN.Gateways {
-			p := map[string]any{"gateway": g.Name}
-			if g.LossPct != nil {
-				p["loss_pct"] = *g.LossPct
+			gateway(n, g)
+		}
+	}
+	for _, n := range devices(in) {
+		wan, told := map[string]bool{}, map[string]bool{}
+		var gateways []model.Gateway
+		for _, r := range n.Reports {
+			if r.Device == nil {
+				continue
 			}
-			if g.RttMs != nil {
-				p["rtt_ms"] = *g.RttMs
+			for _, i := range r.Device.Interfaces {
+				if model.Deref(i.Wan) {
+					wan[i.Name] = true
+				}
 			}
-			switch g.Status {
-			case model.GatewayStatusDown:
-				out = append(out, node("wan_down", Critical, n, g.Name, p))
-			case model.GatewayStatusDegraded:
-				out = append(out, node("wan_degraded", Warning, n, g.Name, p))
+			gateways = append(gateways, r.Device.Gateways...)
+		}
+		if len(n.Reports) == 0 {
+			for _, i := range n.Device.Interfaces {
+				if model.Deref(i.Wan) {
+					wan[i.Name] = true
+				}
 			}
+			gateways = n.Device.Gateways
+		}
+		for _, g := range gateways {
+			if wan[model.Deref(g.Interface)] || told[g.Name] {
+				continue // a WAN node's (or a nested router's, behind another one)
+			}
+			told[g.Name] = true
+			gateway(n, g)
 		}
 	}
 	return out

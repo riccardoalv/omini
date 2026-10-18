@@ -2,6 +2,7 @@ package insights
 
 import (
 	"fmt"
+	"net/netip"
 	"regexp"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -37,12 +38,50 @@ func dhcpNoOffer(in Input, _ index) []Insight {
 			// alert (maintainer, 2026-10-13).
 			continue
 		}
+		if dhcpOff(in.Topology, in.Topology.DhcpCheckAddrs[c.Interface]) {
+			continue // the router says this network has no DHCP: nobody should answer
+		}
 		out = append(out, Insight{
 			Key: "dhcp_no_offer|" + c.Interface, Rule: "dhcp_no_offer", Severity: Critical,
 			Params: map[string]any{"iface": c.Interface},
 		})
 	}
 	return out
+}
+
+// dhcpOff reports whether a router says the network of these addresses has
+// its DHCP turned off.
+func dhcpOff(topo topology.Topology, addrs []string) bool {
+	var ips []netip.Addr
+	for _, s := range addrs {
+		if a, err := netip.ParseAddr(s); err == nil {
+			ips = append(ips, a)
+		}
+	}
+	for i := range topo.Nodes {
+		n := &topo.Nodes[i]
+		if n.Device == nil {
+			continue
+		}
+		nets := n.Device.Networks
+		for _, r := range n.Reports {
+			if r.Device != nil && r.Device != n.Device {
+				nets = append(nets, r.Device.Networks...)
+			}
+		}
+		for _, nw := range nets {
+			p, err := netip.ParsePrefix(model.Deref(nw.Gateway))
+			if err != nil || nw.Dhcp == nil || nw.Dhcp.Enabled {
+				continue
+			}
+			for _, a := range ips {
+				if p.Masked().Contains(a) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // dhcpService is a DHCP server's name or description (Kea, ISC dhcpd,

@@ -203,6 +203,8 @@ export default {
     internet: 'Internet',
     details: 'Details',
     serial: 'Serial number',
+    stpRoot: 'Spanning tree root',
+    stpRootSelf: 'This switch',
     scan: 'Scan (nmap)',
     scanning: 'Scanning…',
     scanHint:
@@ -748,6 +750,30 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      high_swap: {
+        title: '{node} is swapping',
+        detail: 'Swap at {pct}%: the device is short of memory and slows down.',
+      },
+      hot_sensor: {
+        title: '{sensor} is running hot on {node}',
+        detail: 'At {celsius} °C, above {limit_c} °C.',
+      },
+      wifi_open: {
+        title: 'Wi-Fi {ssid} has no password',
+        detail: 'Anyone nearby can join it and see what travels unencrypted.',
+      },
+      reboot_pending: {
+        title: '{node} needs a restart',
+        detail: 'The device asks to be restarted to finish an update or a change.',
+      },
+      vpn_down: {
+        title: 'VPN {peer} down on {node}',
+        detail: 'It was connected {since} and is not now.',
+      },
+      service_stopped: {
+        title: '{service} stopped on {node}',
+        detail: 'The service is enabled but not running.',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -839,6 +865,16 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      high_swap: 'See what uses the memory on the device, stop what is not needed, or add memory.',
+      hot_sensor:
+        'Check the fans, the dust and the airflow around it; a disk that stays hot wears out sooner.',
+      wifi_open:
+        'Set WPA2 or WPA3 with a password on the access point or controller; a guest network can stay open if it is in a VLAN of its own.',
+      reboot_pending: "Restart it when a short outage suits you, from the device's own interface.",
+      vpn_down:
+        'Check the other end of the tunnel and the internet there; a changed address or key also stops it.',
+      service_stopped:
+        "Start it again from the device's own interface and check its logs to see why it stopped.",
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',
@@ -863,6 +899,9 @@ export default {
     peak: 'Peak',
     average: 'Average',
     noData: 'No traffic recorded yet for this period.',
+    module: 'Module',
+    weakestSignal: 'Weakest optical signal',
+    hottestModule: 'Hottest module',
     ranges: { '1': '1 h', '24': '24 h', '168': '7 d', '720': '30 d', '8760': '1 y' },
     link: 'Traffic of {name}',
   },

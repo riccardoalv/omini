@@ -1,0 +1,178 @@
+package insights
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/topology"
+)
+
+// VPNWindow: a VPN peer connected this recently that is not any more is down;
+// one that has not connected within it (a road warrior's phone) is not told.
+const VPNWindow = 24 * time.Hour
+
+// Hot sensors other than CPUs (hot_cpu keeps those).
+const (
+	DiskHotC  = 55.0
+	BoardHotC = 80.0
+)
+
+// SwapWarnPct: swap in use above this is a device short of memory.
+const SwapWarnPct = 50.0
+
+func init() {
+	Rules["service_stopped"] = serviceStopped
+	Rules["vpn_down"] = vpnDown
+	Rules["reboot_pending"] = rebootPending
+	Rules["wifi_open"] = wifiOpen
+	Rules["hot_sensor"] = hotSensor
+	Rules["high_swap"] = highSwap
+}
+
+// serviceStopped: a service the device is configured to run is not running.
+func serviceStopped(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue // its last data is old: device_offline tells it
+		}
+		for _, s := range n.Device.Services {
+			if !model.Deref(s.Enabled) || s.Running == nil || *s.Running {
+				continue
+			}
+			p := map[string]any{"service": s.Name}
+			if d := model.Deref(s.Description); d != "" {
+				p["description"] = d
+			}
+			out = append(out, node("service_stopped", Warning, n, s.Name, p))
+		}
+	}
+	return out
+}
+
+// vpnDown: a VPN peer that was connected in the last VPNWindow is not now.
+// When it was last connected comes from the collector's memory of the
+// rounds, or the peer's last handshake.
+func vpnDown(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue
+		}
+		for _, p := range n.Device.VpnPeers {
+			if p.Connected == nil || *p.Connected {
+				continue
+			}
+			last := in.History.VPNConnected[n.ID+"|"+p.Name]
+			if h := p.LastHandshake; h != nil && h.After(last) {
+				last = *h
+			}
+			if last.IsZero() || in.Now.Sub(last) > VPNWindow {
+				continue
+			}
+			params := map[string]any{"peer": p.Name, "at": last.UTC().Format(time.RFC3339)}
+			if e := model.Deref(p.Endpoint); e != "" {
+				params["endpoint"] = e
+			}
+			out = append(out, node("vpn_down", Warning, n, p.Name, params))
+		}
+	}
+	return out
+}
+
+// rebootPending: the device asks for a restart (to finish an update it
+// installed, or a change), whether or not an update is pending.
+func rebootPending(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if f := n.Device.Firmware; n.Online && f != nil && model.Deref(f.NeedsReboot) {
+			out = append(out, node("reboot_pending", Info, n, "", nil))
+		}
+	}
+	return out
+}
+
+// wifiOpen: a Wi-Fi network without a password. A guest network that puts
+// its clients in a VLAN of their own is only worth knowing (info). A
+// controller reports the same SSID on each of its access points: one alert
+// per integration and SSID, on the first device that reports it.
+func wifiOpen(in Input, _ index) []Insight {
+	type found struct {
+		n    *topology.Node
+		ssid string
+		vlan uint16
+	}
+	byKey := map[string]found{}
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue
+		}
+		for _, w := range n.Device.WifiNetworks {
+			if model.Deref(w.Security) != model.WifiNetworkSecurityOpen || (w.Enabled != nil && !*w.Enabled) {
+				continue
+			}
+			owner := n.ID
+			if n.IntegrationID != 0 {
+				owner = fmt.Sprint(n.IntegrationID)
+			}
+			key := "wifi_open|" + owner + "|" + w.SSID
+			if was, ok := byKey[key]; ok && was.n.ID <= n.ID {
+				continue
+			}
+			byKey[key] = found{n: n, ssid: w.SSID, vlan: model.Deref(w.Vlan)}
+		}
+	}
+	out := make([]Insight, 0, len(byKey))
+	for key, f := range byKey {
+		sev, p := Warning, map[string]any{"ssid": f.ssid}
+		if f.vlan > 1 {
+			sev, p["vlan"] = Info, f.vlan
+		}
+		i := node("wifi_open", sev, f.n, "", p)
+		i.Key = key
+		out = append(out, i)
+	}
+	slices.SortFunc(out, func(a, b Insight) int { return strings.Compare(a.Key, b.Key) })
+	return out
+}
+
+// hotSensor: a disk above DiskHotC or a board above BoardHotC, one alert per
+// sensor.
+func hotSensor(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if !n.Online {
+			continue
+		}
+		for _, t := range n.Device.Temperatures {
+			limit := 0.0
+			switch model.Deref(t.Kind) {
+			case model.TemperatureKindDisk:
+				limit = DiskHotC
+			case model.TemperatureKindBoard:
+				limit = BoardHotC
+			default:
+				continue
+			}
+			if t.Celsius > limit {
+				out = append(out, node("hot_sensor", Warning, n, t.Sensor, map[string]any{
+					"sensor": t.Sensor, "kind": string(*t.Kind), "celsius": round1(t.Celsius), "limit_c": limit,
+				}))
+			}
+		}
+	}
+	return out
+}
+
+func highSwap(in Input, _ index) []Insight {
+	var out []Insight
+	for _, n := range devices(in) {
+		if s := n.Device.SwapPct; n.Online && s != nil && *s > SwapWarnPct {
+			out = append(out, node("high_swap", Warning, n, "", map[string]any{"pct": round1(*s)}))
+		}
+	}
+	return out
+}

@@ -212,6 +212,8 @@ const ptBR: typeof en = {
     internet: 'Internet',
     details: 'Detalhes',
     serial: 'Número de série',
+    stpRoot: 'Raiz do spanning tree',
+    stpRootSelf: 'Este switch',
     scan: 'Escanear (nmap)',
     scanning: 'Escaneando…',
     scanHint:
@@ -761,6 +763,31 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      high_swap: {
+        title: '{node} está usando muito swap',
+        detail: 'Swap em {pct}%: o equipamento está sem memória e fica lento.',
+      },
+      hot_sensor: {
+        title: '{sensor} está quente em {node}',
+        detail: 'A {celsius} °C, acima de {limit_c} °C.',
+      },
+      wifi_open: {
+        title: 'O Wi-Fi {ssid} não tem senha',
+        detail: 'Qualquer pessoa por perto pode entrar nele e ver o que trafega sem criptografia.',
+      },
+      reboot_pending: {
+        title: '{node} precisa reiniciar',
+        detail:
+          'O equipamento pede para ser reiniciado para concluir uma atualização ou alteração.',
+      },
+      vpn_down: {
+        title: 'VPN {peer} caiu em {node}',
+        detail: 'Estava conectada {since} e agora não está.',
+      },
+      service_stopped: {
+        title: '{service} parou em {node}',
+        detail: 'O serviço está habilitado, mas não está rodando.',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -853,6 +880,18 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      high_swap:
+        'Veja o que usa a memória no equipamento, pare o que não é necessário, ou aumente a memória.',
+      hot_sensor:
+        'Verifique as ventoinhas, a poeira e a ventilação em volta; um disco que fica quente se desgasta mais cedo.',
+      wifi_open:
+        'Configure WPA2 ou WPA3 com senha no access point ou controlador; uma rede de visitantes pode ficar aberta se estiver numa VLAN própria.',
+      reboot_pending:
+        'Reinicie-o quando uma breve interrupção não atrapalhar, pela interface do próprio equipamento.',
+      vpn_down:
+        'Verifique a outra ponta do túnel e a internet de lá; um endereço ou chave que mudou também a derruba.',
+      service_stopped:
+        'Inicie-o de novo pela interface do próprio equipamento e veja nos logs por que ele parou.',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',
@@ -880,6 +919,9 @@ const ptBR: typeof en = {
     average: 'Média',
     noData: 'Nenhum tráfego registrado neste período.',
     ranges: { '1': '1 h', '24': '24 h', '168': '7 d', '720': '30 d', '8760': '1 a' },
+    module: 'Módulo',
+    weakestSignal: 'Sinal óptico mais fraco',
+    hottestModule: 'Módulo mais quente',
     link: 'Tráfego de {name}',
   },
   devices: {

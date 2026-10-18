@@ -136,3 +136,34 @@ func TestAlertsOpenRefreshResolve(t *testing.T) {
 		t.Fatalf("reopen: %+v", changes)
 	}
 }
+
+// A port's optical module is kept beside its traffic: per minute, and its
+// average per hour; a port without one has none.
+func TestTrafficHistoryKeepsTheOpticalModule(t *testing.T) {
+	ctx := context.Background()
+	st := openTest(t)
+	start := time.Unix(1_790_000_000, 0).UTC().Truncate(time.Hour)
+	f := func(v float64) *float64 { return &v }
+	for i, s := range [][2]float64{{-10, 40}, {-12, 44}} {
+		err := st.RecordTraffic(ctx, []TrafficSample{
+			{NodeID: "dev:sw", Iface: "SFP 1", RxBps: 1, RxPowerDBM: f(s[0]), TempC: f(s[1])},
+			{NodeID: "dev:sw", Iface: "Port 1", RxBps: 1},
+		}, start.Add(time.Duration(i)*time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := start.Add(2 * time.Minute)
+	mins, _ := st.TrafficHistory(ctx, "dev:sw", "SFP 1", start.Add(-time.Hour), now)
+	if len(mins) != 2 || mins[1].RxPowerDBM == nil || *mins[1].RxPowerDBM != -12 || *mins[1].TempC != 44 {
+		t.Fatalf("minutes: %+v", mins)
+	}
+	hours, _ := st.TrafficHistory(ctx, "dev:sw", "SFP 1", start.Add(-7*24*time.Hour), now)
+	if len(hours) != 1 || hours[0].RxPowerDBM == nil || *hours[0].RxPowerDBM != -11 || *hours[0].TempC != 42 {
+		t.Fatalf("hours: %+v", hours)
+	}
+	plain, _ := st.TrafficHistory(ctx, "dev:sw", "Port 1", start.Add(-time.Hour), now)
+	if len(plain) != 2 || plain[0].RxPowerDBM != nil || plain[0].TempC != nil {
+		t.Fatalf("a port without a module: %+v", plain)
+	}
+}

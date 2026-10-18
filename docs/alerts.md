@@ -23,10 +23,11 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `device_offline` | critical | A device read by an integration is offline: its integration failed **two rounds in a row** (one failed round, a device busy for a moment, shows it offline on the map but is no alert yet). The integration's error is shown |
 | `integration_failed` | critical | An integration fails two rounds in a row and none of its devices is on the map yet |
-| `wan_down` | critical | A WAN gateway is down |
-| `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it) |
+| `wan_down` | critical | A WAN gateway is down. A gateway the router does not tie by name to one of its WAN interfaces is told on the router |
+| `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it); on the router too when it is not tied to a WAN interface |
 | `device_rebooted` | warning | A device's uptime went back: it restarted. Stays open for 1 hour |
 | `discovery_limited` | warning | The network scan is set up but cannot do everything where Omini runs (no host network, no multicast, no ping). See [What each method needs](discovery.md#what-each-method-needs) |
+| `vpn_down` | warning | A VPN peer (tunnel) that was connected in the last 24 hours is not now. Peers that have not connected in the last 24 hours (a phone that connects now and then) are not told |
 
 ### Health
 
@@ -34,11 +35,15 @@ attention) and **info** (worth knowing).
 |---|---|---|
 | `high_cpu` | warning above 80 %, critical from 95 % | CPU use of an online device |
 | `high_memory` | warning from 90 % | Memory use of an online device |
+| `high_swap` | warning above 50 % | Swap use of an online device |
 | `hot_cpu` | warning from 70 °C, critical from 85 °C | The hottest CPU temperature sensor |
+| `hot_sensor` | warning | A disk sensor above 55 °C or a board sensor above 80 °C (CPUs are `hot_cpu`'s) |
 | `disk_full` | warning from 80 %, critical from 90 % | Use of a disk or filesystem |
 | `update_pending` | warning | The device knows of a pending update (from its own last check; Omini never starts one) |
-| `dhcp_pool_full` | warning from 90 % | Addresses in use in a DHCP pool |
+| `reboot_pending` | info | The device asks for a restart (to finish an update or a change), whether or not an update is pending |
+| `dhcp_pool_full` | warning from 90 % | Addresses in use in a DHCP pool. A router that reports its networks' DHCP ranges but no pools is counted by Omini: its leases and reservations inside each range |
 | `firewall_states_full` | warning from 90 % | Entries in the firewall's state table against its limit |
+| `service_stopped` | warning | A service the device is configured to run (enabled) is not running |
 
 ### Links and ports
 
@@ -61,13 +66,14 @@ attention) and **info** (worth knowing).
 | Rule | Severity | Opens when |
 |---|---|---|
 | `duplicate_ip` | warning | Two online devices with different MAC addresses use the same IP |
+| `wifi_open` | warning, or info for a guest network | A Wi-Fi network has no password. Info when it puts its clients in a VLAN of their own (other than 1), the usual guest network. A controller that reports the same SSID on every access point gives one alert per SSID |
 | `config_changed` | info | A device's configuration changed outside Omini: its new [backup](map.md#the-device-panel) differs and Omini made no change in between, on it or through its integration (a UniFi or Omada site keeps its settings in one device's backup, while Omini changes them through any of its devices). Stays open for 24 hours |
 | `dns_bypass` | warning | With [Traffic flows](discovery.md#traffic-flows) and a DNS server Omini reads (AdGuard Home, Pi-hole or the router's), a device sent DNS queries (ports 53, 853) to servers on the internet in the last hour and they answered: your server's blocking and local names do not apply to it. Queries the router blocks (no answer) are not alerted. Routers, servers and DNS servers are left out |
 | `upload_unusual` | warning | With Traffic flows, a device sent at least 200 MB to the internet in the last hour, and five times its usual hour (its average over the week before; needs a day of history). Routers, servers, NAS, hypervisors and VMs are left out |
 | `lan_scan` | warning | With Traffic flows, a device reached 50 or more services (address and port) on your network within a minute in the last hour. Omini's own host and routers are left out; only traffic that crosses the router is seen |
 | `infra_dynamic_ip` | info | A switch, access point, server, NAS, hypervisor, VM, printer or UPS gets its address by DHCP without a reservation, on a router Omini can reserve it on ([Reserve IPs](discovery.md#dns-and-dhcp-checks)) |
 | `iot_with_trusted` | info | Once the network uses VLANs, IoT devices (cameras, TVs, media players, speakers, smart home gear, appliances, air conditioners, solar inverters) share a network with servers, NAS, hypervisors, VMs or computers: one alert per network, listing both. Printers, game consoles, desk phones and phones are left out; a type you corrected counts as corrected, hidden devices do not count |
-| `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered |
+| `dhcp_no_offer` | critical | The network scan asked for an address and no DHCP server answered. Not when a router serves DHCP and its server runs, nor on a network whose router says its DHCP is off |
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |
