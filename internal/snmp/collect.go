@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -319,27 +320,34 @@ func collectInterfaces(c *client, d *model.Device) (map[string]string, error) {
 		}
 		d.Interfaces = append(d.Interfaces, iface)
 	}
-	collectLagMembers(c, d, names)
+	collectStack(c, d, names)
 	return names, nil
 }
 
-// collectLagMembers fills the members of each link aggregation (port-channel,
-// trunk) from IF-MIB's ifStackTable: switches learn MACs on the aggregate
-// while LLDP names its member ports.
-func collectLagMembers(c *client, d *model.Device, names map[string]string) {
-	rows, err := c.walk(oidIfStackStatus)
-	if err != nil {
-		return // optional
-	}
+// collectStack reads IF-MIB's ifStackTable: the members of each link
+// aggregation (port-channel, trunk; switches learn MACs on the aggregate
+// while LLDP names its member ports) and the port each VLAN interface runs
+// on, with its VLAN id when its name says it (see vlanFromName).
+func collectStack(c *client, d *model.Device, names map[string]string) {
 	pos := map[string]int{}
 	for i, iface := range d.Interfaces {
 		pos[iface.Name] = i
+		if model.Deref(iface.Type) == model.InterfaceTypeVlan {
+			if v := vlanFromName(iface.Name); v > 0 {
+				d.Interfaces[i].Vlan = model.Ptr(v)
+			}
+		}
+	}
+	rows, err := c.walk(oidIfStackStatus)
+	if err != nil {
+		return // optional
 	}
 	keys := make([]string, 0, len(rows))
 	for idx := range rows {
 		keys = append(keys, idx)
 	}
 	sort.Strings(keys)
+	lower := map[int][]string{} // VLAN interface -> the ports below it
 	for _, idx := range keys {
 		if st, _ := pduInt(rows[idx]); st != 1 { // active
 			continue
@@ -353,13 +361,37 @@ func collectLagMembers(c *client, d *model.Device, names map[string]string) {
 		if !known || member == "" {
 			continue
 		}
-		if t := d.Interfaces[i].Type; t == nil || *t != model.InterfaceTypeLag {
-			continue
-		}
-		if !slices.Contains(d.Interfaces[i].Members, member) {
-			d.Interfaces[i].Members = append(d.Interfaces[i].Members, member)
+		switch model.Deref(d.Interfaces[i].Type) {
+		case model.InterfaceTypeLag:
+			if !slices.Contains(d.Interfaces[i].Members, member) {
+				d.Interfaces[i].Members = append(d.Interfaces[i].Members, member)
+			}
+		case model.InterfaceTypeVlan:
+			lower[i] = append(lower[i], member)
 		}
 	}
+	for i, ports := range lower {
+		if len(ports) == 1 { // more than one: which is the parent is not known
+			d.Interfaces[i].Parent = model.Ptr(ports[0])
+		}
+	}
+}
+
+// vlanName is a VLAN interface named by its id: a sub-interface ("igc1.20",
+// "Gi0/1.20", the last one of "eth0.20.30") or "vlan20".
+var vlanName = regexp.MustCompile(`(?i)(?:\.|^vlan\.?)(\d{1,4})$`)
+
+// vlanFromName is the VLAN id in a VLAN interface's name, 0 when it has none.
+func vlanFromName(name string) uint16 {
+	m := vlanName.FindStringSubmatch(name)
+	if m == nil {
+		return 0
+	}
+	v, _ := strconv.Atoi(m[1])
+	if v < 1 || v > 4094 {
+		return 0
+	}
+	return uint16(v)
 }
 
 // collectIPs reads the device's IPv4 addresses (ipAddrTable) and each

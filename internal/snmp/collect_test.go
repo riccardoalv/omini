@@ -436,3 +436,41 @@ func TestInterfaceAddresses(t *testing.T) {
 		t.Errorf("device addresses: %v", got.IPs)
 	}
 }
+
+// A VLAN interface runs on the port below it in ifStackTable; its VLAN id
+// is taken only from a name that says it.
+func TestVLANInterfaceParentAndID(t *testing.T) {
+	vlan := model.Ptr(model.InterfaceTypeVlan)
+	d := model.Device{
+		Key: "x", Name: "router",
+		Interfaces: []model.Interface{
+			{Name: "igc1", Type: model.Ptr(model.InterfaceTypeEthernet)},
+			{Name: "igc1.20", Type: vlan, Parent: model.Ptr("igc1")},
+			{Name: "Vlan30", Type: vlan, Parent: model.Ptr("igc1")},
+			{Name: "guest", Type: vlan, Parent: model.Ptr("igc1")}, // no id in the name
+			{Name: "igc1.9999", Type: vlan},                        // not a VLAN id
+			{Name: "eth0.5", Type: model.Ptr(model.InterfaceTypeEthernet)},
+			{Name: "both", Type: vlan},
+		},
+	}
+	pdus := snmptest.FromDevice(d, snmptest.Options{})
+	// "both" over two ports: its parent is not known.
+	for _, lo := range []int{1, 6} {
+		pdus = append(pdus, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.31.1.2.1.3.7.%d", lo), Type: gosnmp.Integer, Value: 1})
+	}
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]struct {
+		parent string
+		vlan   uint16
+	}{"igc1.20": {"igc1", 20}, "Vlan30": {"igc1", 30}, "guest": {"igc1", 0}}
+	for _, i := range got.Interfaces {
+		w := want[i.Name]
+		if model.Deref(i.Parent) != w.parent || model.Deref(i.Vlan) != w.vlan {
+			t.Errorf("%s: parent %q, vlan %d", i.Name, model.Deref(i.Parent), model.Deref(i.Vlan))
+		}
+	}
+}

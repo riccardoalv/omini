@@ -99,10 +99,14 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		}
 	}
 
-	// IF-MIB ifStackTable: a link aggregation over its member ports.
+	// IF-MIB ifStackTable: a link aggregation over its member ports, an
+	// interface over its parent.
 	for _, iface := range d.Interfaces {
 		for _, m := range iface.Members {
 			add(gosnmp.Integer, 1, "1.3.6.1.2.1.31.1.2.1.3.%d.%d", ifIndex[iface.Name], ifIndex[m])
+		}
+		if p := model.Deref(iface.Parent); p != "" {
+			add(gosnmp.Integer, 1, "1.3.6.1.2.1.31.1.2.1.3.%d.%d", ifIndex[iface.Name], ifIndex[p])
 		}
 	}
 
