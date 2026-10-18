@@ -1,5 +1,6 @@
 """SDK for writing Omini integration plugins."""
 
+from omini_sdk.errors import Forbidden, HttpError, NotFound, Unauthorized, Unavailable, optional
 from omini_sdk.models import (
     ArpEntry,
     Change,
@@ -50,12 +51,15 @@ __all__ = [
     "FdbEntry",
     "FirewallStates",
     "Firmware",
+    "Forbidden",
     "Gateway",
     "Host",
+    "HttpError",
     "Interface",
     "Neighbor",
     "Network",
     "NetworkDhcp",
+    "NotFound",
     "PausedDevice",
     "PluginError",
     "PortForward",
@@ -67,10 +71,13 @@ __all__ = [
     "Storage",
     "Temperature",
     "Transceiver",
+    "Unauthorized",
+    "Unavailable",
     "Vlan",
     "VpnPeer",
     "WifiNetwork",
     "WirelessClient",
     "log",
+    "optional",
     "plugin",
 ]
