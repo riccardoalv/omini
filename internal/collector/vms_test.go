@@ -136,3 +136,15 @@ func TestInferenceWhenTheProxmoxIntegrationSeesNoGuests(t *testing.T) {
 		t.Fatalf("guests go under the only host: %v", got)
 	}
 }
+
+func TestApplyInventoryCarriesTheOwner(t *testing.T) {
+	now := time.Now()
+	topo := topology.Topology{Nodes: []topology.Node{{ID: "phone", Kind: topology.KindClient}}}
+	applyInventory(&topo, []store.InventoryEntry{
+		{ID: "phone", Kind: "client", OwnerID: 7, LastSeen: now},
+		{ID: "tablet", Kind: "client", OwnerID: 7, LastSeen: now.Add(-time.Minute)}, // left a minute ago
+	}, now)
+	if len(topo.Nodes) != 2 || topo.Nodes[0].OwnerID != 7 || topo.Nodes[1].OwnerID != 7 {
+		t.Fatalf("owners: %+v", topo.Nodes)
+	}
+}
