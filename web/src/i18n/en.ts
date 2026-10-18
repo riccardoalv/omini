@@ -724,6 +724,10 @@ export default {
         title: 'IoT devices share a network with your servers and computers',
         detail: '{network}: {iot_devices} beside {trusted_devices}.',
       },
+      vpn_down: {
+        title: 'VPN {peer} down on {node}',
+        detail: 'It was connected {since} and is not now.',
+      },
       service_stopped: {
         title: '{service} stopped on {node}',
         detail: 'The service is enabled but not running.',
@@ -819,6 +823,8 @@ export default {
         "Reserve its IP on the device's panel, or every one at once in the map menu's DNS & DHCP tab.",
       iot_with_trusted:
         "Cameras, TVs and smart plugs seldom get updates. Create an IoT VLAN in the map menu's VLANs tab and move them to it, so they cannot reach the rest.",
+      vpn_down:
+        'Check the other end of the tunnel and the internet there; a changed address or key also stops it.',
       service_stopped:
         "Start it again from the device's own interface and check its logs to see why it stopped.",
       firewall_states_full:

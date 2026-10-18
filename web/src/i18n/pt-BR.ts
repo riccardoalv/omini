@@ -736,6 +736,10 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      vpn_down: {
+        title: 'VPN {peer} caiu em {node}',
+        detail: 'Estava conectada {since} e agora não está.',
+      },
       service_stopped: {
         title: '{service} parou em {node}',
         detail: 'O serviço está habilitado, mas não está rodando.',
@@ -832,6 +836,8 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      vpn_down:
+        'Verifique a outra ponta do túnel e a internet de lá; um endereço ou chave que mudou também a derruba.',
       service_stopped:
         'Inicie-o de novo pela interface do próprio equipamento e veja nos logs por que ele parou.',
       firewall_states_full:

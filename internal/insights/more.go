@@ -41,6 +41,8 @@ type History struct {
 	Reboots map[string]time.Time
 	// RootChanges: the spanning tree root a device sees changed, recently.
 	RootChanges map[string]RootChange
+	// VPNConnected: when each VPN peer ("node|peer") was last seen connected.
+	VPNConnected map[string]time.Time
 }
 
 // RootChange is a spanning tree root that changed: a new switch won the

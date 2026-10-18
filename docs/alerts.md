@@ -27,6 +27,7 @@ attention) and **info** (worth knowing).
 | `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it) |
 | `device_rebooted` | warning | A device's uptime went back: it restarted. Stays open for 1 hour |
 | `discovery_limited` | warning | The network scan is set up but cannot do everything where Omini runs (no host network, no multicast, no ping). See [What each method needs](discovery.md#what-each-method-needs) |
+| `vpn_down` | warning | A VPN peer (tunnel) that was connected in the last 24 hours is not now. Peers that have not connected in the last 24 hours (a phone that connects now and then) are not told |
 
 ### Health
 

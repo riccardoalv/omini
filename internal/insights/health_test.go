@@ -57,3 +57,29 @@ func TestServiceStopped(t *testing.T) {
 		}
 	}
 }
+
+func TestVPNDown(t *testing.T) {
+	now := time.Unix(1_790_000_000, 0).UTC()
+	fw := topology.Node{
+		ID: "dev:fw", Kind: topology.KindDevice, Label: "fw", Online: true,
+		Device: &model.Device{VpnPeers: []model.VpnPeer{
+			{Name: "office", Protocol: "wireguard", Connected: model.Ptr(false)},                                                // connected an hour ago (memory)
+			{Name: "branch", Protocol: "ipsec", Connected: model.Ptr(false), LastHandshake: model.Ptr(now.Add(-3 * time.Hour))}, // handshake 3 h ago
+			{Name: "phone", Protocol: "wireguard", Connected: model.Ptr(false), LastHandshake: model.Ptr(now.Add(-72 * time.Hour))},
+			{Name: "laptop", Protocol: "wireguard", Connected: model.Ptr(false)}, // never connected
+			{Name: "up", Protocol: "wireguard", Connected: model.Ptr(true)},
+			{Name: "old", Protocol: "wireguard", Connected: model.Ptr(false)}, // connected two days ago
+		}},
+	}
+	in := Input{
+		Now: now, Topology: topology.Topology{Nodes: []topology.Node{fw}},
+		History: History{VPNConnected: map[string]time.Time{
+			"dev:fw|office": now.Add(-time.Hour), "dev:fw|old": now.Add(-48 * time.Hour), "dev:fw|up": now,
+		}},
+	}
+	got := sortedKeys(keysOf(t, "vpn_down", in))
+	want := []string{"vpn_down|dev:fw|branch", "vpn_down|dev:fw|office"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v", got)
+	}
+}

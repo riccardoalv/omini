@@ -83,6 +83,7 @@ describe('alerts', () => {
       'unknown_neighbor',
       'new_device',
       'iot_with_trusted',
+      'vpn_down',
       'service_stopped',
     ]
     for (const locale of ['en', 'pt-BR']) {
@@ -92,6 +93,7 @@ describe('alerts', () => {
         expect(global.te(`insights.rules.${r}.detail`), `${locale} ${r}`).toBe(true)
       }
       expect(global.te('insights.tips.iot_with_trusted'), `${locale} tip`).toBe(true)
+      expect(global.te('insights.tips.vpn_down'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.service_stopped'), `${locale} tip`).toBe(true)
     }
   })

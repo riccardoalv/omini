@@ -18,6 +18,7 @@ type changeTracker struct {
 	reboots map[string]time.Time   // node → when it restarted
 	roots   map[string]string      // node → spanning tree root at the last round
 	moved   map[string]insights.RootChange
+	vpn     map[string]time.Time // "node|peer" → when it was last seen connected
 	// toggled: "node|iface" → when Omini last enabled or disabled the port; its
 	// ups and downs in the hour after are Omini's, not a flapping link.
 	toggled map[string]time.Time
@@ -34,6 +35,9 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 		t.up, t.flaps = map[string]bool{}, map[string][]time.Time{}
 		t.uptime, t.reboots = map[string]uint64{}, map[string]time.Time{}
 		t.roots, t.moved = map[string]string{}, map[string]insights.RootChange{}
+	}
+	if t.vpn == nil {
+		t.vpn = map[string]time.Time{}
 	}
 	for _, n := range topo.Nodes {
 		if n.Kind != topology.KindDevice || n.Device == nil || !n.Online {
@@ -55,6 +59,11 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 			}
 			t.roots[n.ID] = root
 		}
+		for _, p := range n.Device.VpnPeers {
+			if model.Deref(p.Connected) {
+				t.vpn[n.ID+"|"+p.Name] = now
+			}
+		}
 		if u := n.Device.UptimeS; u != nil {
 			if was, ok := t.uptime[n.ID]; ok && *u < was {
 				t.reboots[n.ID] = now.Add(-time.Duration(*u) * time.Second)
@@ -62,7 +71,17 @@ func (c *Collector) observeChanges(topo topology.Topology, now time.Time) insigh
 			t.uptime[n.ID] = *u
 		}
 	}
-	h := insights.History{Flaps: map[string]int{}, Reboots: map[string]time.Time{}, RootChanges: map[string]insights.RootChange{}}
+	h := insights.History{
+		Flaps: map[string]int{}, Reboots: map[string]time.Time{}, RootChanges: map[string]insights.RootChange{},
+		VPNConnected: map[string]time.Time{},
+	}
+	for key, at := range t.vpn {
+		if now.Sub(at) > insights.VPNWindow {
+			delete(t.vpn, key)
+			continue
+		}
+		h.VPNConnected[key] = at
+	}
 	for id, m := range t.moved {
 		if now.Sub(m.At) > insights.RebootWindow {
 			delete(t.moved, id)
