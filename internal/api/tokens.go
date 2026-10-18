@@ -34,7 +34,8 @@ func tokenMayRead(path string) bool {
 }
 
 // authenticate tells whether the request carries a valid admin session or
-// API token, writing the error when it does not. A token opens reads only.
+// API token, writing the error when it does not. A token opens reads only: the
+// GET routes, and /mcp, whose tools only read.
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) bool {
 	if token, ok := bearerToken(r); ok {
 		if _, err := s.Auth.AuthenticateAPIToken(r.Context(), token); err != nil {
@@ -45,7 +46,7 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) bool {
 			writeError(w, http.StatusUnauthorized, "invalid or revoked API token")
 			return false
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.URL.Path != "/mcp" {
 			writeError(w, http.StatusForbidden, "API tokens are read-only")
 			return false
 		}

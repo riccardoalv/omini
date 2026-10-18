@@ -2,12 +2,15 @@ package api
 
 import (
 	"cmp"
+	"context"
+	"errors"
 	"net/http"
 	"net/netip"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/riccardoalv/omini/internal/flows"
 	"github.com/riccardoalv/omini/internal/geoip"
 	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
@@ -31,29 +34,60 @@ type usageView struct {
 	OnMap bool   `json:"on_map"`
 }
 
+// internetReport is the Internet screen's data over a period.
+type internetReport struct {
+	Devices   []usageView        `json:"devices"`
+	Total     store.Usage        `json:"total"`
+	Since     time.Time          `json:"since"`
+	Seconds   int                `json:"seconds"`
+	Series    []store.UsagePoint `json:"series"`
+	StepS     int                `json:"step_s"`
+	Now       map[string]float64 `json:"now"`
+	Countries []countryUsage     `json:"countries"`
+	Orgs      []orgUsage         `json:"orgs"`
+	Home      string             `json:"home"`
+	Listening bool               `json:"listening"`
+	Exporters []flows.Exporter   `json:"exporters"`
+	// Attribution credits DB-IP when the places come from it.
+	Attribution string `json:"attribution,omitempty"`
+}
+
+var errInternetRange = errors.New("range must be 15m, 1h, today, 7d or 30d")
+
 // internetUsage is who used the internet over a period, busiest first
 // (`range`: 15m, 1h, today, 7d or 30d).
 func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
-	rng := r.URL.Query().Get("range")
+	rep, err := s.internet(r.Context(), r.URL.Query().Get("range"))
+	if errors.Is(err, errInternetRange) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rep)
+}
+
+// internet builds the report of a range ("" is 15m).
+func (s *Server) internet(ctx context.Context, rng string) (internetReport, error) {
 	if rng == "" {
 		rng = "15m"
 	}
 	from, ok := internetRanges[rng]
 	if !ok {
-		writeError(w, http.StatusBadRequest, "range must be 15m, 1h, today, 7d or 30d")
-		return
+		return internetReport{}, errInternetRange
 	}
 	now := time.Now()
 	since := from(now)
-	list, err := s.Store.InternetUsage(r.Context(), since, now)
+	list, err := s.Store.InternetUsage(ctx, since, now)
 	if err != nil {
-		internalError(w, err)
-		return
+		return internetReport{}, err
 	}
 	labels := nodeLabels(s.Collector.State().Topology)
 	// A device no longer on the map keeps its name from the inventory.
 	known := map[string]string{}
-	if inv, err := s.Store.ListInventory(r.Context()); err == nil {
+	if inv, err := s.Store.ListInventory(ctx); err == nil {
 		for _, e := range inv {
 			known[e.ID] = cmp.Or(e.Alias, e.Label)
 		}
@@ -73,31 +107,29 @@ func (s *Server) internetUsage(w http.ResponseWriter, r *http.Request) {
 		total.TX += u.TX
 		out = append(out, v)
 	}
-	series, step, err := s.Store.InternetSeries(r.Context(), since, now)
+	series, step, err := s.Store.InternetSeries(ctx, since, now)
 	if err != nil {
-		internalError(w, err)
-		return
+		return internetReport{}, err
 	}
-	places, err := s.Store.Places(r.Context(), since)
+	places, err := s.Store.Places(ctx, since)
 	if err != nil {
-		internalError(w, err)
-		return
+		return internetReport{}, err
 	}
-	resp := map[string]any{
-		"devices": out, "total": total, "since": since, "seconds": int(now.Sub(since).Seconds()),
-		"series": series, "step_s": int(step.Seconds()), "now": s.rateNow(r, now),
-		"countries": countries(places), "orgs": orgs(places), "home": s.home(),
-		"listening": s.flowsListening(), "exporters": s.flowExporters(),
+	rep := internetReport{
+		Devices: out, Total: total, Since: since, Seconds: int(now.Sub(since).Seconds()),
+		Series: series, StepS: int(step.Seconds()), Now: s.rateNow(ctx, now),
+		Countries: countries(places), Orgs: orgs(places), Home: s.home(),
+		Listening: s.flowsListening(), Exporters: s.flowExporters(),
 	}
 	if s.Geo.Enabled() {
-		resp["attribution"] = geoip.Attribution
+		rep.Attribution = geoip.Attribution
 	}
-	writeJSON(w, http.StatusOK, resp)
+	return rep, nil
 }
 
 // rateNow is the network's internet rate over the last five minutes (bits/s).
-func (s *Server) rateNow(r *http.Request, now time.Time) map[string]float64 {
-	list, err := s.Store.InternetUsage(r.Context(), now.Add(-5*time.Minute), now)
+func (s *Server) rateNow(ctx context.Context, now time.Time) map[string]float64 {
+	list, err := s.Store.InternetUsage(ctx, now.Add(-5*time.Minute), now)
 	out := map[string]float64{"rx_bps": 0, "tx_bps": 0}
 	if err != nil {
 		return out

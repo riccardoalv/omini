@@ -160,6 +160,9 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("DELETE /api/tokens/{id}", s.deleteToken)
 	mux.Handle("/api/", s.requireAuth(private))
 
+	// The MCP server: its tools only read (a token may post to it).
+	mux.Handle("/mcp", s.mcpHandler())
+
 	mux.Handle("/", s.ui())
 	return s.csrf(mux)
 }
