@@ -736,6 +736,10 @@ const ptBR: typeof en = {
         title: 'Dispositivos IoT na mesma rede que seus servidores e computadores',
         detail: '{network}: {iot_devices} junto de {trusted_devices}.',
       },
+      service_stopped: {
+        title: '{service} parou em {node}',
+        detail: 'O serviço está habilitado, mas não está rodando.',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -828,6 +832,8 @@ const ptBR: typeof en = {
         'Fixe o IP no painel do dispositivo, ou de todos de uma vez na aba DNS e DHCP do menu do mapa.',
       iot_with_trusted:
         'Câmeras, TVs e tomadas inteligentes raramente recebem atualizações. Crie uma VLAN de IoT na aba VLANs do menu do mapa e mova-os para ela, para que não alcancem o resto.',
+      service_stopped:
+        'Inicie-o de novo pela interface do próprio equipamento e veja nos logs por que ele parou.',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',

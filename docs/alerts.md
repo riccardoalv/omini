@@ -39,6 +39,7 @@ attention) and **info** (worth knowing).
 | `update_pending` | warning | The device knows of a pending update (from its own last check; Omini never starts one) |
 | `dhcp_pool_full` | warning from 90 % | Addresses in use in a DHCP pool |
 | `firewall_states_full` | warning from 90 % | Entries in the firewall's state table against its limit |
+| `service_stopped` | warning | A service the device is configured to run (enabled) is not running |
 
 ### Links and ports
 
