@@ -89,7 +89,7 @@ func answers(ctx context.Context, t Target) bool {
 }
 
 // Collect reads a managed switch, router or firewall: system, interfaces and
-// traffic counters, IPs, ARP, MAC table, LLDP neighbors and resources.
+// traffic counters, IPs, ARP, MAC table, LLDP and CDP neighbors and resources.
 func Collect(ctx context.Context, t Target) (model.Device, error) {
 	c, err := t.dial(ctx)
 	if err != nil {
@@ -136,6 +136,9 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	}
 	if err := collectLLDP(c, &d, ifNames); err != nil {
 		log.Debug("lldp unavailable", "err", err)
+	}
+	if err := collectCDP(c, &d, ifNames); err != nil {
+		log.Debug("cdp unavailable", "err", err)
 	}
 	if err := collectResources(c, &d); err != nil {
 		log.Debug("host resources unavailable", "err", err)

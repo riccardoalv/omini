@@ -265,6 +265,10 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.OctetString, iface.Name, "1.0.8802.1.1.2.1.3.7.1.4.%d", idx)
 	}
 	for i, nb := range d.Neighbors {
+		if model.Deref(nb.Protocol) == model.NeighborProtocolCdp {
+			out = append(out, cdpCache(nb, ifIndex[nb.LocalPort], i+1)...)
+			continue
+		}
 		idx := fmt.Sprintf("0.%d.%d", ifIndex[nb.LocalPort], i+1)
 		if nb.RemoteMAC != nil {
 			add(gosnmp.Integer, 4, "1.0.8802.1.1.2.1.4.1.1.4.%s", idx)
@@ -487,5 +491,32 @@ func stpRoles(d model.Device, bridgePort func(string) int) []gosnmp.SnmpPDU {
 		add(gosnmp.OctetString, []byte{0x80, byte(port)}, "1.3.6.1.2.1.17.2.15.1.9.%d", bp) //nolint:gosec // test data
 	}
 	add(gosnmp.Integer, rootPort, "1.3.6.1.2.1.17.2.7.0")
+	return out
+}
+
+// cdpCache renders a CDP neighbor as a CISCO-CDP-MIB cdpCacheTable row.
+func cdpCache(nb model.Neighbor, ifIdx, n int) []gosnmp.SnmpPDU {
+	var out []gosnmp.SnmpPDU
+	add := func(typ gosnmp.Asn1BER, value any, col int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.4.1.9.9.23.1.2.1.1.%d.%d.%d", col, ifIdx, n), Type: typ, Value: value})
+	}
+	if ip := net.ParseIP(model.Deref(nb.RemoteIP)); ip != nil {
+		if v4 := ip.To4(); v4 != nil {
+			add(gosnmp.Integer, 1, 3)
+			add(gosnmp.OctetString, []byte(v4), 4)
+		} else {
+			add(gosnmp.Integer, 20, 3)
+			add(gosnmp.OctetString, []byte(ip.To16()), 4)
+		}
+	}
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemoteName)), 6)
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemotePort)), 7)
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemotePlatform)), 8)
+	bits := map[model.NeighborCapability]uint32{"router": 0x01, "bridge": 0x08, "station": 0x10, "repeater": 0x40, "telephone": 0x80}
+	var caps uint32
+	for _, c := range nb.Capabilities {
+		caps |= bits[c]
+	}
+	add(gosnmp.OctetString, []byte{byte(caps >> 24), byte(caps >> 16), byte(caps >> 8), byte(caps)}, 9)
 	return out
 }
