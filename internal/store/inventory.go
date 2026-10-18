@@ -27,7 +27,9 @@ type InventoryEntry struct {
 	DeviceType string `json:"device_type,omitempty"`
 	Icon       string `json:"icon,omitempty"`
 	// Note is the user's free text about the device (NoteMax characters at most).
-	Note      string    `json:"note,omitempty"`
+	Note string `json:"note,omitempty"`
+	// OwnerID is the person who owns the device (0: nobody).
+	OwnerID   int64     `json:"owner_id,omitempty"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
 }
@@ -72,7 +74,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, kind, label, COALESCE(mac, ''), COALESCE(ip, ''), COALESCE(hostname, ''), COALESCE(vendor, ''),
 		       COALESCE(parent_id, ''), COALESCE(port, ''), COALESCE(alias, ''), first_seen, last_seen,
-		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden, note
+		       COALESCE(device_type, ''), COALESCE(icon, ''), hidden, note, COALESCE(owner_id, 0)
 		FROM inventory ORDER BY last_seen DESC, id`)
 	if err != nil {
 		return nil, err
@@ -86,7 +88,7 @@ func (s *Store) ListInventory(ctx context.Context) ([]InventoryEntry, error) {
 			first, latest int64
 		)
 		if err := rows.Scan(&e.ID, &e.Kind, &e.Label, &e.MAC, &e.IP, &e.Hostname, &e.Vendor,
-			&e.ParentID, &e.Port, &e.Alias, &first, &latest, &e.DeviceType, &e.Icon, &hidden, &e.Note); err != nil {
+			&e.ParentID, &e.Port, &e.Alias, &first, &latest, &e.DeviceType, &e.Icon, &hidden, &e.Note, &e.OwnerID); err != nil {
 			return nil, err
 		}
 		e.Hidden, e.FirstSeen, e.LastSeen = hidden == 1, fromUnix(first), fromUnix(latest)
@@ -103,6 +105,8 @@ type InventoryUpdate struct {
 	DeviceType *string `json:"device_type"`
 	Icon       *string `json:"icon"`
 	Note       *string `json:"note"`
+	// Owner sets the device's owner when present; null clears it.
+	Owner OptionalID `json:"owner_id"`
 }
 
 // NoteMax is the longest note a device can have, in characters.
@@ -113,6 +117,11 @@ var ErrNoteTooLong = errors.New("the note is longer than 1000 characters")
 
 // UpdateInventory changes the user fields of an entry.
 func (s *Store) UpdateInventory(ctx context.Context, id string, u InventoryUpdate) (InventoryEntry, error) {
+	if u.Owner.Set {
+		if err := s.setOwner(ctx, id, u.Owner.ID); err != nil {
+			return InventoryEntry{}, err
+		}
+	}
 	if u.Note != nil {
 		note := strings.TrimSpace(*u.Note)
 		if utf8.RuneCountInString(note) > NoteMax {

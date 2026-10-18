@@ -360,6 +360,18 @@ var migrations = []string{
 	`
 	ALTER TABLE inventory ADD COLUMN note TEXT NOT NULL DEFAULT '';
 	`,
+	// 28: people and the devices they own (a device has at most one owner;
+	// deleting a person leaves their devices without one).
+	`
+	CREATE TABLE people (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+		color      TEXT NOT NULL DEFAULT '', -- optional, #rrggbb
+		created_at INTEGER NOT NULL          -- unix seconds
+	);
+	ALTER TABLE inventory ADD COLUMN owner_id INTEGER REFERENCES people (id) ON DELETE SET NULL;
+	CREATE INDEX inventory_owner ON inventory (owner_id);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.
