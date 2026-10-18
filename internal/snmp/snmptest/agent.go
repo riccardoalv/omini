@@ -23,6 +23,7 @@ type Agent struct {
 	write     string   // the community allowed to Set (empty: none)
 	ignored   []string // OID prefixes whose Sets are answered but not applied
 	drop      int      // requests left to drop (negative: all)
+	mute      []string // OID prefixes whose reads are never answered
 
 	conn  net.PacketConn
 	mu    sync.RWMutex
@@ -86,6 +87,14 @@ func (a *Agent) Drop(n int) {
 	a.drop = n
 }
 
+// Mute leaves reads under an OID prefix unanswered, like agents that time
+// out on a table they cannot serve.
+func (a *Agent) Mute(prefix string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.mute = append(a.mute, "."+strings.Trim(prefix, ".")+".")
+}
+
 // IgnoreWrites makes Sets under an OID prefix answer noError without
 // changing anything, like agents that accept a write and drop it.
 func (a *Agent) IgnoreWrites(prefix string) {
@@ -112,6 +121,10 @@ func (a *Agent) serve(t testing.TB) {
 		}
 		a.mu.Lock()
 		dropped := a.drop != 0
+		if req.PDUType != gosnmp.SetRequest && len(req.Variables) > 0 {
+			name := "." + strings.TrimPrefix(req.Variables[0].Name, ".")
+			dropped = dropped || slices.ContainsFunc(a.mute, func(p string) bool { return strings.HasPrefix(name+".", p) })
+		}
 		if a.drop > 0 {
 			a.drop--
 		}

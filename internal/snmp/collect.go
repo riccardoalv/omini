@@ -2,6 +2,7 @@ package snmp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -700,11 +701,10 @@ func capabilities(bits []byte) []model.NeighborCapability {
 	return out
 }
 
+// collectResources reads CPU load and RAM usage; each table is optional, and
+// one failing does not keep the other from being read.
 func collectResources(c *client, d *model.Device) error {
-	loads, err := c.walk(oidHrProcessorLoad)
-	if err != nil {
-		return err
-	}
+	loads, cpuErr := c.walk(oidHrProcessorLoad)
 	var sum, n uint64
 	for _, p := range loads {
 		if v, ok := pduUint(p); ok {
@@ -718,7 +718,7 @@ func collectResources(c *client, d *model.Device) error {
 
 	rows, err := c.walk(oidHrStorage)
 	if err != nil {
-		return err
+		return errors.Join(cpuErr, err)
 	}
 	t := table(rows)
 	for idx, p := range t[2] {
@@ -732,7 +732,7 @@ func collectResources(c *client, d *model.Device) error {
 		}
 		break
 	}
-	return nil
+	return cpuErr
 }
 
 func guessRole(c *client, d *model.Device) model.DeviceRole {

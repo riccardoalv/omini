@@ -268,3 +268,17 @@ func TestKeyWithoutLLDPIsStable(t *testing.T) {
 		t.Fatalf("LLDP chassis: %s", k)
 	}
 }
+
+// A processor table that times out must not hide the memory.
+func TestMemoryIsReadWhenTheCPUTableFails(t *testing.T) {
+	d := model.Device{Key: "x", Name: "srv", CPUPct: model.Ptr(12.0), MemPct: model.Ptr(40.0)}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(d, snmptest.Options{}))
+	agent.Mute("1.3.6.1.2.1.25.3.3.1.2") // hrProcessorLoad
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CPUPct != nil || model.Deref(got.MemPct) != 40 {
+		t.Fatalf("cpu %v, memory %v", got.CPUPct, got.MemPct)
+	}
+}
