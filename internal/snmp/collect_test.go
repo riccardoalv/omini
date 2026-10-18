@@ -361,3 +361,40 @@ func TestStorageFromFixedDisks(t *testing.T) {
 		t.Fatalf("memory: %v", got.MemPct)
 	}
 }
+
+// IPv6 neighbors are ipNetToPhysicalTable's IPv6 rows, named by their port;
+// its IPv4 rows are ARP only for agents without ipNetToMediaTable.
+func TestNDPFromIPNetToPhysical(t *testing.T) {
+	d := model.Device{
+		Key: "x", Name: "router",
+		Interfaces: []model.Interface{{Name: "lan"}, {Name: "wan"}},
+		Arp:        []model.ArpEntry{{IP: "192.168.1.10", MAC: "aa:bb:cc:00:00:10", Interface: model.Ptr("lan")}},
+		Ndp: []model.ArpEntry{
+			{IP: "2804:1128:bd79:3e00::42", MAC: "aa:bb:cc:00:00:42", Interface: model.Ptr("lan")},
+			{IP: "fe80::1", MAC: "aa:bb:cc:00:00:01", Interface: model.Ptr("wan")},
+		},
+	}
+	pdus := snmptest.FromDevice(d, snmptest.Options{})
+	// The same ARP entry in ipNetToPhysicalTable must not be read twice.
+	pdus = append(pdus, gosnmp.SnmpPDU{Name: ".1.3.6.1.2.1.4.35.1.4.1.1.4.192.168.1.10", Type: gosnmp.OctetString, Value: []byte{0xaa, 0xbb, 0xcc, 0, 0, 0x10}})
+	agent := snmptest.Start(t, "public", pdus)
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Ndp, d.Ndp) {
+		t.Fatalf("ndp: %+v", got.Ndp)
+	}
+	if !reflect.DeepEqual(got.Arp, d.Arp) {
+		t.Fatalf("arp: %+v", got.Arp)
+	}
+	// Without ipNetToMediaTable its IPv4 rows are the ARP.
+	d.Arp = nil
+	agent = snmptest.Start(t, "public", append(snmptest.FromDevice(d, snmptest.Options{}), pdus[len(pdus)-1]))
+	if got, err = snmp.Collect(context.Background(), target(agent, "public")); err != nil {
+		t.Fatal(err)
+	}
+	if want := []model.ArpEntry{{IP: "192.168.1.10", MAC: "aa:bb:cc:00:00:10", Interface: model.Ptr("lan")}}; !reflect.DeepEqual(got.Arp, want) {
+		t.Fatalf("arp from ipNetToPhysicalTable: %+v", got.Arp)
+	}
+}

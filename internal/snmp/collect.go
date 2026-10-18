@@ -378,11 +378,10 @@ func collectIPs(c *client, d *model.Device) error {
 	return nil
 }
 
+// collectARP reads ARP from ipNetToMediaTable and IPv6 neighbors (NDP) from
+// ipNetToPhysicalTable, which also gives ARP to agents without the former.
 func collectARP(c *client, d *model.Device, ifNames map[string]string) error {
-	rows, err := c.walk(oidIPNetToMedia)
-	if err != nil {
-		return err
-	}
+	rows, mediaErr := c.walk(oidIPNetToMedia)
 	t := table(rows)
 	for idx, p := range t[2] {
 		if typ, ok := pduInt(t[4][idx]); ok && typ == 2 { // invalid
@@ -402,29 +401,48 @@ func collectARP(c *client, d *model.Device, ifNames map[string]string) error {
 		}
 		d.Arp = append(d.Arp, e)
 	}
-	if len(d.Arp) > 0 {
-		return nil
-	}
 
-	// Fallback: ipNetToPhysicalTable (index ifIndex.addrType.len.addr), IPv4 only.
-	rows, err = c.walk(oidIPNetToPhysical)
+	// ipNetToPhysicalTable, index ifIndex.addrType.len.addr: IPv6 (2) always,
+	// IPv4 (1) when ipNetToMediaTable gave none.
+	rows, err := c.walk(oidIPNetToPhysical)
 	if err != nil {
-		return err
+		return errors.Join(mediaErr, err)
 	}
+	arp := len(d.Arp) == 0
 	for idx, p := range rows {
 		n := splitOID(idx)
-		if len(n) != 7 || n[1] != 1 || n[2] != 4 {
+		if len(n) < 3 || len(n) != 3+n[2] {
 			continue
+		}
+		var ip net.IP
+		switch {
+		case n[1] == 1 && n[2] == 4 && arp:
+			ip = make(net.IP, 4)
+		case n[1] == 2 && n[2] == 16:
+			ip = make(net.IP, 16)
+		default:
+			continue
+		}
+		for i := range ip {
+			ip[i] = byte(n[3+i]) //nolint:gosec // checked below
 		}
 		mac := model.MACFromBytes(pduBytes(p))
-		if mac == "" {
+		if mac == "" || slices.ContainsFunc(n[3:], func(b int) bool { return b < 0 || b > 255 }) {
 			continue
 		}
-		e := model.ArpEntry{IP: fmt.Sprintf("%d.%d.%d.%d", n[3], n[4], n[5], n[6]), MAC: mac}
+		e := model.ArpEntry{IP: ip.String(), MAC: mac}
 		if name := ifNames[strconv.Itoa(n[0])]; name != "" {
 			e.Interface = model.Ptr(name)
 		}
-		d.Arp = append(d.Arp, e)
+		if len(ip) == 16 {
+			d.Ndp = append(d.Ndp, e)
+		} else {
+			d.Arp = append(d.Arp, e)
+		}
+	}
+	sort.Slice(d.Ndp, func(a, b int) bool { return d.Ndp[a].IP < d.Ndp[b].IP })
+	if len(d.Arp) == 0 {
+		return mediaErr
 	}
 	return nil
 }

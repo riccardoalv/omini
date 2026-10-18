@@ -115,6 +115,12 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.OctetString, macBytes(a.MAC), "1.3.6.1.2.1.4.22.1.2.%d.%s", idx, a.IP)
 		add(gosnmp.Integer, 3, "1.3.6.1.2.1.4.22.1.4.%d.%s", idx, a.IP) // dynamic
 	}
+	// IPv6 neighbors: ipNetToPhysicalPhysAddress, index ifIndex.2.16.addr.
+	for _, a := range d.Ndp {
+		if ip := net.ParseIP(a.IP); ip != nil && ip.To4() == nil {
+			add(gosnmp.OctetString, macBytes(a.MAC), "1.3.6.1.2.1.4.35.1.4.%d.2.16.%s", ifIndex[model.Deref(a.Interface)], bytesOID(ip))
+		}
+	}
 
 	// Q-BRIDGE-MIB forwarding table: index fdbId.mac, the fdbId being the
 	// VLAN id unless Options.FdbIDs says otherwise (then dot1qVlanCurrentTable
@@ -317,10 +323,13 @@ func macBytes(m model.MACAddress) []byte {
 	return hw
 }
 
-func macOID(m model.MACAddress) string {
-	parts := make([]string, 0, 6)
-	for _, b := range macBytes(m) {
-		parts = append(parts, fmt.Sprint(b))
+func macOID(m model.MACAddress) string { return bytesOID(macBytes(m)) }
+
+// bytesOID writes bytes as OID arcs (an index of a MAC or an address).
+func bytesOID(b []byte) string {
+	parts := make([]string, 0, len(b))
+	for _, x := range b {
+		parts = append(parts, fmt.Sprint(x))
 	}
 	return strings.Join(parts, ".")
 }

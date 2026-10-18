@@ -15,7 +15,7 @@ const (
 	oidIPForwarding    = "1.3.6.1.2.1.4.1.0"
 	oidIPAddrIfIndex   = "1.3.6.1.2.1.4.20.1.2"   // index: IPv4 address
 	oidIPNetToMedia    = "1.3.6.1.2.1.4.22.1"     // ARP: .2 phys address, .4 type; index ifIndex.a.b.c.d
-	oidIPNetToPhysical = "1.3.6.1.2.1.4.35.1.4"   // ARP (newer): index ifIndex.addrType.len.addr...
+	oidIPNetToPhysical = "1.3.6.1.2.1.4.35.1.4"   // ARP and NDP: index ifIndex.addrType.len.addr...
 	oidIfTable         = "1.3.6.1.2.1.2.2.1"      // IF-MIB ifEntry
 	oidIfXTable        = "1.3.6.1.2.1.31.1.1.1"   // IF-MIB ifXEntry
 	oidIfStackStatus   = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
