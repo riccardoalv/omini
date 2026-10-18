@@ -714,6 +714,7 @@ func collectResources(c *client, d *model.Device) error {
 	}
 	if n > 0 {
 		d.CPUPct = model.Ptr(float64(sum) / float64(n))
+		d.CPUCount = model.Ptr(n) // one hrProcessorLoad row per processor (core)
 	}
 
 	rows, err := c.walk(oidHrStorage)

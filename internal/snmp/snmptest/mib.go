@@ -234,8 +234,12 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 	}
 
 	// HOST-RESOURCES-MIB: CPU load and RAM usage.
+	// One hrProcessorLoad row per processor (CPUCount, else one), all at
+	// CPUPct, indexed like Net-SNMP's (hrDeviceIndex 196608 on).
 	if d.CPUPct != nil {
-		add(gosnmp.Integer, int(*d.CPUPct), "1.3.6.1.2.1.25.3.3.1.2.1")
+		for i := range max(model.Deref(d.CPUCount), 1) {
+			add(gosnmp.Integer, int(*d.CPUPct), "1.3.6.1.2.1.25.3.3.1.2.%d", 196608+i)
+		}
 	}
 	if d.MemPct != nil {
 		add(gosnmp.ObjectIdentifier, ".1.3.6.1.2.1.25.2.1.2", "1.3.6.1.2.1.25.2.3.1.2.1")

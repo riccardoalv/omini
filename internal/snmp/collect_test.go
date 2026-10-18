@@ -68,6 +68,9 @@ func expected(d model.Device, vendor string, role model.DeviceRole) model.Device
 	}
 	if d.CPUPct != nil {
 		d.CPUPct = model.Ptr(float64(int(*d.CPUPct))) // hrProcessorLoad is an integer
+		if d.CPUCount == nil {
+			d.CPUCount = model.Ptr(uint64(1)) // the fake agent's one processor row
+		}
 	}
 	ifaces := make([]model.Interface, len(d.Interfaces))
 	for i, iface := range d.Interfaces {
@@ -280,5 +283,23 @@ func TestMemoryIsReadWhenTheCPUTableFails(t *testing.T) {
 	}
 	if got.CPUPct != nil || model.Deref(got.MemPct) != 40 {
 		t.Fatalf("cpu %v, memory %v", got.CPUPct, got.MemPct)
+	}
+}
+
+// Every hrProcessorLoad row is a processor: their number is the CPU count.
+func TestCPUCountIsTheNumberOfProcessorRows(t *testing.T) {
+	d := model.Device{Key: "x", Name: "nas", CPUPct: model.Ptr(30.0), CPUCount: model.Ptr(uint64(4))}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(d, snmptest.Options{}))
+	got, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.Deref(got.CPUCount) != 4 || model.Deref(got.CPUPct) != 30 {
+		t.Fatalf("cpu count %v, load %v", got.CPUCount, got.CPUPct)
+	}
+	// No processor table: no count either.
+	agent = snmptest.Start(t, "public", snmptest.FromDevice(model.Device{Key: "y", Name: "sw"}, snmptest.Options{}))
+	if got, err = snmp.Collect(context.Background(), target(agent, "public")); err != nil || got.CPUCount != nil {
+		t.Fatalf("cpu count without the table: %v (%v)", got.CPUCount, err)
 	}
 }
