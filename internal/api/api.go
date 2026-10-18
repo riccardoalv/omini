@@ -139,6 +139,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PUT /api/nodes/{id}/reservation", s.reserve)
 	private.HandleFunc("PUT /api/wifi", s.setWifi)
 	private.HandleFunc("DELETE /api/wifi/{ssid}", s.deleteWifi)
+	private.HandleFunc("GET /api/wifi/channels", s.planChannels)
+	private.HandleFunc("POST /api/wifi/channels", s.applyChannels)
 	private.HandleFunc("DELETE /api/nodes/{id}/reservation", s.unreserve)
 	private.HandleFunc("GET /api/fix-ip", s.fixCandidates)
 	private.HandleFunc("GET /api/nodes/{id}/dns-name", s.dnsName)

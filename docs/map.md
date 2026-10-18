@@ -9,6 +9,7 @@ attention.
 - [Nodes](#nodes)
 - [Links](#links)
 - [The device panel](#the-device-panel)
+- [Wi-Fi channels](#wi-fi-channels)
 - [Folding children into bubbles](#folding-children-into-bubbles)
 - [Hiding and deleting devices](#hiding-and-deleting-devices)
 - [Areas](#areas)
@@ -259,6 +260,20 @@ makes, kept when they changed (the last 50), each marked **by Omini** or
 saves one. Secrets are left out where the device allows it. Omini never
 restores a configuration.
 
+**Wi-Fi radios**, folded, for an access point whose integration reports them:
+each radio's band, channel, width, **auto** when the channel is automatic,
+transmit power and whether it is off; the summary lists the channels
+("2.4 GHz 6 · 5 GHz 36"). A mesh unit says so. A conflict between access
+points is settled from its alert ([Wi-Fi channels](#wi-fi-channels)).
+
+**Exposed to the internet**, folded, for a router that reports its port forwards:
+each external port or range, where it goes (the device's name when Omini knows
+the address, else the address, and the port), the protocol, who may use it
+(**from anyone**, or an address or prefix), a **UPnP** badge on those a device
+opened by itself (listed first) and **off** on disabled ones. The summary counts
+the enabled ones and those made by UPnP. It is read-only: Omini never changes
+them; each enabled one is an alert (`port_forward`, or `upnp_forward`).
+
 **Extras**, folded, when an integration reports them: services (stopped ones first),
 VPN peers (WireGuard, OpenVPN, IPsec: connected, endpoint, last handshake,
 traffic), DHCP pool usage and firewall states (yellow from 75 %, red from
@@ -317,6 +332,33 @@ The operator's VLAN under the WAN (PPPoE) is not listed. Networks that already
 exist on the router (the LAN is VLAN 1) are imported with their gateway,
 DHCP and access, and can be changed here too; access set by hand shows as
 **Custom** until you pick one of the three.
+
+## Wi-Fi channels
+
+When two access points are on the same or overlapping 2.4 GHz channels, or
+one is on a channel other than 1, 6 or 11, the alert `wifi_channel_conflict`
+opens (one for the network, shown on each access point's panel too). Its
+**Resolve** button, on the Alerts screen and in the device panel's alerts,
+shows the plan before anything changes:
+
+- each access point to move, its radio, the channel it leaves and the one it
+  goes to, and how many clients reconnect (for a few seconds); **You are on
+  it** when the browser you use is one of them;
+- the access points left alone and why: an automatic channel (its controller
+  would move it back), a mesh unit (a new channel can drop its link; never
+  moved), an integration that cannot change the channel, a width other than
+  20 MHz.
+
+Omini keeps the access points already on a free channel, moves as few as it
+can (the one with fewest clients first) and shares 1, 6 and 11 evenly among
+more than three; never a DFS channel nor another width. It moves one access
+point at a time: applied, checked that its radio is up on the new channel,
+saved, then the next. The first that fails stops it; those already moved stay,
+and each step shows **Done**, **Failed** or **Not run**. Every move is in the
+access point's **Changes**. When Omini's own machine is on that access point's
+Wi-Fi the step is destructive: it needs **Allow destructive changes** in
+Settings and a second confirmation. When nothing can be moved (every access
+point on automatic channel), the alert has no button.
 
 ## Folding children into bubbles
 

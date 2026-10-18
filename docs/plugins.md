@@ -116,6 +116,7 @@ changes:                    # optional: the changes `apply` supports
   - wol.send                # wake a device: {mac, ip}, sent on the network holding ip
   - pause.set               # cut a device's internet: {mac, ips, name}
   - pause.delete            # give it back: {mac}
+  - wifi.channel            # move a 2.4 GHz radio: {radio, channel}
 backup: true                # optional: the plugin answers the backup action
 fields:                     # the "add integration" form
   - key: url
@@ -271,6 +272,8 @@ returns itself. The main fields:
 | `networks`, `dhcp_reservations`, `wifi_networks` | A router's VLAN networks and fixed addresses, an access point's Wi-Fi networks (what `network.*`, `reservation.*` and `wifi.*` change) |
 | `dns_records`, `dns_domain` | Local DNS names a DNS server or router answers, and its domain (what `dns.*` changes) |
 | `paused` | Devices whose internet a router cuts: `mac`, `ips`, `name` (what `pause.*` changes) |
+| `port_forwards` | A router's port forwards (NAT): `protocol` (`tcp`, `udp`, `tcp/udp`), `external_port` and `external_port_end` (a range), `internal_ip` and `internal_port` (the first of a range), `source` (an address or prefix; empty: anyone), `interface` (the WAN), `description`, `enabled`, and `upnp: true` for one a device opened by itself (UPnP IGD or NAT-PMP). Read-only: shown under **Exposed to the internet** and told as alerts |
+| `radios`, `wireless_uplink` | An access point's Wi-Fi radios: `name` (as the device names it: what `wifi.channel` names), `band`, `channel`, `width_mhz`, `auto` (the device or its controller picks the channel), `tx_power_dbm`, `enabled`; `wireless_uplink: true` for a mesh unit or repeater (it reaches the network over Wi-Fi). See [Wi-Fi channels](#wi-fi-channels) |
 | `stp_root` | The spanning tree root bridge the device sees: `<priority>.<mac>` |
 | `hosts` | End devices your integration observed with extra details (scanners, controllers) |
 
@@ -294,6 +297,28 @@ Rules of the data model:
 
 The full schema, with every field and its description, is
 `schema/omini.schema.json` in the Omini repository.
+
+### Wi-Fi channels
+
+Omini settles a 2.4 GHz channel conflict between access points (the
+`wifi_channel_conflict` alert and its **Resolve** button). For that a plugin:
+
+- reports each radio in `radios`, with its `band`, `channel` and `width_mhz`,
+  and `auto: true` when the channel is automatic (a controller on "auto"):
+  Omini never moves those, since the controller would move them back;
+- sets `wireless_uplink: true` on a mesh unit or repeater: Omini never moves
+  its channel, not even with destructive changes allowed;
+- reports its Wi-Fi clients with their `band`: the plan moves the access
+  point with fewest clients on 2.4 GHz first;
+- declares `wifi.channel` under `changes`. The change is
+  `{"kind": "wifi.channel", "device": "<key>", "value": {"radio": "wifi0", "channel": 6}}`:
+  set that radio to that channel, keeping its width (20 MHz) and everything
+  else; check that the device answers and the radio is up on the new channel;
+  save; answer with the device as read after the change. Omini checks the
+  radio's channel in that answer too, and asks for 2.4 GHz channels 1, 6 or
+  11 only (never DFS, never another width).
+
+Omini sends one access point at a time and stops at the first that fails.
 
 ## The protocol
 

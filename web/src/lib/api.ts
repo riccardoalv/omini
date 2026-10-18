@@ -24,6 +24,8 @@ import type {
   CatalogEntry,
   ChangeKind,
   Backup,
+  ChannelPlan,
+  ChannelResult,
   ChangeSettings,
   ConfigChange,
   DnsName,
@@ -48,6 +50,8 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** The answer's body, when it was JSON (what a plan did before it stopped). */
+    public readonly data?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -80,13 +84,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   if (!res.ok) {
     let message = res.statusText
+    let data: unknown
     try {
-      const data = await res.json()
-      if (data && typeof data.error === 'string') message = data.error
+      data = await res.json()
+      const err = (data as { error?: unknown } | null)?.error
+      if (typeof err === 'string') message = err
     } catch {
       // not JSON
     }
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, message, data)
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
@@ -289,6 +295,11 @@ export const api = {
   }) => request<{ changes: ConfigChange[] }>('PUT', '/api/wifi', w),
   deleteWifi: (ssid: string) =>
     request<{ changes: ConfigChange[] }>('DELETE', `/api/wifi/${encodeURIComponent(ssid)}`),
+  /** What settles the access points' 2.4 GHz channel conflict (and whether this browser is on one). */
+  wifiChannelPlan: () => request<ChannelPlan>('GET', '/api/wifi/channels'),
+  /** Applies it one access point at a time; a refusal throws an ApiError whose data has the results. */
+  applyWifiChannels: (confirm = false) =>
+    request<{ results: ChannelResult[] }>('POST', '/api/wifi/channels', { confirm }),
   /** Fixes a device's address on the router whose network holds it (a DHCP reservation). */
   reserve: (nodeId: string, ip: string) =>
     request<ConfigChange>('PUT', `/api/nodes/${encodeURIComponent(nodeId)}/reservation`, { ip }),

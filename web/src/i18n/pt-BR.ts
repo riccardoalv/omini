@@ -159,6 +159,15 @@ const ptBR: typeof en = {
     vpnProtocol: { wireguard: 'WireGuard', openvpn: 'OpenVPN', ipsec: 'IPsec', other: 'VPN' },
     services: 'Serviços',
     servicesStopped: '{n} parados',
+    radios: 'Rádios Wi-Fi',
+    channel: 'Canal {n}',
+    radioAuto: 'automático',
+    radioOff: 'desligado',
+    meshUnit: 'Uma unidade mesh: chega à rede pelo Wi-Fi.',
+    exposed: 'Exposto à internet',
+    upnpCount: '{n} por UPnP',
+    exposedFrom: 'de {source}',
+    exposedAnyone: 'de qualquer um',
     untagged: 'sem tag {id}',
     tagged: 'com tag {ids}',
     module: 'Módulo',
@@ -421,6 +430,34 @@ const ptBR: typeof en = {
     hint: 'Clique numa porta: fora → na VLAN → com tag → fora.',
     state: { in: 'Na VLAN', tagged: 'Com tag (trunk)', out: 'Fora' },
     change: '{device} {port}: {state} ({vlans}). O que muda:',
+  },
+  wifiChannels: {
+    resolve: 'Resolver',
+    title: 'Canais de Wi-Fi',
+    intro:
+      'O Omini move os rádios de 2,4 GHz dos pontos de acesso para 1, 6 ou 11 (20 MHz), um de cada vez: cada um é aplicado, conferido e salvo antes do próximo. Os clientes reconectam em alguns segundos.',
+    loading: 'Montando o plano…',
+    step: '{ap} ({radio}): canal {from} → {to}',
+    clients: 'nenhum cliente | 1 cliente reconecta | {n} clientes reconectam',
+    browser: 'Você está nele: esta página pode perder a conexão por um instante.',
+    omini: 'A máquina do próprio Omini está neste Wi-Fi: o Omini fica fora por um instante.',
+    skipped: 'Deixados como estão',
+    skip: {
+      auto: '{ap} ({channel}): canal automático, a controladora o moveria de volta.',
+      mesh: '{ap} ({channel}): uma unidade mesh, um canal novo pode derrubar o link dela.',
+      unsupported: '{ap} ({channel}): a integração dele não muda o canal.',
+      width: '{ap} ({channel}): usa mais de 20 MHz; mude no próprio equipamento.',
+    },
+    none: 'Nada que o Omini possa mover: mude os canais nos próprios equipamentos.',
+    blocked:
+      'Um passo deixa o Omini fora: permita mudanças destrutivas nas Configurações para fazê-lo, ou mude o canal desse ponto de acesso você mesmo.',
+    askAgain: 'Um passo move o Wi-Fi em que a máquina do Omini está. Aplicar mesmo assim?',
+    apply: 'Mover {n} ponto de acesso | Mover {n} pontos de acesso',
+    applyAnyway: 'Aplicar mesmo assim',
+    applying: 'Aplicando…',
+    status: { done: 'Feito', failed: 'Falhou', not_run: 'Não feito' },
+    allDone: 'Todos os pontos de acesso estão no canal novo.',
+    stopped: 'Parou em {ap}: os já feitos ficam no canal novo.',
   },
   portVlans: {
     change: 'Mudar VLAN',
@@ -788,6 +825,20 @@ const ptBR: typeof en = {
         title: '{service} parou em {node}',
         detail: 'O serviço está habilitado, mas não está rodando.',
       },
+      wifi_channel_conflict: {
+        title: 'Canais de Wi-Fi dos seus pontos de acesso se sobrepõem',
+        detail: 'Em 2,4 GHz: {aps}.',
+        detailAuto:
+          'Em 2,4 GHz: {aps}. Em canal automático (deixados com a controladora): {auto_aps}.',
+      },
+      port_forward: {
+        title: 'Porta {ports}/{protocol} aberta para {target}',
+        detail: '{node} a encaminha da internet para {internal}. {description}',
+      },
+      upnp_forward: {
+        title: '{target} abriu a porta {ports}/{protocol} sozinho',
+        detail: 'Por UPnP ou NAT-PMP em {node}, para {internal}. {description}',
+      },
       dhcp_pool_full: {
         title: 'Pool DHCP quase cheio em {node}',
         detail: '{network}: {used} de {total} endereços em uso ({pct}%).',
@@ -892,6 +943,12 @@ const ptBR: typeof en = {
         'Verifique a outra ponta do túnel e a internet de lá; um endereço ou chave que mudou também a derruba.',
       service_stopped:
         'Inicie-o de novo pela interface do próprio equipamento e veja nos logs por que ele parou.',
+      wifi_channel_conflict:
+        'Use Resolver: ele move o mínimo de pontos de acesso para 1, 6 ou 11, um de cada vez. Os que estão em canal automático ficam com a controladora.',
+      port_forward:
+        'Confira que o serviço por trás dela está atualizado e precisa mesmo ser acessível pela internet; uma VPN é mais segura para o seu próprio acesso.',
+      upnp_forward:
+        'Um dispositivo a abriu sem você. Se não precisa dela, desligue o UPnP no roteador (ou para este dispositivo).',
       firewall_states_full:
         'Aumente o limite da tabela de states, ou procure um dispositivo abrindo muitas conexões.',
       insecure_service: 'Desligue no equipamento, ou use SSH, SFTP ou HTTPS no lugar.',

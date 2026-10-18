@@ -155,6 +155,15 @@ export default {
     vpnProtocol: { wireguard: 'WireGuard', openvpn: 'OpenVPN', ipsec: 'IPsec', other: 'VPN' },
     services: 'Services',
     servicesStopped: '{n} stopped',
+    radios: 'Wi-Fi radios',
+    channel: 'Channel {n}',
+    radioAuto: 'auto',
+    radioOff: 'off',
+    meshUnit: 'A mesh unit: it reaches the network over Wi-Fi.',
+    exposed: 'Exposed to the internet',
+    upnpCount: '{n} by UPnP',
+    exposedFrom: 'from {source}',
+    exposedAnyone: 'from anyone',
     untagged: 'untagged {id}',
     tagged: 'tagged {ids}',
     module: 'Module',
@@ -411,6 +420,34 @@ export default {
     hint: 'Click a port: out → in → tagged → out.',
     state: { in: 'In the VLAN', tagged: 'Tagged (trunk)', out: 'Out' },
     change: '{device} {port}: {state} ({vlans}). What changes:',
+  },
+  wifiChannels: {
+    resolve: 'Resolve',
+    title: 'Wi-Fi channels',
+    intro:
+      "Omini moves the access points' 2.4 GHz radios to 1, 6 or 11 (20 MHz), one at a time: each is applied, checked and saved before the next. Their clients reconnect for a few seconds.",
+    loading: 'Working out the plan…',
+    step: '{ap} ({radio}): channel {from} → {to}',
+    clients: 'no clients | 1 client reconnects | {n} clients reconnect',
+    browser: 'You are on it: this page may lose the connection for a moment.',
+    omini: "Omini's own machine is on this Wi-Fi: it cuts Omini off for a moment.",
+    skipped: 'Left alone',
+    skip: {
+      auto: '{ap} ({channel}): automatic channel, its controller would move it back.',
+      mesh: '{ap} ({channel}): a mesh unit, a new channel can drop its link.',
+      unsupported: '{ap} ({channel}): its integration cannot change the channel.',
+      width: '{ap} ({channel}): uses more than 20 MHz; change it on the device.',
+    },
+    none: 'Nothing Omini can move: change the channels on the devices themselves.',
+    blocked:
+      "A step cuts Omini off: allow destructive changes in Settings to do it, or change that access point's channel yourself.",
+    askAgain: "A step moves the Wi-Fi Omini's machine is on. Apply anyway?",
+    apply: 'Move {n} access point | Move {n} access points',
+    applyAnyway: 'Apply anyway',
+    applying: 'Applying…',
+    status: { done: 'Done', failed: 'Failed', not_run: 'Not run' },
+    allDone: 'Every access point is on its new channel.',
+    stopped: 'Stopped at {ap}: those already done stay on their new channel.',
   },
   portVlans: {
     change: 'Change VLAN',
@@ -774,6 +811,20 @@ export default {
         title: '{service} stopped on {node}',
         detail: 'The service is enabled but not running.',
       },
+      wifi_channel_conflict: {
+        title: 'Wi-Fi channels of your access points overlap',
+        detail: 'On 2.4 GHz: {aps}.',
+        detailAuto:
+          'On 2.4 GHz: {aps}. On automatic channel (left to their controller): {auto_aps}.',
+      },
+      port_forward: {
+        title: 'Port {ports}/{protocol} open to {target}',
+        detail: '{node} forwards it from the internet to {internal}. {description}',
+      },
+      upnp_forward: {
+        title: '{target} opened port {ports}/{protocol} by itself',
+        detail: 'Through UPnP or NAT-PMP on {node}, to {internal}. {description}',
+      },
       dhcp_pool_full: {
         title: 'DHCP pool almost full on {node}',
         detail: '{network}: {used} of {total} addresses in use ({pct}%).',
@@ -875,6 +926,12 @@ export default {
         'Check the other end of the tunnel and the internet there; a changed address or key also stops it.',
       service_stopped:
         "Start it again from the device's own interface and check its logs to see why it stopped.",
+      wifi_channel_conflict:
+        'Press Resolve: it moves the fewest access points to 1, 6 or 11, one at a time. Those on automatic channel are left to their controller.',
+      port_forward:
+        'Make sure the service behind it is up to date and must be reachable from the internet; a VPN is safer for your own access.',
+      upnp_forward:
+        'A device opened it without you. If you do not need it, turn UPnP off on the router (or for this device).',
       firewall_states_full:
         'Raise the state table limit, or look for a device opening many connections.',
       insecure_service: 'Turn it off on the device, or use SSH, SFTP or HTTPS instead.',

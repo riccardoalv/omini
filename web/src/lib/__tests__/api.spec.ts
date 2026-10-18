@@ -59,7 +59,9 @@ describe('api client', () => {
   it('throws ApiError with the server message', async () => {
     mockFetch(400, { error: 'missing required fields: host' })
     await expect(api.createIntegration({})).rejects.toEqual(
-      new ApiError(400, 'missing required fields: host'),
+      new ApiError(400, 'missing required fields: host', {
+        error: 'missing required fields: host',
+      }),
     )
   })
 

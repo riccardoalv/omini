@@ -42,6 +42,7 @@ export function alertText(a: Alert, t: T, locale: string): { title: string; deta
     detail = p.reboot ? `${base}.detailVersionReboot` : `${base}.detailVersion`
   // The device did not say which version: only how many updates.
   if (a.rule === 'update_pending' && !a.params.latest) detail = `${base}.detailCount`
+  if (a.rule === 'wifi_channel_conflict' && p.auto_aps) detail = `${base}.detailAuto`
   if (a.rule === 'discovery_limited' && typeof p.limits === 'string')
     p.what = p.limits
       .split(',')
@@ -76,4 +77,16 @@ export async function refreshAlerts(): Promise<void> {
   } catch {
     // shown again on the next refresh
   }
+}
+
+/** An alert with a Resolve button: a Wi-Fi channel conflict with radios Omini can move. */
+export function resolvable(a: Alert): boolean {
+  return a.rule === 'wifi_channel_conflict' && !a.resolved_at && Number(a.params.movable ?? 0) > 0
+}
+
+/** Whether an alert is about a node: its own, or one of the nodes it lists (the network's access points). */
+export function concerns(a: Alert, id: string | undefined): boolean {
+  if (!id) return false
+  const nodes = a.params.nodes
+  return a.node_id === id || (Array.isArray(nodes) && nodes.includes(id))
 }

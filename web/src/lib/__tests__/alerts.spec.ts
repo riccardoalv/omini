@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { createAppI18n } from '@/i18n'
-import { alertText, attentionCount, sortAlerts, worstByNode } from '@/lib/alerts'
+import {
+  alertText,
+  attentionCount,
+  concerns,
+  resolvable,
+  sortAlerts,
+  worstByNode,
+} from '@/lib/alerts'
 import type { Alert } from '@/lib/types'
 
 const i18n = createAppI18n('en')
@@ -89,6 +96,9 @@ describe('alerts', () => {
       'reboot_pending',
       'vpn_down',
       'service_stopped',
+      'wifi_channel_conflict',
+      'port_forward',
+      'upnp_forward',
     ]
     for (const locale of ['en', 'pt-BR']) {
       const { global } = createAppI18n(locale)
@@ -103,7 +113,23 @@ describe('alerts', () => {
       expect(global.te('insights.tips.reboot_pending'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.vpn_down'), `${locale} tip`).toBe(true)
       expect(global.te('insights.tips.service_stopped'), `${locale} tip`).toBe(true)
+      for (const tip of [
+        'iot_with_trusted',
+        'wifi_channel_conflict',
+        'port_forward',
+        'upnp_forward',
+      ])
+        expect(global.te(`insights.tips.${tip}`), `${locale} ${tip}`).toBe(true)
     }
+  })
+
+  it('tells the access points left on automatic channel', () => {
+    const wifi = (params: Alert['params']) =>
+      alertText(alert({ rule: 'wifi_channel_conflict', params }), t, 'en').detail
+    expect(wifi({ aps: 'hall (6), office (6)' })).toBe('On 2.4 GHz: hall (6), office (6).')
+    expect(wifi({ aps: 'hall (6), attic (6)', auto_aps: 'attic' })).toBe(
+      'On 2.4 GHz: hall (6), attic (6). On automatic channel (left to their controller): attic.',
+    )
   })
 
   it('sorts by severity, then newest', () => {
@@ -124,5 +150,43 @@ describe('alerts', () => {
     ]
     expect([...worstByNode(list)]).toEqual([['a', 'warning']])
     expect(attentionCount(list)).toBe(2)
+  })
+
+  it('offers Resolve on a channel conflict with radios to move, on every access point it lists', () => {
+    const wifi = alert({
+      rule: 'wifi_channel_conflict',
+      node_id: 'dev:hall',
+      params: { movable: 2, nodes: ['dev:hall', 'dev:office'] },
+    })
+    expect(resolvable(wifi)).toBe(true)
+    expect(resolvable({ ...wifi, params: { movable: 0 } })).toBe(false)
+    expect(resolvable({ ...wifi, resolved_at: '2026-10-08T00:00:00Z' })).toBe(false)
+    expect(resolvable(alert({}))).toBe(false)
+    expect(concerns(wifi, 'dev:office')).toBe(true)
+    expect(concerns(wifi, 'dev:hall')).toBe(true)
+    expect(concerns(wifi, 'dev:attic')).toBe(false)
+    expect(concerns(alert({ node_id: 'a' }), 'a')).toBe(true)
+  })
+
+  it('tells what a port forward exposes', () => {
+    const text = alertText(
+      alert({
+        rule: 'port_forward',
+        params: {
+          node: 'gw',
+          ports: '443',
+          protocol: 'tcp',
+          target: 'nas',
+          internal: '192.168.1.10:443',
+          description: 'Nextcloud',
+        },
+      }),
+      t,
+      'en',
+    )
+    expect(text).toEqual({
+      title: 'Port 443/tcp open to nas',
+      detail: 'gw forwards it from the internet to 192.168.1.10:443. Nextcloud',
+    })
   })
 })

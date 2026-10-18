@@ -179,6 +179,12 @@ export interface Device {
   neighbors?: Neighbor[]
   /** Clients of an access point. */
   wireless_clients?: WirelessClient[]
+  /** An access point's Wi-Fi radios and their channels. */
+  radios?: Radio[]
+  /** It reaches the network over Wi-Fi (a mesh unit or repeater). */
+  wireless_uplink?: boolean
+  /** Ports a router forwards from the internet to the network. */
+  port_forwards?: PortForward[]
   /** The network scan's DHCPDISCOVER on each interface. */
   dhcp_checks?: DhcpCheck[]
   /** The network scan's queries to each DNS server. */
@@ -211,6 +217,34 @@ export interface WirelessClient {
   tx_rate_mbps?: number
   rx_bps?: number
   tx_bps?: number
+}
+
+/** A Wi-Fi radio of an access point and the channel it is on. */
+export interface Radio {
+  name: string
+  band: '2.4ghz' | '5ghz' | '6ghz'
+  channel?: number
+  width_mhz?: number
+  /** The device (or its controller) picks the channel itself. */
+  auto?: boolean
+  tx_power_dbm?: number
+  enabled?: boolean
+}
+
+/** A port a router forwards from the internet to a device (made by hand, or by the device through UPnP). */
+export interface PortForward {
+  protocol: 'tcp' | 'udp' | 'tcp/udp'
+  external_port: number
+  external_port_end?: number
+  internal_ip?: string
+  internal_port?: number
+  /** Who may use it (an address or prefix); empty: anyone. */
+  source?: string
+  interface?: string
+  description?: string
+  enabled?: boolean
+  /** A device opened it by itself (UPnP IGD or NAT-PMP). */
+  upnp?: boolean
 }
 
 /** One DHCPDISCOVER of the network scan, on one interface. */
@@ -503,7 +537,7 @@ export interface Alert {
   rule: string
   severity: Severity
   node_id?: string
-  params: Record<string, string | number | boolean>
+  params: Record<string, string | number | boolean | string[]>
   opened_at: string
   updated_at: string
   resolved_at?: string
@@ -648,6 +682,7 @@ export type ChangeKind =
   | 'wol.send'
   | 'pause.set'
   | 'pause.delete'
+  | 'wifi.channel'
 
 /** What a network reaches through the router; custom: rules set by hand (reported only). */
 export type NetworkAccess = 'internet' | 'all' | 'local' | 'custom'
@@ -891,4 +926,42 @@ export interface NewApiToken {
   name: string
   token: string
   created_at: string
+}
+
+/** A step of the Wi-Fi channels plan: one access point's 2.4 GHz radio to another channel. */
+export interface ChannelStep {
+  node_id: string
+  label: string
+  radio: string
+  from: number
+  to: number
+  /** Its clients on 2.4 GHz: they reconnect for a few seconds. */
+  clients: number
+  /** Omini's own machine is on this radio: destructive. */
+  protected?: Protection
+  /** The browser asking is one of its clients. */
+  browser?: boolean
+}
+
+/** Why the plan leaves a radio alone. */
+export type ChannelSkip = 'auto' | 'mesh' | 'unsupported' | 'width'
+
+/** What settles the access points' 2.4 GHz channels, and the radios left alone. */
+export interface ChannelPlan {
+  steps: ChannelStep[]
+  skipped: {
+    node_id: string
+    label: string
+    radio: string
+    channel: number
+    clients: number
+    skip: ChannelSkip
+  }[]
+}
+
+/** What became of a step of the plan. */
+export interface ChannelResult extends ChannelStep {
+  status: 'done' | 'failed' | 'not_run'
+  error?: string
+  change?: ConfigChange
 }

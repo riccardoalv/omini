@@ -60,6 +60,7 @@ attention) and **info** (worth knowing).
 | `lag_member_down` | warning | A port of a LAG (bond, aggregate) is down while the LAG is up: less bandwidth, no redundancy. A port turned off on purpose is not told |
 | `stp_root_changed` | warning | The spanning tree root a switch sees changed (a new switch won the election, or the old root or its link went down). Stays open for 1 hour |
 | `weak_wifi` | warning | A Wi-Fi client's signal is below -75 dBm |
+| `wifi_channel_conflict` | warning | Two access points are on the same or overlapping 2.4 GHz channels (less than 5 apart), or one is on a channel other than 1, 6 or 11 (with more than three access points, a channel holds more than its even share of the three). One alert for the network, listing the access points and their channels and those on automatic channel; every access point is taken to hear the others. **Resolve** on the alert moves them ([Wi-Fi channels](map.md#wi-fi-channels)) |
 
 ### Network and security
 
@@ -79,6 +80,8 @@ attention) and **info** (worth knowing).
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |
 | `dns_local` | warning | A DNS server resolves the internet name but not a local one |
 | `vlan_unknown` | warning | A device has a VLAN that is not one of the network's (created on the device, not in Omini) |
+| `port_forward` | info | A router forwards a port (or a range) from the internet to a device: one alert per enabled forward (protocol and external port), open while it exists, with where it goes (the device's name when Omini knows the address), who may use it and its description. The router's panel lists them under **Exposed to the internet**. Omini never changes them |
+| `upnp_forward` | warning | Like `port_forward`, for a forward a device opened by itself through UPnP or NAT-PMP |
 | `insecure_service` | warning | Telnet (23) or FTP (21) is open on a device, or a network device's admin page is served only over plain HTTP (no 443 or 8443). Telnet and FTP are found by [nmap](discovery.md#nmap): the network scan's default ports leave 21 and 23 out (its **Ports to check** replaces them: list 21 and 23 there with the others to have it look) |
 | `new_devices_burst` | warning | 5 or more devices never seen before appeared within 10 minutes |
 | `new_device` | info | A device is seen for the first time. Shown for 24 hours. Devices found in the first 15 minutes after Omini started tracking are the existing network, not new |
@@ -113,7 +116,8 @@ it is a new alert and shows again. "Show again" undoes a dismissal.
 
 - open alerts, most severe first, each with what happened, a tip on what to
   do, since when, and **Show on the map** (opens the device's panel and
-  centers it),
+  centers it); a Wi-Fi channel conflict has **Resolve** ([Wi-Fi
+  channels](map.md#wi-fi-channels)),
 - a severity filter (all, critical, warning, info),
 - **Show dismissed**,
 - **Resolved in the last 7 days**.

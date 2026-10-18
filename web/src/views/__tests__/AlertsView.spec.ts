@@ -19,6 +19,8 @@ vi.mock('@/lib/api', async (orig) => {
       dismissAlert: vi.fn<typeof mod.api.dismissAlert>(),
       presence: vi.fn<typeof mod.api.presence>(),
       inventory: vi.fn<typeof mod.api.inventory>(),
+      wifiChannelPlan: vi.fn<typeof mod.api.wifiChannelPlan>(),
+      changeSettings: vi.fn<typeof mod.api.changeSettings>(),
     },
   }
 })
@@ -143,5 +145,34 @@ describe('AlertsView', () => {
     await flushPromises()
     expect(api.presence).toHaveBeenLastCalledWith({ before: undefined, limit: 100, first: true })
     w.unmount()
+  })
+
+  it('resolves a Wi-Fi channel conflict from its alert', async () => {
+    const wifi = (id: number, movable: number) =>
+      alert({
+        id,
+        rule: 'wifi_channel_conflict',
+        node_id: 'dev:hall',
+        params: { aps: 'hall (6), office (6)', movable, nodes: ['dev:hall', 'dev:office'] },
+      })
+    vi.mocked(api.alerts).mockResolvedValue([wifi(7, 1)])
+    vi.mocked(api.changeSettings).mockResolvedValue({ allow_destructive: false, dns_domain: '' })
+    vi.mocked(api.wifiChannelPlan).mockResolvedValue({ steps: [], skipped: [] })
+    const router = setup()
+    await router.push('/alerts')
+    const w = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    await w.get('[data-test=alert-resolve]').trigger('click')
+    await flushPromises()
+    expect(api.wifiChannelPlan).toHaveBeenCalled()
+    expect(w.find('[role=dialog]').exists()).toBe(true)
+    w.unmount()
+
+    // Nothing movable (every access point on auto): no button.
+    vi.mocked(api.alerts).mockResolvedValue([wifi(8, 0)])
+    const again = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    expect(again.find('[data-test=alert-resolve]').exists()).toBe(false)
+    again.unmount()
   })
 })
