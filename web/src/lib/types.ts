@@ -611,6 +611,8 @@ export interface Protection {
 export interface ConfigChange {
   id: number
   node_id: string
+  /** The device it was for, when another node made it (a reservation on the router). */
+  target_id?: string
   kind: ChangeKind
   port?: string
   before?: unknown

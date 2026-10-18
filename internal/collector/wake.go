@@ -110,7 +110,7 @@ func (c *Collector) Wake(ctx context.Context, nodeID string) (store.ConfigChange
 	}
 	value := WolValue{MAC: mac, IP: ip.String()}
 	if via.Via == "router" {
-		return c.Apply(ctx, ChangeRequest{NodeID: via.Router, Kind: model.ChangeKindWolSend, Value: value})
+		return c.Apply(ctx, ChangeRequest{NodeID: via.Router, Kind: model.ChangeKindWolSend, Target: nodeID, Value: value})
 	}
 	hw, err := net.ParseMAC(string(mac))
 	if err != nil {

@@ -1338,6 +1338,7 @@ const ptBR: typeof en = {
       pause_delete: 'Internet de {mac} devolvida',
     },
     failed: 'não aplicada: {error}',
+    through: '{what} (em {name})',
   },
 }
 

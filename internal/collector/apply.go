@@ -29,6 +29,10 @@ type ChangeRequest struct {
 	Kind   model.ChangeKind
 	Port   string
 	Value  any
+	// Target is the device the change is for when another node makes it (a
+	// reservation or a pause on the router, a name on the DNS server): the
+	// change shows in its history too.
+	Target string
 	// Confirmed: the user confirmed a destructive change a second time.
 	Confirmed bool
 }
@@ -116,6 +120,9 @@ func (c *Collector) Apply(ctx context.Context, req ChangeRequest) (store.ConfigC
 	rec := store.ConfigChange{
 		NodeID: n.ID, IntegrationID: n.IntegrationID, Kind: string(req.Kind), Port: req.Port,
 		Before: before, After: after, At: c.opts.Now(),
+	}
+	if req.Target != n.ID {
+		rec.TargetID = req.Target
 	}
 	if applyErr != nil {
 		rec.Error = applyErr.Error()

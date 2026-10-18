@@ -69,7 +69,7 @@ func (c *Collector) Pause(ctx context.Context, nodeID string) (store.ConfigChang
 	if err != nil {
 		return store.ConfigChange{}, err
 	}
-	return c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Value: v})
+	return c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Target: nodeID, Value: v})
 }
 
 // Resume gives a paused device its internet back, on every router pausing it.
@@ -85,7 +85,7 @@ func (c *Collector) Resume(ctx context.Context, nodeID string) (store.ConfigChan
 		if r.Device == nil || pausedOf(r, mac) == nil || !slices.Contains(r.Changes, model.ChangeKindPauseDelete) {
 			continue
 		}
-		rec, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseDelete, Value: MACValue{MAC: mac}})
+		rec, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseDelete, Target: nodeID, Value: MACValue{MAC: mac}})
 		if err != nil {
 			return rec, err
 		}
@@ -122,7 +122,7 @@ func (c *Collector) syncPaused(ctx context.Context) {
 				continue
 			}
 			v := model.PausedDevice{MAC: mac, IPs: ips, Name: p.Name}
-			if _, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Value: v}); err != nil {
+			if _, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindPauseSet, Target: id, Value: v}); err != nil {
 				slog.Warn("could not follow a paused device's new address", "node", id, "err", err)
 			}
 		}

@@ -99,7 +99,7 @@ func TestDeletingAVLANRemovesItsNetwork(t *testing.T) {
 // A device's address is fixed on the router whose network holds it, and
 // freed again; an address outside its networks is refused.
 func TestReservingADevicesAddress(t *testing.T) {
-	coll, s, _ := switchNetwork(t)
+	coll, s, st := switchNetwork(t)
 	ctx := context.Background()
 	phone := ""
 	for _, n := range coll.State().Topology.Nodes {
@@ -128,6 +128,11 @@ func TestReservingADevicesAddress(t *testing.T) {
 	}
 	if _, err := coll.Unreserve(ctx, phone); !errors.Is(err, collector.ErrNotChangeable) {
 		t.Fatalf("again: %v", err)
+	}
+	// The router made them, for the phone: both show in the phone's history.
+	h, err := st.ConfigChanges(ctx, phone, 10)
+	if err != nil || len(h) < 2 || h[0].Kind != string(model.ChangeKindReservationDelete) || h[0].TargetID != phone || h[0].NodeID != "dev:"+string(fwMAC) {
+		t.Fatalf("history: %+v %v", h, err)
 	}
 }
 

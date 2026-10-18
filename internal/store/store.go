@@ -348,6 +348,13 @@ var migrations = []string{
 		PRIMARY KEY (at, country, org)
 	);
 	`,
+	// 26: the device a change was for, when another one made it (a
+	// reservation on the router, a name on the DNS server): its history
+	// shows it too.
+	`
+	ALTER TABLE config_changes ADD COLUMN target_id TEXT NOT NULL DEFAULT '';
+	CREATE INDEX config_changes_target ON config_changes (target_id, at);
+	`,
 }
 
 // Open opens (creating if needed) the database at path and applies migrations.

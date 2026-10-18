@@ -1197,5 +1197,6 @@ export default {
       pause_delete: 'Internet of {mac} given back',
     },
     failed: 'not applied: {error}',
+    through: '{what} (on {name})',
   },
 }

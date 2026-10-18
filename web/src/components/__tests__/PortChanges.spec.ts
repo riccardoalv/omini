@@ -186,4 +186,30 @@ describe('Changes in the device panel', () => {
     expect(items[1]!.classes()).toContain('failed')
     expect(items[2]!.text()).toContain('Port 5: disabled')
   })
+
+  it('shows on a client what its router did for it', async () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    vi.mocked(api.presence).mockResolvedValue([])
+    vi.mocked(api.changeSettings).mockResolvedValue({ allow_destructive: false, dns_domain: '' })
+    vi.mocked(api.configChanges).mockResolvedValue([
+      {
+        id: 4,
+        node_id: 'dev:fw',
+        target_id: 'mac:92',
+        kind: 'reservation.set',
+        after: { mac: '92:34:c8:00:00:01', ip: '192.168.1.41' },
+        at: '2026-10-10T12:10:00Z',
+      },
+    ])
+    const fw: TopoNode = { id: 'dev:fw', kind: 'device', label: 'OPNsense', online: true }
+    const w = mount(NodePanel, {
+      props: { node: phone, nodes: [phone, fw], edges: [] },
+      global: { plugins: plugins(), stubs: { RouterLink: true, HostActions: true } },
+    })
+    await flushPromises()
+    expect(api.configChanges).toHaveBeenCalledWith('mac:92')
+    const items = w.findAll('[data-test=node-changes] li')
+    expect(items).toHaveLength(1)
+    expect(items[0]!.text()).toContain('Fixed 192.168.1.41 for 92:34:c8:00:00:01 (on OPNsense)')
+  })
 })

@@ -240,7 +240,7 @@ func (c *Collector) SyncDNSName(ctx context.Context, nodeID string) error {
 	var errs []error
 	if server, fqdn, ok := strings.Cut(applied, "|"); ok && (server != want.Server || fqdn != want.Name) {
 		if s, ok := c.node(server); ok && s.Device != nil && dnsRecordOf(s, fqdn) != nil {
-			if _, err := c.Apply(ctx, ChangeRequest{NodeID: server, Kind: model.ChangeKindDnsDelete, Value: DnsDelete{Name: fqdn}}); err != nil {
+			if _, err := c.Apply(ctx, ChangeRequest{NodeID: server, Kind: model.ChangeKindDnsDelete, Target: nodeID, Value: DnsDelete{Name: fqdn}}); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -250,7 +250,7 @@ func (c *Collector) SyncDNSName(ctx context.Context, nodeID string) error {
 		ip, _ := fixedIP(c.State().Topology, model.MACAddress(mac))
 		s, _ := c.node(want.Server)
 		if r := dnsRecordOf(s, want.Name); r == nil || r.IP != ip.String() {
-			_, err := c.Apply(ctx, ChangeRequest{NodeID: want.Server, Kind: model.ChangeKindDnsSet, Value: model.DnsRecord{Name: want.Name, IP: ip.String()}})
+			_, err := c.Apply(ctx, ChangeRequest{NodeID: want.Server, Kind: model.ChangeKindDnsSet, Target: nodeID, Value: model.DnsRecord{Name: want.Name, IP: ip.String()}})
 			if err != nil {
 				errs = append(errs, err)
 			}

@@ -151,7 +151,7 @@ func (c *Collector) keepBackup(ctx context.Context, integrationID int64, nodeID 
 	if prev, err := c.store.Backups(ctx, nodeID); err == nil && len(prev) > 0 {
 		changes, _ := c.store.ConfigChanges(ctx, nodeID, 50)
 		for _, ch := range changes {
-			if ch.Error == "" && ch.Kind != string(model.ChangeKindWolSend) && ch.At.After(prev[0].TakenAt) {
+			if ch.NodeID == nodeID && ch.Error == "" && ch.Kind != string(model.ChangeKindWolSend) && ch.At.After(prev[0].TakenAt) {
 				byOmini = true
 				break
 			}

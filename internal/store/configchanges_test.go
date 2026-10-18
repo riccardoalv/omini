@@ -48,3 +48,25 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("limit: %+v", list)
 	}
 }
+
+// A change made by the router for a device is in both histories.
+func TestConfigChangesForAnotherDevice(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	now := time.Unix(1_800_000_000, 0)
+	if _, err := s.AddConfigChange(ctx, ConfigChange{
+		NodeID: "dev:fw", TargetID: "mac:phone", IntegrationID: 1, Kind: "reservation.set",
+		After: json.RawMessage(`{"mac":"aa:00:00:00:00:01","ip":"192.168.1.41"}`), At: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"dev:fw", "mac:phone"} {
+		list, err := s.ConfigChanges(ctx, id, 10)
+		if err != nil || len(list) != 1 || list[0].NodeID != "dev:fw" || list[0].TargetID != "mac:phone" {
+			t.Fatalf("%s: %+v %v", id, list, err)
+		}
+	}
+	if list, _ := s.ConfigChanges(ctx, "dev:sw", 10); len(list) != 0 {
+		t.Fatalf("another device: %+v", list)
+	}
+}

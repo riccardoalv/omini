@@ -117,7 +117,8 @@ const history = ref<ConfigChange[]>([])
 const allowDestructive = ref(false)
 async function loadChanges(id: string | undefined) {
   history.value = []
-  if (!id || !props.node?.changes?.length) return
+  // Every node: a client's history holds what its router or DNS server did for it.
+  if (!id) return
   try {
     const [list, settings] = await Promise.all([api.configChanges(id), api.changeSettings()])
     if (props.node?.id === id) {
@@ -152,7 +153,10 @@ function changeText(c: ConfigChange) {
         ? t('changes.portDisabled', { port })
         : t('changes.portEnabled', { port })
       : t(`changes.done.${c.kind.replace('.', '_')}`, { port, name: '', ...v })
-  return c.error ? `${what}: ${t('changes.failed', { error: c.error })}` : what
+  // Made by another node for this one (a reservation on the router).
+  const shown =
+    c.node_id !== n.value?.id ? t('changes.through', { what, name: nodeName(c.node_id) }) : what
+  return c.error ? `${shown}: ${t('changes.failed', { error: c.error })}` : shown
 }
 function afterChange() {
   void loadChanges(n.value?.id)
@@ -834,7 +838,7 @@ async function save(patch: {
         />
 
         <PanelSection
-          v-if="n.changes?.length"
+          v-if="n.changes?.length || history.length"
           id="changes"
           :title="t('changes.history')"
           :summary="history.length ? String(history.length) : ''"

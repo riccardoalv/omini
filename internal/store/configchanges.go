@@ -11,8 +11,11 @@ const ConfigChangesKeep = 365 * 24 * time.Hour
 
 // ConfigChange is one configuration change made from Omini, applied or not.
 type ConfigChange struct {
-	ID            int64           `json:"id"`
-	NodeID        string          `json:"node_id"`
+	ID     int64  `json:"id"`
+	NodeID string `json:"node_id"`
+	// TargetID is the device the change was for, when another node made it (a
+	// reservation or a pause on the router, a name on the DNS server).
+	TargetID      string          `json:"target_id,omitempty"`
 	IntegrationID int64           `json:"integration_id"`
 	Kind          string          `json:"kind"`
 	Port          string          `json:"port,omitempty"`
@@ -30,9 +33,9 @@ func (s *Store) AddConfigChange(ctx context.Context, c ConfigChange) (int64, err
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO config_changes (node_id, integration_id, kind, port, before, after, error, at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.NodeID, c.IntegrationID, c.Kind, c.Port, string(c.Before), string(c.After), c.Error, c.At.Unix())
+		INSERT INTO config_changes (node_id, target_id, integration_id, kind, port, before, after, error, at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.NodeID, c.TargetID, c.IntegrationID, c.Kind, c.Port, string(c.Before), string(c.After), c.Error, c.At.Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -46,11 +49,12 @@ func (s *Store) AddConfigChange(ctx context.Context, c ConfigChange) (int64, err
 	return id, tx.Commit()
 }
 
-// ConfigChanges returns the changes made to a node, newest first, at most limit.
+// ConfigChanges returns the changes made on a node or for it (through
+// another one), newest first, at most limit.
 func (s *Store) ConfigChanges(ctx context.Context, nodeID string, limit int) ([]ConfigChange, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, node_id, integration_id, kind, port, before, after, error, at
-		FROM config_changes WHERE node_id = ? ORDER BY at DESC, id DESC LIMIT ?`, nodeID, limit)
+		SELECT id, node_id, target_id, integration_id, kind, port, before, after, error, at
+		FROM config_changes WHERE node_id = ? OR target_id = ? ORDER BY at DESC, id DESC LIMIT ?`, nodeID, nodeID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +64,7 @@ func (s *Store) ConfigChanges(ctx context.Context, nodeID string, limit int) ([]
 		var c ConfigChange
 		var before, after string
 		var at int64
-		if err := rows.Scan(&c.ID, &c.NodeID, &c.IntegrationID, &c.Kind, &c.Port, &before, &after, &c.Error, &at); err != nil {
+		if err := rows.Scan(&c.ID, &c.NodeID, &c.TargetID, &c.IntegrationID, &c.Kind, &c.Port, &before, &after, &c.Error, &at); err != nil {
 			return nil, err
 		}
 		if before != "" {

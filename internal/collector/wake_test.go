@@ -54,8 +54,15 @@ func TestWakingADevice(t *testing.T) {
 	if _, err := coll.Wake(ctx, phone); err != nil || len(s.applied) != n || len(sent) != 1 || sent[0].String() != "192.168.1.3/24" {
 		t.Fatalf("local: %v %v", err, sent)
 	}
-	if h, err := st.ConfigChanges(ctx, phone, 5); err != nil || len(h) != 1 || h[0].Kind != string(model.ChangeKindWolSend) {
+	// Both are in the device's history; the one the router sent is in the
+	// router's too.
+	fw := "dev:" + string(fwMAC)
+	if h, err := st.ConfigChanges(ctx, phone, 5); err != nil || len(h) != 2 || h[0].NodeID != phone ||
+		h[1].NodeID != fw || h[1].TargetID != phone || h[1].Kind != string(model.ChangeKindWolSend) {
 		t.Fatalf("history: %+v %v", h, err)
+	}
+	if h, err := st.ConfigChanges(ctx, fw, 5); err != nil || len(h) != 1 || h[0].TargetID != phone {
+		t.Fatalf("router's history: %+v %v", h, err)
 	}
 	if _, err := coll.Wake(ctx, "no-such-node"); !errors.Is(err, collector.ErrNotChangeable) {
 		t.Fatalf("unknown: %v", err)

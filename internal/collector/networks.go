@@ -306,7 +306,7 @@ func (c *Collector) Reserve(ctx context.Context, nodeID, ip string) (store.Confi
 		if slices.Contains(r.Changes, model.ChangeKindReservationSet) && networkHolding(r, addr) != nil {
 			name := n.Label
 			rec, err := c.Apply(ctx, ChangeRequest{
-				NodeID: r.ID, Kind: model.ChangeKindReservationSet,
+				NodeID: r.ID, Kind: model.ChangeKindReservationSet, Target: nodeID,
 				Value: model.DhcpReservation{MAC: model.NormMAC(n.MAC), IP: ip, Name: &name},
 			})
 			if err == nil {
@@ -327,7 +327,7 @@ func (c *Collector) Unreserve(ctx context.Context, nodeID string) (store.ConfigC
 	mac := model.NormMAC(n.MAC)
 	for _, r := range c.State().Topology.Nodes {
 		if reservationOf(r, mac) != nil && slices.Contains(r.Changes, model.ChangeKindReservationDelete) {
-			rec, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindReservationDelete, Value: ReservationDelete{MAC: mac}})
+			rec, err := c.Apply(ctx, ChangeRequest{NodeID: r.ID, Kind: model.ChangeKindReservationDelete, Target: nodeID, Value: ReservationDelete{MAC: mac}})
 			if err == nil {
 				c.syncNameOf(ctx, nodeID)
 			}
