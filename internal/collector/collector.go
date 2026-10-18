@@ -586,6 +586,9 @@ func upstreamNodes(topo *topology.Topology) map[string]bool {
 		if n.WAN != nil {
 			for _, g := range n.WAN.Gateways {
 				if a := model.Deref(g.Address); a != "" {
+					if ip, err := netip.ParseAddr(a); err == nil && ip.Is6() {
+						a = ip.WithZone("").String() // as the node's ips6 are written
+					}
 					gateways[a] = true
 				}
 			}
@@ -593,7 +596,8 @@ func upstreamNodes(topo *topology.Topology) map[string]bool {
 	}
 	out := map[string]bool{}
 	for _, n := range topo.Nodes {
-		if n.Kind != topology.KindWAN && (wans[n.ParentID] || (n.IP != "" && gateways[n.IP])) {
+		if n.Kind != topology.KindWAN && (wans[n.ParentID] || (n.IP != "" && gateways[n.IP]) ||
+			slices.ContainsFunc(topology.GlobalIPv6(n.IPs6), func(ip string) bool { return gateways[ip] })) {
 			out[n.ID] = true
 		}
 	}

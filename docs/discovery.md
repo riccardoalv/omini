@@ -115,6 +115,12 @@ integration reports by its IPv6 address alone is merged with the one NDP
 gives that address to. **Link-local addresses** (`fe80::`) are shown but
 never used to merge two devices (`fe80::1` is on many routers at once).
 
+An **IPv6 default gateway** is an uplink's gateway like an IPv4 one: the
+WAN node lists it with its status, round-trip time and loss, it raises the
+same alerts, and the uplink is down only when all its gateways are. A
+router whose WAN address is in another router's IPv6 LAN (a /48 to /64) is
+behind it, as with IPv4.
+
 ## SNMP
 
 SNMP is a method of the network scan, on by default. Every host found is

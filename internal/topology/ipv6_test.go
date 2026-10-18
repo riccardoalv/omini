@@ -141,3 +141,67 @@ func TestDHCPv6Leases(t *testing.T) {
 		t.Fatal("a DHCPv6 lease alone made a device present")
 	}
 }
+
+// An IPv6 default gateway is the uplink's gateway like an IPv4 one: on the
+// WAN node with its status, and the uplink is down only when every gateway
+// is. Its link-local address (as most are) does not make the router look
+// nested in another device's LAN.
+func TestIPv6GatewaysAreWANGateways(t *testing.T) {
+	up, down := model.GatewayStatusUp, model.GatewayStatusDown
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall),
+		MACs: []model.MACAddress{"58:9c:fc:00:00:01"},
+		Interfaces: []model.Interface{
+			{Name: "pppoe0", Up: model.Ptr(true), Wan: model.Ptr(true), IPs: []string{"100.64.0.20/32", "2001:db8:ffff::2/64"}},
+			{Name: "lte0", Up: model.Ptr(true), Wan: model.Ptr(true), IPs: []string{"2001:db8:eeee::2/64"}},
+			{Name: "igc1", IPs: []string{"192.168.1.1/24", "2001:db8:1::1/64", "fe80::1/64"}},
+		},
+		Gateways: []model.Gateway{
+			{Name: "WAN_GW", Interface: model.Ptr("pppoe0"), Address: model.Ptr("100.64.0.1"), Status: up},
+			{Name: "WAN_GWv6", Interface: model.Ptr("pppoe0"), Address: model.Ptr("fe80::1%pppoe0"), Status: down, RttMs: model.Ptr(9.5), LossPct: model.Ptr(100.0)},
+			{Name: "LTE_GWv6", Interface: model.Ptr("lte0"), Address: model.Ptr("fe80::1%lte0"), Status: down},
+		},
+	}
+	// A switch on the LAN with the same link-local address as the gateways.
+	sw := model.Device{
+		Key: "1c:2a:a3:00:00:01", Name: "sw", Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{"1c:2a:a3:00:00:01"},
+		Interfaces: []model.Interface{{Name: "vlan1", IPs: []string{"192.168.1.2/24", "fe80::1/64", "2001:db8:1::2/64"}}},
+	}
+	nodes := build6(fw, sw)
+	wan := nodes["wan:dev:58:9c:fc:00:00:01:pppoe0"]
+	if wan.WAN == nil || len(wan.WAN.Gateways) != 2 || !wan.Online {
+		t.Fatalf("dual-stack WAN = %+v %+v", wan, wan.WAN)
+	}
+	if g := wan.WAN.Gateways[1]; model.Deref(g.Address) != "fe80::1%pppoe0" || model.Deref(g.RttMs) != 9.5 {
+		t.Fatalf("IPv6 gateway = %+v", g)
+	}
+	if lte, ok := nodes["wan:dev:58:9c:fc:00:00:01:lte0"]; !ok || lte.Online {
+		t.Fatalf("IPv6-only WAN with its gateway down = %+v (present %v)", lte, ok)
+	}
+}
+
+// A router whose WAN has an address in another router's IPv6 LAN is behind
+// it (double NAT, or a routed lab), not the center.
+func TestNestedRouterByIPv6(t *testing.T) {
+	fw := model.Device{
+		Key: "58:9c:fc:00:00:01", Name: "fw", Role: model.Ptr(model.DeviceRoleFirewall), MACs: []model.MACAddress{"58:9c:fc:00:00:01"},
+		Interfaces: []model.Interface{
+			{Name: "wan", Wan: model.Ptr(true), IPs: []string{"2001:db8:ffff::2/64"}},
+			{Name: "lan", IPs: []string{"2001:db8:1::1/64", "fe80::1/64"}},
+		},
+	}
+	lab := model.Device{
+		Key: "bc:24:11:00:00:99", Name: "lab", Role: model.Ptr(model.DeviceRoleRouter), MACs: []model.MACAddress{"bc:24:11:00:00:99"},
+		Interfaces: []model.Interface{
+			{Name: "wan", Wan: model.Ptr(true), IPs: []string{"2001:db8:1::99/64"}},
+			{Name: "lan", IPs: []string{"2001:db8:99::1/64"}},
+		},
+	}
+	nodes := build6(fw, lab)
+	if _, ok := nodes["wan:dev:bc:24:11:00:00:99:wan"]; ok {
+		t.Fatal("the lab router behind the firewall's IPv6 LAN is a center")
+	}
+	if _, ok := nodes["wan:dev:58:9c:fc:00:00:01:wan"]; !ok {
+		t.Fatal("the firewall lost its WAN")
+	}
+}
