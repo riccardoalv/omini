@@ -46,7 +46,7 @@ func TestCandidates(t *testing.T) {
 		client("far", "server", "aa:00:00:00:00:06", "10.9.9.9"),       // no router for it
 	}}
 	topo.Nodes[4].RandomMAC = true
-	got := Candidates(topo)
+	got := Candidates(topo, "")
 	if len(got) != 2 {
 		t.Fatalf("candidates: %+v", got)
 	}
@@ -75,7 +75,7 @@ func TestProposesAnAddressOutsideTheRange(t *testing.T) {
 		client("cam", "camera", "aa:00:00:00:00:03", "10.0.0.3"), // outside the range already
 		client("printer", "printer", "aa:00:00:00:00:09", "10.0.0.2"),
 	}}
-	got := Candidates(topo)
+	got := Candidates(topo, "")
 	if len(got) != 3 {
 		t.Fatalf("candidates: %+v", got)
 	}
@@ -98,8 +98,31 @@ func TestOnlyARouterThatServesDHCP(t *testing.T) {
 		Device: &model.Device{DhcpLeases: []model.DhcpLease{{MAC: "aa:00:00:00:00:02", IP: "192.168.1.121"}}},
 	}
 	topo := topology.Topology{Nodes: []topology.Node{gw, pihole, client("sw-desk", "switch", "aa:00:00:00:00:02", "192.168.1.121")}}
-	got := Candidates(topo)
+	got := Candidates(topo, "")
 	if len(got) != 1 || got[0].Router != "" || got[0].Server != "pihole" || got[0].Proposed != "" {
 		t.Fatalf("candidates: %+v", got)
+	}
+}
+
+// TestOminiIsNeverMoved: Omini's own host keeps its address or is left out;
+// it never gets another one (Omini would move at its next lease renewal).
+func TestOminiIsNeverMoved(t *testing.T) {
+	no := false
+	leases := []model.DhcpLease{{MAC: "aa:00:00:00:00:01", IP: "10.0.0.150"}, {MAC: "aa:00:00:00:00:02", IP: "10.0.0.20"}}
+	topo := topology.Topology{Nodes: []topology.Node{
+		router("pf", "10.0.0.1/24", &no, leases, nil),
+		client("omini", "server", "aa:00:00:00:00:01", "10.0.0.150"),
+	}}
+	if got := Candidates(topo, "omini"); len(got) != 0 {
+		t.Fatalf("Omini's host would move: %+v", got)
+	}
+	if got := Candidates(topo, ""); len(got) != 1 || got[0].Proposed == "" {
+		t.Fatalf("another server is moved: %+v", got)
+	}
+	// Outside the range it keeps its address: fine.
+	topo.Nodes[1].IP = "10.0.0.20"
+	topo.Nodes[1].MAC = "aa:00:00:00:00:02"
+	if got := Candidates(topo, "omini"); len(got) != 1 || got[0].Proposed != "" {
+		t.Fatalf("keeping its address: %+v", got)
 	}
 }

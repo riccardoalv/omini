@@ -264,7 +264,9 @@ hypervisors, VMs, printers and UPS are checked; the other devices can be
 shown and checked too. Each keeps the address it has today as a reservation
 on its router. A router that does not fix addresses inside its DHCP range
 (pfSense) gets a free address outside it instead, shown before applying; the
-device takes it at its next lease renewal. One device failing does not stop
+device takes it at its next lease renewal. Omini's own host never gets another
+address that way (Omini would move): it is left out of the list, and from its
+panel only with destructive changes allowed. One device failing does not stop
 the others, and each change is in its router's history and the device's. A
 device's own panel has the same button (**Network → Reserve this IP**). Only a
 router that serves DHCP on the device's network is asked; a device that gets

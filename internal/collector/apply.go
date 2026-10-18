@@ -382,13 +382,10 @@ func ProtectedPorts(topo topology.Topology, self Self) map[string]map[string]top
 			below[e.Source] = append(below[e.Source], e)
 		}
 	}
-	omini := ""
+	omini := self.NodeIn(topo)
 	routers := map[string]bool{}
 	var routerMACs []model.MACAddress
 	for _, n := range topo.Nodes {
-		if omini == "" && n.Kind != topology.KindApp && self.Owns(n) {
-			omini = n.ID
-		}
 		if n.Kind == topology.KindDevice && isRouter(n.Role) {
 			routers[n.ID] = true
 			routerMACs = append(routerMACs, model.MACAddress(n.MAC))
@@ -474,6 +471,19 @@ type Self struct {
 	MACs []model.MACAddress
 	IPs  []string
 }
+
+// NodeIn is the node of the machine Omini runs on ("" when it is not on the map).
+func (s Self) NodeIn(topo topology.Topology) string {
+	for _, n := range topo.Nodes {
+		if n.Kind != topology.KindApp && s.Owns(n) {
+			return n.ID
+		}
+	}
+	return ""
+}
+
+// OminiNode is the node of the machine Omini runs on ("" when not found).
+func (c *Collector) OminiNode() string { return c.opts.Self.NodeIn(c.State().Topology) }
 
 // Owns reports whether a node is the machine Omini runs on.
 func (s Self) Owns(n topology.Node) bool {

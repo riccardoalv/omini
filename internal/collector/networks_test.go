@@ -236,3 +236,33 @@ func TestNoReservationOnARouterWithoutDHCP(t *testing.T) {
 		t.Fatalf("reserved on a router without DHCP: %v %+v", err, s.applied)
 	}
 }
+
+// Another address for Omini's own host would move Omini at its next lease
+// renewal: refused unless destructive changes are allowed; its current one is
+// fine.
+func TestOminisOwnHostIsNotMoved(t *testing.T) {
+	coll, s, _ := switchNetwork(t)
+	ctx := context.Background()
+	s.mu.Lock()
+	s.devices[0].Arp = append(s.devices[0].Arp, model.ArpEntry{IP: "192.168.1.3", MAC: ominiMAC})
+	s.mu.Unlock()
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	omini := coll.OminiNode()
+	if omini == "" {
+		t.Fatal("Omini is not on the map")
+	}
+	if _, err := coll.Reserve(ctx, omini, "192.168.1.60"); !errors.Is(err, collector.ErrInvalidChange) {
+		t.Fatalf("moved Omini: %v", err)
+	}
+	if _, err := coll.Reserve(ctx, omini, "192.168.1.3"); err != nil {
+		t.Fatalf("its own address: %v", err)
+	}
+	if err := coll.SetAllowDestructive(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coll.Reserve(ctx, omini, "192.168.1.61"); err != nil {
+		t.Fatalf("allowed: %v", err)
+	}
+}

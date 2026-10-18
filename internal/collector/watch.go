@@ -44,7 +44,7 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 		slog.Warn("could not record traffic history", "err", err)
 	}
 
-	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}, Core: map[int64]bool{}}
+	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}, Core: map[int64]bool{}, Omini: c.opts.Self.NodeIn(topo)}
 	names := map[int64]string{}
 	if all, err := c.store.ListIntegrations(ctx); err == nil {
 		for _, it := range all {

@@ -355,7 +355,7 @@ func (s *Server) deleteWifi(w http.ResponseWriter, r *http.Request) {
 // fixCandidates lists the devices on DHCP without a reservation, with the
 // address each would keep (or the one proposed outside the DHCP range).
 func (s *Server) fixCandidates(w http.ResponseWriter, _ *http.Request) {
-	list := fixip.Candidates(s.Collector.State().Topology)
+	list := fixip.Candidates(s.Collector.State().Topology, s.Collector.OminiNode())
 	if list == nil {
 		list = []fixip.Candidate{}
 	}

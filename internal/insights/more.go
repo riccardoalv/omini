@@ -302,7 +302,7 @@ func infraDynamicIP(in Input, _ index) []Insight {
 		byID[in.Topology.Nodes[i].ID] = &in.Topology.Nodes[i]
 	}
 	var out []Insight
-	for _, c := range fixip.Candidates(in.Topology) {
+	for _, c := range fixip.Candidates(in.Topology, in.Omini) {
 		if n := byID[c.NodeID]; c.Infra && c.Router != "" && n != nil {
 			out = append(out, node("infra_dynamic_ip", Info, n, "", map[string]any{"ip": c.IP}))
 		}

@@ -320,6 +320,11 @@ func (c *Collector) Reserve(ctx context.Context, nodeID, ip string) (store.Confi
 	if !ok || n.MAC == "" || err != nil {
 		return store.ConfigChange{}, fmt.Errorf("%w: a reservation needs a device with a MAC and an IPv4 address", ErrInvalidChange)
 	}
+	// Another address for Omini's own host moves Omini at its next lease
+	// renewal (its address in the browser stops working): destructive.
+	if c.opts.Self.Owns(n) && addr.String() != n.IP && !c.AllowDestructive(ctx) {
+		return store.ConfigChange{}, fmt.Errorf("%w: %s would move Omini's own host at its next lease renewal (allow destructive changes in Settings to do it)", ErrInvalidChange, ip)
+	}
 	for _, r := range topo.Nodes {
 		if slices.Contains(r.Changes, model.ChangeKindReservationSet) && servesDHCP(r, networkHolding(r, addr), model.NormMAC(n.MAC)) {
 			name := n.Label

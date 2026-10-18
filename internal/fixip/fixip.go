@@ -63,8 +63,10 @@ type network struct {
 // left out. A device whose lease comes from a server Omini cannot make
 // reservations on, with no such router for it, is listed with that Server
 // and no Router (it cannot be fixed from Omini). Infra ones first, then by
-// label.
-func Candidates(topo topology.Topology) []Candidate {
+// label. Omini's own node (omini, "" when unknown) is left out when its
+// reservation would need another address: it would move Omini at its next
+// lease renewal.
+func Candidates(topo topology.Topology, omini string) []Candidate {
 	var nets []network
 	leased := map[model.MACAddress]string{} // MAC → the node that leased it
 	reserves := map[string]bool{}           // nodes that can make reservations
@@ -130,6 +132,9 @@ func Candidates(topo topology.Topology) []Candidate {
 			Router: nets[i].router, Infra: Infra(n.Type),
 		}
 		if inRange(nets[i].dhcp, ip) && nets[i].dhcp.ReserveInRange != nil && !*nets[i].dhcp.ReserveInRange {
+			if n.ID == omini {
+				continue // never move Omini's own host
+			}
 			if free, ok := outside(nets[i], used); ok {
 				c.Proposed = free.String()
 				used[free] = true

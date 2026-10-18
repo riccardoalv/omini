@@ -96,6 +96,8 @@ type Input struct {
 	Flows *Flows
 	// SlowDNS: how many checks in a row each DNS server answered slowly.
 	SlowDNS map[string]int
+	// Omini is the node of the machine Omini runs on ("" when not found).
+	Omini string
 }
 
 // Events are rules about something that happened (a restart, a device that
