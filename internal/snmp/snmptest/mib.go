@@ -2,6 +2,7 @@ package snmptest
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"slices"
 	"strings"
@@ -89,6 +90,19 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.Counter64, model.Deref(iface.TxBytes), "1.3.6.1.2.1.31.1.1.1.10.%d", idx)
 		add(gosnmp.Gauge32, uint32(model.Deref(iface.SpeedMbps)), "1.3.6.1.2.1.31.1.1.1.15.%d", idx)
 		add(gosnmp.OctetString, model.Deref(iface.Description), "1.3.6.1.2.1.31.1.1.1.18.%d", idx)
+	}
+	// EtherLike-MIB dot3StatsTable: the duplex of the ports that know it, in
+	// rows numbered apart from the ifIndex (dot3StatsIndex names the port).
+	for i, iface := range d.Interfaces {
+		if iface.Duplex == nil {
+			continue
+		}
+		status := 3 // fullDuplex
+		if *iface.Duplex == model.InterfaceDuplexHalf {
+			status = 2
+		}
+		add(gosnmp.Integer, ifIndex[iface.Name], "1.3.6.1.2.1.10.7.2.1.1.%d", 100+i)
+		add(gosnmp.Integer, status, "1.3.6.1.2.1.10.7.2.1.19.%d", 100+i)
 	}
 	// BRIDGE-MIB dot1dBasePortIfIndex: bridge port -> ifIndex.
 	if !opts.NoBridgePortTable {
@@ -189,6 +203,7 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 			add(gosnmp.Integer, ifIndex[lag], "1.2.840.10006.300.43.1.2.1.1.13.%d", ifIndex[iface.Name])
 		}
 	}
+	out = append(out, stpRoles(d, bridgePort)...)
 	if root := model.Deref(d.StpRoot); root != "" {
 		var prio int
 		var mac string
@@ -250,6 +265,10 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		add(gosnmp.OctetString, iface.Name, "1.0.8802.1.1.2.1.3.7.1.4.%d", idx)
 	}
 	for i, nb := range d.Neighbors {
+		if model.Deref(nb.Protocol) == model.NeighborProtocolCdp {
+			out = append(out, cdpCache(nb, ifIndex[nb.LocalPort], i+1)...)
+			continue
+		}
 		idx := fmt.Sprintf("0.%d.%d", ifIndex[nb.LocalPort], i+1)
 		if nb.RemoteMAC != nil {
 			add(gosnmp.Integer, 4, "1.0.8802.1.1.2.1.4.1.1.4.%s", idx)
@@ -264,8 +283,12 @@ func FromDevice(d model.Device, opts Options) []gosnmp.SnmpPDU {
 		}
 		if ip := net.ParseIP(model.Deref(nb.RemoteIP)).To4(); ip != nil {
 			add(gosnmp.Integer, 2, "1.0.8802.1.1.2.1.4.2.1.3.%s.1.4.%d.%d.%d.%d", idx, ip[0], ip[1], ip[2], ip[3])
+		} else if ip := net.ParseIP(model.Deref(nb.RemoteIP)); ip != nil {
+			add(gosnmp.Integer, 2, "1.0.8802.1.1.2.1.4.2.1.3.%s.2.16.%s", idx, bytesOID(ip))
 		}
 	}
+
+	out = append(out, entityMIB(d, ifIndex)...)
 
 	// HOST-RESOURCES-MIB: CPU load and RAM usage.
 	// One hrProcessorLoad row per processor (CPUCount, else one), all at
@@ -360,4 +383,142 @@ func bytesOID(b []byte) string {
 		parts = append(parts, fmt.Sprint(x))
 	}
 	return strings.Join(parts, ".")
+}
+
+// entityMIB renders ENTITY-MIB when the device has something it carries: a
+// chassis (index 1) with the device's model, serial number and software and
+// firmware versions, and for each port with a transceiver, the transceiver
+// (a module in the chassis) and the port inside it (Cisco's layout), the
+// port tied to its ifIndex by entAliasMappingTable; ENTITY-SENSOR-MIB has
+// the temperatures, a transceiver's inside it.
+func entityMIB(d model.Device, ifIndex map[string]int) []gosnmp.SnmpPDU {
+	transceivers := slices.ContainsFunc(d.Interfaces, func(i model.Interface) bool { return i.Transceiver != nil })
+	firmware := ""
+	if d.Firmware != nil {
+		firmware = model.Deref(d.Firmware.Current)
+	}
+	if d.Serial == nil && d.OSVersion == nil && firmware == "" && !transceivers && len(d.Temperatures) == 0 {
+		return nil
+	}
+	var out []gosnmp.SnmpPDU
+	str := func(v string, col, idx int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.1.1.1.%d.%d", col, idx), Type: gosnmp.OctetString, Value: []byte(v)})
+	}
+	num := func(v, col, idx int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.1.1.1.%d.%d", col, idx), Type: gosnmp.Integer, Value: v})
+	}
+	// physical adds a row: descr, contained in, class, name, firmware,
+	// software, serial, manufacturer, model.
+	physical := func(idx int, descr string, parent, class int, name, fw, sw, serial, mfg, mdl string) {
+		str(descr, 2, idx)
+		num(parent, 4, idx)
+		num(class, 5, idx)
+		str(name, 7, idx)
+		str(fw, 9, idx)
+		str(sw, 10, idx)
+		str(serial, 11, idx)
+		str(mfg, 12, idx)
+		str(mdl, 13, idx)
+	}
+	physical(1, "Chassis", 0, 3, "Chassis", firmware, model.Deref(d.OSVersion), model.Deref(d.Serial),
+		model.Deref(d.Vendor), model.Deref(d.Model))
+	// sensor adds a temperature sensor (ENTITY-SENSOR-MIB, in tenths of a degree).
+	sensor := func(idx, parent int, name string, celsius float64) {
+		physical(idx, name+" temperature", parent, 8, name, "", "", "", "", "")
+		for col, v := range map[int]int{1: 8, 2: 9, 3: 1, 4: int(math.Round(celsius * 10)), 5: 1} {
+			out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.2.1.99.1.1.1.%d.%d", col, idx), Type: gosnmp.Integer, Value: v})
+		}
+	}
+	for j, temp := range d.Temperatures {
+		sensor(100+j, 1, temp.Sensor, temp.Celsius)
+	}
+	for i, iface := range d.Interfaces {
+		x := iface.Transceiver
+		if x == nil {
+			continue
+		}
+		module, port := 1000+2*i, 1001+2*i
+		descr := "SFP transceiver"
+		if x.Type != nil {
+			descr = *x.Type + " SFP"
+		}
+		physical(module, descr, 1, 9, iface.Name+" transceiver", "", "", model.Deref(x.Serial), model.Deref(x.Vendor), model.Deref(x.Part))
+		physical(port, iface.Name, module, 10, iface.Name, "", "", "", "", "")
+		if x.TemperatureC != nil {
+			sensor(2000+i, module, iface.Name+" transceiver", *x.TemperatureC)
+		}
+		out = append(out, gosnmp.SnmpPDU{
+			Name: fmt.Sprintf(".1.3.6.1.2.1.47.1.3.2.1.2.%d.0", port), Type: gosnmp.ObjectIdentifier,
+			Value: fmt.Sprintf(".1.3.6.1.2.1.2.2.1.1.%d", ifIndex[iface.Name]),
+		})
+	}
+	return out
+}
+
+// stpRoles renders what BRIDGE-MIB tells the ports' roles by, when a port
+// has one: the switch's bridge address (its key's MAC, else
+// 02:00:00:00:00:01) and root port, and each port's designated bridge and
+// port (the switch's for designated and backup ports, another bridge's for
+// root and alternate ones; a backup port's designated port is another one).
+func stpRoles(d model.Device, bridgePort func(string) int) []gosnmp.SnmpPDU {
+	if !slices.ContainsFunc(d.Interfaces, func(i model.Interface) bool { return i.Stp != nil && i.Stp.Role != nil }) {
+		return nil
+	}
+	self := macBytes(model.NormMAC(d.Key))
+	if len(self) != 6 {
+		self = []byte{2, 0, 0, 0, 0, 1}
+	}
+	other := []byte{0x80, 0, 2, 0, 0, 0, 0, 0x99}
+	var out []gosnmp.SnmpPDU
+	add := func(typ gosnmp.Asn1BER, value any, format string, args ...any) {
+		out = append(out, gosnmp.SnmpPDU{Name: "." + fmt.Sprintf(format, args...), Type: typ, Value: value})
+	}
+	add(gosnmp.OctetString, self, "1.3.6.1.2.1.17.1.1.0")
+	rootPort := 0
+	for _, iface := range d.Interfaces {
+		if iface.Stp == nil || iface.Stp.Role == nil {
+			continue
+		}
+		bp := bridgePort(iface.Name)
+		bridge, port := other, bp
+		switch *iface.Stp.Role {
+		case model.PortStpRoleRoot:
+			rootPort = bp
+		case model.PortStpRoleDesignated:
+			bridge = append([]byte{0x80, 1}, self...) // priority 32768 + VLAN 1
+		case model.PortStpRoleBackup:
+			bridge, port = append([]byte{0x80, 1}, self...), bp+1
+		}
+		add(gosnmp.OctetString, bridge, "1.3.6.1.2.1.17.2.15.1.8.%d", bp)
+		add(gosnmp.OctetString, []byte{0x80, byte(port)}, "1.3.6.1.2.1.17.2.15.1.9.%d", bp) //nolint:gosec // test data
+	}
+	add(gosnmp.Integer, rootPort, "1.3.6.1.2.1.17.2.7.0")
+	return out
+}
+
+// cdpCache renders a CDP neighbor as a CISCO-CDP-MIB cdpCacheTable row.
+func cdpCache(nb model.Neighbor, ifIdx, n int) []gosnmp.SnmpPDU {
+	var out []gosnmp.SnmpPDU
+	add := func(typ gosnmp.Asn1BER, value any, col int) {
+		out = append(out, gosnmp.SnmpPDU{Name: fmt.Sprintf(".1.3.6.1.4.1.9.9.23.1.2.1.1.%d.%d.%d", col, ifIdx, n), Type: typ, Value: value})
+	}
+	if ip := net.ParseIP(model.Deref(nb.RemoteIP)); ip != nil {
+		if v4 := ip.To4(); v4 != nil {
+			add(gosnmp.Integer, 1, 3)
+			add(gosnmp.OctetString, []byte(v4), 4)
+		} else {
+			add(gosnmp.Integer, 20, 3)
+			add(gosnmp.OctetString, []byte(ip.To16()), 4)
+		}
+	}
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemoteName)), 6)
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemotePort)), 7)
+	add(gosnmp.OctetString, []byte(model.Deref(nb.RemotePlatform)), 8)
+	bits := map[model.NeighborCapability]uint32{"router": 0x01, "bridge": 0x08, "station": 0x10, "repeater": 0x40, "telephone": 0x80}
+	var caps uint32
+	for _, c := range nb.Capabilities {
+		caps |= bits[c]
+	}
+	add(gosnmp.OctetString, []byte{byte(caps >> 24), byte(caps >> 16), byte(caps >> 8), byte(caps)}, 9)
+	return out
 }

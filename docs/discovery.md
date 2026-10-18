@@ -16,6 +16,7 @@ Everything here is read-only: Omini never changes a device's configuration.
 - [What each method needs](#what-each-method-needs)
 - [Subnets and the routers' networks](#subnets-and-the-routers-networks)
 - [SNMP](#snmp)
+- [UPnP port mappings](#upnp-port-mappings)
 - [nmap](#nmap)
 - [DNS and DHCP checks](#dns-and-dhcp-checks)
 - [Device identification](#device-identification)
@@ -36,7 +37,7 @@ its settings are in **Integrations → Network scan**.
 | Reverse DNS | Reverse DNS | Names from this server's DNS, then from the gateway's DNS |
 | NetBIOS | NetBIOS | Names of Windows and Samba machines |
 | mDNS / Bonjour | mDNS / Bonjour | What devices announce: names, models, services (AirPlay, Chromecast, printers, HomeKit...). Omini both asks and listens on UDP 5353 |
-| SSDP / UPnP | SSDP / UPnP | Manufacturer and model of TVs, routers and media players, from their UPnP descriptions |
+| SSDP / UPnP | SSDP / UPnP | Manufacturer and model of TVs, routers and media players, from their UPnP descriptions; the port mappings devices opened on the router. See [UPnP port mappings](#upnp-port-mappings) |
 | Web page titles | Web page titles | The title of each web interface, to recognize apps (Proxmox, TrueNAS, Home Assistant...) |
 | SSH banners | SSH banners | The SSH version line, which often names the operating system |
 | DHCP fingerprints | DHCP fingerprints | What each device asks for when it requests an address (see [DHCP fingerprints](#dhcp-fingerprints)) |
@@ -110,16 +111,21 @@ twice); the hosts that answer are read in full on every round:
 |---|---|
 | Name, description, uptime, vendor | `SNMPv2-MIB` |
 | Ports: name, status (enabled or disabled), speed, MAC, byte and error counters | `IF-MIB` |
+| Duplex of each Ethernet port (half or full; unknown stays empty), which the `half_duplex` alert needs | `EtherLike-MIB` (`dot3StatsDuplexStatus`, its row tied to the port by `dot3StatsIndex`) |
 | Port addresses with their prefix: IPv4 (with its mask) and IPv6 (with the prefix length the agent knows) | `IP-MIB` (`ipAddrTable`, `ipAddressTable`) |
 | Link aggregations: their member ports, the aggregate each port is in | `IF-MIB` (`ifStackTable`), `IEEE8023-LAG-MIB` |
 | VLAN interfaces: the port each runs on, its VLAN id when the name says it (`igc1.20`, `Vlan20`) | `IF-MIB` (`ifStackTable`) |
-| Neighbors | `LLDP-MIB` |
+| Neighbors: chassis, port, name, platform, capabilities and management address (IPv4, else IPv6 that is not link-local) | `LLDP-MIB` |
+| Neighbors of the ports LLDP says nothing about: device id, address (IPv4 or IPv6), port, platform, capabilities | `CISCO-CDP-MIB` (`cdpCacheTable`), on Cisco devices and others that speak CDP |
 | MAC table (which device is on which port, VLAN) | `BRIDGE-MIB`, `Q-BRIDGE-MIB` |
 | VLANs: names, each port's native and tagged VLANs | `Q-BRIDGE-MIB` |
-| Spanning tree: each port's state, the root bridge | `BRIDGE-MIB` |
+| Spanning tree: each port's state and role, the root bridge | `BRIDGE-MIB`. The role is worked out, as the MIB has no column for it: root is `dot1dStpRootPort`; designated when the segment's designated bridge is this switch (bridges compared by MAC, as PVST and MSTP put the VLAN in the priority); a blocking port is backup when this switch is designated there through another port, alternate when another bridge is; disabled when its state is |
 | ARP and IPv6 neighbors (NDP) | `IP-MIB` (`ipNetToMediaTable`, `ipNetToPhysicalTable`) |
 | CPU load and number of processors, memory (percentage and bytes) | `HOST-RESOURCES-MIB`, when the agent has it (a profile's vendor OIDs win for the percentages) |
 | Disks: each fixed disk's mount, size and use (a NAS's volumes), leaving out pseudo file systems such as `/run` and `/snap` | `HOST-RESOURCES-MIB` (`hrStorageTable`) |
+| Model, serial number, software version and firmware: the chassis with the lowest index (its model name replaces `sysDescr`'s first line); values a profile gives win | `ENTITY-MIB` (`entPhysicalTable`, class chassis) |
+| Transceivers: vendor, part and serial of the SFP in a port, when `entAliasMappingTable` ties the port's entity to its `ifIndex` (nothing is guessed without it) and the port is, is in, or holds a module described as an SFP, XFP, QSFP or GBIC | `ENTITY-MIB` |
+| Temperatures: each celsius sensor, scaled by its scale and precision, unavailable or out of range ones left out; a CPU's (by entity class or name) is `cpu`, the others `board`. A sensor inside a port's transceiver is that transceiver's temperature. A profile's sensor of the same name replaces it | `ENTITY-SENSOR-MIB` |
 | Vendor CPU and memory, temperatures, firmware, serial, model | [SNMP profiles](snmp-profiles.md) |
 
 To use it:
@@ -153,13 +159,31 @@ Communities and passwords are stored encrypted and never shown again.
 
 ### SNMP profiles
 
-Standard MIBs do not say a device's temperatures or firmware, and many devices
-leave `HOST-RESOURCES-MIB` (CPU and memory) out. **Profiles** add them: YAML
+Many devices leave the standard MIBs that say temperatures, firmware, CPU and
+memory (`ENTITY-MIB`, `ENTITY-SENSOR-MIB`, `HOST-RESOURCES-MIB`) out. **Profiles** add them: YAML
 files matched by `sysObjectID`, `sysDescr` or an OID that exists. Omini ships
 profiles for Net-SNMP (Linux, with lm-sensors), MikroTik, Cisco IOS, Juniper,
 FortiGate, Synology, QNAP and HPE Aruba. You can add your own or replace a
 shipped one in `<data dir>/profiles/`. The format is in
 [SNMP profiles](snmp-profiles.md).
+
+## UPnP port mappings
+
+Game consoles, media servers and other devices can open ports on the router
+by themselves through UPnP. With **SSDP / UPnP** on, when the network's
+gateway answers SSDP as an Internet Gateway Device (a `WANIPConnection:1`,
+`WANIPConnection:2` or `WANPPPConnection:1` service, its control URL on the
+gateway itself), the scan asks it for its port mappings every round
+(`GetGenericPortMappingEntry`, by index until the gateway says there are no
+more, at most 256; 2 seconds per request, 15 in all). Each mapping becomes a
+port forward on the gateway's device, marked as made through UPnP: protocol,
+external port, the internal address and port, description, whether it is
+enabled and the source when it is limited to one (the device's
+`port_forwards`).
+
+Omini only reads the mappings: it never adds, changes or removes one. NAT-PMP
+and PCP (UDP 5351) are another protocol and are not read; a router's own
+plugin reports what they opened when its API says it.
 
 ## nmap
 

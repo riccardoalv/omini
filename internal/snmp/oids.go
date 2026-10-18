@@ -24,6 +24,10 @@ const (
 	oidIfXTable             = "1.3.6.1.2.1.31.1.1.1"   // IF-MIB ifXEntry
 	oidIfStackStatus        = "1.3.6.1.2.1.31.1.2.1.3" // IF-MIB ifStackStatus; index: higher.lower ifIndex
 
+	// EtherLike-MIB
+	oidDot3StatsIndex        = "1.3.6.1.2.1.10.7.2.1.1"  // dot3StatsIndex: the ifIndex of the row
+	oidDot3StatsDuplexStatus = "1.3.6.1.2.1.10.7.2.1.19" // unknown(1), halfDuplex(2), fullDuplex(3)
+
 	// BRIDGE-MIB / Q-BRIDGE-MIB
 	oidBaseBridgeAddress = "1.3.6.1.2.1.17.1.1.0"       // dot1dBaseBridgeAddress
 	oidBasePortIfIndex   = "1.3.6.1.2.1.17.1.4.1.2"     // bridge port -> ifIndex

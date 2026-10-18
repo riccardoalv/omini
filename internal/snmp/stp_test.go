@@ -55,3 +55,38 @@ func TestReadsSpanningTreeAndLAGs(t *testing.T) {
 		t.Errorf("lag: %+v %+v", ports["ge-0/0/4"], ports["ae0"])
 	}
 }
+
+// TestSpanningTreeRoles: root (dot1dStpRootPort), designated (this switch is
+// the segment's designated bridge), alternate and backup (blocking, another
+// bridge or another port of this one is), disabled.
+func TestSpanningTreeRoles(t *testing.T) {
+	stp := func(s model.PortStpState, r model.PortStpRole) *model.PortStp {
+		return &model.PortStp{State: &s, Role: &r}
+	}
+	fwd, blk := model.PortStpStateForwarding, model.PortStpStateBlocking
+	sw := model.Device{
+		Key: "aa:bb:cc:00:00:01", Name: "sw",
+		Interfaces: []model.Interface{
+			{Name: "p1", Stp: stp(fwd, model.PortStpRoleRoot)},
+			{Name: "p2", Stp: stp(fwd, model.PortStpRoleDesignated)},
+			{Name: "p3", Stp: stp(blk, model.PortStpRoleAlternate)},
+			{Name: "p4", Stp: stp(blk, model.PortStpRoleBackup)},
+			{Name: "p5", Stp: stp(model.PortStpStateDisabled, model.PortStpRoleDisabled)},
+			{Name: "p6", Stp: &model.PortStp{State: &fwd}}, // no designated bridge: no role
+		},
+	}
+	agent := snmptest.Start(t, "public", snmptest.FromDevice(sw, snmptest.Options{}))
+	d, err := snmp.Collect(context.Background(), target(agent, "public"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]model.PortStpRole{
+		"p1": model.PortStpRoleRoot, "p2": model.PortStpRoleDesignated, "p3": model.PortStpRoleAlternate,
+		"p4": model.PortStpRoleBackup, "p5": model.PortStpRoleDisabled, "p6": "",
+	}
+	for _, i := range d.Interfaces {
+		if i.Stp == nil || model.Deref(i.Stp.Role) != want[i.Name] {
+			t.Errorf("%s: %+v, want role %q", i.Name, i.Stp, want[i.Name])
+		}
+	}
+}

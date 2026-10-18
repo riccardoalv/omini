@@ -89,7 +89,7 @@ func answers(ctx context.Context, t Target) bool {
 }
 
 // Collect reads a managed switch, router or firewall: system, interfaces and
-// traffic counters, IPs, ARP, MAC table, LLDP neighbors and resources.
+// traffic counters, IPs, ARP, MAC table, LLDP and CDP neighbors and resources.
 func Collect(ctx context.Context, t Target) (model.Device, error) {
 	c, err := t.dial(ctx)
 	if err != nil {
@@ -113,6 +113,9 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err != nil {
 		log.Debug("interfaces unavailable", "err", err)
 	}
+	if err := collectDuplex(c, &d, ifNames); err != nil {
+		log.Debug("duplex unavailable", "err", err)
+	}
 	if err := collectIPs(c, &d, ifNames); err != nil {
 		log.Debug("ip addresses unavailable", "err", err)
 	}
@@ -134,10 +137,14 @@ func Collect(ctx context.Context, t Target) (model.Device, error) {
 	if err := collectLLDP(c, &d, ifNames); err != nil {
 		log.Debug("lldp unavailable", "err", err)
 	}
+	if err := collectCDP(c, &d, ifNames); err != nil {
+		log.Debug("cdp unavailable", "err", err)
+	}
 	if err := collectResources(c, &d); err != nil {
 		log.Debug("host resources unavailable", "err", err)
 	}
-	d.Role = model.Ptr(guessRole(c, &d))
+	d.Role = model.Ptr(guessRole(c, &d)) // on sysDescr, before ENTITY-MIB's model replaces it
+	collectEntity(c, &d, ifNames)
 	// Vendor profiles: what the standard MIBs lack (vendor CPU, temperatures...).
 	if sys, err := c.get(oidSysObjectID, oidSysDescr); err == nil {
 		used, perVLAN := applyProfiles(c, &d, pduString(sys[oidSysObjectID]), pduString(sys[oidSysDescr]))
@@ -322,6 +329,42 @@ func collectInterfaces(c *client, d *model.Device) (map[string]string, error) {
 	}
 	collectStack(c, d, names)
 	return names, nil
+}
+
+// collectDuplex reads each Ethernet port's duplex from EtherLike-MIB's
+// dot3StatsDuplexStatus. Its rows are named by dot3StatsIndex, the port's
+// ifIndex (the row index when the agent leaves that column out); unknown(1)
+// stays empty.
+func collectDuplex(c *client, d *model.Device, ifNames map[string]string) error {
+	rows, err := c.walk(oidDot3StatsDuplexStatus)
+	if err != nil || len(rows) == 0 {
+		return err
+	}
+	indexes, _ := c.walk(oidDot3StatsIndex) // optional
+	byName := map[string]model.InterfaceDuplex{}
+	for idx, p := range rows {
+		ifIdx := idx
+		if v, ok := pduInt(indexes[idx]); ok && v > 0 {
+			ifIdx = strconv.FormatInt(v, 10)
+		}
+		name := ifNames[ifIdx]
+		v, ok := pduInt(p)
+		if name == "" || !ok {
+			continue
+		}
+		switch v {
+		case 2:
+			byName[name] = model.InterfaceDuplexHalf
+		case 3:
+			byName[name] = model.InterfaceDuplexFull
+		}
+	}
+	for i := range d.Interfaces {
+		if dx, ok := byName[d.Interfaces[i].Name]; ok {
+			d.Interfaces[i].Duplex = &dx
+		}
+	}
+	return nil
 }
 
 // collectStack reads IF-MIB's ifStackTable: the members of each link
@@ -741,17 +784,7 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 		return "port" + num
 	}
 
-	mgmt := map[string]string{} // timeMark.localPort.remIndex -> IPv4
-	if rows, err := c.walk(oidLldpRemManAddr); err == nil {
-		for idx := range rows {
-			n := splitOID(idx)
-			// timeMark.localPort.remIndex.subtype(1=ipv4).len(4).a.b.c.d
-			if len(n) == 9 && n[3] == 1 && n[4] == 4 {
-				key := fmt.Sprintf("%d.%d.%d", n[0], n[1], n[2])
-				mgmt[key] = fmt.Sprintf("%d.%d.%d.%d", n[5], n[6], n[7], n[8])
-			}
-		}
-	}
+	mgmt := lldpManagementAddrs(c)
 
 	t := table(rem)
 	for idx := range t[5] { // lldpRemChassisId
@@ -769,7 +802,8 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 				nb.RemoteMAC = &mac
 			}
 		case chassisSubtypeNetAddr:
-			if b := pduBytes(t[5][idx]); len(b) == 5 && b[0] == 1 {
+			// An address family number (1 IPv4, 2 IPv6) and the address.
+			if b := pduBytes(t[5][idx]); (len(b) == 5 && b[0] == 1) || (len(b) == 17 && b[0] == 2) {
 				nb.RemoteIP = model.Ptr(net.IP(b[1:]).String())
 			}
 		}
@@ -804,6 +838,41 @@ func collectLLDP(c *client, d *model.Device, ifNames map[string]string) error {
 	}
 	sort.Slice(d.Neighbors, func(a, b int) bool { return d.Neighbors[a].LocalPort < d.Neighbors[b].LocalPort })
 	return nil
+}
+
+// lldpManagementAddrs reads lldpRemManAddrTable (index timeMark.localPort.
+// remIndex.subtype.len.addr): each remote system's management address,
+// IPv4 (subtype 1) first, else IPv6 (2) that is not link-local (useless
+// without its zone).
+func lldpManagementAddrs(c *client) map[string]string {
+	rows, err := c.walk(oidLldpRemManAddr)
+	if err != nil {
+		return nil
+	}
+	v4, v6 := map[string]string{}, map[string]string{}
+	for idx := range rows {
+		n := splitOID(idx)
+		if len(n) < 5 || len(n) != 5+n[4] || slices.ContainsFunc(n[5:], func(b int) bool { return b < 0 || b > 255 }) {
+			continue
+		}
+		key := fmt.Sprintf("%d.%d.%d", n[0], n[1], n[2])
+		ip := make(net.IP, n[4])
+		for i := range ip {
+			ip[i] = byte(n[5+i]) //nolint:gosec // checked above
+		}
+		switch {
+		case n[3] == 1 && n[4] == 4:
+			v4[key] = ip.String()
+		case n[3] == 2 && n[4] == 16 && !ip.IsLinkLocalUnicast() && (v6[key] == "" || ip.String() < v6[key]):
+			v6[key] = ip.String()
+		}
+	}
+	for key, ip := range v6 {
+		if v4[key] == "" {
+			v4[key] = ip
+		}
+	}
+	return v4
 }
 
 // capabilities reads LLDP's capability BITS (the first bit is the first
