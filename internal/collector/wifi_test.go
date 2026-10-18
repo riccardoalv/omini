@@ -129,7 +129,8 @@ func TestAVLANsWifi(t *testing.T) {
 	}
 }
 
-// stubborn is another site's access point that refuses every Wi-Fi change.
+// stubborn is another site's access point that refuses every Wi-Fi change
+// (first on the map: its MAC sorts first).
 type stubborn struct{ airy }
 
 func (*stubborn) Info() integration.Info {
@@ -140,8 +141,8 @@ func (*stubborn) Info() integration.Info {
 
 func (s *stubborn) devices() []model.Device {
 	return []model.Device{{
-		Key: "0c:ea:14:00:00:09", Name: "ap9", Role: model.Ptr(model.DeviceRoleAp),
-		MACs: []model.MACAddress{"0c:ea:14:00:00:09"}, WifiNetworks: []model.WifiNetwork{{SSID: "Shop"}},
+		Key: "0c:ea:14:00:00:00", Name: "ap9", Role: model.Ptr(model.DeviceRoleAp),
+		MACs: []model.MACAddress{"0c:ea:14:00:00:00"}, WifiNetworks: []model.WifiNetwork{{SSID: "Shop"}},
 	}}
 }
 
@@ -153,8 +154,9 @@ func (*stubborn) Apply(context.Context, integration.Config, model.Change) ([]mod
 	return nil, errors.New("no interface on VLAN 80")
 }
 
-// One access point that refuses does not keep the others from the change.
-func TestOneRefusalDoesNotStopTheOthers(t *testing.T) {
+// A Wi-Fi change is a plan like any other: the first access point that
+// refuses stops it, and the error says which.
+func TestTheFirstRefusalStopsTheWifiChange(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "omini.db"))
 	if err != nil {
@@ -177,7 +179,14 @@ func TestOneRefusalDoesNotStopTheOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 	done, err := coll.SetWifi(ctx, model.WifiChange{SSID: "Guests", Vlan: model.Ptr[uint16](80), Password: model.Ptr("correct horse")})
-	if err == nil || !strings.Contains(err.Error(), "ap9") || len(a.applied) != 1 {
+	if err == nil || !strings.Contains(err.Error(), "ap9") || len(a.applied) != 0 {
 		t.Fatalf("err %v, applied %d, done %+v", err, len(a.applied), done)
+	}
+	a.wifi = append(a.wifi, model.WifiNetwork{SSID: "Shop"}) // both have it now
+	if err := coll.CollectNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := coll.DeleteWifi(ctx, "Shop"); err == nil || !strings.Contains(err.Error(), "ap9") || len(a.applied) != 0 {
+		t.Fatalf("delete: err %v, applied %d", err, len(a.applied))
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"unicode/utf8"
@@ -122,29 +121,30 @@ func wifiTargets(topo topology.Topology, kind model.ChangeKind, names ...string)
 }
 
 // SetWifi creates or changes a Wi-Fi network on every integration that can
-// (each controller once, each standalone access point). One that refuses
-// (an access point with no way to the VLAN) does not stop the others: the
-// refusals are returned together, with the changes made.
+// (each controller once, each standalone access point), one at a time like
+// every plan: the first that refuses (an access point with no way to the
+// VLAN) stops it, and the changes already made stay (each is valid on its
+// own) and are returned.
 func (c *Collector) SetWifi(ctx context.Context, w model.WifiChange) ([]store.ConfigChange, error) {
 	targets := wifiTargets(c.State().Topology, model.ChangeKindWifiSet, w.SSID, model.Deref(w.Previous))
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("%w: no access point Omini manages can change Wi-Fi", ErrNotChangeable)
 	}
 	var done []store.ConfigChange
-	var failed []error
 	for _, n := range targets {
 		rec, err := c.Apply(ctx, ChangeRequest{NodeID: n.ID, Kind: model.ChangeKindWifiSet, Value: w})
 		if rec.ID != 0 {
 			done = append(done, rec)
 		}
 		if err != nil {
-			failed = append(failed, fmt.Errorf("%s: %w", n.Label, err))
+			return done, fmt.Errorf("%s: %w", n.Label, err)
 		}
 	}
-	return done, errors.Join(failed...)
+	return done, nil
 }
 
-// DeleteWifi removes a Wi-Fi network from every integration that has it.
+// DeleteWifi removes a Wi-Fi network from every integration that has it, one
+// at a time: the first that refuses stops it (see SetWifi).
 func (c *Collector) DeleteWifi(ctx context.Context, ssid string) ([]store.ConfigChange, error) {
 	var done []store.ConfigChange
 	for _, n := range wifiTargets(c.State().Topology, model.ChangeKindWifiDelete, ssid) {
@@ -156,7 +156,7 @@ func (c *Collector) DeleteWifi(ctx context.Context, ssid string) ([]store.Config
 			done = append(done, rec)
 		}
 		if err != nil {
-			return done, err
+			return done, fmt.Errorf("%s: %w", n.Label, err)
 		}
 	}
 	return done, nil

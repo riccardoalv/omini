@@ -119,8 +119,8 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 | `GET` | `/api/nodes/{id}/backups` | Its configuration versions, newest first: `id`, `taken_at`, `format`, `size`, `by_omini` |
 | `GET` | `/api/backups/{id}` | One version with its `content` (it may hold secrets the device would not leave out) |
 | `POST` | `/api/integrations/{id}/backup` | Back up the integration's devices now (204) |
-| `PUT` | `/api/wifi` | Body `{ssid, previous, vlan, password, enabled}`: create or change a Wi-Fi network on every controller and access point Omini manages (`wifi.set`); an empty password keeps the current one. The password is passed on, never kept nor logged |
-| `DELETE` | `/api/wifi/{ssid}` | Remove it from every device that broadcasts it |
+| `PUT` | `/api/wifi` | Body `{ssid, previous, vlan, password, enabled}`: create or change a Wi-Fi network on every controller and access point Omini manages (`wifi.set`); an empty password keeps the current one. The password is passed on, never kept nor logged. One device at a time: the first that refuses stops it, 502 `{error, changes}` with the changes already made (they stay) |
+| `DELETE` | `/api/wifi/{ssid}` | Remove it from every device that broadcasts it, one at a time (stops at the first that refuses, like `PUT`) |
 | `DELETE` | `/api/vlans/{id}` | Remove its network from the router, delete it from every device, then from the catalog; 409 when a device cannot (it names it), or `destructive` (Omini's network) until `?confirm=1` |
 | `POST` | `/api/nodes/{id}/vlan-plan` | Body `{port, value}` (`value`: `{untagged, tagged}`): what putting the port in those VLANs changes: `steps` (`node_id`, `kind`, `port`, `value`, `protected` when destructive) and `notes` (`node_id`, `reason`: `router`, `unmanaged` or `unknown_port`, `vlans`) |
 | `POST` | `/api/nodes/{id}/vlans` | Body `{port, value, confirm}`: apply that plan step by step; 409 like a change for a destructive step, 502 with the `changes` made when a device refuses |
