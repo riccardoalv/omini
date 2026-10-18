@@ -299,9 +299,16 @@ func SetPortVlans(ctx context.Context, t Target, port string, want model.PortVla
 	return nil
 }
 
+// maxVlanName is the longest name dot1qVlanStaticName holds
+// (SnmpAdminString (SIZE (0..32))), in octets.
+const maxVlanName = 32
+
 // SetVlan creates a VLAN (dot1qVlanStaticRowStatus createAndGo, else
 // createAndWait then active) or renames it.
 func SetVlan(ctx context.Context, t Target, id uint16, name string) error {
+	if len(name) > maxVlanName {
+		return fmt.Errorf("the VLAN name %q is too long for SNMP: at most %d bytes", name, maxVlanName)
+	}
 	c, err := t.dial(ctx)
 	if err != nil {
 		return err

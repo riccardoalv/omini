@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/model"
@@ -196,5 +197,19 @@ func TestChecksThePVIDWasApplied(t *testing.T) {
 	err := snmp.SetPortVlans(context.Background(), target(agent, "private"), "1/3", model.PortVlans{Untagged: model.Ptr[uint16](10)})
 	if err == nil {
 		t.Fatal("a PVID the agent did not apply must fail")
+	}
+}
+
+// dot1qVlanStaticName holds at most 32 octets.
+func TestRefusesAVLANNameTooLong(t *testing.T) {
+	w := target(qbridge(t), "private")
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("x", 33)); err == nil {
+		t.Fatal("a 33-octet name must be refused")
+	}
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("é", 17)); err == nil {
+		t.Fatal("34 octets in 17 characters must be refused")
+	}
+	if err := snmp.SetVlan(context.Background(), w, 30, strings.Repeat("x", 32)); err != nil {
+		t.Fatal(err)
 	}
 }
