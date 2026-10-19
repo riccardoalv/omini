@@ -58,12 +58,15 @@ async function save() {
   margin-bottom: 12px;
 }
 textarea {
+  /* .input is sized for one line (36px, no vertical padding): a note has room for two. */
   width: 100%;
+  height: auto;
+  min-height: calc(2 * 1.45em + 18px);
+  padding: 8px 10px;
   resize: vertical;
-  min-height: 2.6em;
   font: inherit;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .left {
   display: block;
