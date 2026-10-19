@@ -62,7 +62,8 @@ func TestRoundShowsAContainerAsTheAppTheScanFound(t *testing.T) {
 				t.Errorf("jellyfin app = %+v", a)
 			}
 		case "uptime-kuma":
-			if a.Label != "Uptime Kuma" || a.Web[0].URL != "http://192.168.1.42:3001/" {
+			// The scan saw no page on 3001 here: no link is made up for it.
+			if a.Label != "Uptime Kuma" || len(a.Web) != 0 {
 				t.Errorf("kuma app = %+v", a)
 			}
 		default:

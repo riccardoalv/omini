@@ -163,10 +163,11 @@ func containerApp(c *topology.Node, host *topology.Node) topology.Node {
 	var web []topology.WebApp
 	if webProtocol(p) {
 		w := topology.WebApp{Port: int(p.Port), App: app}
+		// Only a page the scan saw: a published port is not always a web
+		// interface (syslog, MQTT...), and a link that leads nowhere is worse
+		// than none.
 		if i := slices.IndexFunc(host.Web, func(w topology.WebApp) bool { return w.Port == int(p.Port) }); i >= 0 {
 			w.URL, w.Title = host.Web[i].URL, host.Web[i].Title
-		} else if host.IP != "" {
-			w.URL = "http://" + hostPort(host.IP, int(p.Port)) + "/"
 		}
 		if w.URL != "" {
 			web = []topology.WebApp{w}
@@ -196,13 +197,6 @@ func portRank(host *topology.Node, p model.ContainerPort) int {
 		return 1
 	}
 	return 2
-}
-
-func hostPort(ip string, port int) string {
-	if strings.Contains(ip, ":") {
-		ip = "[" + ip + "]"
-	}
-	return ip + ":" + strconv.Itoa(port)
 }
 
 // containerLabel names a container app without a catalog icon: its name

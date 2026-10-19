@@ -124,9 +124,10 @@ func TestContainerWithoutAppBecomesAnAppOfItsImage(t *testing.T) {
 			t.Fatalf("a container is one app, got one on %s too", p)
 		}
 	}
-	// An image the catalog does not know: named after its service, linked to its port.
+	// An image the catalog does not know: named after its service; no web link,
+	// since the scan saw no page on its port.
 	s := nodes["app:"+host.ID+":3000"]
-	if s.Product != "" || s.Label != "speedtest" || len(s.Web) != 1 || s.Web[0].URL != "http://192.168.1.42:3000/" {
+	if s.Product != "" || s.Label != "speedtest" || len(s.Web) != 0 {
 		t.Fatalf("speedtest app = %+v", s)
 	}
 	// UDP only: an app without a web link.

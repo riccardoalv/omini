@@ -109,7 +109,7 @@ again as a node of its own.
 |---|---|
 | publishes a port where the scan found an app | That app's node, carrying the container |
 | is a Swarm service published through the routing mesh | Every app found on its port on a node of the swarm carries it |
-| publishes ports where the scan found no app (it was not scanned yet, or the page has no name Omini knows) | An app node of its own under its host, named and drawn after its image when Omini's app catalog knows it (`jc21/nginx-proxy-manager` is Nginx Proxy Manager), else after its service, with a link to its port; offline when no replica runs |
+| publishes ports where the scan found no app (it was not scanned yet, or the page has no name Omini knows) | An app node of its own under its host, named and drawn after its image when Omini's app catalog knows it (`jc21/nginx-proxy-manager` is Nginx Proxy Manager), else after its service, with a link to its web page when the scan saw one on that port; offline when no replica runs |
 | has an address of its own (macvlan, ipvlan) | A device of its own; its apps come from scanning its address |
 | publishes no port | A service in its host's panel |
 
