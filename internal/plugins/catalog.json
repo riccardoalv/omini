@@ -149,5 +149,44 @@
     "categories": [
       "dns"
     ]
+  },
+  {
+    "id": "docker",
+    "detect": {"products": ["portainer"]},
+    "name": "Docker",
+    "description": "Docker hosts and their containers, through the Docker Engine API (behind a read-only socket proxy) or Portainer: containers on an address of their own as devices under their host, with their image, ports and state; the others as the host's services. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-docker",
+    "icon": "server",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "hypervisor"
+    ]
+  },
+  {
+    "id": "truenas",
+    "detect": {"products": ["truenas"]},
+    "name": "TrueNAS",
+    "description": "TrueNAS SCALE and Community Edition through the REST API with a read-only API key: system, version and uptime, network interfaces with IPv4 and IPv6, pools as storage, disk temperatures and apps. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-truenas",
+    "icon": "truenas",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "nas"
+    ]
+  },
+  {
+    "id": "synology",
+    "detect": {"products": ["synology"]},
+    "name": "Synology DSM",
+    "description": "Synology NAS through the DSM Web API: model, serial, version and uptime, CPU and memory, network interfaces, volumes as storage, disk temperatures and Container Manager containers. Read-only.",
+    "url": "https://github.com/riccardoalv/omini-plugin-synology",
+    "icon": "synology",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "nas"
+    ]
   }
 ]
