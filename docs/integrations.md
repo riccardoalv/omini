@@ -103,6 +103,18 @@ How installs work:
   (never Omini's own settings or secret key), one run per collection, with a
   time limit.
 
+**Update every plugin at once:** when installed plugins have a newer release,
+the Integrations screen shows **Update N plugins** next to **Add
+integration** ("Plugins up to date" when there is none). It lists what will
+change (`v0.1.0 → v0.2.0`), updates the plugins one by one exactly as
+**Update** does, and shows each result: updated, or failed with the error (a
+failure keeps the working version and does not stop the others). In the
+store, a plugin with a newer release shows **Update to v0.2.0**. Omini asks
+GitHub for the latest releases at most once an hour. Development plugins
+(`OMINI_PLUGIN_DIRS`) and plugins installed from a branch or a commit
+(`main@1a2b3c4`, or a version you typed that is not a tag) are left alone:
+update those from the store's card.
+
 The catalog comes from an **index** in Omini's repository, fetched once a day
 and cached for offline starts. The store says where its list came from and
 offers **Update now**. `OMINI_PLUGIN_INDEX` points it elsewhere, or `off`

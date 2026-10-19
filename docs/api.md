@@ -207,6 +207,8 @@ optional `color` (`#rrggbb`); a device has at most one owner
 | `GET` | `/api/plugins/index` | Where the catalog came from and when it was fetched |
 | `POST` | `/api/plugins/index/refresh` | Fetch the remote index now. 409 when `OMINI_PLUGIN_INDEX=off` |
 | `POST` | `/api/plugins` | Body `{url, version}`: install or update a plugin from a GitHub repository. `version` is a tag, branch or commit; empty for the latest release (else the newest commit). Can take minutes |
+| `GET` | `/api/plugins/updates` | Per installed plugin: `{id, name, installed, latest, update, reason, error}`. `update` is true when the repository has a newer release (GitHub is asked at most once an hour per repository; `?refresh=1` asks now). Left out with `update: false` and a `reason`: `dev` (development plugin), `pinned` (installed from a branch or commit), `no_release`, `github` (GitHub unreachable, see `error`) |
+| `POST` | `/api/plugins/update-all` | Update every plugin with `update: true`, one by one, as `POST /api/plugins` with no version; each becomes available as an integration type again. Answers `[{id, from, to, error}]` (`error` only on a failure, which keeps the working version and does not stop the others). Can take minutes. API tokens cannot call it |
 | `DELETE` | `/api/plugins/{id}` | Remove a plugin. 409 while integrations use it, or for a development plugin |
 
 ## Alerts, presence and history
