@@ -489,6 +489,7 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	}
 	classifyNodes(&topo)
 	expandApps(&topo)
+	attachContainers(&topo)
 	attachVMs(&topo)
 	applyInventory(&topo, inventory, now)
 	labels, err := c.store.PortLabels(ctx)

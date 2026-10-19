@@ -294,6 +294,7 @@ func (l *devnetLab) collect(t *testing.T) devnetRound {
 	r.topo = topology.BuildWith(r.sources, topology.Options{})
 	classifyNodes(&r.topo)
 	expandApps(&r.topo)
+	attachContainers(&r.topo)
 	attachVMs(&r.topo)
 	if path := os.Getenv("DEVNET_DUMP"); path != "" {
 		b, _ := json.MarshalIndent(r.topo, "", " ")
