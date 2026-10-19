@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.9.0](https://github.com/riccardoalv/omini/compare/v1.8.1...v1.9.0) (2026-10-19)
+
+
+### Features
+
+* **appicons:** recognize the app a container image runs ([c28b3fa](https://github.com/riccardoalv/omini/commit/c28b3faf2eb5327c384e34da0d2c1054bbe2c831))
+* **collector:** a container is the app the scan found on its port ([230fd8f](https://github.com/riccardoalv/omini/commit/230fd8fb276996c5f05e060bc5ab42da66ecd4b6))
+* **plugins:** check and apply every plugin's latest release ([8805f8f](https://github.com/riccardoalv/omini/commit/8805f8fe07ef64fe45d6331fca1351c5bf72fb04))
+* **schema:** a device can be a container and the ports it publishes ([b0a0f1e](https://github.com/riccardoalv/omini/commit/b0a0f1e36386ac520321b032a4fa8635627f3b69))
+* **web:** an app's panel shows the container that serves it ([fd54e88](https://github.com/riccardoalv/omini/commit/fd54e88a1e8c358635b9410df03213cc8c8ad9b2))
+* **web:** update every plugin from the Integrations screen ([9aacd70](https://github.com/riccardoalv/omini/commit/9aacd706eebfb625859aac0cc5fae19cdc542273))
+
+
+### Bug Fixes
+
+* **collector:** a container app links only to a page the scan saw ([74ab522](https://github.com/riccardoalv/omini/commit/74ab522a5bf92191bfb0a5752d413a575d3404b5))
+* **web:** give the device note room for its text ([9f767d4](https://github.com/riccardoalv/omini/commit/9f767d41006c15a959b06b510bd75c11b81aa3f1))
+
 ## [1.8.1](https://github.com/riccardoalv/omini/compare/v1.8.0...v1.8.1) (2026-10-19)
 
 
