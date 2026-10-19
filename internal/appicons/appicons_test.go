@@ -107,3 +107,27 @@ func TestServeHTTP(t *testing.T) {
 		t.Fatalf("missing icon: %d", rec.Code)
 	}
 }
+
+func TestFromImage(t *testing.T) {
+	cases := map[string]string{
+		"lscr.io/linuxserver/jellyfin:latest":          "jellyfin",
+		"louislam/uptime-kuma:1":                       "uptime-kuma",
+		"jc21/nginx-proxy-manager:latest":              "nginx-proxy-manager",
+		"portainer/portainer-ce:2.21.4@sha256:0123abc": "portainer",
+		"grafana/grafana-oss":                          "grafana",
+		"ghcr.io/open-webui/open-webui:main":           "open-webui",
+		"openspeedtest/latest":                         "openspeedtest", // the namespace names the app
+		"prom/prometheus:v3.0.0":                       "prometheus",
+		"localhost:5000/qbittorrent":                   "qbittorrent",
+	}
+	for image, want := range cases {
+		if got, ok := FromImage(image); !ok || got != want {
+			t.Errorf("FromImage(%q) = %q, %v; want %q", image, got, ok, want)
+		}
+	}
+	for _, image := range []string{"", "busybox:1.36", "lscr.io/linuxserver/some-unknown-thing", "registry.local/team/worker"} {
+		if got, ok := FromImage(image); ok {
+			t.Errorf("FromImage(%q) = %q, want no match", image, got)
+		}
+	}
+}
