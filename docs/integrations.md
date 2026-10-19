@@ -6,19 +6,21 @@ own API. Collecting only reads. The integrations that support it can also
 **change** their devices from the map; see
 [Configuration changes](decisions.md#configuration-changes):
 
-| Integration | Ports on/off | Switch VLANs (ports, create, delete) | VLAN networks (gateway, DHCP, access) and fixed addresses | Wi-Fi per VLAN | DNS names | Wake-on-LAN | Pause internet | Backups |
-|---|---|---|---|---|---|---|---|---|
-| Network scan (SNMP) | yes | yes (Q-BRIDGE-MIB) | | | | | | |
-| OPNsense | | | yes (26.7+) | | yes | yes (os-wol) | yes (26.7+) | yes |
-| pfSense | | | yes | | yes | yes | yes | |
-| MikroTik RouterOS | yes | yes | yes | | yes | yes | yes | yes |
-| UniFi Network | yes | yes | | yes | | | | yes |
-| TP-Link Omada | yes | yes | | yes | | | | yes |
-| OpenWrt | yes | yes | yes | yes | yes | yes (etherwake) | yes | yes |
-| Proxmox VE | | a guest's network device | | | | | | yes |
-| Horaco switch | yes | yes | | | | | | yes |
-| AdGuard Home | | | | | yes | | | yes |
-| Pi-hole | | | | | yes | | | yes |
+| Integration | Ports on/off | Switch VLANs (ports, create, delete) | VLAN networks (gateway, DHCP, access) and fixed addresses | Wi-Fi per VLAN | Wi-Fi channels | DNS names | Wake-on-LAN | Pause internet | Backups |
+|---|---|---|---|---|---|---|---|---|---|
+| Network scan (SNMP) | yes | yes (Q-BRIDGE-MIB) | | | | | | | |
+| OPNsense | yes (26.7+) | | yes (26.7+) | | | yes | yes (os-wol) | yes (26.7+) | yes |
+| pfSense | yes | | yes | | | yes | yes | yes | |
+| MikroTik RouterOS | yes | yes | yes | yes (not under CAPsMAN) | yes | yes | yes | yes | yes |
+| UniFi Network | yes | yes | yes (its gateway) | yes | yes | yes (Network 8.2+) | | yes (Network 7+) | yes |
+| TP-Link Omada | yes | yes | | yes | | | | | yes |
+| OpenWrt | yes | yes | yes | yes | yes | yes | yes (etherwake) | yes | yes |
+| Proxmox VE | a guest's network device | a guest's network device | | | | | | | yes |
+| Horaco switch | yes | ports and create | | | | | | | yes |
+| AdGuard Home | | | | | | yes | | | yes |
+| Pi-hole | | | | | | yes | | | yes |
+
+Mercusys Halo, Docker, TrueNAS and Synology DSM only read.
 
 Omini also wakes devices on its own networks by itself. Spanning tree and
 LAGs are read (never changed) from SNMP (BRIDGE-MIB, IEEE8023-LAG-MIB),
@@ -149,6 +151,9 @@ hardware; reports from users are welcome.
 | Mercusys Halo | [omini-plugin-mercusys](https://github.com/riccardoalv/omini-plugin-mercusys) | Wi-Fi |
 | AdGuard Home | [omini-plugin-adguard](https://github.com/riccardoalv/omini-plugin-adguard) | DNS server |
 | Pi-hole | [omini-plugin-pihole](https://github.com/riccardoalv/omini-plugin-pihole) | DNS server |
+| Docker | [omini-plugin-docker](https://github.com/riccardoalv/omini-plugin-docker) | Containers |
+| TrueNAS | [omini-plugin-truenas](https://github.com/riccardoalv/omini-plugin-truenas) | NAS |
+| Synology DSM | [omini-plugin-synology](https://github.com/riccardoalv/omini-plugin-synology) | NAS |
 
 When the network scan identifies one of these devices and its integration is
 not set up, the **Integration available** alert says so.
@@ -501,6 +506,38 @@ Configure app password). To let it change local names, turn on
 `webserver.api.app_sudo` (Settings → All settings → Webserver and API).
 In Omini: the address (`http://pi.hole` or `http://192.168.1.53`) and the
 application password.
+
+## Docker
+
+Reads a Docker host through the Docker Engine API, or every Docker environment
+of a Portainer: the host (version, CPU count, memory) and its containers. A
+container with an address of its own (macvlan, ipvlan) or with published ports
+is a device under its host, with its image, ports and state; the others are the
+host's services. Read-only.
+
+**Account:** never expose the Docker socket itself. Put a read-only socket
+proxy in front of it (for example `tecnativa/docker-socket-proxy` with
+`CONTAINERS=1`, `NETWORKS=1`, `INFO=1` and `POST=0`) and give Omini its
+address, or use a Portainer access token. The plugin's README has the details.
+
+## TrueNAS
+
+Reads TrueNAS SCALE and Community Edition through the REST API (HTTPS only):
+system, version and uptime, network interfaces (IPv4 and IPv6), pools as
+storage (so `disk_full` works), disk temperatures and apps. Read-only.
+
+**Account:** a user with the **Read-Only Administrator** role (24.10 or
+later) and an API key of that user.
+
+## Synology DSM
+
+Reads a Synology NAS through the DSM Web API: model, serial, version and
+uptime, CPU and memory, network interfaces, volumes as storage, disk
+temperatures and Container Manager containers. Read-only.
+
+**Account:** try a regular user with the DSM application privilege first;
+some data needs the administrators group (the connection test lists what is
+missing). Two-step verification must be off for this account.
 
 ## Writing your own
 

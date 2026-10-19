@@ -37,7 +37,7 @@ It runs as one small container (amd64 and arm64, a Raspberry Pi is enough) and k
 - **Notifications.** Telegram, e-mail, generic webhooks (signed with HMAC), Slack, Discord and ntfy, grouped per device and never repeated while an alert flaps.
 - **Your map, your way.** Left-to-right or top-down layout, named and colored areas, fold any node's children into a bubble, VLAN and subnet filter, hide devices. Export to PNG, SVG, draw.io or JSON.
 - **Homelab tools on every device.** Fix the IP of every switch, access point and server in one click; each device with a fixed IP gets a local DNS name on your router, AdGuard Home or Pi-hole; wake a device (Wake-on-LAN) or pause its internet from its panel; every device's configuration is backed up daily and after each change, with the differences between versions.
-- **Integrations and a plugin store.** One-click plugins for OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, Proxmox (clusters included), Mercusys Halo, Horaco switches, AdGuard Home and Pi-hole. Any GitHub repository can be installed too, and plugins are short Python scripts.
+- **Integrations and a plugin store.** One-click plugins for OPNsense, pfSense, MikroTik, UniFi, Omada, OpenWrt, Proxmox (clusters included), Mercusys Halo, Horaco switches, AdGuard Home, Pi-hole, Docker, TrueNAS and Synology DSM. Any GitHub repository can be installed too, and plugins are short Python scripts.
 - **Built for your server.** Single admin login, credentials encrypted at rest, dark and light themes, English and Brazilian Portuguese.
 
 ## Screenshots
@@ -110,7 +110,7 @@ Host networking matters: in a Docker bridge network Omini only sees Docker's own
 | [Proxmox VE](https://github.com/riccardoalv/omini-plugin-proxmox) | Plugin, API token | Nodes and clusters, VMs and containers on the right host, CPU, memory, disks |
 | [Horaco](https://github.com/riccardoalv/omini-plugin-horaco) | Plugin, web interface | Ports, RJ45/SFP, counters, MAC table (switches without SNMP) |
 | [Mercusys Halo](https://github.com/riccardoalv/omini-plugin-mercusys) | Plugin, local web interface | Mesh units, Wi-Fi and wired clients, bands, traffic |
-| MikroTik, UniFi, Omada, OpenWrt, pfSense, AdGuard Home, Pi-hole | Plugins | See [Integrations](docs/integrations.md) for each one's status |
+| MikroTik, UniFi, Omada, OpenWrt, pfSense, AdGuard Home, Pi-hole, Docker, TrueNAS, Synology DSM | Plugins | See [Integrations](docs/integrations.md) for each one's status |
 
 Plugins live in their own repositories and are installed from the built-in store. Each shows a publisher badge (official or community) and a trust level given by the maintainers (plug-and-play, stable, experimental or unverified), as described in [Plugin review](docs/plugin-review.md).
 
