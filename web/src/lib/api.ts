@@ -36,6 +36,8 @@ import type {
   Network,
   NetworkVlan,
   PluginInfo,
+  PluginUpdate,
+  PluginUpdateResult,
   Point,
   PortVlans,
   ServicesView,
@@ -245,6 +247,11 @@ export const api = {
   installPlugin: (url: string, version?: string) =>
     request<PluginInfo>('POST', '/api/plugins', { url, version }),
   removePlugin: (id: string) => request<void>('DELETE', `/api/plugins/${encodeURIComponent(id)}`),
+  /** Installed plugins with a newer release (GitHub is asked at most once an hour). */
+  pluginUpdates: (refresh = false) =>
+    request<PluginUpdate[]>('GET', `/api/plugins/updates${refresh ? '?refresh=1' : ''}`),
+  /** Updates every plugin with a newer release, one by one. */
+  updateAllPlugins: () => request<PluginUpdateResult[]>('POST', '/api/plugins/update-all'),
 
   alerts: (resolvedHours?: number) =>
     request<Alert[]>(

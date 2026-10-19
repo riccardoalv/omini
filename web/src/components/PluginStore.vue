@@ -75,6 +75,10 @@ const refreshingIndex = ref(false)
 const busy = ref<string>()
 const errors = ref<Record<string, string>>({})
 const confirmRemove = ref<string>()
+/** Plugin id → its newer release, for "Update to vX". */
+const newer = ref<Record<string, string>>({})
+const updateLabel = (id: string) =>
+  newer.value[id] ? t('plugins.updateTo', { v: newer.value[id] }) : t('plugins.update')
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : t('common.error'))
 
@@ -87,6 +91,15 @@ async function load() {
       api.integrations(),
     ])
     index.value = await api.pluginIndex().catch(() => undefined)
+    // Newer releases (GitHub, at most once an hour): not waited for.
+    void api
+      .pluginUpdates()
+      .then((list) => {
+        newer.value = Object.fromEntries(
+          list.filter((u) => u.update && u.latest).map((u) => [u.id, u.latest!]),
+        )
+      })
+      .catch(() => undefined)
   } finally {
     loading.value = false
   }
@@ -437,15 +450,17 @@ onMounted(load)
               <span class="grow" />
               <template v-if="!item.dev && item.url">
                 <button
-                  class="btn ghost icon small"
+                  class="btn small"
+                  :class="newer[item.id] ? 'primary' : 'ghost icon'"
                   type="button"
                   data-test="store-update"
-                  :title="t('plugins.update')"
-                  :aria-label="t('plugins.update')"
+                  :title="updateLabel(item.id)"
+                  :aria-label="updateLabel(item.id)"
                   :disabled="!!busy"
                   @click="install(item)"
                 >
                   <RefreshCw :size="14" :class="{ spin: busy === item.id }" />
+                  <template v-if="newer[item.id]">{{ updateLabel(item.id) }}</template>
                 </button>
                 <button
                   class="btn ghost icon small danger"

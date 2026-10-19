@@ -10,6 +10,7 @@ import IntegrationLogo from '@/components/IntegrationLogo.vue'
 import CollectionRound from '@/components/CollectionRound.vue'
 import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
+import UpdatePlugins from '@/components/UpdatePlugins.vue'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
 import type { Config, Integration, IntegrationType } from '@/lib/types'
@@ -46,6 +47,13 @@ async function load() {
 
 // "Add integration" opens the store: built-in integrations, installed and
 // available plugins. Picking one there opens its form.
+// The "Update plugins" button: refreshed when the store changes plugins.
+const updater = ref<InstanceType<typeof UpdatePlugins>>()
+function onPluginsChanged() {
+  void load()
+  void updater.value?.load()
+}
+
 const storeOpen = ref(false)
 function addFromStore(type: string) {
   storeOpen.value = false
@@ -112,6 +120,7 @@ onMounted(async () => {
         <p class="muted">{{ t('integrations.subtitle') }}</p>
       </div>
       <div class="header-actions">
+        <UpdatePlugins ref="updater" @updated="load" />
         <button class="btn primary" data-test="add" @click="storeOpen = true">
           <Plus :size="16" />{{ t('integrations.add') }}
         </button>
@@ -195,7 +204,12 @@ onMounted(async () => {
       </li>
     </ul>
 
-    <PluginStore v-if="storeOpen" @close="storeOpen = false" @changed="load" @add="addFromStore" />
+    <PluginStore
+      v-if="storeOpen"
+      @close="storeOpen = false"
+      @changed="onPluginsChanged"
+      @add="addFromStore"
+    />
 
     <IntegrationForm
       v-if="form"

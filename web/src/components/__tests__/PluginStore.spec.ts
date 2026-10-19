@@ -15,6 +15,8 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...mod.api,
       plugins: vi.fn<typeof mod.api.plugins>(),
+      pluginUpdates: vi.fn<typeof mod.api.pluginUpdates>(),
+      updateAllPlugins: vi.fn<typeof mod.api.updateAllPlugins>(),
       pluginCatalog: vi.fn<typeof mod.api.pluginCatalog>(),
       installPlugin: vi.fn<typeof mod.api.installPlugin>(),
       removePlugin: vi.fn<typeof mod.api.removePlugin>(),
@@ -62,6 +64,7 @@ describe('PluginStore', () => {
   beforeEach(() => {
     vi.mocked(api.pluginCatalog).mockReset().mockResolvedValue([opnsenseEntry, mikrotikEntry])
     vi.mocked(api.plugins).mockReset().mockResolvedValue([])
+    vi.mocked(api.pluginUpdates).mockReset().mockResolvedValue([])
     vi.mocked(api.pluginIndex).mockReset().mockResolvedValue({ url: '', plugins: 2 })
     vi.mocked(api.installPlugin).mockReset().mockResolvedValue(installed('opnsense', URL))
     vi.mocked(api.removePlugin).mockReset().mockResolvedValue()
@@ -241,5 +244,33 @@ describe('PluginStore', () => {
     await w.get('[data-test=store-index] button').trigger('click')
     await flushPromises()
     expect(w.get('[data-test=store-index]').text()).toContain('10 plugins')
+  })
+
+  it('labels the update button with a newer release', async () => {
+    vi.mocked(api.plugins).mockResolvedValue([
+      { ...installed('opnsense', URL), source: { url: URL, version: 'v0.1.0', installed_at: '' } },
+      installed('mikrotik', mikrotikEntry.url),
+    ])
+    vi.mocked(api.pluginUpdates).mockResolvedValue([
+      { id: 'opnsense', name: 'OPNsense', installed: 'v0.1.0', latest: 'v0.2.0', update: true },
+      {
+        id: 'mikrotik',
+        name: 'MikroTik',
+        installed: 'main@1a2b3c4',
+        update: false,
+        reason: 'pinned',
+      },
+    ])
+    const w = await mountStore()
+    const [opn, mik] = w.findAll('[data-test=store-update]')
+    expect(opn!.text()).toBe('Update to v0.2.0')
+    expect(opn!.attributes('title')).toBe('Update to v0.2.0')
+    expect(mik!.text()).toBe('')
+    expect(mik!.attributes('title')).toBe('Update')
+
+    // It installs the latest release, as before.
+    await opn!.trigger('click')
+    await flushPromises()
+    expect(api.installPlugin).toHaveBeenCalledWith(URL, undefined)
   })
 })

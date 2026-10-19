@@ -1257,6 +1257,18 @@ const ptBR: typeof en = {
     community: 'Comunidade',
     update: 'Atualizar',
     updating: 'Atualizando…',
+    updateTo: 'Atualizar para {v}',
+    updateAll: {
+      button: 'Atualizar {n} plugin | Atualizar {n} plugins',
+      upToDate: 'Plugins atualizados',
+      title: 'Atualizar plugins',
+      confirm: 'Cada plugin é atualizado para a sua versão mais recente, um de cada vez:',
+      start: 'Atualizar',
+      running: 'Atualizando… (pode levar alguns minutos)',
+      done: 'Atualizado',
+      failed: 'Falhou',
+      nothing: 'Nada foi atualizado: os plugins estão em dia.',
+    },
     fromUrl: 'Instalar a partir de um endereço do GitHub',
     installAndAdd: 'Instalar',
     trust: {

@@ -484,6 +484,28 @@ export interface PluginInfo {
   trust: PluginTrust
 }
 
+/** Whether an installed plugin has a newer release (GET /api/plugins/updates). */
+export interface PluginUpdate {
+  id: string
+  name: string
+  /** The installed version: a tag, or branch@commit. */
+  installed: string
+  /** The repository's latest release. */
+  latest?: string
+  update: boolean
+  /** Why it is left alone: dev, pinned (branch or commit), no_release, github. */
+  reason?: 'dev' | 'pinned' | 'no_release' | 'github'
+  error?: string
+}
+
+/** What updating one plugin did (POST /api/plugins/update-all). */
+export interface PluginUpdateResult {
+  id: string
+  from: string
+  to: string
+  error?: string
+}
+
 /** A plugin of the curated list shipped with Omini. */
 export interface CatalogEntry {
   id: string

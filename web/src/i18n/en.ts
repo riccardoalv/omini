@@ -1082,6 +1082,18 @@ export default {
     community: 'Community',
     update: 'Update',
     updating: 'Updating…',
+    updateTo: 'Update to {v}',
+    updateAll: {
+      button: 'Update {n} plugin | Update {n} plugins',
+      upToDate: 'Plugins up to date',
+      title: 'Update plugins',
+      confirm: 'Each plugin is updated to its latest release, one by one:',
+      start: 'Update',
+      running: 'Updating… (can take a few minutes)',
+      done: 'Updated',
+      failed: 'Failed',
+      nothing: 'Nothing was updated: the plugins are up to date.',
+    },
     fromUrl: 'Install from a GitHub address',
     installAndAdd: 'Install',
     trust: {

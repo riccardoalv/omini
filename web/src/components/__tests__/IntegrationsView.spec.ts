@@ -21,6 +21,8 @@ vi.mock('@/lib/api', async (orig) => {
       pluginCatalog: vi.fn<typeof mod.api.pluginCatalog>(),
       installPlugin: vi.fn<typeof mod.api.installPlugin>(),
       plugins: vi.fn<typeof mod.api.plugins>(),
+      pluginUpdates: vi.fn<typeof mod.api.pluginUpdates>(),
+      updateAllPlugins: vi.fn<typeof mod.api.updateAllPlugins>(),
     },
   }
 })
@@ -48,6 +50,7 @@ describe('IntegrationsView', () => {
     vi.mocked(api.integrationTypes).mockResolvedValue([])
     vi.mocked(api.pluginCatalog).mockResolvedValue([])
     vi.mocked(api.plugins).mockResolvedValue([])
+    vi.mocked(api.pluginUpdates).mockResolvedValue([])
   })
 
   it('shows each integration with its logo', async () => {
@@ -156,6 +159,33 @@ describe('IntegrationsView', () => {
     await w.get('[data-test=store-use]').trigger('click')
     await flushPromises()
     expect(document.body.textContent).toContain('Address')
+    w.unmount()
+  })
+
+  it('"Update plugins" updates them and reloads the list', async () => {
+    vi.mocked(api.pluginUpdates).mockResolvedValue([
+      { id: 'opnsense', name: 'OPNsense', installed: 'v0.1.0', latest: 'v0.2.0', update: true },
+    ])
+    vi.mocked(api.updateAllPlugins).mockResolvedValue([
+      { id: 'opnsense', from: 'v0.1.0', to: 'v0.2.0' },
+    ])
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: IntegrationsView }],
+    })
+    const w = mount(IntegrationsView, {
+      global: { plugins: [...plugins(), router] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const button = w.get('header [data-test=update-plugins]')
+    expect(button.text()).toBe('Update 1 plugin')
+    const before = vi.mocked(api.integrations).mock.calls.length
+    await button.trigger('click')
+    ;(document.body.querySelector('[data-test=update-confirm]') as HTMLElement).click()
+    await flushPromises()
+    expect(document.body.textContent).toContain('Updated')
+    expect(vi.mocked(api.integrations).mock.calls.length).toBeGreaterThan(before)
     w.unmount()
   })
 })
