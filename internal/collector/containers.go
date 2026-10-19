@@ -2,12 +2,15 @@ package collector
 
 import (
 	"cmp"
+	"context"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/riccardoalv/omini/internal/appicons"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
 
@@ -20,7 +23,7 @@ import (
 // after its image. A container with an address of its own (macvlan, ipvlan)
 // stays a device: its apps come from scanning it. Matching is by host and
 // port only: no runtime is known here.
-func attachContainers(topo *topology.Topology) {
+func attachContainers(topo *topology.Topology) []string {
 	byID := make(map[string]*topology.Node, len(topo.Nodes))
 	for i := range topo.Nodes {
 		byID[topo.Nodes[i].ID] = &topo.Nodes[i]
@@ -53,8 +56,7 @@ func attachContainers(topo *topology.Topology) {
 	var edges []topology.Edge
 	for i := range topo.Nodes {
 		c := &topo.Nodes[i]
-		if c.Kind == topology.KindApp || c.Device == nil || c.Device.Container == nil ||
-			len(c.Device.Container.Ports) == 0 || ownAddress(c.Device) {
+		if !publishedContainer(*c) {
 			continue
 		}
 		host := containerHost(topo, byID, c)
@@ -96,12 +98,56 @@ func attachContainers(topo *topology.Topology) {
 		})
 	}
 	if len(gone) == 0 {
-		return
+		return nil
 	}
 	topo.Nodes = slices.DeleteFunc(topo.Nodes, func(n topology.Node) bool { return gone[n.ID] })
 	topo.Edges = slices.DeleteFunc(topo.Edges, func(e topology.Edge) bool { return gone[e.Source] || gone[e.Target] })
 	topo.Nodes = append(topo.Nodes, added...)
 	topo.Edges = append(topo.Edges, edges...)
+	ids := make([]string, 0, len(gone))
+	for id := range gone {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// publishedContainer: a container that publishes ports on its host without an
+// address of its own, so it is shown as an app, never as a device.
+func publishedContainer(n topology.Node) bool {
+	return n.Kind != topology.KindApp && n.Device != nil && n.Device.Container != nil &&
+		len(n.Device.Container.Ports) > 0 && !ownAddress(n.Device)
+}
+
+// forgetContainers removes from the inventory the containers an older Omini
+// recorded as devices before they were shown as apps.
+func (c *Collector) forgetContainers(ctx context.Context, gone []string, inventory []store.InventoryEntry) {
+	known := make(map[string]bool, len(inventory))
+	for _, e := range inventory {
+		known[e.ID] = true
+	}
+	var ids []string
+	for _, id := range gone {
+		if known[id] {
+			ids = append(ids, id)
+		}
+	}
+	// The same container under an older key: a Swarm task's name
+	// ("<service>.1.<task id>") before containers were named after their service.
+	for _, e := range inventory {
+		for _, id := range gone {
+			if strings.HasPrefix(e.ID, id+".") {
+				ids = append(ids, e.ID)
+				break
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	if err := c.store.DeleteInventory(ctx, ids); err != nil {
+		slog.Warn("could not forget containers shown as apps", "err", err)
+	}
 }
 
 // ownAddress: the container is reachable at an address of its own.

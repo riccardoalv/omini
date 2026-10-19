@@ -468,6 +468,9 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	// Record what is present now (before user aliases are applied to labels).
 	var seen []store.InventoryEntry
 	for _, n := range topo.Nodes {
+		if publishedContainer(n) {
+			continue // it becomes an app below (apps are not in the inventory)
+		}
 		if n.Online && n.Kind != topology.KindWAN { // an uplink is not a device
 			if n.ParentID == "" {
 				if e, ok := uplink[n.ID]; ok && !strings.HasPrefix(e.Source, "wan:") {
@@ -489,7 +492,10 @@ func (c *Collector) rebuild(ctx context.Context) error {
 	}
 	classifyNodes(&topo)
 	expandApps(&topo)
-	attachContainers(&topo)
+	if gone := attachContainers(&topo); len(gone) > 0 {
+		// Containers recorded as devices before they were shown as apps.
+		c.forgetContainers(ctx, gone, inventory)
+	}
 	attachVMs(&topo)
 	applyInventory(&topo, inventory, now)
 	labels, err := c.store.PortLabels(ctx)

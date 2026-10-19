@@ -1,10 +1,13 @@
 package collector_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
+	"github.com/riccardoalv/omini/internal/store"
 	"github.com/riccardoalv/omini/internal/topology"
 )
 
@@ -72,5 +75,43 @@ func TestRoundShowsAContainerAsTheAppTheScanFound(t *testing.T) {
 	}
 	if apps[0].ParentID != apps[1].ParentID || apps[0].ParentID == "" {
 		t.Errorf("both apps hang from the host: %q, %q", apps[0].ParentID, apps[1].ParentID)
+	}
+}
+
+// A container shown as an app is no device in the inventory (the device
+// list), and one an older Omini recorded there is forgotten.
+func TestAContainerShownAsAnAppIsNoInventoryDevice(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	mac := model.MACAddress("bc:24:11:8d:d7:e5")
+	scan := model.Device{Key: "scan", Name: "scan", Hosts: []model.Host{{IP: "192.168.1.42", MAC: &mac, OpenPorts: []uint16{81}}}}
+	host := model.Device{Key: "docker:192.168.1.42", Name: "master", Host: model.Ptr("192.168.1.42"), IPs: []string{"192.168.1.42"}}
+	name, image := "homelab_npm", "jc21/nginx-proxy-manager:latest"
+	npm := model.Device{
+		Key: "docker:192.168.1.42:" + name, Name: name,
+		Container: &model.Container{Name: &name, Image: &image, Ports: []model.ContainerPort{{Port: 81, Protocol: model.Ptr(model.ContainerPortProtocolTcp)}}},
+		Neighbors: []model.Neighbor{{
+			LocalPort: "ingress", Protocol: model.Ptr(model.NeighborProtocolOther),
+			RemoteIP: model.Ptr("192.168.1.42"), RemoteName: model.Ptr("master"), RemotePlatform: model.Ptr("Docker"),
+		}},
+	}
+	// An older Omini recorded the container as a device, also under its Swarm
+	// task's name.
+	old := "dev:1:docker:192.168.1.42:" + name
+	if err := e.st.MarkSeen(ctx, []store.InventoryEntry{{ID: old, Kind: "device", Label: name}, {ID: old + ".1.4r0zt3ko9yhetqnc53kzedm7o", Kind: "device", Label: name}}, e.clock); err != nil {
+		t.Fatal(err)
+	}
+	e.fake.set([]model.Device{scan, host, npm}, nil)
+	e.collect(t)
+	e.collect(t)
+	inv, err := e.st.ListInventory(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, en := range inv {
+		if strings.Contains(en.ID, name) {
+			t.Fatalf("the container is no device in the inventory: %+v", en)
+		}
 	}
 }
