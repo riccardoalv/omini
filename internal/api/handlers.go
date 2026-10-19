@@ -556,6 +556,32 @@ func (s *Server) installPlugin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, p)
 }
 
+// pluginUpdates tells which installed plugins have a newer release (GitHub
+// is asked at most once an hour per repository; ?refresh=1 asks now).
+func (s *Server) pluginUpdates(w http.ResponseWriter, r *http.Request) {
+	if s.Plugins == nil {
+		writeJSON(w, http.StatusOK, []plugins.Update{})
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, time.Minute)
+	defer cancel()
+	writeJSON(w, http.StatusOK, s.Plugins.Updates(ctx, r.URL.Query().Get("refresh") == "1"))
+}
+
+// updateAllPlugins updates every plugin with a newer release, one by one, as
+// installPlugin does with no version; one failure does not stop the others.
+func (s *Server) updateAllPlugins(w http.ResponseWriter, r *http.Request) {
+	if s.Plugins == nil {
+		writeError(w, http.StatusServiceUnavailable, "plugins are not available")
+		return
+	}
+	ctx, cancel := contextWithTimeout(r, 30*time.Minute)
+	defer cancel()
+	writeJSON(w, http.StatusOK, s.Plugins.UpdateAll(ctx, func(p *plugins.Plugin) {
+		s.Registry.Register(s.Plugins.Integration(p))
+	}))
+}
+
 // removePlugin uninstalls a plugin that no integration uses anymore.
 func (s *Server) removePlugin(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

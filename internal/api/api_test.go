@@ -52,6 +52,7 @@ type harness struct {
 	coll   *collector.Collector
 	box    *secret.Box
 	web    *fakeWeb
+	plugs  *plugins.Manager
 }
 
 // extraPlugins are more development plugin folders.
@@ -93,7 +94,7 @@ func newHarness(t *testing.T, ui *fstest.MapFS, extraPlugins ...string) *harness
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
-	return &harness{t: t, srv: srv, client: &http.Client{Jar: jar}, store: st, coll: coll, box: box, web: web}
+	return &harness{t: t, srv: srv, client: &http.Client{Jar: jar}, store: st, coll: coll, box: box, web: web, plugs: plugs}
 }
 
 // do sends a request (with the CSRF header unless csrf is false) and decodes the JSON response into out.

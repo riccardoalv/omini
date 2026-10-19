@@ -109,6 +109,8 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("GET /api/plugins/catalog", s.pluginCatalog)
 	private.HandleFunc("GET /api/plugins/index", s.pluginIndex)
 	private.HandleFunc("POST /api/plugins/index/refresh", s.refreshPluginIndex)
+	private.HandleFunc("GET /api/plugins/updates", s.pluginUpdates)
+	private.HandleFunc("POST /api/plugins/update-all", s.updateAllPlugins)
 	private.HandleFunc("POST /api/plugins", s.installPlugin)
 	private.HandleFunc("DELETE /api/plugins/{id}", s.removePlugin)
 	private.HandleFunc("PUT /api/layout", s.saveLayout)

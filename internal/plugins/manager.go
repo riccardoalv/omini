@@ -52,6 +52,11 @@ type Manager struct {
 	mu      sync.Mutex
 	plugins map[string]*Plugin
 	envMu   sync.Map // per-plugin lock while its environment is (re)built
+
+	latestMu    sync.Mutex
+	latestCache map[string]latestRelease // owner/repo → its latest release (see latest)
+	updateMu    sync.Mutex               // one UpdateAll at a time
+	now         func() time.Time         // tests move the clock
 }
 
 func (m *Manager) init() {
