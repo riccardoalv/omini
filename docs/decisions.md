@@ -150,6 +150,14 @@ tested with fixtures). The rules that are easy to break:
   integrations, or by MAC in one and by IP in another, is merged; a device
   reported without a MAC takes the one its address has (DHCP, scans, then
   ARP).
+- **Every report of a machine shows** (decided 2026-10-19): a machine two
+  integrations report (a NAS VM: Proxmox sees the VM, TrueNAS its system) is
+  one node whose panel and alerts see both: the device's own report first (not
+  its hypervisor's view of it), the rest filled from the others, ports,
+  neighbors and services joined. A device reported without a MAC (a Docker
+  host) whose address ARP or a lease gives to another device's MAC is that
+  device. A VM or container its hypervisor or Docker host reports is never a
+  `new_device`.
 - **A device keeps its history when its key changes** (decided 2026-10-18):
   a managed device's node is named after its key's MAC, so a plugin that
   picks another of the device's MACs (a newer version, a stable SNMP key)

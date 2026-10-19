@@ -302,6 +302,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 		}
 	}
 	b.adoptMACs(sources)
+	b.mergeReports()
 	b.center = b.centers()
 	managed := b.sortedIDs(KindDevice)
 	for _, id := range managed {
@@ -461,11 +462,23 @@ func (b *builder) adoptMACs(sources []Source) {
 	}
 	for _, id := range b.sortedIDs(KindDevice) {
 		n := b.nodes[id]
+		if n == nil {
+			continue // merged into another one
+		}
 		if n.IP == "" || len(deviceMACs(n.Device)) > 0 {
 			continue
 		}
 		m, ok := byIP[ipKey(n.IP)]
-		if _, taken := b.byMAC[m]; !ok || taken {
+		if !ok {
+			continue
+		}
+		if other, taken := b.byMAC[m]; taken {
+			// Its address is another device's: the same machine, reported
+			// without a MAC by one integration (Docker's host) and with it by
+			// another (the hypervisor's VM).
+			if o := b.nodes[other]; o != nil && o.Kind == KindDevice && other != id {
+				b.mergeInto(id, other)
+			}
 			continue
 		}
 		d := *n.Device // a copy: the collected data stays as it came
