@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/riccardoalv/omini/compare/v1.9.0...v1.9.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **collector:** a container shown as an app is no device in the list ([7b3422d](https://github.com/riccardoalv/omini/commit/7b3422d8e0038479471fcdfe7d45d81a8599e73f))
+
 ## [1.9.0](https://github.com/riccardoalv/omini/compare/v1.8.1...v1.9.0) (2026-10-19)
 
 
