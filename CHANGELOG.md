@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1](https://github.com/riccardoalv/omini/compare/v1.8.0...v1.8.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **collector:** a VM or container its host reports is no new device ([c126d36](https://github.com/riccardoalv/omini/commit/c126d3632db1ce11814ddf823a67cd31c8da3fdd))
+* **topology:** one machine two integrations report shows both reports ([4ed2506](https://github.com/riccardoalv/omini/commit/4ed2506fe29c1c0b68847301865f77e63600d44d))
+
 ## [1.8.0](https://github.com/riccardoalv/omini/compare/v1.7.0...v1.8.0) (2026-10-19)
 
 
