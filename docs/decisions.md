@@ -150,6 +150,19 @@ tested with fixtures). The rules that are easy to break:
   integrations, or by MAC in one and by IP in another, is merged; a device
   reported without a MAC takes the one its address has (DHCP, scans, then
   ARP).
+- **A container is the app the scan found** (maintainer's choice, 2026-10-19):
+  a self-hosted app is one node, the app the port scan identified on its
+  host (its icon, its name, the button to its web interface), and Docker
+  adds to it what it knows: the container or Swarm service that publishes
+  that port, its image, stack, state and replicas. They are matched by the
+  host and the published port; nothing is vendor-specific in the core. A
+  container with published ports and no app found on them becomes an app
+  node of its own, with the icon of its image when the catalog knows it. A
+  container with an address of its own (macvlan, ipvlan) stays a device.
+  Containers without published ports stay a list in the host's panel. A
+  Swarm service publishes its ports on every node (the routing mesh): the
+  plugin reads the services from a manager, so the app on any node finds
+  the service that serves it.
 - **Every report of a machine shows** (decided 2026-10-19): a machine two
   integrations report (a NAS VM: Proxmox sees the VM, TrueNAS its system) is
   one node whose panel and alerts see both: the device's own report first (not
@@ -747,6 +760,12 @@ for many devices at once.
   (official / community) and a **trust level** set by the maintainers for a
   release (plug-and-play, stable, experimental, unverified — always the level
   of a URL import). Review process: [plugin-review.md](plugin-review.md).
+- **Update every plugin at once** (maintainer's choice, 2026-10-19): the
+  Integrations screen has an **Update plugins** button with the number of
+  plugins that have a newer release; it updates them one by one to their
+  latest release and shows each result. The latest releases are asked to
+  GitHub at most once an hour. Development plugins and plugins pinned to a
+  branch or commit are left alone.
 - **New plugins** (decided 2026-10-18, experimental until tested on real
   hardware): Docker (the Engine API over TCP, or Portainer's API: containers
   as devices under their host, with ports and state), TrueNAS (pools,
