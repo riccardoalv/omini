@@ -72,7 +72,7 @@ Raspberry Pi.
    and fed to the traffic meter.
 4. The map is **rebuilt once**, from every snapshot:
    topology → MAC table and attachment memory → inventory (first/last seen) →
-   identification → apps and VMs → user overrides and port names → traffic →
+   identification → apps, containers and VMs → user overrides and port names → traffic →
    the changes each device can apply and its protected ports
    (`markChangeable`) → presence events and traffic history → insights →
    alerts.
@@ -168,6 +168,10 @@ After the build, the collector adds what is not topology:
   the evidence (titles, ports, mDNS, UPnP, vendor, names, banners, TTL,
   model, integration).
 - **Apps**: one node per self-hosted app found on a device.
+- **Containers** (`attachContainers`): a device with `container` and
+  published ports is the app found on its host and port (the app node
+  carries it), else an app node of its own; one with an address of its own
+  stays a device. Matched by host and port only.
 - **VMs**: with exactly one Proxmox host on the network and no Proxmox
   integration, devices with a Proxmox MAC hang under it.
 - **User data**: names, pinned, hidden, type and icon overrides, port names.
