@@ -3,7 +3,9 @@ package collector_test
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/riccardoalv/omini/internal/collector"
 	"github.com/riccardoalv/omini/internal/integration"
 	"github.com/riccardoalv/omini/internal/model"
 	"github.com/riccardoalv/omini/internal/store"
@@ -85,5 +87,32 @@ func TestADeviceKeyedByItsAddressBeforeKeepsItsHistory(t *testing.T) {
 	n, ok := node(s, "dev:aa:00:00:00:00:53")
 	if !ok || n.Label != alias {
 		t.Fatalf("the DNS server keeps its alias under its MAC: %+v (found=%v, old=%s)", n, ok, old)
+	}
+}
+
+func TestAContainerOrVMIsNoNewDevice(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	host := model.Device{Key: "aa:00:00:00:00:42", Name: "docker", Host: model.Ptr("192.168.1.42"), MACs: []model.MACAddress{"aa:00:00:00:00:42"}}
+	e.fake.set([]model.Device{host}, nil)
+	e.collect(t)
+	// After the grace period a stack is deployed: a container its host reports,
+	// and a stranger's phone shows up on the network.
+	e.clock = e.clock.Add(collector.NewDeviceGrace + time.Minute)
+	container := model.Device{Key: "docker:192.168.1.42:web", Name: "web", Neighbors: []model.Neighbor{{
+		LocalPort: "bridge", Protocol: model.Ptr(model.NeighborProtocolOther),
+		RemoteIP: model.Ptr("192.168.1.42"), RemotePlatform: model.Ptr("Docker"),
+	}}}
+	phone := model.Device{Key: "aa:00:00:00:00:99", Name: "phone", MACs: []model.MACAddress{"aa:00:00:00:00:99"}}
+	e.fake.set([]model.Device{host, container, phone}, nil)
+	s := e.collect(t)
+	var news []string
+	for _, a := range s.Alerts {
+		if a.Rule == "new_device" {
+			news = append(news, a.NodeID)
+		}
+	}
+	if len(news) != 1 || news[0] != "dev:aa:00:00:00:00:99" {
+		t.Fatalf("only the phone is a new device, not the container: %v", news)
 	}
 }

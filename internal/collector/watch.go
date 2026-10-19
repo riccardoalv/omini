@@ -84,9 +84,17 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 			ID: s.IntegrationID, Name: names[s.IntegrationID], OK: s.OK, Error: s.Error, Failures: s.Failures,
 		})
 	}
+	// A VM or container its hypervisor or Docker host reports is the user's own:
+	// no stranger joining the network, and a redeployed stack is not news.
+	guests := map[string]bool{}
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindDevice && topology.GuestView(n.Device) {
+			guests[n.ID] = true
+		}
+	}
 	seenMAC := firstSeenByMAC(inventory)
 	for _, e := range inventory {
-		if (e.Kind == string(topology.KindClient) || e.Kind == string(topology.KindDevice)) &&
+		if !guests[e.ID] && (e.Kind == string(topology.KindClient) || e.Kind == string(topology.KindDevice)) &&
 			firstSeen(e, seenMAC).After(since.Add(NewDeviceGrace)) {
 			in.NewDevices = append(in.NewDevices, insights.NewDevice{NodeID: e.ID, FirstSeen: e.FirstSeen})
 		}
