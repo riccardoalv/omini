@@ -28,7 +28,7 @@ import hashlib
 import json
 import os
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
@@ -155,10 +155,16 @@ class Client:
         follow_redirects: bool = False,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] | None = None,
+        idempotent: Iterable[str] | None = None,
     ):
         self.base = normalize_url(base_url, scheme=scheme, port=port, strip=strip)
         self.name = name
         self.retries = max(0, retries)
+        # Methods safe to send again after a timeout (an API whose PUT creates
+        # an item, such as RouterOS, leaves PUT out).
+        self.idempotent = (
+            frozenset(m.upper() for m in idempotent) if idempotent is not None else IDEMPOTENT
+        )
         self.backoff = backoff
         self.unauthorized = unauthorized or f"{name} rejected the credentials"
         self.forbidden_hint = forbidden_hint
@@ -250,7 +256,7 @@ class Client:
                     f"cannot connect to {self.base}: {e}", method=method, resource=path
                 ) from e
             except httpx.TimeoutException as e:
-                if method in IDEMPOTENT and not timed_out and attempt < self.retries:
+                if method in self.idempotent and not timed_out and attempt < self.retries:
                     timed_out = True
                     self._pause(attempt, f"{self.base} did not answer {path} in time")
                     attempt += 1
@@ -259,7 +265,7 @@ class Client:
                     f"{self.base} did not answer in time", method=method, resource=path
                 ) from e
             except (httpx.RemoteProtocolError, httpx.ReadError) as e:
-                if method in IDEMPOTENT and attempt < self.retries:
+                if method in self.idempotent and attempt < self.retries:
                     self._pause(attempt, f"{self.base} cut its answer to {path} short")
                     attempt += 1
                     continue

@@ -204,6 +204,24 @@ def test_a_timeout_is_retried_once_and_only_for_idempotent_methods():
     assert calls == ["POST"]
 
 
+def test_a_client_can_say_which_methods_are_safe_to_send_again():
+    calls = []
+
+    def handler(request):
+        calls.append(request.method)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    # RouterOS creates an item on PUT: sending it again could create it twice.
+    c = client(handler, retries=5, idempotent={"GET", "HEAD", "OPTIONS", "DELETE"})
+    with pytest.raises(Unavailable):
+        c.put("/x", {})
+    assert calls == ["PUT"]
+    calls.clear()
+    with pytest.raises(Unavailable):
+        c.get("/x")
+    assert calls == ["GET", "GET"]
+
+
 def test_a_cut_answer_is_retried_for_reads():
     calls = []
 
