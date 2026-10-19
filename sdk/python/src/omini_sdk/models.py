@@ -652,6 +652,25 @@ class PortForward(BaseModel):
     """
 
 
+class ContainerPort(BaseModel):
+    """
+    A port a container publishes on its host.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    port: Annotated[int, Field(ge=1, le=65535)]
+    """
+    The port on the host.
+    """
+    protocol: Literal["tcp", "udp", "sctp"] | None = None
+    target_port: Annotated[int | None, Field(ge=1, le=65535)] = None
+    """
+    The port inside the container.
+    """
+
+
 class Interface(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -1066,6 +1085,48 @@ class DnsCheck(BaseModel):
     local: DnsQuery | None = None
 
 
+class Container(BaseModel):
+    """
+    A container or a service of containers (a Swarm service, a Compose service).
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: str | None = None
+    """
+    The container's or the service's name (e.g. "homelab_jellyfin").
+    """
+    image: str | None = None
+    """
+    The image it runs (e.g. "lscr.io/linuxserver/jellyfin:latest").
+    """
+    stack: str | None = None
+    """
+    The stack or project it belongs to (a Swarm stack, a Compose project).
+    """
+    state: str | None = None
+    """
+    Its state as the runtime names it (running, exited, paused...).
+    """
+    replicas: Annotated[int | None, Field(ge=0)] = None
+    """
+    A service: the replicas it should run (a global service: one per node it runs on).
+    """
+    running: Annotated[int | None, Field(ge=0)] = None
+    """
+    A service: the replicas running now.
+    """
+    ports: list[ContainerPort] | None = None
+    """
+    The ports it publishes on its host.
+    """
+    addresses: list[str] | None = None
+    """
+    Other addresses its published ports answer on besides its host's (a Swarm service published through the routing mesh answers on every node of the swarm).
+    """
+
+
 class Device(BaseModel):
     """
     Vendor-neutral snapshot of one network device, as collected by an integration.
@@ -1214,6 +1275,10 @@ class Device(BaseModel):
     port_forwards: list[PortForward] | None = None
     """
     Ports the router forwards from the internet to the network.
+    """
+    container: Container | None = None
+    """
+    The device is a container, or a service of containers (a Swarm service): what it runs and the ports it publishes on its host (the device it hangs from by a neighbor of protocol "other"). Omini shows it as the app the network scan finds on those ports.
     """
 
 

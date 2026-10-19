@@ -185,6 +185,8 @@ export interface Device {
   wireless_uplink?: boolean
   /** Ports a router forwards from the internet to the network. */
   port_forwards?: PortForward[]
+  /** The device is a container or a Swarm service: what it runs and publishes. */
+  container?: Container
   /** The network scan's DHCPDISCOVER on each interface. */
   dhcp_checks?: DhcpCheck[]
   /** The network scan's queries to each DNS server. */
@@ -245,6 +247,21 @@ export interface PortForward {
   enabled?: boolean
   /** A device opened it by itself (UPnP IGD or NAT-PMP). */
   upnp?: boolean
+}
+
+/** A container or a service of containers (a Swarm service). */
+export interface Container {
+  name?: string
+  image?: string
+  stack?: string
+  state?: string
+  /** A service: the replicas it should run, and those running now. */
+  replicas?: number
+  running?: number
+  /** The ports it publishes on its host. */
+  ports?: { port: number; protocol?: 'tcp' | 'udp' | 'sctp'; target_port?: number }[]
+  /** Other addresses its ports answer on (a Swarm routing mesh: every node). */
+  addresses?: string[]
 }
 
 /** One DHCPDISCOVER of the network scan, on one interface. */

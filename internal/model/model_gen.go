@@ -211,10 +211,113 @@ func (j *ConfigBackup) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// A container or a service of containers (a Swarm service, a Compose service).
+type Container struct {
+	// Other addresses its published ports answer on besides its host's (a Swarm
+	// service published through the routing mesh answers on every node of the swarm).
+	Addresses []string `json:"addresses,omitempty,omitzero" yaml:"addresses,omitempty"`
+
+	// The image it runs (e.g. "lscr.io/linuxserver/jellyfin:latest").
+	Image *string `json:"image,omitempty,omitzero" yaml:"image,omitempty"`
+
+	// The container's or the service's name (e.g. "homelab_jellyfin").
+	Name *string `json:"name,omitempty,omitzero" yaml:"name,omitempty"`
+
+	// The ports it publishes on its host.
+	Ports []ContainerPort `json:"ports,omitempty,omitzero" yaml:"ports,omitempty"`
+
+	// A service: the replicas it should run (a global service: one per node it runs
+	// on).
+	Replicas *uint64 `json:"replicas,omitempty,omitzero" yaml:"replicas,omitempty"`
+
+	// A service: the replicas running now.
+	Running *uint64 `json:"running,omitempty,omitzero" yaml:"running,omitempty"`
+
+	// The stack or project it belongs to (a Swarm stack, a Compose project).
+	Stack *string `json:"stack,omitempty,omitzero" yaml:"stack,omitempty"`
+
+	// Its state as the runtime names it (running, exited, paused...).
+	State *string `json:"state,omitempty,omitzero" yaml:"state,omitempty"`
+}
+
+// A port a container publishes on its host.
+type ContainerPort struct {
+	// The port on the host.
+	Port uint16 `json:"port" yaml:"port"`
+
+	// Protocol corresponds to the JSON schema field "protocol".
+	Protocol *ContainerPortProtocol `json:"protocol,omitempty,omitzero" yaml:"protocol,omitempty"`
+
+	// The port inside the container.
+	TargetPort *uint16 `json:"target_port,omitempty,omitzero" yaml:"target_port,omitempty"`
+}
+
+type ContainerPortProtocol string
+
+const ContainerPortProtocolSctp ContainerPortProtocol = "sctp"
+const ContainerPortProtocolTcp ContainerPortProtocol = "tcp"
+const ContainerPortProtocolUdp ContainerPortProtocol = "udp"
+
+var enumValues_ContainerPortProtocol = []interface{}{
+	"tcp",
+	"udp",
+	"sctp",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *ContainerPortProtocol) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_ContainerPortProtocol {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_ContainerPortProtocol, v)
+	}
+	*j = ContainerPortProtocol(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *ContainerPort) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["port"]; raw != nil && !ok {
+		return fmt.Errorf("field port in ContainerPort: required")
+	}
+	type Plain ContainerPort
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if 1 > plain.Port {
+		return fmt.Errorf("field %s: must be >= %v", "port", 1)
+	}
+	if plain.TargetPort != nil && 1 > *plain.TargetPort {
+		return fmt.Errorf("field %s: must be >= %v", "target_port", 1)
+	}
+	*j = ContainerPort(plain)
+	return nil
+}
+
 // Vendor-neutral snapshot of one network device, as collected by an integration.
 type Device struct {
 	// Arp corresponds to the JSON schema field "arp".
 	Arp []ArpEntry `json:"arp,omitempty,omitzero" yaml:"arp,omitempty"`
+
+	// The device is a container, or a service of containers (a Swarm service): what
+	// it runs and the ports it publishes on its host (the device it hangs from by a
+	// neighbor of protocol "other"). Omini shows it as the app the network scan finds
+	// on those ports.
+	Container *Container `json:"container,omitempty,omitzero" yaml:"container,omitempty"`
 
 	// Logical CPUs (cores or threads); for a virtual machine or container, its vCPUs.
 	CPUCount *uint64 `json:"cpu_count,omitempty,omitzero" yaml:"cpu_count,omitempty"`
