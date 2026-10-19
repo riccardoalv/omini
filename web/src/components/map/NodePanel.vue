@@ -19,6 +19,7 @@ import NodeIcon from '@/components/NodeIcon.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import DeviceExtras from '@/components/map/DeviceExtras.vue'
 import ConfigBackups from '@/components/map/ConfigBackups.vue'
+import ContainerFacts from '@/components/map/ContainerFacts.vue'
 import HostActions from '@/components/map/HostActions.vue'
 import NoteField from '@/components/map/NoteField.vue'
 import OwnerField from '@/components/map/OwnerField.vue'
@@ -210,6 +211,8 @@ const byId = computed(() => new Map(props.nodes.map((x) => [x.id, x])))
 const parent = computed(() => (n.value?.parent_id ? byId.value.get(n.value.parent_id) : undefined))
 // A router or firewall running as a VM: the host it runs on (no link on the map).
 const runsOn = computed(() => (n.value?.runs_on ? byId.value.get(n.value.runs_on) : undefined))
+/** The container or Swarm service that serves an app, or that a device is. */
+const container = computed(() => n.value?.container ?? n.value?.device?.container)
 /** The spanning tree root this switch sees ("32768.aa:bb:..."), and its node when on the map. */
 const stpRoot = computed(() => {
   const id = n.value?.device?.stp_root
@@ -886,6 +889,8 @@ async function save(patch: {
             </li>
           </ul>
         </PanelSection>
+
+        <ContainerFacts v-if="container" :container="container" :fixed="n.kind === 'app'" />
 
         <NodeTraffic
           :node="n"

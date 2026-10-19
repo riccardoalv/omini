@@ -172,6 +172,60 @@ describe('NodePanel app node', () => {
     expect(w.find('.classification').exists()).toBe(false)
     expect(w.text()).toContain('Ubuntu')
   })
+
+  it('shows the container that serves the app', async () => {
+    vi.mocked(api.webServices).mockReset()
+    const host: TopoNode = { id: 'dev:master', kind: 'device', label: 'master', online: true }
+    const app: TopoNode = {
+      id: 'app:dev:master:8096',
+      kind: 'app',
+      label: 'Jellyfin',
+      online: true,
+      parent_id: 'dev:master',
+      port: '8096',
+      product: 'jellyfin',
+      web: [{ port: 8096, url: 'http://192.168.1.42:8096/', app: 'jellyfin' }],
+      container: {
+        name: 'homelab_jellyfin',
+        image: 'lscr.io/linuxserver/jellyfin:latest',
+        stack: 'homelab',
+        state: 'running',
+        replicas: 1,
+        running: 1,
+        ports: [
+          { port: 8096, protocol: 'tcp', target_port: 8096 },
+          { port: 8920, target_port: 443 },
+        ],
+      },
+    }
+    const w = mount(NodePanel, {
+      props: { node: app, nodes: [host, app], edges: [] },
+      global: { plugins: plugins(), stubs: { RouterLink: true } },
+    })
+    await flushPromises()
+    const c = w.get('[data-test=container]')
+    expect(c.get('[data-test=container-name]').text()).toBe('homelab_jellyfin')
+    expect(c.get('[data-test=container-image]').text()).toBe('lscr.io/linuxserver/jellyfin:latest')
+    expect(c.get('[data-test=container-state]').text()).toBe('running · 1/1 replicas')
+    expect(c.get('[data-test=container-stack]').text()).toBe('homelab')
+    expect(c.get('[data-test=container-ports]').text()).toBe('8096/tcp, 8920/tcp → 443')
+    // Open for an app: no fold to click.
+    expect(c.find('[data-test=fold-container]').exists()).toBe(false)
+  })
+
+  it('folds the container of a device to one line', async () => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+    const w = mountPanel({
+      ...firewall,
+      device: {
+        key: '02:42:c0:a8:01:50',
+        name: 'pihole',
+        container: { name: 'pihole', image: 'pihole/pihole', state: 'running' },
+      },
+    })
+    await flushPromises()
+    expect(w.get('[data-test=fold-container]').text()).toContain('pihole · pihole/pihole · running')
+  })
 })
 
 describe('NodePanel hide and delete', () => {

@@ -328,6 +328,8 @@ export interface TopoNode {
   banners?: string[]
   ttl?: number
   web?: { port: number; url: string; title?: string; app?: string }[]
+  /** Apps: the container or Swarm service that serves it. */
+  container?: Container
   type?: string
   brand?: string
   product?: string
