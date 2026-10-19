@@ -15,6 +15,8 @@ code.
 - [Repository layout](#repository-layout)
 - [plugin.yaml](#pluginyaml)
 - [The SDK](#the-sdk)
+- [The toolkit](#the-toolkit)
+- [Conventions](#conventions)
 - [What to return](#what-to-return)
 - [The protocol](#the-protocol)
 - [State between runs](#state-between-runs)
@@ -28,9 +30,11 @@ code.
    device, reboot it or start a check (a `POST` only for a login or a read
    that needs it, documented in the README). A plugin changes a device only
    in `apply`, for the changes its manifest declares.
-2. **Optional data never fails the collection.** Try optional endpoints and
-   skip them on error. Fail only when the essential data cannot be read.
-3. **Short timeouts** on every request (about 5 to 10 seconds).
+2. **Optional data never fails the collection.** Read optional endpoints
+   with `optional(...)`, which skips them on error. Fail only when the
+   essential data cannot be read.
+3. **Short timeouts** on every request: 15 seconds by default (the
+   `timeout_s` field), with the retries of `omini_sdk.http.Client`.
 4. **Secrets** only in `secret` fields, never logged, never written in clear to
    the state folder.
 5. **Unknown is empty.** Leave a field out when the device does not say it;
@@ -137,6 +141,13 @@ fields:                     # the "add integration" form
     type: bool
     label: Verify the TLS certificate
     default: false
+    group: Advanced
+  - key: timeout_s
+    type: int
+    label: Timeout (seconds)
+    default: 15
+    group: Advanced
+    help: How long to wait for each answer of the router.
 ```
 
 Omini refuses a manifest with an unknown key, a missing required key, an `id`
@@ -165,43 +176,40 @@ from these fields: a plugin needs no frontend code.
 ```python
 """main.py: Omini plugin for Example routers."""
 
-import httpx
+from omini_sdk import ArpEntry, Device, Interface, PluginError, optional, plugin
+from omini_sdk.http import Client, settings
 
-from omini_sdk import ArpEntry, Device, Interface, PluginError, log, plugin
 
-
-def client(cfg) -> httpx.Client:
-    return httpx.Client(
-        base_url=cfg.str("url"),
+def client(cfg) -> Client:
+    if not cfg.str("url") or not cfg.str("password"):
+        raise PluginError("the address, username and password are required")
+    return Client(
+        cfg.str("url"),
+        name="the router",
         auth=(cfg.str("username"), cfg.str("password")),
-        verify=cfg.bool("verify_tls", False),
-        timeout=10,
+        unauthorized="the router rejected the username or password",
+        user_agent="omini-plugin-example",
+        **settings(cfg),  # verify_tls and timeout_s from the form
     )
+
+
+def arp(c: Client) -> list[ArpEntry]:
+    return [ArpEntry(ip=a["ip"], mac=a["mac"].lower(), interface=a["port"])
+            for a in c.get("/api/arp")]
 
 
 @plugin.collect
 def collect(cfg) -> list[Device]:
     with client(cfg) as c:
-        try:
-            system = c.get("/api/system").raise_for_status().json()
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401:
-                raise PluginError("wrong username or password") from e
-            raise PluginError(f"the router answered {e.response.status_code}") from e
-        except httpx.HTTPError as e:
-            raise PluginError(f"cannot reach {cfg.str('url')}: {e}") from e
-
-        arp = []
-        try:  # optional: skip it if this firmware lacks it
-            arp = [ArpEntry(ip=a["ip"], mac=a["mac"].lower(), interface=a["port"])
-                   for a in c.get("/api/arp").raise_for_status().json()]
-        except httpx.HTTPError as e:
-            log.info("no ARP table: %s", e)
+        system = c.get("/api/system")  # essential: its errors fail the run
+        # Optional: skipped (and logged) when this firmware lacks it.
+        neighbours = optional("the ARP table", lambda: arp(c), [])
 
     return [
         Device(
-            key=system["mac"].lower(),
+            key=system["lan_mac"].lower(),
             name=system["hostname"],
+            host=c.host,
             role="router",
             vendor="Example",
             model=system.get("model"),
@@ -210,7 +218,7 @@ def collect(cfg) -> list[Device]:
                           rx_bytes=p["rx_bytes"], tx_bytes=p["tx_bytes"])
                 for p in system["ports"]
             ],
-            arp=arp,
+            arp=neighbours or None,
         )
     ]
 
@@ -218,10 +226,7 @@ def collect(cfg) -> list[Device]:
 @plugin.test
 def test(cfg) -> str:
     with client(cfg) as c:
-        try:
-            info = c.get("/api/system").raise_for_status().json()
-        except httpx.HTTPError as e:
-            raise PluginError(f"cannot read the router: {e}") from e
+        info = c.get("/api/system")
     return f"Connected to {info['hostname']}"
 
 
@@ -237,6 +242,10 @@ if __name__ == "__main__":
 | `plugin.backup` | Decorator for the function that returns each device's configuration (`backup: true` in the manifest): `backup(cfg)` returns a list of `ConfigBackup(device=<key>, format="text"|"json"|"xml", content=...)`, deterministic and without secrets where the device allows |
 | `plugin.run()` | Reads the request, runs the action, prints the answer and exits |
 | `PluginError("...")` | An error the user should read: wrong key, host unreachable, missing permission. Any other exception becomes "unexpected error", with the traceback in Omini's log |
+| `Unauthorized`, `Forbidden`, `NotFound`, `Unavailable`, `HttpError` | `PluginError`s for what a device refuses or lacks (see [the toolkit](#the-toolkit)) |
+| `optional(name, fn, default)` | Runs an optional read: skipped, and logged once, when the device lacks it |
+| `omini_sdk.http` | `Client` (HTTP with timeouts, retries and those errors), `Session`, `LoginBackoff`, `settings(cfg)` |
+| `omini_sdk.changes` | `apply_verify(apply, verify, undo)`: apply, check, undo when it does not take |
 | `Config` | The `cfg` argument: a dict of the form values, with `cfg.str(key, default)`, `cfg.bool(key, default)`, `cfg.int(key, default)` and `cfg.state_dir` |
 | `log` | A `logging` logger that writes to stderr (shown in Omini's log at debug level) |
 | Models | `Change`, `ConfigBackup`, `Device`, `Interface`, `Neighbor`, `FdbEntry`, `ArpEntry`, `DhcpLease`, `DhcpReservation`, `DnsRecord`, `WirelessClient`, `WifiNetwork`, `Gateway`, `Firmware`, `Storage`, `Temperature`, `Transceiver`, `PortStp`, `PortVlans`, `Vlan`, `Network`, `NetworkDhcp`, `PausedDevice`, `Service`, `VpnPeer`, `DhcpPool`, `FirewallStates`, `Host` |
@@ -245,7 +254,143 @@ The models are pydantic classes generated from Omini's JSON Schema
 (`schema/omini.schema.json`), so invalid data is caught before it reaches
 Omini: the SDK answers "the plugin returned invalid data" and logs the details.
 
-Make the test useful: when the account lacks a permission, say which one.
+Make the test useful: when the account lacks a permission, say which one
+(`optional(..., missing=missing)` collects them).
+
+## The toolkit
+
+Every plugin solves the same problems: timeouts, a device that is busy for a
+moment, a login that must not be repeated every minute, an account without a
+privilege, a change that does not take. The SDK solves them once, so every
+plugin behaves alike for the user. Use it instead of your own.
+
+### HTTP: `omini_sdk.http`
+
+```python
+from omini_sdk.http import Client, LoginBackoff, Session, settings
+```
+
+`Client(base_url, *, name, api="", scheme="https", port=None, strip=(),
+verify_tls=False, timeout=15, retries=2, backoff=1.0, auth=None,
+headers=None, user_agent="omini-plugin", unauthorized=None,
+forbidden_hint=None, follow_redirects=False, transport=None)` wraps
+`httpx.Client` (`c.http` when you need it, for a stream):
+
+- The address gets `scheme` when it has none, `port` (one, or one per
+  scheme) when it has none, and loses a pasted API suffix in `strip`
+  (`normalize_url` does it alone). `api` is a prefix every path goes under.
+  `c.base` is the address, `c.host` its host.
+- `c.get(path, params)`, `c.post(path, json)`, `c.put`, `c.patch`,
+  `c.delete` return the JSON answer (None when it is empty); `c.text(path)`
+  a file as is; `c.request(method, path, **httpx_kwargs)` any of them;
+  `c.send(...)` the raw response, with the retries but no status check.
+- **Retries**: a refused connection and a busy answer (429, 503) are sent
+  again `retries` times after a pause (`backoff`, doubled each time, or the
+  device's Retry-After up to 10 s); a timeout or a cut answer once, and only
+  for GET, HEAD, OPTIONS, PUT and DELETE (a POST that timed out may have been
+  done).
+- **Errors**, all `PluginError`, so one that reaches the SDK is shown as it
+  is: `Unauthorized` (401, with the `unauthorized` message), `Forbidden`
+  (403; `privilege` from `forbidden_hint`, a function of `(method, path)` or
+  a mapping of path prefixes to the device's name for the privilege),
+  `NotFound` (404, 410; `resource` is the path), `Unavailable` (connection
+  refused, timeout, 429, 5xx), and `HttpError`, their base, for another 4xx
+  (with the device's words for a refused change). Each has `status`,
+  `method` and `resource`.
+- A device that answers errors its own way (an error code in a 200, 400 for
+  a missing menu): subclass `Client` and override `check(response, method,
+  path)`, which raises the error a status means, or `detail(response)`, the
+  device's words for an error.
+- `settings(cfg)` gives `verify_tls` and `timeout` from the form's
+  `verify_tls` and `timeout_s` fields: `Client(url, **settings(cfg))`.
+- Tests pass `transport=httpx.MockTransport(handler)` (and `sleep=` to skip
+  the pauses).
+
+Raise the same errors from other transports (SNMP, SSH, web pages) when they
+fit, so `optional` and `apply_verify` treat them alike.
+
+**Logins.** `Session(cfg.state_dir, url, username, password, name="session")`
+keeps a login in `<state_dir>/<name>.json`, readable by the owner only and
+tied to a hash of the address and credentials: `load()` (an empty dict for
+other credentials), `save(data)`, `clear()`. Keep a session id, cookies or a
+token, never the password. `LoginBackoff(cfg.state_dir, url, username,
+password, minutes=10)` waits after the device refuses the credentials:
+`check()` raises while it waits, `refused(message)` after a refused password
+(only then: a device out of reach is asked again next run), `clear()` after a
+good login. Without a state folder neither keeps anything on disk.
+
+### Optional reads: `omini_sdk.optional`
+
+```python
+from omini_sdk import optional
+
+missing: list[str] = []
+leases = optional("the DHCP leases", lambda: read_leases(c), [], missing=missing)
+```
+
+`optional(name, fn, default, *, missing=None)` runs a read the collection can
+do without. `Forbidden`, `NotFound`, `Unavailable` and timeouts are logged once
+at info and give `default`; a `Forbidden` also adds its privilege (else
+`name`) to `missing`, for the connection test to list. `Unauthorized` is
+raised. Anything else (a parser bug) is logged as a warning with its
+traceback and gives `default`.
+
+### Changes: `omini_sdk.changes`
+
+```python
+from omini_sdk.changes import Failed, Pending, apply_verify
+
+apply_verify(
+    lambda: c.put(f"/api/port/{port}", {"enabled": False}),
+    lambda: read_port(c, port)["enabled"] is False,
+    undo=lambda: c.put(f"/api/port/{port}", {"enabled": True}),
+    message=f"could not disable {port}",
+)
+```
+
+`apply_verify(apply, verify, undo=None, *, timeout=30, interval=2,
+message="the change did not take effect", check_in="on the device",
+undo_failed_apply=True)` runs
+`apply`, then `verify` every `interval` seconds until it returns True or
+`timeout` seconds pass (at least once), and returns what `apply` returned.
+`verify` returns False (not yet), raises `Pending(why)` (not yet, and why),
+`Failed(why)` (it will not take: stop now) or another `PluginError` (a read
+that failed while the device applies it: read again). When `apply` raises or
+the change is not seen, `undo` puts things back and the error says
+`<message>: <why> (undone)` or `<message>: <why> (could not be undone: check
+it on the device)` (`check_in="in UniFi Network"` names where). Give an
+`undo` whenever the API allows it, safe to call when `apply` did only part;
+when `apply` is one request that changes all or nothing, pass
+`undo_failed_apply=False` so a refused one is not "undone".
+Wait longer than 30 s only when the device needs it (a radio on a DFS channel
+listens 60 s before it sends).
+
+## Conventions
+
+What Omini expects of every plugin, so devices look alike whatever reads them:
+
+- **Device key**: stable, and never text the user can edit (a name, a
+  description). The MAC of the LAN-side interface; else the lowest MAC of a
+  physical port; else the host from the form. A controller uses each
+  device's base MAC (or serial).
+- **Role**: what the device is (`firewall`, `router`, `switch`, `ap`,
+  `server`), from its kind or model. A default route alone does not make a
+  device a `router` (servers and NAS have one too).
+- **Vendor**: always set, as the brand is written (`OPNsense`, `Ubiquiti`,
+  `MikroTik`).
+- **Form fields**: `url` (type `url`) with the scheme in the help example
+  (`https://192.168.1.1`); credentials `secret` (an API key ID that is not a
+  secret may be `string`); `verify_tls` (default false) and `timeout_s`
+  (default 15) under `group: Advanced`. Labels in sentence case without a
+  colon ("API secret"); help says where to find or create the value, in one
+  or two sentences.
+- **IPv6** is first-class: addresses, neighbors (NDP), leases and DNS
+  records are reported like IPv4 ones, never dropped.
+- **Unknown values stay empty**: leave a field out when the device does not
+  say it; `0`, `""` or `"unknown"` are not "unknown".
+- **HTTP** goes through `omini_sdk.http.Client`, optional reads through
+  `optional`, changes through `apply_verify`.
+- **Backups** return `ConfigBackup(device=<the key collect reports>, ...)`.
 
 ## What to return
 
@@ -374,27 +519,22 @@ collection fails with "did not answer within ...".
 `cfg.state_dir` is a folder private to one configured integration,
 `<data dir>/plugins/<id>/state/<integration id>`, kept between runs and
 removed with the plugin. Use it for sessions and tokens, so the plugin does
-not log in on every collection:
+not log in on every collection, through `omini_sdk.http.Session`:
 
 ```python
-import json
-from pathlib import Path
+from omini_sdk.http import Session
 
-def load_session(cfg) -> dict:
-    path = Path(cfg.state_dir) / "session.json"
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
+session = Session(cfg.state_dir, url, username, password)
+sid = session.load().get("sid") or login()   # login() calls session.save({"sid": ...})
 ```
 
-Write files readable only by the owner, never store a password in clear, and
-tie a cached session to a hash of the address and credentials so a change in
-the form takes effect. A connection test runs with its own state folder.
+`Session` writes files readable only by the owner, never the password, and
+ties a saved session to a hash of the address and credentials, so a change
+in the form takes effect. A connection test runs with its own state folder.
 
 Many devices lock an account after repeated failed logins: when a login is
-refused, wait before trying again (the Mercusys and UniFi plugins wait 10 to
-15 minutes).
+refused, wait before trying again with `LoginBackoff` (10 minutes by
+default; the Mercusys plugin waits 15).
 
 ## Testing
 
