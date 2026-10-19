@@ -83,7 +83,9 @@ func TestRunServes(t *testing.T) {
 	case addr = <-ready:
 	case err := <-done:
 		t.Fatalf("server exited early: %v", err)
-	case <-time.After(10 * time.Second):
+	// About 6 s with -race on its own; much more while `make ci` runs every
+	// package at once.
+	case <-time.After(30 * time.Second):
 		t.Fatal("server did not start")
 	}
 

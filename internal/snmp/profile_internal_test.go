@@ -12,7 +12,10 @@ func TestSysDescrIsCompiledOnce(t *testing.T) {
 	if !p.matches(nil, "", "RouterOS RB4011") || p.matches(nil, "", "Linux") {
 		t.Fatal("sys_descr does not match as it should")
 	}
-	if n := testing.AllocsPerRun(100, func() { p.matches(nil, "", "RouterOS RB4011") }); n != 0 {
-		t.Fatalf("matching allocates %v times: the expression is compiled on every match", n)
+	// Checked on the profile, not by counting allocations: with -race,
+	// sync.Pool (which regexp uses) drops items on purpose, so matching
+	// allocates now and then anyway.
+	if p.sysDescr == nil {
+		t.Fatal("the expression is not compiled when the profile is read")
 	}
 }
