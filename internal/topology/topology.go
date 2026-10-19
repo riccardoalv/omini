@@ -110,6 +110,8 @@ type Node struct {
 	Banners       []string               `json:"banners,omitempty"`    // e.g. SSH version
 	TTL           int                    `json:"ttl,omitempty"`        // ICMP reply TTL
 	DHCP          *model.DhcpFingerprint `json:"dhcp,omitempty"`       // what it asks for when it requests an address
+	// Apps: the container or service that serves the app (set by the collector).
+	Container *model.Container `json:"container,omitempty"`
 
 	// Classification (set by the collector, see internal/classify).
 	Type    string   `json:"type,omitempty"`

@@ -78,7 +78,7 @@ nodes, link labels and areas they do not belong to.
 | Device | A device an integration reads, or a host the network scan found. Its icon is the product logo for homelab software, else the device type with an OS or brand badge |
 | WAN | An internet uplink of a router or firewall, drawn as its parent. Several WANs, several parents. Shows the uplink's name, speed (of the physical port, following PPPoE and VLANs down to it), gateway latency and a status dot: green, yellow when a gateway is degraded, red when down. The ISP modem hangs under it |
 | Wi-Fi network | A small node between an access point and its clients, one per network and band ("IOT · 2.4 GHz"), its icon colored by band. Click it to fold or unfold its clients. It has no panel |
-| App | A self-hosted app found on a device (Jellyfin, Grafana...), one per app, under the machine that runs it |
+| App | A self-hosted app found on a device (Jellyfin, Grafana...), one per app, under the machine that runs it, with the container that serves it (see [Apps and containers](#apps-and-containers)) |
 | Unmanaged | A device announced by LLDP that no integration reads |
 | Unmanaged segment | Several devices behind one switch port with nothing integrated there: probably a small switch, a consumer access point or a hypervisor |
 | Bubble | Folded children: "12 clients", or an area's name. Click it to unfold |
@@ -93,6 +93,31 @@ Marks on a node:
 - A **red or yellow mark** when the device has an open critical or warning
   alert.
 - **Dimmed** when it is offline, or outside the [VLAN filter](#vlan-and-subnet-filter).
+
+## Apps and containers
+
+A self-hosted app is **one node**: the app the network scan found on a port
+of its machine, with its icon, its name and a button to its web interface.
+When an integration that reads containers (Docker, through the Engine API or
+Portainer) knows the container or Swarm service that publishes that port, the
+app carries it: its panel has a **Container** section with the container's or
+service's name, its image, its state and replicas ("running · 1/1
+replicas"), its stack and the ports it publishes. The container is not drawn
+again as a node of its own.
+
+| A container... | On the map |
+|---|---|
+| publishes a port where the scan found an app | That app's node, carrying the container |
+| is a Swarm service published through the routing mesh | Every app found on its port on a node of the swarm carries it |
+| publishes ports where the scan found no app (it was not scanned yet, or the page has no name Omini knows) | An app node of its own under its host, named and drawn after its image when Omini's app catalog knows it (`jc21/nginx-proxy-manager` is Nginx Proxy Manager), else after its service, with a link to its web page when the scan saw one on that port; offline when no replica runs |
+| has an address of its own (macvlan, ipvlan) | A device of its own; its apps come from scanning its address |
+| publishes no port | A service in its host's panel |
+
+A container is one app: when several of its ports are found (Nginx Proxy
+Manager's 80, 81 and 443), the app the scan named is the node and the others
+are listed among its published ports. Matching knows no vendor: any
+integration that reports a device with `container` and its published ports,
+hung under its host, is shown this way ([writing a plugin](plugins.md)).
 
 ## Links
 

@@ -522,15 +522,19 @@ application password.
 ## Docker
 
 Reads a Docker host through the Docker Engine API, or every Docker environment
-of a Portainer: the host (version, CPU count, memory) and its containers. A
-container with an address of its own (macvlan, ipvlan) or with published ports
-is a device under its host, with its image, ports and state; the others are the
-host's services. Read-only.
+of a Portainer: the host (version, CPU count, memory), its containers and, on
+a Swarm manager, its services. A container or Swarm service that publishes
+ports is the app the network scan finds on them (the app's panel shows its
+container: image, stack, state and replicas), or an app of its own when the
+scan found none ([apps and containers](map.md#apps-and-containers)). A
+container with an address of its own (macvlan, ipvlan) is a device under its
+host; the others are the host's services. Read-only.
 
 **Account:** never expose the Docker socket itself. Put a read-only socket
 proxy in front of it (for example `tecnativa/docker-socket-proxy` with
-`CONTAINERS=1`, `NETWORKS=1`, `INFO=1` and `POST=0`) and give Omini its
-address, or use a Portainer access token. The plugin's README has the details.
+`CONTAINERS=1`, `NETWORKS=1`, `INFO=1` and `POST=0`, plus `SERVICES=1`,
+`TASKS=1` and `NODES=1` on a Swarm manager) and give Omini its address, or use
+a Portainer access token. The plugin's README has the details.
 
 ## TrueNAS
 
