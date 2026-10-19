@@ -31,6 +31,24 @@ const entry = (id: string, online: boolean, mac?: string): InventoryEntry => ({
 })
 
 describe('DevicesList', () => {
+  it('shows and searches IPv6 addresses', async () => {
+    vi.mocked(api.inventory).mockResolvedValue([
+      {
+        ...entry('mac:nas', true),
+        ip: '192.168.1.10',
+        ips6: ['2001:db8:1::10', 'fd00::10', 'fe80::10'],
+      },
+      { ...entry('mac:tv', true), ip: '192.168.1.30' },
+    ])
+    const w = mount(DevicesList, { global: { plugins: plugins() } })
+    await flushPromises()
+    const v6 = w.get('[data-test=ipv6]')
+    expect(v6.text()).toBe('2001:db8:1::10 +1')
+    expect(v6.attributes('title')).toBe('2001:db8:1::10\nfd00::10\nfe80::10')
+    await w.get('input[type=search]').setValue('2001:0db8:0001:0000:0000:0000:0000:0010')
+    expect(w.findAll('[data-test=device-name]').map((b) => b.text())).toEqual(['mac:nas'])
+  })
+
   it('wakes an offline device, even one that left the map', async () => {
     vi.mocked(api.inventory).mockResolvedValue([
       entry('mac:pc', false, '00:11:22:00:00:09'),

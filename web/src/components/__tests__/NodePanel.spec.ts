@@ -580,3 +580,28 @@ describe('NodePanel Wi-Fi channels', () => {
     alertsState.list = []
   })
 })
+
+describe('NodePanel IPv6', () => {
+  beforeEach(() => {
+    vi.mocked(api.webServices).mockResolvedValue([])
+  })
+
+  it('lists the IPv6 addresses, link-local ones marked', () => {
+    const w = mountPanel({ ...firewall, ips6: ['2001:db8:1::1', 'fe80::1'] })
+    const spans = w.get('[data-test=ipv6]').findAll('span')
+    expect(spans.map((s) => s.text())).toEqual(['2001:db8:1::1', 'fe80::1'])
+    expect(spans[0]!.classes()).not.toContain('muted')
+    expect(spans[1]!.classes()).toContain('muted')
+    expect(spans[1]!.attributes('title')).toContain('Link-local')
+  })
+
+  it('shows a device known by IPv6 alone by its global address', () => {
+    const w = mountPanel({ ...firewall, ip: undefined, ips6: ['fe80::5', '2001:db8:1::5'] })
+    expect(w.get('.status').text()).toContain('2001:db8:1::5')
+    expect(w.get('.status').text()).not.toContain('fe80::5')
+  })
+
+  it('has no IPv6 line without IPv6', () => {
+    expect(mountPanel(firewall).find('[data-test=ipv6]').exists()).toBe(false)
+  })
+})

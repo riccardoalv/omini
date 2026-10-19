@@ -162,3 +162,65 @@ func TestBundleLeavesPeopleOut(t *testing.T) {
 		t.Fatalf("the owner's id (no name) stays: %s", raw)
 	}
 }
+
+// A node's IPv6 addresses (ips6) and where they came from (NDP, DHCPv6
+// leases, AAAA records, IPv6 gateways) become placeholders, the same one
+// for an address however it is written.
+func TestBundleHidesIPv6Addresses(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{{
+		ID: "mac:00:11:32:aa:bb:cc", Kind: topology.KindClient, MAC: "00:11:32:aa:bb:cc",
+		IPs6: []string{"2804:14c:1234::10", "fd12:3456::10", "fe80::211:32ff:feaa:bbcc"},
+	}, {
+		ID: "dev:58:9c:fc:00:00:01", Kind: topology.KindDevice, Device: &model.Device{
+			Key: "58:9c:fc:00:00:01", Name: "fw",
+			Ndp:        []model.ArpEntry{{IP: "2804:014c:1234:0000:0000:0000:0000:0010", MAC: "00:11:32:aa:bb:cc", Interface: model.Ptr("igc1")}},
+			DhcpLeases: []model.DhcpLease{{IP: "2804:14c:1234::77", MAC: "00:11:32:aa:bb:cc"}},
+			DnsRecords: []model.DnsRecord{{Name: "nas.lan", IP: "2804:14c:1234::10"}},
+			Gateways:   []model.Gateway{{Name: "WAN_GWv6", Address: model.Ptr("fe80::1:2%pppoe0"), Status: model.GatewayStatusUp}},
+		},
+	}}}
+	out, err := Bundle(Input{Version: "1.4.0", Topology: topo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(out)
+	s := string(raw)
+	for _, secret := range []string{"2804", "fd12:3456", "feaa:bbcc", "fe80::1:2", "aa:bb:cc"} {
+		if strings.Contains(s, secret) {
+			t.Errorf("bundle still holds %q:\n%s", secret, s)
+		}
+	}
+	for _, kept := range []string{`"ips6"`, `"ndp"`, `"2001:db8::`, `"fd00::`, `"fe80::`, `"igc1"`} {
+		if !strings.Contains(s, kept) {
+			t.Errorf("bundle lost %s:\n%s", kept, s)
+		}
+	}
+	// The NDP entry, written in full, and the node's compact address are one.
+	var b struct {
+		Topology struct {
+			Nodes []struct {
+				IPs6   []string `json:"ips6"`
+				Device *struct {
+					Ndp []struct {
+						IP string `json:"ip"`
+					} `json:"ndp"`
+				} `json:"device"`
+			} `json:"nodes"`
+		} `json:"topology"`
+	}
+	if err := json.Unmarshal(raw, &b); err != nil {
+		t.Fatal(err)
+	}
+	var ips6, ndp string
+	for _, n := range b.Topology.Nodes {
+		if len(n.IPs6) > 0 {
+			ips6 = n.IPs6[0]
+		}
+		if n.Device != nil && len(n.Device.Ndp) > 0 {
+			ndp = n.Device.Ndp[0].IP
+		}
+	}
+	if ips6 == "" || ips6 != ndp {
+		t.Errorf("placeholders differ: ips6 %q, ndp %q", ips6, ndp)
+	}
+}

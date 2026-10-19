@@ -111,8 +111,8 @@ changes:                    # optional: the changes `apply` supports
   - reservation.delete      # {mac}
   - wifi.set                # a Wi-Fi network: {ssid, previous, vlan, password, enabled}
   - wifi.delete             # {ssid}
-  - dns.set                 # a local DNS name: {name, ip} (name fully qualified)
-  - dns.delete              # {name}
+  - dns.set                 # a local DNS name: {name, ip} (name fully qualified; ip is IPv4: an A record, AAAA records of that name stay)
+  - dns.delete              # {name} (its A record; AAAA records of that name stay)
   - wol.send                # wake a device: {mac, ip}, sent on the network holding ip
   - pause.set               # cut a device's internet: {mac, ips, name}
   - pause.delete            # give it back: {mac}

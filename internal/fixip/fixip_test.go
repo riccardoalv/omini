@@ -126,3 +126,15 @@ func TestOminiIsNeverMoved(t *testing.T) {
 		t.Fatalf("keeping its address: %+v", got)
 	}
 }
+
+// TestDHCPv6LeaseIsNotOnDHCP: a device with a static IPv4 address and a
+// DHCPv6 lease has nothing to fix.
+func TestDHCPv6LeaseIsNotOnDHCP(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{
+		router("gw", "192.168.1.1/24", nil, []model.DhcpLease{{MAC: "aa:00:00:00:00:05", IP: "2001:db8:1::5"}}, nil),
+		client("tv", "tv", "aa:00:00:00:00:05", "192.168.1.30"),
+	}}
+	if got := Candidates(topo, ""); len(got) != 0 {
+		t.Fatalf("candidates: %+v", got)
+	}
+}

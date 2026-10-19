@@ -17,7 +17,7 @@ func (b *builder) lanNets() map[string][]netip.Prefix {
 					continue
 				}
 				for _, a := range i.IPs {
-					if p, err := netip.ParsePrefix(a); err == nil && p.Bits() >= 8 && p.Bits() < 32 {
+					if p, err := netip.ParsePrefix(a); err == nil && lanPrefix(p) {
 						out[id] = append(out[id], p.Masked())
 					}
 				}
@@ -25,6 +25,16 @@ func (b *builder) lanNets() map[string][]netip.Prefix {
 		}
 	}
 	return out
+}
+
+// lanPrefix: a LAN's network, IPv4 (/8 to /31) or IPv6 (/48 to /64, global
+// or ULA: every network has the same link-local prefix, so a link-local
+// gateway says nothing).
+func lanPrefix(p netip.Prefix) bool {
+	if p.Addr().Is4() {
+		return p.Bits() >= 8 && p.Bits() < 32
+	}
+	return !p.Addr().IsLinkLocalUnicast() && p.Bits() >= 48 && p.Bits() <= 64
 }
 
 // nestedWAN reports whether a router's WAN interface is in fact a link into

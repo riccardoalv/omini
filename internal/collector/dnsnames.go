@@ -176,11 +176,19 @@ func (c *Collector) DNSNameOf(ctx context.Context, nodeID string) (DNSName, erro
 		out.Label, out.Custom = user, true
 	}
 	ip, fixed := fixedIP(topo, mac)
+	mine := map[string]bool{} // its IPv6 addresses: AAAA records others made name it too
+	for _, a := range n.IPs6 {
+		mine[a] = true
+	}
 	for _, s := range topo.Nodes {
 		if s.Device == nil {
 			continue
 		}
 		for _, r := range s.Device.DnsRecords {
+			if a, err := netip.ParseAddr(r.IP); err == nil && a.Is6() && mine[a.WithZone("").String()] {
+				out.Others = append(out.Others, r)
+				continue
+			}
 			if r.IP == ip.String() || (!fixed && r.IP == n.IP) {
 				out.Others = append(out.Others, r)
 			}
@@ -239,7 +247,7 @@ func (c *Collector) SyncDNSName(ctx context.Context, nodeID string) error {
 	}
 	var errs []error
 	if server, fqdn, ok := strings.Cut(applied, "|"); ok && (server != want.Server || fqdn != want.Name) {
-		if s, ok := c.node(server); ok && s.Device != nil && dnsRecordOf(s, fqdn) != nil {
+		if s, ok := c.node(server); ok && s.Device != nil && aRecordOf(s, fqdn) != nil {
 			if _, err := c.Apply(ctx, ChangeRequest{NodeID: server, Kind: model.ChangeKindDnsDelete, Target: nodeID, Value: DnsDelete{Name: fqdn}}); err != nil {
 				errs = append(errs, err)
 			}
@@ -249,7 +257,7 @@ func (c *Collector) SyncDNSName(ctx context.Context, nodeID string) error {
 	if want.Name != "" {
 		ip, _ := fixedIP(c.State().Topology, model.MACAddress(mac))
 		s, _ := c.node(want.Server)
-		if r := dnsRecordOf(s, want.Name); r == nil || r.IP != ip.String() {
+		if r := aRecordOf(s, want.Name); r == nil || r.IP != ip.String() {
 			_, err := c.Apply(ctx, ChangeRequest{NodeID: want.Server, Kind: model.ChangeKindDnsSet, Target: nodeID, Value: model.DnsRecord{Name: want.Name, IP: ip.String()}})
 			if err != nil {
 				errs = append(errs, err)

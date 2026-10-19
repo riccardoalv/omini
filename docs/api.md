@@ -165,7 +165,7 @@ the integration reported, in the [plugin data model](plugins.md#what-to-return).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `note`, `owner_id`, `first_seen`, `last_seen`, plus `online` and the current identification |
+| `GET` | `/api/inventory` | Every device ever seen: `id`, `kind`, `label`, `mac`, `ip`, `hostname`, `vendor`, `parent_id`, `port`, `alias`, `hidden`, `device_type`, `icon`, `note`, `owner_id`, `first_seen`, `last_seen`, plus `online`, `ips6` (its IPv6 addresses, while on the map) and the current identification |
 | `PATCH` | `/api/inventory/{id}` | Change user fields: `alias` (name), `hidden`, `device_type`, `icon` (`""` = automatic), `note` (plain text, up to 1,000 characters; `""` clears it; longer is a 400), `owner_id` (a person's id; `null` clears it; an unknown person is a 400) |
 | `POST` | `/api/inventory/delete` | Body `{ids: [...]}`: delete entries and their history (they come back if seen again) |
 

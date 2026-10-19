@@ -7,6 +7,7 @@ import DeviceIcon from '@/components/DeviceIcon.vue'
 import { api, ApiError } from '@/lib/api'
 import { formatAgo, formatDateTime } from '@/lib/format'
 import { displayName, filterInventory, isRandomMAC, type StatusFilter } from '@/lib/inventory'
+import { compactIPv6, globalIPv6 } from '@/lib/ipv6'
 import { displayName as nodeName } from '@/lib/names'
 import type { InventoryEntry } from '@/lib/types'
 
@@ -178,7 +179,19 @@ onMounted(load)
                 }}</span>
               </div>
             </td>
-            <td class="mono">{{ e.ip }}</td>
+            <td class="mono">
+              {{ e.ip }}
+              <span
+                v-if="globalIPv6(e.ips6).length"
+                class="ip6 muted"
+                data-test="ipv6"
+                :title="(e.ips6 ?? []).map(compactIPv6).join('\n')"
+                >{{ compactIPv6(globalIPv6(e.ips6)[0]!)
+                }}<template v-if="globalIPv6(e.ips6).length > 1">
+                  +{{ globalIPv6(e.ips6).length - 1 }}</template
+                ></span
+              >
+            </td>
             <td class="mono hide-sm">
               {{ e.mac }}
               <span v-if="isRandomMAC(e.mac)" class="badge">random</span>
@@ -240,6 +253,10 @@ onMounted(load)
 </template>
 
 <style scoped>
+.ip6 {
+  display: block;
+  font-size: 0.85em;
+}
 .filters {
   display: flex;
   align-items: center;

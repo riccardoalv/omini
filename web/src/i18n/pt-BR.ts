@@ -259,6 +259,8 @@ const ptBR: typeof en = {
       'Remove o dispositivo e o histórico dele do Omini. Se ainda estiver na rede, ele volta na próxima varredura — use Ocultar para tirá-lo do mapa.',
     expandGroup: 'Mostrar todos os clientes',
     ip: 'Endereço IP',
+    ipv6: 'IPv6',
+    linkLocal: 'Link-local: alcançável só na própria rede',
     mac: 'Endereço MAC',
     hostname: 'Hostname',
     vendor: 'Fabricante',

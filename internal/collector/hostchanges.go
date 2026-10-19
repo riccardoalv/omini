@@ -48,9 +48,12 @@ type WolValue struct {
 // dashes, at least two of them.
 var hostname = regexp.MustCompile(`^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
-func dnsRecordOf(n topology.Node, name string) *model.DnsRecord {
+// aRecordOf is the name's IPv4 (A) record on the server: the only kind Omini
+// sets (devices rotate their IPv6 privacy addresses). AAAA records others
+// made with the same name are left alone, never changed nor deleted.
+func aRecordOf(n topology.Node, name string) *model.DnsRecord {
 	for i, r := range n.Device.DnsRecords {
-		if strings.EqualFold(r.Name, name) {
+		if strings.EqualFold(r.Name, name) && !topology.IsIPv6(r.IP) {
 			return &n.Device.DnsRecords[i]
 		}
 	}
@@ -68,7 +71,7 @@ func dnsSet(n topology.Node, value any) (json.RawMessage, any, error) {
 	if !hostname.MatchString(v.Name) || len(v.Name) > 253 || err != nil || !ip.Is4() {
 		return nil, nil, fmt.Errorf("%w: a DNS name is a full name (nas.home.arpa) and an IPv4 address", ErrInvalidChange)
 	}
-	cur := dnsRecordOf(n, v.Name)
+	cur := aRecordOf(n, v.Name)
 	if cur == nil {
 		return nil, v, nil
 	}
@@ -81,7 +84,7 @@ func dnsDelete(n topology.Node, value any) (json.RawMessage, any, error) {
 	if err := strict(value, &v); err != nil {
 		return nil, nil, fmt.Errorf("%w: dns.delete takes {name}", ErrInvalidChange)
 	}
-	cur := dnsRecordOf(n, v.Name)
+	cur := aRecordOf(n, v.Name)
 	if cur == nil {
 		return nil, nil, fmt.Errorf("%w: %s has no name %s", ErrNotChangeable, n.Label, v.Name)
 	}

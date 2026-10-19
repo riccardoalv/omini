@@ -113,7 +113,7 @@ somewhere else for sure:
 - **For sure:** on an access point's list of Wi-Fi clients (it moves when it
   roams to another), alone on a switch port (a cable), or behind a desk phone.
 - **Not for sure:** a MAC seen on a port shared with other devices, on a port
-  towards other network gear, or only in a router's ARP table.
+  towards other network gear, or only in a router's ARP or NDP (IPv6) table.
 
 So a phone that drops out of its access point's list for a while stays on its
 Wi-Fi, instead of being drawn on a cable behind a switch. The place is kept in
@@ -151,6 +151,11 @@ The panel shows little at first: the name, status, type and address, its open
 it). Everything else folds to its title and a short summary (**Details** shows
 the version and uptime, **Changes** how many there were); click a title to
 open it. The sections you open stay open, for every device (per browser).
+
+**IPv6.** Under the IP address, **IPv6** lists the device's IPv6 addresses
+in compact form (`2001:db8::20`), global and ULA ones first; link-local ones
+(`fe80::`) are grayed, as they only reach it on its own network. A device
+known by IPv6 alone shows its first global address next to its status.
 
 **Note.** At the top of the panel, a free note about the device ("in the
 living room, bought 2024"), saved when you leave the field: up to 1,000
@@ -251,7 +256,10 @@ name comes from the device's name ("Living Room TV" → `living-room-tv`) and
 follows it when you rename the device; the pencil sets another, **Remove
 name** takes it away. The domain is the one the router or DNS server uses,
 else `home.arpa`; **Settings → Changes → Domain of local names** sets one.
-Other names the DNS servers have for the address are listed below.
+Other names the DNS servers have for the address, or for one of the
+device's IPv6 addresses (AAAA records), are listed below. Omini only sets
+IPv4 (A) records, since devices change their IPv6 privacy addresses; AAAA
+records made outside Omini are kept, never changed or deleted.
 
 **Configuration**, folded, for a device whose integration keeps backups: the
 versions of its configuration, read every day and after each change Omini
@@ -487,8 +495,11 @@ The menu (☰) at the top left opens the inventory in a drawer, in the
 too). It lists everything ever seen on the
 network:
 
-- name, IP, MAC, type, where it is connected, first and last seen,
-- a search box and filters: all, online, offline, only randomized MACs,
+- name, IP (with its first global IPv6 address below, and how many more:
+  hover for all of them, while the device is on the map), MAC, type, where it
+  is connected, first and last seen,
+- a search box (name, IPv4 or IPv6 address, typed compact or in full, MAC,
+  vendor, note) and filters: all, online, offline, only randomized MACs,
 - rename, hide or unhide,
 - **Wake** (the power button) on an offline device with a MAC, also one
   that left the map (off for more than an hour, a PC off overnight): the same
@@ -530,8 +541,8 @@ light) and the orientation:
 |---|---|
 | Image (PNG) | The whole map at twice the screen's pixel ratio, scaled down past 8192 px |
 | Vector image (SVG) | The whole map as SVG |
-| Diagram (draw.io) | An editable [draw.io](https://www.drawio.com) diagram: nodes where they are drawn, areas as rectangles behind them, links labeled "port \| speed" |
-| Data (JSON) | The topology, areas and layout |
+| Diagram (draw.io) | An editable [draw.io](https://www.drawio.com) diagram: nodes where they are drawn (under each name its IPv4 address, else its first global IPv6 one), areas as rectangles behind them, links labeled "port \| speed" |
+| Data (JSON) | The topology (each node's IPv6 addresses in `ips6`), areas and layout |
 
 Images and diagrams show the **whole map with every group and area
 expanded**, laid out in the orientation and theme you picked, whatever the

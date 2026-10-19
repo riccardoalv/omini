@@ -80,7 +80,8 @@ func Candidates(topo topology.Topology, omini string) []Candidate {
 			continue
 		}
 		for _, l := range n.Device.DhcpLeases {
-			if m := model.NormMAC(string(l.MAC)); leased[m] == "" {
+			// A DHCPv6 lease says nothing of how the device gets its IPv4 address.
+			if m := model.NormMAC(string(l.MAC)); leased[m] == "" && !topology.IsIPv6(l.IP) {
 				leased[m] = n.ID
 			}
 			if a, err := netip.ParseAddr(l.IP); err == nil {

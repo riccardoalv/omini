@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import type { ExportOptions } from '@/components/map/ExportDialog.vue'
 import { formatSpeed } from '@/lib/format'
 import type { GraphView } from '@/lib/graph'
+import { globalIPv6 } from '@/lib/ipv6'
 import type { Direction } from '@/lib/layout'
 import { displayName } from '@/lib/names'
 import { applyTheme, prefs } from '@/lib/prefs'
@@ -103,7 +104,7 @@ export function useMapExport(options: {
       ...v.nodes.map((n) => ({
         id: n.id,
         label: displayName(n, t),
-        sub: n.kind === 'ssid' ? undefined : n.ip,
+        sub: n.kind === 'ssid' ? undefined : (n.ip ?? globalIPv6(n.ips6)[0]),
         kind: n.kind,
         online: n.online,
         ...(positions.value[n.id] ?? { x: 0, y: 0 }),

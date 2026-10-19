@@ -69,6 +69,14 @@ func nodesBy(topo topology.Topology) (byIP map[string]string, byMAC map[string]s
 			byMAC[n.MAC] = n.ID
 		}
 	}
+	// Then IPv6: a server reached by its IPv6 address is that node too.
+	for _, n := range topo.Nodes {
+		for _, ip := range topology.GlobalIPv6(n.IPs6) {
+			if _, ok := byIP[ip]; !ok && n.Kind != topology.KindApp {
+				byIP[ip] = n.ID
+			}
+		}
+	}
 	return byIP, byMAC
 }
 
