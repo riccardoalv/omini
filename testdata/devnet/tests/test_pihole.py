@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -65,12 +66,13 @@ def test_collect_and_test(world: World) -> None:
     assert test["message"] == "Connected to Pi-hole 6.1.2, 6 local names"
 
 
-def test_dns_set_change_and_delete(world: World) -> None:
+def test_dns_set_change_and_delete(world: World, tmp_path: Path) -> None:
     docker01 = world.nodes["docker01"]
     with Emulator(at=TUESDAY_10, apis=["pihole"], world=world) as emu:
 
         def apply(kind: str, value: dict[str, Any]) -> dict[str, Any]:
-            return device(emu.collect("pihole", "apply", change={"device": docker01.mac, "kind": kind, "value": value}))
+            change = {"device": docker01.mac, "kind": kind, "value": value}
+            return device(emu.collect("pihole", "apply", state_dir=tmp_path, change=change))
 
         d = apply("dns.set", {"name": "erp.acme.local", "ip": "10.10.20.30"})
         assert ("erp.acme.local", "10.10.20.30") in records(d)
@@ -83,9 +85,11 @@ def test_dns_set_change_and_delete(world: World) -> None:
         assert ("grafana.acme.local", docker01.ip) not in records(d)
         d = apply("dns.delete", {"name": "erp.acme.local"})
         assert all(r[0] != "erp.acme.local" for r in records(d))
-        # Every run signed out: a new one still gets a session (max 16).
+        # Omini gives an integration the same state folder every run: the
+        # session is kept there and used again, so runs never pile up sessions
+        # (Pi-hole allows 16).
         for _ in range(pihole.MAX_SESSIONS + 1):
-            device(emu.collect("pihole"))
+            device(emu.collect("pihole", state_dir=tmp_path))
 
 
 def test_backup_is_deterministic_and_has_no_secrets(world: World) -> None:
