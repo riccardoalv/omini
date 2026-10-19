@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/riccardoalv/omini/compare/v1.7.0...v1.8.0) (2026-10-19)
+
+
+### Features
+
+* **plugins:** Docker, TrueNAS and Synology DSM in the store ([48eead5](https://github.com/riccardoalv/omini/commit/48eead552d647b170369f0adc8575617834521bf))
+
 ## [1.7.0](https://github.com/riccardoalv/omini/compare/v1.6.2...v1.7.0) (2026-10-19)
 
 
