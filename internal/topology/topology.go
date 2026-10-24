@@ -304,6 +304,7 @@ func BuildWith(sources []Source, opts Options) Topology {
 		}
 	}
 	b.adoptMACs(sources)
+	b.followMovedAddresses(sources)
 	b.mergeReports()
 	b.center = b.centers()
 	managed := b.sortedIDs(KindDevice)
@@ -1209,12 +1210,21 @@ func (b *builder) placeCollected(
 
 	// A client must be present now (Wi-Fi, MAC table, ARP or a scan); a DHCP
 	// lease alone only enriches, since leases outlive devices leaving the network.
+	// An access point's or switch's list only counts while it answers: when its
+	// collection fails, its last list is old (a MAC that left, a device that
+	// changed its card) and would keep ghosts online. ARP still counts, so a
+	// client the router sees stays.
+	live := func(node string) bool { n := b.nodes[node]; return n != nil && n.Online }
 	present := map[model.MACAddress]bool{}
-	for m := range wifi {
-		present[m] = true
+	for m, w := range wifi {
+		if live(w.node) {
+			present[m] = true
+		}
 	}
-	for m := range b.fdbPorts {
-		present[m] = true
+	for m, ports := range b.fdbPorts {
+		if slices.ContainsFunc(ports, func(k portKey) bool { return live(k.node) }) {
+			present[m] = true
+		}
 	}
 	for m := range arp {
 		present[m] = true

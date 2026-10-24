@@ -128,3 +128,53 @@ func TestANodeShowsEveryReportOfTheMachine(t *testing.T) {
 		t.Fatalf("the VM's link to its host stays, and the reports stay as they came: %+v", d.Neighbors)
 	}
 }
+
+// A switch whose collection failed keeps its last MAC table: a MAC only it
+// lists (a card that was replaced) is no client any more; one the router's
+// ARP still sees stays.
+func TestAnOfflineSwitchKeepsNoGhosts(t *testing.T) {
+	sw := topology.Source{IntegrationID: 4, Online: false, Devices: []model.Device{{
+		Key: "1c:2a:a3:2f:57:f7", Name: "switch", Host: model.Ptr("192.168.1.96"), Role: model.Ptr(model.DeviceRoleSwitch),
+		MACs: []model.MACAddress{"1c:2a:a3:2f:57:f7"},
+		Fdb: []model.FdbEntry{
+			{MAC: "58:9c:fc:10:8f:2c", Port: "Port 1"}, // the firewall's old card
+			{MAC: "aa:00:00:00:00:10", Port: "Port 3"}, // the NAS, still there
+		},
+	}}}
+	topo := topology.Build([]topology.Source{
+		router(model.ArpEntry{IP: "192.168.1.10", MAC: "aa:00:00:00:00:10"}),
+		sw,
+	})
+	ids := map[string]bool{}
+	for _, n := range topo.Nodes {
+		ids[n.ID] = true
+	}
+	if ids["mac:58:9c:fc:10:8f:2c"] {
+		t.Fatalf("a MAC only an offline switch lists is no client: %+v", topo.Nodes)
+	}
+	if !ids["mac:aa:00:00:00:00:10"] {
+		t.Fatalf("a client the router's ARP sees stays: %+v", topo.Nodes)
+	}
+}
+
+// A switch that got another address from DHCP: its integration still asks the
+// old one and fails, but the router knows where its MAC answers now.
+func TestAnOfflineDeviceShowsWhereItIsNow(t *testing.T) {
+	sw := topology.Source{IntegrationID: 4, Online: false, Devices: []model.Device{{
+		Key: "1c:2a:a3:2f:57:f7", Name: "switch", Host: model.Ptr("192.168.1.96"), IPs: []string{"192.168.1.96"},
+		Role: model.Ptr(model.DeviceRoleSwitch), MACs: []model.MACAddress{"1c:2a:a3:2f:57:f7"},
+	}}}
+	topo := topology.Build([]topology.Source{
+		router(model.ArpEntry{IP: "192.168.1.110", MAC: "1c:2a:a3:2f:57:f7"}),
+		sw,
+	})
+	for _, n := range topo.Nodes {
+		if n.ID == "dev:1c:2a:a3:2f:57:f7" {
+			if n.IP != "192.168.1.110" || n.Online {
+				t.Fatalf("the offline switch shows its address now: %+v", n)
+			}
+			return
+		}
+	}
+	t.Fatalf("no switch node: %+v", topo.Nodes)
+}

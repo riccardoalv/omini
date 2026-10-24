@@ -129,3 +129,37 @@ func joinBy[T any](a, b []T, key func(T) string) []T {
 func joinMACs(a, b []model.MACAddress) []model.MACAddress {
 	return joinBy(a, b, func(m model.MACAddress) string { return string(m) })
 }
+
+// followMovedAddresses gives a device whose integration failed its current
+// address: its collected data is the last it got (the address it had), but a
+// router that answers knows where its MAC is now (ARP, a DHCP lease) — a
+// device that got another address from DHCP.
+func (b *builder) followMovedAddresses(sources []Source) {
+	now := map[model.MACAddress]string{}
+	for _, src := range sources {
+		if !src.Online {
+			continue
+		}
+		for i := range src.Devices {
+			d := &src.Devices[i]
+			for _, l := range d.DhcpLeases {
+				if _, ok := now[l.MAC]; !ok && !IsIPv6(l.IP) && mergeable(l.IP) {
+					now[l.MAC] = l.IP
+				}
+			}
+			for _, a := range d.Arp {
+				if mergeable(a.IP) {
+					now[a.MAC] = a.IP // ARP says where it answers now
+				}
+			}
+		}
+	}
+	for _, n := range b.nodes {
+		if n.Kind != KindDevice || n.Online || n.MAC == "" {
+			continue
+		}
+		if ip, ok := now[model.MACAddress(n.MAC)]; ok && ip != n.IP {
+			n.IP = ip
+		}
+	}
+}
