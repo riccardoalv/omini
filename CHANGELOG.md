@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.10.0](https://github.com/riccardoalv/omini/compare/v1.9.1...v1.10.0) (2026-10-24)
+
+
+### Features
+
+* **api:** point an integration at the address its device moved to ([f943d2f](https://github.com/riccardoalv/omini/commit/f943d2f29a0a7e4e9f15075c6b3ef3eabc8aae88))
+* **classify:** recognize 3D printers ([b0b33c8](https://github.com/riccardoalv/omini/commit/b0b33c80ca22ebcde326611dbbad15ca7bb226af))
+* **collector:** find the device a failing integration lost to DHCP ([e245161](https://github.com/riccardoalv/omini/commit/e2451611fe26aa09854d64b650a1154828d4fa3d))
+* **insights:** an offline device says where DHCP moved it ([d72fbf6](https://github.com/riccardoalv/omini/commit/d72fbf64975e29d201b7be14050d36be337a27c5))
+* **web:** "Use &lt;address&gt;" on the alert of a device DHCP moved ([fcc1b0d](https://github.com/riccardoalv/omini/commit/fcc1b0d624de02b7eb19b70b314c1ea5b2aeef6d))
+
+
+### Bug Fixes
+
+* **collector:** a firewall on a new card keeps its history and is not new ([f66b2f2](https://github.com/riccardoalv/omini/commit/f66b2f2d8d6f2c428db387a2757a394b9c655269))
+* **insights:** a Wi-Fi channel conflict nothing can move is information ([268b317](https://github.com/riccardoalv/omini/commit/268b3176269af5f686ac58c4b8fe29166ef99054))
+* **topology:** a local DNS name left behind does not name another device ([2e73164](https://github.com/riccardoalv/omini/commit/2e73164d8914f9c0b3b1e3bec8da8c240e511468))
+* **topology:** an offline switch keeps no ghosts, and shows where it is now ([f76ba99](https://github.com/riccardoalv/omini/commit/f76ba99eff860762ffa8ada57b204eb27e0b1cdc))
+
 ## [1.9.1](https://github.com/riccardoalv/omini/compare/v1.9.0...v1.9.1) (2026-10-19)
 
 
