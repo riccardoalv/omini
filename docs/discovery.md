@@ -340,7 +340,7 @@ machine Omini runs on).
 
 | | Examples |
 |---|---|
-| Types | Firewall, router, switch, access point, server, NAS, hypervisor, virtual machine, computer, phone, tablet, TV, media player, speaker, printer, camera, IP phone, UPS, solar inverter, smart home device, air conditioner, appliance, game console, wearable |
+| Types | Firewall, router, switch, access point, server, NAS, hypervisor, virtual machine, computer, phone, tablet, TV, media player, speaker, printer, 3D printer, camera, IP phone, UPS, solar inverter, smart home device, air conditioner, appliance, game console, wearable |
 | Operating systems | Windows, macOS, iOS, Android, Linux distributions, FreeBSD-based firewalls... |
 | Brands | From the MAC vendor, mDNS, UPnP or the device's own pages |
 | Products | Homelab software and appliances: Proxmox, TrueNAS, OPNsense, Home Assistant... |
@@ -350,6 +350,11 @@ Some details:
 - **Model names.** Apple identifiers and Android model codes become names:
   `iPhone14,2` is an iPhone 13 Pro, `SM-S911B` a Samsung Galaxy S23. This also
   applies to DHCP names that are model codes.
+- **3D printers.** In LAN mode a printer opens ports only its firmware opens
+  together: Anycubic (9883 and 18910), Bambu Lab (8883 and 990), Klipper's
+  Moonraker (7125); OctoPrint, Mainsail, Fluidd and PrusaLink are known by
+  their pages. A printer with LAN mode off opens nothing, and is a device of
+  unknown type: set its type in its panel.
 - **Apps.** Self-hosted apps found on a device's web ports (Jellyfin,
   qBittorrent, Grafana... about 2,600 are known) appear as their own small
   nodes under the machine that runs them, one per app.

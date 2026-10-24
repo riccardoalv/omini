@@ -10,6 +10,8 @@ import {
   siDebian,
   siDell,
   siEmby,
+  siAnycubic,
+  siBambulab,
   siEpson,
   siEspressif,
   siEsphome,
@@ -190,6 +192,8 @@ export const logos: Record<string, Logo> = {
   vmware: fromSimpleIcons(siVmware),
   shelly: fromSimpleIcons(siShelly),
   epson: fromSimpleIcons(siEpson),
+  anycubic: fromSimpleIcons(siAnycubic),
+  bambulab: fromSimpleIcons(siBambulab),
 }
 
 /** Slugs that are products (homelab software/appliances): their logo replaces the type icon. */
@@ -274,6 +278,7 @@ export const brandNames: Record<string, string> = {
   reolink: 'Reolink',
   brother: 'Brother',
   canon: 'Canon',
+  prusa: 'Prusa',
   gigabyte: 'Gigabyte',
   tenda: 'Tenda',
   dlink: 'D-Link',
@@ -310,6 +315,7 @@ export const typeIcons: Record<string, string> = {
   media_player: 'cast',
   speaker: 'speaker',
   printer: 'printer',
+  '3d_printer': 'printer',
   camera: 'cctv',
   smart_home: 'house',
   air_conditioner: 'air-vent',

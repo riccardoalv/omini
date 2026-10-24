@@ -176,6 +176,34 @@ func TestClassify(t *testing.T) {
 			Input{Kind: "client", Vendor: "Brother Industries", OpenPorts: []int{80, 631, 9100}},
 			Result{Type: Printer, Brand: "brother"},
 		},
+		// 3D printers in LAN mode, by the ports their firmware opens together
+		// (a real Anycubic: its Wi-Fi chip's maker and a host name of
+		// "network device" say nothing).
+		{
+			"Anycubic 3D printer",
+			Input{Kind: "client", Vendor: "AltoBeam", Hostname: "network device", DHCPVendor: "udhcp 1.27.2", OpenPorts: []int{9883, 18088, 18910, 50052}},
+			Result{Type: Printer3D, OS: "linux", Brand: "anycubic"},
+		},
+		{
+			"Bambu Lab 3D printer",
+			Input{Kind: "client", OpenPorts: []int{990, 6000, 8883}},
+			Result{Type: Printer3D, Brand: "bambulab"},
+		},
+		{
+			"An MQTT broker alone is no 3D printer",
+			Input{Kind: "client", OpenPorts: []int{8883}},
+			Result{Type: Unknown},
+		},
+		{
+			"Klipper printer by its Moonraker API",
+			Input{Kind: "client", OpenPorts: []int{80, 7125}, Titles: []string{"Mainsail"}},
+			Result{Type: Printer3D},
+		},
+		{
+			"Prusa printer by its web interface",
+			Input{Kind: "client", OpenPorts: []int{80}, Titles: []string{"PrusaLink"}},
+			Result{Type: Printer3D, Brand: "prusa"},
+		},
 		{
 			"Chromecast",
 			Input{Kind: "client", Services: []string{"_googlecast._tcp"}},

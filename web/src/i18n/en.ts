@@ -333,6 +333,7 @@ export default {
     media_player: 'Media player',
     speaker: 'Speaker',
     printer: 'Printer',
+    '3d_printer': '3D printer',
     camera: 'Camera',
     smart_home: 'Smart home device',
     appliance: 'Appliance',

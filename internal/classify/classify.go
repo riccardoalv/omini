@@ -28,6 +28,7 @@ const (
 	MediaPlayer    = "media_player"
 	Speaker        = "speaker"
 	Printer        = "printer"
+	Printer3D      = "3d_printer"
 	Camera         = "camera"
 	SmartHome      = "smart_home"
 	Appliance      = "appliance"
@@ -515,6 +516,45 @@ var (
 	printerService       = []string{"_ipp._tcp", "_ipps._tcp", "_printer._tcp", "_pdl-datastream._tcp"}
 )
 
+// printers3D recognize 3D printers in LAN mode by the ports only their
+// firmware opens together, so an MQTT broker or a file server is no printer:
+// Anycubic (MQTT over TLS on 9883, file uploads on 18910), Bambu Lab (MQTT
+// over TLS on 8883, FTPS on 990) and Klipper's Moonraker API (7125, Creality
+// K1 and most Klipper printers).
+var printers3D = []struct {
+	ports []int
+	brand string
+}{
+	{[]int{9883, 18910}, "anycubic"},
+	{[]int{8883, 990}, "bambulab"},
+	{[]int{7125}, ""},
+}
+
+// printer3DNames are the web interfaces of 3D printers (and of the hosts
+// that drive them) and printer names in DHCP host names.
+var printer3DNames = regexp.MustCompile(`\boctoprint\b|\bmainsail\b|\bfluidd\b|\bprusa ?link\b|\bmoonraker\b|\bbambu\b|\banycubic\b|\bkobra\b`)
+
+func printer3D(s *state) {
+	for _, p := range printers3D {
+		if !slices.ContainsFunc(p.ports, func(port int) bool { return !s.port(port) }) {
+			s.set(&s.r.Type, Printer3D, "port:"+strconv.Itoa(p.ports[0]))
+			s.set(&s.r.Brand, p.brand, "")
+			return
+		}
+	}
+	if m := printer3DNames.FindString(s.txt); m != "" {
+		s.set(&s.r.Type, Printer3D, evidence(s, m))
+		switch {
+		case m == "bambu":
+			s.set(&s.r.Brand, "bambulab", "")
+		case m == "anycubic" || m == "kobra":
+			s.set(&s.r.Brand, "anycubic", "")
+		case strings.HasPrefix(m, "prusa"):
+			s.set(&s.r.Brand, "prusa", "")
+		}
+	}
+}
+
 func deviceType(s *state) {
 	r := &s.r
 	in := s.in
@@ -547,6 +587,7 @@ func deviceType(s *state) {
 	if slices.Contains(upsBrands, r.Brand) {
 		s.set(&r.Type, UPS, "vendor:"+in.Vendor)
 	}
+	printer3D(s)
 	for _, p := range printerPorts {
 		if s.port(p) {
 			s.set(&r.Type, Printer, "port:"+strconv.Itoa(p))

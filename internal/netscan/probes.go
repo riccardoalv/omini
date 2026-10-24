@@ -36,12 +36,14 @@ var CommonPorts = []int{
 	// Vaultwarden/Bitwarden, Gitea, code-server, MinIO, InfluxDB, Homarr, Dashy, n8n,
 	// Mealie, Actual, Ollama, Open WebUI, Filebrowser, Dozzle.
 	8000, 2283, 8384, 8001, 3002, 8086, 9001, 7575, 4000, 5678, 9925, 5006, 11434, 8888, 8082, 8090,
+	// 3D printers in LAN mode: Bambu Lab (MQTT, FTPS), Anycubic (MQTT, uploads), Klipper's Moonraker.
+	8883, 990, 9883, 18910, 7125,
 }
 
 // notWeb are open ports that never serve web pages (no title is fetched).
 var notWeb = map[int]bool{
 	22: true, 53: true, 139: true, 445: true, 515: true, 548: true, 554: true, 1883: true,
-	3389: true, 9100: true, 62078: true, 8009: true,
+	3389: true, 9100: true, 62078: true, 8009: true, 8883: true, 990: true, 9883: true, 18910: true, 7125: true,
 }
 
 // livenessPorts answer quickly on most devices; a refused connection also proves the host is up.

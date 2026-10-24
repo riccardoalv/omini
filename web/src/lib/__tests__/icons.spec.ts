@@ -43,6 +43,12 @@ describe('iconChoice', () => {
       logo: undefined,
       badge: false,
     })
+    // A 3D printer: the printer icon with its maker's badge.
+    expect(iconChoice({ type: '3d_printer', brand: 'anycubic' })).toEqual({
+      type: 'printer',
+      logo: 'anycubic',
+      badge: true,
+    })
     // A Huawei SUN2000: solar panel with the Huawei badge.
     expect(iconChoice({ type: 'solar_inverter', brand: 'huawei' })).toMatchObject({
       type: 'solar-panel',

@@ -342,6 +342,7 @@ const ptBR: typeof en = {
     media_player: 'Media player',
     speaker: 'Caixa de som',
     printer: 'Impressora',
+    '3d_printer': 'Impressora 3D',
     camera: 'Câmera',
     smart_home: 'Casa inteligente',
     appliance: 'Eletrodoméstico',

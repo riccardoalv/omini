@@ -148,7 +148,7 @@ var typeNames = map[string]map[string]string{
 		"switch": "Switch", "ap": "Access point", "server": "Server", "nas": "NAS / storage",
 		"hypervisor": "Hypervisor", "virtual_machine": "Virtual machine", "computer": "Computer",
 		"phone": "Phone", "tablet": "Tablet", "tv": "TV", "media_player": "Media player", "speaker": "Speaker",
-		"printer": "Printer", "camera": "Camera", "smart_home": "Smart home device", "appliance": "Appliance",
+		"printer": "Printer", "3d_printer": "3D printer", "camera": "Camera", "smart_home": "Smart home device", "appliance": "Appliance",
 		"game_console": "Game console", "wearable": "Wearable", "segment": "Unmanaged segment",
 	},
 	"pt-BR": {
@@ -157,7 +157,7 @@ var typeNames = map[string]map[string]string{
 		"switch": "Switch", "ap": "Access point", "server": "Servidor", "nas": "NAS / armazenamento",
 		"hypervisor": "Hypervisor", "virtual_machine": "Máquina virtual", "computer": "Computador",
 		"phone": "Celular", "tablet": "Tablet", "tv": "TV", "media_player": "Media player", "speaker": "Caixa de som",
-		"printer": "Impressora", "camera": "Câmera", "smart_home": "Casa inteligente", "appliance": "Eletrodoméstico",
+		"printer": "Impressora", "3d_printer": "Impressora 3D", "camera": "Câmera", "smart_home": "Casa inteligente", "appliance": "Eletrodoméstico",
 		"game_console": "Videogame", "wearable": "Vestível", "segment": "Segmento não gerenciado",
 	},
 }

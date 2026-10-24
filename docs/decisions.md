@@ -140,6 +140,10 @@ choices and the reasons behind them.
   naming the device's own brand is its own interface, not an app.
 - **DHCP fingerprints** come from public knowledge (vendor classes, a few
   parameter lists), no third-party database.
+- **3D printers by their ports together** (2026-10-24): one port alone (an
+  MQTT broker on 8883) names no printer; the pair only a printer's firmware
+  opens does (Anycubic 9883 + 18910, Bambu Lab 8883 + 990), and Moonraker's
+  7125. The scan probes these ports.
 
 ## Topology
 
