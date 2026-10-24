@@ -1018,6 +1018,13 @@ const ptBR: typeof en = {
     empty: 'Nenhum dispositivo encontrado.',
     renamePrompt: 'Nome para este dispositivo (vazio para voltar ao original)',
   },
+  moved: {
+    use: 'Usar {to}',
+    answersAt: 'Agora responde em {to}',
+    confirm: 'Mudar o endereço de {name} de {from} para {to}?',
+    done: 'Pronto: ele responde em {to}.',
+    stillFailing: 'Salvo, mas ainda falha: {error}',
+  },
   integrations: {
     interval: 'A cada',
     everySeconds: '{n} segundos',

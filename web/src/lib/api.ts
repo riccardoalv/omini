@@ -2,6 +2,7 @@ import { noteIntegrations } from './features'
 import type {
   Alert,
   ApiToken,
+  CollectionStatus,
   NewApiToken,
   Destination,
   FlowsResponse,
@@ -163,6 +164,13 @@ export const api = {
 
   topology: () => request<TopologyResponse>('GET', '/api/topology'),
   refresh: () => request<{ status: string }>('POST', '/api/refresh'),
+  /** Points an integration at the address its device answers at now, and collects it again. */
+  moveIntegration: (id: number, to: string) =>
+    request<{ integration: Integration; status?: CollectionStatus }>(
+      'POST',
+      `/api/integrations/${id}/move`,
+      { to },
+    ).then(afterIntegrationChange),
   runRound: () => request<{ status: string }>('POST', '/api/collection/run'),
   saveLayout: (positions: Record<string, Point>) =>
     request<void>('PUT', '/api/layout', { positions }),

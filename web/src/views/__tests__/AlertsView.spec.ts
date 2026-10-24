@@ -113,6 +113,33 @@ describe('AlertsView', () => {
     w.unmount()
   })
 
+  it('offers the address a device DHCP moved answers at now', async () => {
+    vi.mocked(api.alerts).mockResolvedValue([
+      alert({
+        id: 4,
+        rule: 'device_offline',
+        severity: 'critical',
+        node_id: 'dev:sw',
+        params: {
+          node: 'Horaco switch',
+          moved_from: '192.168.1.96',
+          moved_to: '192.168.1.110',
+          integration_id: 3,
+        },
+      }),
+      alert({ id: 1 }),
+    ])
+    const router = setup()
+    await router.push('/alerts')
+    const w = mount(AlertsView, { global: { plugins: [...plugins(), router] } })
+    await flushPromises()
+    const rows = w.findAll('[data-test=alert]')
+    expect(rows[0]!.text()).toContain('it answers at 192.168.1.110 now')
+    expect(rows[0]!.get('[data-test=move-address]').text()).toBe('Use 192.168.1.110')
+    expect(rows[1]!.find('[data-test=move-address]').exists()).toBe(false)
+    w.unmount()
+  })
+
   it('dismisses an alert and opens a node on the map', async () => {
     const router = setup()
     await router.push('/alerts')

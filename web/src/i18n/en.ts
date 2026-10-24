@@ -998,6 +998,13 @@ export default {
     empty: 'No devices match.',
     renamePrompt: 'Name for this device (empty to reset)',
   },
+  moved: {
+    use: 'Use {to}',
+    answersAt: 'Answers at {to} now',
+    confirm: "Change {name}'s address from {from} to {to}?",
+    done: 'Done: it answers at {to}.',
+    stillFailing: 'Saved, but it still fails: {error}',
+  },
   integrations: {
     interval: 'Every',
     everySeconds: '{n} seconds',

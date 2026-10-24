@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import MoveAddressButton from '@/components/MoveAddressButton.vue'
 import { alertsState, alertText, alertTip } from '@/lib/alerts'
 import { ui } from '@/lib/ui'
 import type { Alert } from '@/lib/types'
@@ -84,6 +85,7 @@ function showOnMap(a: Alert) {
         <strong>{{ alertText(a, t, locale).title }}</strong>
         <p class="muted">{{ alertText(a, t, locale).detail }}</p>
         <p v-if="alertTip(a, t)" class="tip"><Lightbulb :size="13" />{{ alertTip(a, t) }}</p>
+        <MoveAddressButton :alert="a" />
         <button
           v-if="a.node_id"
           class="link small"

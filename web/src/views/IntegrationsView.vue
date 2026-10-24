@@ -8,12 +8,14 @@ import IntegrationDetails from '@/components/IntegrationDetails.vue'
 import IntegrationForm from '@/components/IntegrationForm.vue'
 import IntegrationLogo from '@/components/IntegrationLogo.vue'
 import CollectionRound from '@/components/CollectionRound.vue'
+import MoveAddressButton from '@/components/MoveAddressButton.vue'
 import PluginStore from '@/components/PluginStore.vue'
 import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import UpdatePlugins from '@/components/UpdatePlugins.vue'
+import { alertsState, moved } from '@/lib/alerts'
 import { api } from '@/lib/api'
 import { formatAgo } from '@/lib/format'
-import type { Config, Integration, IntegrationType } from '@/lib/types'
+import type { Alert, Config, Integration, IntegrationType } from '@/lib/types'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -64,6 +66,17 @@ function addFromStore(type: string) {
 function openAdd(type: IntegrationType) {
   form.value = { type }
 }
+
+// A failing integration whose device answers at another address now (DHCP
+// gave it another one): its open alert says where, with the button.
+const movedAlerts = computed(() => {
+  const out = new Map<number, Alert>()
+  for (const a of alertsState.list) {
+    const m = moved(a)
+    if (m && !out.has(m.integration)) out.set(m.integration, a)
+  }
+  return out
+})
 
 const expanded = ref<number>()
 
@@ -177,6 +190,16 @@ onMounted(async () => {
             </div>
             <p v-if="item.enabled && item.status?.error" class="error-text">
               {{ item.status.error }}
+            </p>
+            <p
+              v-if="item.enabled && movedAlerts.get(item.id)"
+              class="moved-row"
+              data-test="integration-moved"
+            >
+              <span>{{
+                t('moved.answersAt', { to: movedAlerts.get(item.id)!.params.moved_to })
+              }}</span>
+              <MoveAddressButton :alert="movedAlerts.get(item.id)!" @moved="load" />
             </p>
           </div>
           <ToggleSwitch
@@ -304,6 +327,14 @@ onMounted(async () => {
 .error-text {
   margin: 6px 0 0;
   color: var(--danger);
+  font-size: 13px;
+}
+.moved-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
   font-size: 13px;
 }
 </style>

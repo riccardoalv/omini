@@ -15,6 +15,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DeviceIcon from '@/components/DeviceIcon.vue'
+import MoveAddressButton from '@/components/MoveAddressButton.vue'
 import NodeIcon from '@/components/NodeIcon.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import DeviceExtras from '@/components/map/DeviceExtras.vue'
@@ -765,6 +766,7 @@ async function save(patch: {
             >
               <strong>{{ alertText(a, t, locale).title }}</strong>
               <span>{{ alertText(a, t, locale).detail }}</span>
+              <MoveAddressButton class="resolve" :alert="a" @moved="emit('scanned')" />
               <button
                 v-if="resolvable(a)"
                 class="btn small primary resolve"

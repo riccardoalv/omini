@@ -14,6 +14,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+import MoveAddressButton from '@/components/MoveAddressButton.vue'
 import WifiChannelsDialog from '@/components/map/WifiChannelsDialog.vue'
 import {
   alertsState,
@@ -263,6 +264,7 @@ onBeforeUnmount(() => clearInterval(timer))
             </span>
           </div>
           <div class="row-actions">
+            <MoveAddressButton :alert="a" />
             <button
               v-if="resolvable(a)"
               class="btn small primary"
