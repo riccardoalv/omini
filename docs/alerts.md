@@ -84,7 +84,7 @@ attention) and **info** (worth knowing).
 | `upnp_forward` | warning | Like `port_forward`, for a forward a device opened by itself through UPnP or NAT-PMP |
 | `insecure_service` | warning | Telnet (23) or FTP (21) is open on a device, or a network device's admin page is served only over plain HTTP (no 443 or 8443). Telnet and FTP are found by [nmap](discovery.md#nmap): the network scan's default ports leave 21 and 23 out (its **Ports to check** replaces them: list 21 and 23 there with the others to have it look) |
 | `new_devices_burst` | warning | 5 or more devices never seen before appeared within 10 minutes |
-| `new_device` | info | A device is seen for the first time. Shown for 24 hours. Devices found in the first 15 minutes after Omini started tracking are the existing network, not new; a VM or container its hypervisor or Docker host reports is the user's own, never new |
+| `new_device` | info | A device is seen for the first time. Shown for 24 hours. Devices found in the first 15 minutes after Omini started tracking are the existing network, not new; a VM or container its hypervisor or Docker host reports is the user's own, never new; a device known before under another key (a new network card) and the network scan's stand-in for a subnet are not new either |
 | `integration_available` | warning | Omini identified a device (by product, brand or OS) that an integration in the store can read in full, and no integration of that type is set up |
 | `unmanaged_switch` | info | Three or more devices sit behind one switch port where nothing is integrated: probably a small switch, an access point or a hypervisor |
 | `unknown_neighbor` | info | A device announces itself by LLDP but no integration reads it |

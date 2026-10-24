@@ -149,7 +149,12 @@ tested with fixtures). The rules that are easy to break:
 - **One machine, one node** (maintainer's rule): a device seen by several
   integrations, or by MAC in one and by IP in another, is merged; a device
   reported without a MAC takes the one its address has (DHCP, scans, then
-  ARP).
+  ARP). A device that comes back under a new key (a new network card, so a
+  new MAC) takes the history of the older entry with the same name and
+  address that left the map: its first sighting, alias, type, icon, note and
+  owner (2026-10-24). After addresses change (leases cleared), a local DNS
+  name that is another device's name no longer names a client, and an
+  offline device shows the address its MAC has now.
 - **A container is the app the scan found** (maintainer's choice, 2026-10-19):
   a self-hosted app is one node, the app the port scan identified on its
   host (its icon, its name, the button to its web interface), and Docker
