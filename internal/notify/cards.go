@@ -328,3 +328,17 @@ func nonEmpty(s ...string) []string {
 	}
 	return out
 }
+
+// movedTips say what to do about a device that answers at another address now
+// (DHCP gave it another one): update its integration (the UI's
+// "insights.tipMoved", kept in step).
+var movedTips = map[string]map[string]string{
+	"en": {
+		"device_offline":     `DHCP gave it another address: press "Use {moved_to}" on the alert in Omini to update the integration, and give the device a DHCP reservation so it keeps it.`,
+		"integration_failed": `DHCP gave the device another address: press "Use {moved_to}" on the alert in Omini to update the integration, and give the device a DHCP reservation so it keeps it.`,
+	},
+	"pt-BR": {
+		"device_offline":     `O DHCP deu outro endereço a ele: clique em "Usar {moved_to}" no alerta no Omini para atualizar a integração, e faça uma reserva de DHCP para que ele o mantenha.`,
+		"integration_failed": `O DHCP deu outro endereço ao equipamento: clique em "Usar {moved_to}" no alerta no Omini para atualizar a integração, e faça uma reserva de DHCP para que ele o mantenha.`,
+	},
+}

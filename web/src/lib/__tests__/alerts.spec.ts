@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { createAppI18n } from '@/i18n'
 import {
   alertText,
+  alertTip,
   attentionCount,
   concerns,
+  moved,
   resolvable,
   sortAlerts,
   worstByNode,
@@ -130,6 +132,48 @@ describe('alerts', () => {
     expect(wifi({ aps: 'hall (6), attic (6)', auto_aps: 'attic' })).toBe(
       'On 2.4 GHz: hall (6), attic (6). On automatic channel (left to their controller): attic.',
     )
+  })
+
+  it('tells where a device DHCP moved answers now', () => {
+    const offline = alert({
+      rule: 'device_offline',
+      severity: 'critical',
+      node_id: 'dev:sw',
+      params: {
+        node: 'Horaco switch',
+        error: 'no route to host',
+        moved_from: '192.168.1.96',
+        moved_to: '192.168.1.110',
+        integration_id: 3,
+      },
+    })
+    expect(alertText(offline, t, 'en').detail).toBe(
+      "Its integration could not reach it at 192.168.1.96: it answers at 192.168.1.110 now. Update the integration's address.",
+    )
+    expect(alertTip(offline, t)).toContain('press "Use 192.168.1.110"')
+    expect(moved(offline)).toEqual({ integration: 3, from: '192.168.1.96', to: '192.168.1.110' })
+    expect(moved({ ...offline, resolved_at: '2026-10-07T11:00:00Z' })).toBeNull()
+    // The normal case keeps its texts.
+    const plain = alert({ rule: 'device_offline', params: { node: 'NAS', error: 'timeout' } })
+    expect(alertText(plain, t, 'en').detail).toBe('Its integration could not reach it: timeout')
+    expect(alertTip(plain, t)).toMatch(/^Check that it is powered/)
+    expect(moved(plain)).toBeNull()
+    const failing = alert({
+      rule: 'integration_failed',
+      params: {
+        integration: 'Horaco',
+        moved_from: '192.168.1.96',
+        moved_to: '192.168.1.110',
+        integration_id: 3,
+      },
+    })
+    expect(alertText(failing, t, 'en').detail).toContain('answers at 192.168.1.110 now')
+    for (const locale of ['en', 'pt-BR']) {
+      const { global } = createAppI18n(locale)
+      expect(global.te('insights.tipMoved'), `${locale} tip`).toBe(true)
+      for (const r of ['device_offline', 'integration_failed'])
+        expect(global.te(`insights.rules.${r}.detailMoved`), `${locale} ${r}`).toBe(true)
+    }
   })
 
   it('sorts by severity, then newest', () => {

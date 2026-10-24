@@ -172,3 +172,39 @@ func TestOneFailedRoundIsNoAlertYet(t *testing.T) {
 		t.Fatalf("an integration that failed once: %+v", got["integration_failed"])
 	}
 }
+
+// TestOfflineDeviceThatMoved: DHCP gave the device another address; its alert
+// says where it answers now, for the button that updates the integration.
+func TestOfflineDeviceThatMoved(t *testing.T) {
+	topo := topology.Topology{Nodes: []topology.Node{
+		{ID: "dev:sw", Kind: topology.KindDevice, Label: "Horaco", IntegrationID: 3, IP: "192.168.1.110", Device: &model.Device{}},
+		{ID: "dev:ap", Kind: topology.KindDevice, Label: "AP", IntegrationID: 4, IP: "192.168.1.30", Device: &model.Device{}},
+	}}
+	got := byRule(Evaluate(Input{
+		Topology: topo,
+		Integrations: []Integration{
+			{ID: 3, Name: "Horaco", Error: "no route to host", Failures: 2},
+			{ID: 4, Name: "Mercusys", Error: "timeout", Failures: 2},
+			{ID: 5, Name: "OPNsense", Error: "timeout", Failures: 2},
+		},
+		Moved: map[int64]Moved{
+			3: {NodeID: "dev:sw", From: "192.168.1.96", To: "192.168.1.110"},
+			5: {NodeID: "dev:gone", From: "192.168.1.1", To: "192.168.1.2"},
+		},
+	}))
+	off := map[string]Insight{}
+	for _, a := range got["device_offline"] {
+		off[a.NodeID] = a
+	}
+	sw := off["dev:sw"].Params
+	if sw["moved_from"] != "192.168.1.96" || sw["moved_to"] != "192.168.1.110" || sw["integration_id"] != int64(3) || sw["error"] != "no route to host" {
+		t.Fatalf("moved switch: %+v", sw)
+	}
+	if ap := off["dev:ap"].Params; ap["moved_to"] != nil || ap["integration_id"] != nil {
+		t.Fatalf("an access point that did not move: %+v", ap)
+	}
+	f := got["integration_failed"]
+	if len(f) != 1 || f[0].Params["moved_from"] != "192.168.1.1" || f[0].Params["moved_to"] != "192.168.1.2" {
+		t.Fatalf("integration: %+v", f)
+	}
+}

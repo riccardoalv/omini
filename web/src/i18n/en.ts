@@ -670,6 +670,8 @@ export default {
     resolved: 'Resolved {ago}',
     since: 'Since {ago}',
     onMap: 'Show on the map',
+    tipMoved:
+      'DHCP gave it another address: press "Use {moved_to}" to update the integration, and give the device a DHCP reservation so it keeps it.',
     newOnly: 'New devices only',
     joined: 'joined the network',
     left: 'left the network',
@@ -685,10 +687,14 @@ export default {
         title: '{node} is offline',
         detail: 'Its integration could not reach it.',
         detailError: 'Its integration could not reach it: {error}',
+        detailMoved:
+          "Its integration could not reach it at {moved_from}: it answers at {moved_to} now. Update the integration's address.",
       },
       integration_failed: {
         title: 'The {integration} integration is failing',
         detail: '{error}',
+        detailMoved:
+          "It cannot reach {moved_from}: the device answers at {moved_to} now. Update the integration's address.",
       },
       wan_down: { title: 'Internet down on {node}', detail: 'Gateway {gateway} does not answer.' },
       wan_degraded: {

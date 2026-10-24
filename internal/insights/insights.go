@@ -200,6 +200,10 @@ func deviceOffline(in Input, _ index) []Insight {
 			waiting[it.ID] = true
 		}
 	}
+	moved := map[string]int64{}
+	for id, m := range in.Moved {
+		moved[m.NodeID] = id
+	}
 	var out []Insight
 	for _, n := range devices(in) {
 		if n.Online || waiting[n.IntegrationID] {
@@ -209,9 +213,18 @@ func deviceOffline(in Input, _ index) []Insight {
 		if e := errs[n.IntegrationID]; e != "" {
 			p["error"] = e
 		}
+		if id, ok := moved[n.ID]; ok {
+			movedParams(p, id, in.Moved[id])
+		}
 		out = append(out, node("device_offline", Critical, n, "", p))
 	}
 	return out
+}
+
+// movedParams tell where a device its integration cannot reach answers now,
+// and which integration to give that address (the alert's button).
+func movedParams(p map[string]any, integration int64, m Moved) {
+	p["moved_from"], p["moved_to"], p["integration_id"] = m.From, m.To, integration
 }
 
 // integrationFailed reports integrations that fail and have no device on the
@@ -226,9 +239,13 @@ func integrationFailed(in Input, _ index) []Insight {
 		if !it.failing() || shown[it.ID] {
 			continue
 		}
+		p := map[string]any{"integration": it.Name, "integration_id": it.ID, "error": it.Error}
+		if m, ok := in.Moved[it.ID]; ok {
+			movedParams(p, it.ID, m)
+		}
 		out = append(out, Insight{
 			Key: fmt.Sprintf("integration_failed|%d", it.ID), Rule: "integration_failed", Severity: Critical,
-			Params: map[string]any{"integration": it.Name, "integration_id": it.ID, "error": it.Error},
+			Params: p,
 		})
 	}
 	return out

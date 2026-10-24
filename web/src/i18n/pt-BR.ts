@@ -683,6 +683,8 @@ const ptBR: typeof en = {
     resolved: 'Resolvido {ago}',
     since: 'Desde {ago}',
     onMap: 'Ver no mapa',
+    tipMoved:
+      'O DHCP deu outro endereço a ele: clique em "Usar {moved_to}" para atualizar a integração, e faça uma reserva de DHCP para que ele o mantenha.',
     newOnly: 'Só dispositivos novos',
     joined: 'entrou na rede',
     left: 'saiu da rede',
@@ -698,10 +700,14 @@ const ptBR: typeof en = {
         title: '{node} está offline',
         detail: 'A integração não conseguiu alcançá-lo.',
         detailError: 'A integração não conseguiu alcançá-lo: {error}',
+        detailMoved:
+          'A integração não conseguiu alcançá-lo em {moved_from}: agora ele responde em {moved_to}. Atualize o endereço da integração.',
       },
       integration_failed: {
         title: 'A integração {integration} está falhando',
         detail: '{error}',
+        detailMoved:
+          'Ela não alcança {moved_from}: o equipamento agora responde em {moved_to}. Atualize o endereço da integração.',
       },
       wan_down: { title: 'Internet fora em {node}', detail: 'O gateway {gateway} não responde.' },
       wan_degraded: {

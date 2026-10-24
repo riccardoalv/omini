@@ -401,7 +401,7 @@ func TestComposeGroupsByDevice(t *testing.T) {
 func TestEveryRuleHasAShortName(t *testing.T) {
 	for _, locale := range []string{"en", "pt-BR"} {
 		for rule := range texts["en"] {
-			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || strings.HasSuffix(rule, "_latest") || strings.HasSuffix(rule, "_auto") || rule == "new_device" || rule == "new_devices_burst" {
+			if strings.HasPrefix(rule, "_") || strings.HasSuffix(rule, "_count") || strings.HasSuffix(rule, "_latest") || strings.HasSuffix(rule, "_auto") || strings.HasSuffix(rule, "_moved") || rule == "new_device" || rule == "new_devices_burst" {
 				continue
 			}
 			if short[locale][rule] == "" {
@@ -442,5 +442,37 @@ func TestPortForwardTexts(t *testing.T) {
 	}), "en")
 	if title != "xbox opened port 27015-27020/udp by itself" || detail != "Through UPnP or NAT-PMP on gw, to 192.168.1.50:27015-27020." {
 		t.Fatalf("%q %q", title, detail)
+	}
+}
+
+func TestOfflineDeviceThatMovedTexts(t *testing.T) {
+	moved := map[string]any{"node": "Horaco switch", "error": "no route to host", "moved_from": "192.168.1.96", "moved_to": "192.168.1.110", "integration_id": 3}
+	_, detail := Describe(alert("device_offline", "critical", moved), "en")
+	if detail != "Its integration could not reach it at 192.168.1.96: it answers at 192.168.1.110 now. Update the integration's address." {
+		t.Fatalf("detail: %q", detail)
+	}
+	_, detail = Describe(alert("integration_failed", "critical", map[string]any{"integration": "Horaco", "moved_from": "192.168.1.96", "moved_to": "192.168.1.110"}), "pt-BR")
+	if detail != "Ela não alcança 192.168.1.96: o equipamento agora responde em 192.168.1.110. Atualize o endereço da integração." {
+		t.Fatalf("detail: %q", detail)
+	}
+	// The normal case keeps its text and tip.
+	_, detail = Describe(alert("device_offline", "critical", map[string]any{"node": "NAS", "error": "timeout"}), "en")
+	if detail != "Its integration could not reach it. timeout" {
+		t.Fatalf("detail: %q", detail)
+	}
+	m := Compose([]store.AlertChange{{Alert: alert("device_offline", "critical", moved), Opened: true}}, "en")
+	if len(m.Groups) != 1 || !strings.Contains(m.Groups[0].Tip, `press "Use 192.168.1.110"`) {
+		t.Fatalf("tip: %+v", m.Groups)
+	}
+	m = Compose([]store.AlertChange{{Alert: alert("device_offline", "critical", map[string]any{"node": "NAS"}), Opened: true}}, "en")
+	if !strings.HasPrefix(m.Groups[0].Tip, "Check that it is powered") {
+		t.Fatalf("tip: %+v", m.Groups)
+	}
+	for _, locale := range []string{"en", "pt-BR"} {
+		for _, k := range []string{"device_offline", "integration_failed"} {
+			if texts[locale][k+"_moved"][1] == "" || movedTips[locale][k] == "" {
+				t.Errorf("%s: no text or tip for %s", locale, k)
+			}
+		}
 	}
 }

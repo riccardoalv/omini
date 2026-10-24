@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
-import { alertsState, alertText } from '@/lib/alerts'
+import { alertsState, alertText, alertTip } from '@/lib/alerts'
 import { ui } from '@/lib/ui'
 import type { Alert } from '@/lib/types'
 
@@ -54,11 +54,6 @@ const more = computed(() =>
   route.path === '/alerts' ? 0 : pending.value.length - shown.value.length,
 )
 
-function tip(a: Alert): string {
-  const key = `insights.tips.${a.rule}`
-  const text = t(key)
-  return text === key ? '' : text
-}
 function showOnMap(a: Alert) {
   void router.push({ path: '/', query: { node: a.node_id } })
 }
@@ -88,7 +83,7 @@ function showOnMap(a: Alert) {
       <div class="body">
         <strong>{{ alertText(a, t, locale).title }}</strong>
         <p class="muted">{{ alertText(a, t, locale).detail }}</p>
-        <p v-if="tip(a)" class="tip"><Lightbulb :size="13" />{{ tip(a) }}</p>
+        <p v-if="alertTip(a, t)" class="tip"><Lightbulb :size="13" />{{ alertTip(a, t) }}</p>
         <button
           v-if="a.node_id"
           class="link small"

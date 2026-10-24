@@ -17,6 +17,8 @@ var texts = map[string]map[string][2]string{
 	"en": {
 		"device_offline":             {"{node} is offline", "Its integration could not reach it. {error}"},
 		"integration_failed":         {"The {integration} integration is failing", "{error}"},
+		"device_offline_moved":       {"{node} is offline", "Its integration could not reach it at {moved_from}: it answers at {moved_to} now. Update the integration's address."},
+		"integration_failed_moved":   {"The {integration} integration is failing", "It cannot reach {moved_from}: the device answers at {moved_to} now. Update the integration's address."},
 		"wan_down":                   {"Internet down on {node}", "Gateway {gateway} does not answer."},
 		"wan_degraded":               {"Unstable internet on {node}", "Gateway {gateway}: {loss_pct}% loss, {rtt_ms} ms."},
 		"duplicate_ip":               {"Duplicate IP {ip}", "Used by several devices at once: {devices}"},
@@ -77,6 +79,8 @@ var texts = map[string]map[string][2]string{
 	"pt-BR": {
 		"device_offline":             {"{node} está offline", "A integração não conseguiu alcançá-lo. {error}"},
 		"integration_failed":         {"A integração {integration} está falhando", "{error}"},
+		"device_offline_moved":       {"{node} está offline", "A integração não conseguiu alcançá-lo em {moved_from}: agora ele responde em {moved_to}. Atualize o endereço da integração."},
+		"integration_failed_moved":   {"A integração {integration} está falhando", "Ela não alcança {moved_from}: o equipamento agora responde em {moved_to}. Atualize o endereço da integração."},
 		"wan_down":                   {"Internet fora em {node}", "O gateway {gateway} não responde."},
 		"wan_degraded":               {"Internet instável em {node}", "Gateway {gateway}: {loss_pct}% de perda, {rtt_ms} ms."},
 		"duplicate_ip":               {"IP duplicado {ip}", "Usado por vários dispositivos ao mesmo tempo: {devices}"},
@@ -216,6 +220,8 @@ func Describe(a store.Alert, locale string) (title, detail string) {
 		rule = "update_pending_latest" // nor how many updates
 	case rule == "wifi_channel_conflict" && a.Params["auto_aps"] != nil:
 		rule = "wifi_channel_conflict_auto" // some are left to their controller
+	case (rule == "device_offline" || rule == "integration_failed") && a.Params["moved_to"] != nil:
+		rule += "_moved" // DHCP gave the device another address
 	}
 	pair, ok := t[rule]
 	if !ok {
@@ -359,7 +365,7 @@ func ComposeWith(changes []store.AlertChange, locale string, ctx Context) Messag
 		}
 		g := byKey[key]
 		if g == nil {
-			g = &Group{Severity: c.Alert.Severity, Title: label, Tip: advice[c.Alert.Rule]}
+			g = &Group{Severity: c.Alert.Severity, Title: label, Tip: tipOf(advice, localeOf(movedTips, locale), c.Alert)}
 			if label != title {
 				g.Device = k.card(c.Alert.NodeID)
 			}
@@ -480,4 +486,13 @@ func number(v any) (float64, bool) {
 		return float64(x), true
 	}
 	return 0, false
+}
+
+// tipOf says what to do about an alert: a device that answers at another
+// address now is told to update its integration, not to check the cable.
+func tipOf(advice, moved map[string]string, a store.Alert) string {
+	if a.Params["moved_to"] != nil && moved[a.Rule] != "" {
+		return fill(moved[a.Rule], params(a))
+	}
+	return advice[a.Rule]
 }
