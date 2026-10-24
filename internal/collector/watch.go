@@ -47,7 +47,8 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 
 	in := insights.Input{Topology: topo, Now: now, History: c.observeChanges(topo, now), Configured: map[string]bool{}, Core: map[int64]bool{}, Omini: c.opts.Self.NodeIn(topo)}
 	names := map[int64]string{}
-	if all, err := c.store.ListIntegrations(ctx); err == nil {
+	all, err := c.store.ListIntegrations(ctx)
+	if err == nil {
 		for _, it := range all {
 			names[it.ID] = it.Name
 			in.Configured[it.Type] = true
@@ -55,6 +56,9 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 				in.Core[it.ID] = true
 			}
 		}
+	}
+	if moved := readdressed(topo, all, statuses, c.fields); len(moved) > 0 {
+		in.Moved = moved
 	}
 	in.SlowDNS = c.slow.update(topo)
 	in.Detectors = detectors()

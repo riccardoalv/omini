@@ -98,6 +98,17 @@ type Input struct {
 	SlowDNS map[string]int
 	// Omini is the node of the machine Omini runs on ("" when not found).
 	Omini string
+	// Moved: failing integrations whose device answers at another address
+	// now (DHCP gave it another one), by integration id.
+	Moved map[int64]Moved
+}
+
+// Moved is a device its integration cannot reach at the configured address
+// while the network (a router's ARP or DHCP leases) sees it at another one.
+type Moved struct {
+	NodeID string
+	From   string // the address in the integration's settings
+	To     string // where the device answers now
 }
 
 // Events are rules about something that happened (a restart, a device that
