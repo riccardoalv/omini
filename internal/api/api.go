@@ -94,6 +94,7 @@ func (s *Server) Handler() http.Handler {
 	private.HandleFunc("PUT /api/collection", s.setCollection)
 	private.HandleFunc("POST /api/collection/run", s.runRound)
 	private.HandleFunc("POST /api/integrations/{id}/run", s.runIntegration)
+	private.HandleFunc("POST /api/integrations/{id}/move", s.moveIntegration)
 	private.HandleFunc("GET /api/topology", s.topology)
 	private.HandleFunc("POST /api/refresh", s.refresh)
 	private.HandleFunc("GET /api/inventory", s.listInventory)
