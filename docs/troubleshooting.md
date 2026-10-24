@@ -16,6 +16,7 @@ Start with two places:
 - [The same device appears twice](#the-same-device-appears-twice)
 - [There is no traffic on the map](#there-is-no-traffic-on-the-map)
 - [A plugin fails](#a-plugin-fails)
+- [A device got another address from DHCP](#a-device-got-another-address-from-dhcp)
 - [Proxmox guests are missing or misplaced](#proxmox-guests-are-missing-or-misplaced)
 - [nmap does not detect operating systems](#nmap-does-not-detect-operating-systems)
 - [The Flows screen stays empty](#the-flows-screen-stays-empty)
@@ -145,6 +146,28 @@ Common causes:
 A plugin's Python environment is rebuilt when its requirements or the SDK
 change. If it is broken, **Update** it in the store, or remove and install it
 again.
+
+## A device got another address from DHCP
+
+An integration reads its device at the address in its settings. When DHCP
+gives the device another one (its lease expired, or the router's leases were
+cleared), the integration fails ("No route to host", "timeout") and the
+device goes offline, while the router still sees its MAC at the new address
+(ARP, DHCP leases).
+
+Omini notices: the device's node on the map shows the address it answers at
+now, and its `device_offline` alert says so ("Its integration could not reach
+it at 192.168.1.96: it answers at 192.168.1.110 now"). The alert (Alerts
+screen, device panel, popup) and the integration's row on **Integrations**
+("Answers at 192.168.1.110 now") have a **Use 192.168.1.110** button: after
+one confirmation it changes the host part of the integration's address
+(scheme, port and path stay) and collects it again.
+
+This needs a router integration (or the network scan) that sees the device's
+MAC, and an address field that holds an IP: an integration set up with a
+host name is left alone (fix the name in DNS). To keep it from happening
+again, give the device a DHCP reservation (the `infra_dynamic_ip` alert
+offers one) or a static address.
 
 ## Proxmox guests are missing or misplaced
 

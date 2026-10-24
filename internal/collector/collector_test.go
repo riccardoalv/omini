@@ -62,6 +62,7 @@ type env struct {
 	fake  *fake
 	clock time.Time
 	box   *secret.Box
+	reg   *integration.Registry
 }
 
 func setup(t *testing.T) *env {
@@ -77,7 +78,7 @@ func setup(t *testing.T) *env {
 	f := &fake{}
 	reg.Register(f)
 	reg.Register(demo.New())
-	e := &env{st: st, fake: f, clock: time.Unix(1_790_000_000, 0).UTC(), box: box}
+	e := &env{st: st, fake: f, clock: time.Unix(1_790_000_000, 0).UTC(), box: box, reg: reg}
 	e.coll = collector.New(st, reg, box, collector.Options{Now: func() time.Time { return e.clock }})
 	return e
 }

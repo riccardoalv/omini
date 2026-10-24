@@ -21,7 +21,7 @@ attention) and **info** (worth knowing).
 
 | Rule | Severity | Opens when |
 |---|---|---|
-| `device_offline` | critical | A device read by an integration is offline: its integration failed **two rounds in a row** (one failed round, a device busy for a moment, shows it offline on the map but is no alert yet). The integration's error is shown |
+| `device_offline` | critical | A device read by an integration is offline: its integration failed **two rounds in a row** (one failed round, a device busy for a moment, shows it offline on the map but is no alert yet). The integration's error is shown. When the network sees the device at another address (DHCP gave it a new one: the router's ARP or leases have its MAC there), the alert says where it answers now and has a **Use <address>** button that updates the integration's address and collects it again (see [Troubleshooting](troubleshooting.md#a-device-got-another-address-from-dhcp)) |
 | `integration_failed` | critical | An integration fails two rounds in a row and none of its devices is on the map yet |
 | `wan_down` | critical | A WAN gateway is down. A gateway the router does not tie by name to one of its WAN interfaces is told on the router |
 | `wan_degraded` | warning | A WAN gateway is degraded (loss or latency, as the router reports it); on the router too when it is not tied to a WAN interface |
