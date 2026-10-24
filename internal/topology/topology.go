@@ -1126,8 +1126,24 @@ func (b *builder) clientNames(managed []string) clientNames {
 // reservation's name, else its host name (a lease's first), else its address
 // or MAC. The user's alias, applied later, wins over all.
 func (b *builder) clientLabel(n *Node) string {
-	return firstNonEmpty(shortName(b.names.dns[n.IP]), shortName(b.names.reserved[model.MACAddress(n.MAC)]),
+	return firstNonEmpty(b.dnsName(n), shortName(b.names.reserved[model.MACAddress(n.MAC)]),
 		shortName(n.Hostname), n.IP, n.MAC)
+}
+
+// dnsName is the local DNS name of a client's address, unless that name is
+// another device's: a record left behind when DHCP gave the address to
+// someone else (the hypervisor's old address, now a desktop's).
+func (b *builder) dnsName(n *Node) string {
+	name := shortName(b.names.dns[n.IP])
+	if name == "" {
+		return ""
+	}
+	for _, k := range []string{strings.ToLower(b.names.dns[n.IP]), strings.ToLower(name)} {
+		if id, ok := b.byName[k]; ok && id != n.ID {
+			return ""
+		}
+	}
+	return name
 }
 
 func (b *builder) collectClientsOf(id string, d *model.Device,

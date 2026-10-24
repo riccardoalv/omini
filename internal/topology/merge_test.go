@@ -178,3 +178,24 @@ func TestAnOfflineDeviceShowsWhereItIsNow(t *testing.T) {
 	}
 	t.Fatalf("no switch node: %+v", topo.Nodes)
 }
+
+// After DHCP leases were cleared, a desktop got the address the hypervisor
+// had, and a local DNS name still says "proxmox" for it: the name is the
+// hypervisor's, not the desktop's.
+func TestAStaleDNSNameDoesNotNameAnotherDevice(t *testing.T) {
+	fw := router(model.ArpEntry{IP: "192.168.1.40", MAC: "00:e0:4c:f8:02:2e"})
+	fw.Devices[0].DnsRecords = []model.DnsRecord{{Name: "proxmox.internal", IP: "192.168.1.40"}}
+	fw.Devices[0].DhcpLeases = []model.DhcpLease{{IP: "192.168.1.40", MAC: "00:e0:4c:f8:02:2e", Hostname: model.Ptr("DESKTOP-P1KTQAF")}}
+	pve := hypervisor(guest("vm", "bc:24:11:00:00:01"))
+	pve.Devices[0].Name = "proxmox" // the hypervisor, now at another address
+	topo := topology.Build([]topology.Source{fw, pve})
+	for _, n := range topo.Nodes {
+		if n.ID == "mac:00:e0:4c:f8:02:2e" {
+			if n.Label != "DESKTOP-P1KTQAF" {
+				t.Fatalf("the desktop keeps its own name: %+v", n)
+			}
+			return
+		}
+	}
+	t.Fatalf("no desktop node: %+v", topo.Nodes)
+}
