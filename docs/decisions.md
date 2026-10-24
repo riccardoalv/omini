@@ -315,6 +315,18 @@ tested with fixtures). The rules that are easy to break:
 - **Rules are pure functions of the topology** returning keys and
   parameters; **texts are translated in the UI**, never built on the server.
   An alert opens, refreshes and resolves by its key.
+- **A device DHCP moved** (decided 2026-10-24): when an integration fails
+  and the network (a router's ARP or DHCP leases) sees its device's MAC at
+  another address, `device_offline` (or `integration_failed`) carries
+  `moved_from` and `moved_to` and says the device answers there now. Only an
+  address field holding an IP counts (a hostname is DNS's business), and only
+  a device that was at that address in the integration's last data (a
+  controller's devices have addresses of their own). The alert and the
+  integration's row have a "Use <address>" button: one confirmation, then the
+  host part of the integration's address is replaced (scheme, port and path
+  kept), saved with the usual validation, and that integration is read again
+  at once, like a change, so the map shows it back (not a "Run now"). Omini
+  never changes the address by itself.
 - **Offline after two failed rounds** (maintainer's choice, 2026-10-12): a
   device whose integration failed once shows offline on the map at once, but
   `device_offline` (and `integration_failed`) opens only when it fails a
