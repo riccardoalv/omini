@@ -94,6 +94,11 @@ func (c *Collector) watch(ctx context.Context, topo topology.Topology, inventory
 	}
 	seenMAC := firstSeenByMAC(inventory)
 	for _, e := range inventory {
+		// A node with neither MAC nor address (the network scan's stand-in for a
+		// subnet) is no device that joined.
+		if e.MAC == "" && e.IP == "" {
+			continue
+		}
 		if !guests[e.ID] && (e.Kind == string(topology.KindClient) || e.Kind == string(topology.KindDevice)) &&
 			firstSeen(e, seenMAC).After(since.Add(NewDeviceGrace)) {
 			in.NewDevices = append(in.NewDevices, insights.NewDevice{NodeID: e.ID, FirstSeen: e.FirstSeen})

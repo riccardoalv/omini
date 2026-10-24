@@ -40,6 +40,21 @@ func (s *Store) RenameNode(ctx context.Context, from, to string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
+	// When both are known (the new id was recorded before the old one left the
+	// map), the new entry keeps the first sighting and whatever the user set
+	// on the old one and not on the new.
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE inventory SET
+			first_seen  = MIN(inventory.first_seen, o.first_seen),
+			alias       = COALESCE(inventory.alias, o.alias),
+			device_type = COALESCE(inventory.device_type, o.device_type),
+			icon        = COALESCE(inventory.icon, o.icon),
+			note        = CASE WHEN inventory.note = '' THEN o.note ELSE inventory.note END,
+			owner_id    = COALESCE(inventory.owner_id, o.owner_id)
+		FROM (SELECT first_seen, alias, device_type, icon, note, owner_id FROM inventory WHERE id = ?) AS o
+		WHERE inventory.id = ?`, from, to); err != nil {
+		return fmt.Errorf("inventory: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE OR IGNORE inventory SET id = ? WHERE id = ?`, to, from); err != nil {
 		return fmt.Errorf("inventory: %w", err)
 	}

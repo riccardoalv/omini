@@ -2,6 +2,7 @@ package collector_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -114,5 +115,60 @@ func TestAContainerOrVMIsNoNewDevice(t *testing.T) {
 	}
 	if len(news) != 1 || news[0] != "dev:aa:00:00:00:00:99" {
 		t.Fatalf("only the phone is a new device, not the container: %v", news)
+	}
+}
+
+// A firewall's LAN moved to a new card: for a while both its old MAC and its
+// new one were on the map; when the old one leaves, its history (and its
+// first sighting) goes to the new one, which is then no new device.
+func TestAFirewallOnANewCardKeepsItsHistory(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	oldFW := model.Device{Key: "58:9c:fc:10:8f:2c", Name: "OPNsense.internal", Host: model.Ptr("192.168.1.1"), MACs: []model.MACAddress{"58:9c:fc:10:8f:2c"}}
+	newFW := model.Device{Key: "24:8a:07:f7:bb:2a", Name: "OPNsense.internal", Host: model.Ptr("192.168.1.10"), MACs: []model.MACAddress{"24:8a:07:f7:bb:2a"}}
+	e.fake.set([]model.Device{oldFW}, nil)
+	e.collect(t)
+	alias := "Firewall"
+	if _, err := e.st.UpdateInventory(ctx, "dev:58:9c:fc:10:8f:2c", store.InventoryUpdate{Alias: &alias}); err != nil {
+		t.Fatal(err)
+	}
+	// Past the grace period the new card shows up next to the old one.
+	e.clock = e.clock.Add(collector.NewDeviceGrace + time.Minute)
+	e.fake.set([]model.Device{oldFW, newFW}, nil)
+	e.collect(t)
+	// The old card is gone; the new one answers at the firewall's address.
+	newFW.Host = model.Ptr("192.168.1.1")
+	e.clock = e.clock.Add(time.Minute)
+	e.fake.set([]model.Device{newFW}, nil)
+	s := e.collect(t)
+	n, ok := node(s, "dev:24:8a:07:f7:bb:2a")
+	if !ok || n.Label != alias {
+		t.Fatalf("the firewall keeps its alias on its new card: %+v (found=%v)", n, ok)
+	}
+	for _, a := range s.Alerts {
+		if a.Rule == "new_device" && a.NodeID == "dev:24:8a:07:f7:bb:2a" {
+			t.Fatalf("the firewall on its new card is no new device: %+v", a)
+		}
+	}
+}
+
+func TestASubnetStandInIsNoNewDevice(t *testing.T) {
+	e := setup(t)
+	e.addIntegration(t, "fake", integration.Config{})
+	e.fake.set([]model.Device{{Key: "aa:00:00:00:00:01", Name: "sw", MACs: []model.MACAddress{"aa:00:00:00:00:01"}}}, nil)
+	e.collect(t)
+	e.clock = e.clock.Add(collector.NewDeviceGrace + time.Minute)
+	// The network scan's stand-in for a subnet: no MAC, no address.
+	standIn := model.Device{
+		Key: "net:192.168.1.0/24", Name: "Network 192.168.1.0/24",
+		Hosts: []model.Host{{IP: "192.168.1.77"}},
+	}
+	e.fake.set([]model.Device{{Key: "aa:00:00:00:00:01", Name: "sw", MACs: []model.MACAddress{"aa:00:00:00:00:01"}}, standIn}, nil)
+	s := e.collect(t)
+	for _, a := range s.Alerts {
+		if a.Rule == "new_device" && strings.Contains(a.NodeID, "net:") {
+			t.Fatalf("a subnet's stand-in is no new device: %+v", a)
+		}
 	}
 }

@@ -31,7 +31,12 @@ func movedDevices(topo topology.Topology, inventory []store.InventoryEntry) map[
 		if n.Kind != topology.KindDevice || n.Device == nil {
 			continue
 		}
-		if _, ok := known[n.ID]; ok {
+		if e, ok := known[n.ID]; ok {
+			// Known already: recorded under its new key before the old one
+			// left the map (a firewall that got a new card).
+			if old := sameDeviceBefore(n, e, inventory, onMap, moved); old != "" {
+				moved[old] = n.ID
+			}
 			continue
 		}
 		if old := previousID(n, known, onMap, moved); old != "" {
@@ -107,4 +112,23 @@ func (c *Collector) followMovedDevices(ctx context.Context, topo topology.Topolo
 		}
 		slog.Info("a device has a new id; its history follows", "from", old, "to", id)
 	}
+}
+
+// sameDeviceBefore is an older device entry that is this node under its key
+// before its card changed: a device first seen earlier, no longer on the map,
+// with the same name and the same address (a firewall's LAN moved to a new
+// card: new MAC, same name and gateway address).
+func sameDeviceBefore(n topology.Node, e store.InventoryEntry, inventory []store.InventoryEntry, onMap map[string]bool, moved map[string]string) string {
+	if n.IP == "" || n.Label == "" {
+		return ""
+	}
+	for _, o := range inventory {
+		if _, taken := moved[o.ID]; taken || o.ID == n.ID || onMap[o.ID] || o.Kind != string(topology.KindDevice) {
+			continue
+		}
+		if o.IP == n.IP && strings.EqualFold(o.Label, e.Label) && o.FirstSeen.Before(e.FirstSeen) {
+			return o.ID
+		}
+	}
+	return ""
 }

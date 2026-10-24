@@ -95,3 +95,31 @@ func TestRenameNodeLetsTheNewNodeWin(t *testing.T) {
 		t.Fatalf("the new node's own position wins: %+v", layout)
 	}
 }
+
+func TestRenameNodeOntoAKnownNodeKeepsTheFirstSighting(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	old, moved := "dev:58:9c:fc:10:8f:2c", "dev:24:8a:07:f7:bb:2a"
+	first := time.Unix(1_790_000_000, 0)
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: old, Kind: "device", Label: "fw"}}, first); err != nil {
+		t.Fatal(err)
+	}
+	alias, note := "Firewall", "rack, top"
+	if _, err := s.UpdateInventory(ctx, old, InventoryUpdate{Alias: &alias, Note: &note}); err != nil {
+		t.Fatal(err)
+	}
+	// The firewall's new card was seen before its old one left the map.
+	if err := s.MarkSeen(ctx, []InventoryEntry{{ID: moved, Kind: "device", Label: "fw"}}, first.Add(400*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RenameNode(ctx, old, moved); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := s.ListInventory(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inv) != 1 || inv[0].ID != moved || !inv[0].FirstSeen.Equal(first) || inv[0].Alias != alias || inv[0].Note != note {
+		t.Fatalf("one entry, first seen with the old card, with what the user set: %+v", inv)
+	}
+}
