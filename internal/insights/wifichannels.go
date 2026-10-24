@@ -34,8 +34,15 @@ func wifiChannelConflict(in Input, _ index) []Insight {
 	if len(auto) > 0 {
 		params["auto_aps"] = strings.Join(auto, ", ")
 	}
+	// Nothing Omini can move (a mesh that picks its channels, a controller on
+	// auto, a plugin that cannot change them): worth knowing, not a warning
+	// that pops up with nothing to press.
+	severity := Warning
+	if len(steps) == 0 {
+		severity = Info
+	}
 	return []Insight{{
-		Key: "wifi_channel_conflict", Rule: "wifi_channel_conflict", Severity: Warning,
+		Key: "wifi_channel_conflict", Rule: "wifi_channel_conflict", Severity: severity,
 		NodeID: radios[0].NodeID, Params: params,
 	}}
 }

@@ -60,7 +60,7 @@ attention) and **info** (worth knowing).
 | `lag_member_down` | warning | A port of a LAG (bond, aggregate) is down while the LAG is up: less bandwidth, no redundancy. A port turned off on purpose is not told |
 | `stp_root_changed` | warning | The spanning tree root a switch sees changed (a new switch won the election, or the old root or its link went down). Stays open for 1 hour |
 | `weak_wifi` | warning | A Wi-Fi client's signal is below -75 dBm |
-| `wifi_channel_conflict` | warning | Two access points are on the same or overlapping 2.4 GHz channels (less than 5 apart), or one is on a channel other than 1, 6 or 11 (with more than three access points, a channel holds more than its even share of the three). One alert for the network, listing the access points and their channels and those on automatic channel; every access point is taken to hear the others. **Resolve** on the alert moves them ([Wi-Fi channels](map.md#wi-fi-channels)) |
+| `wifi_channel_conflict` | warning, or info when Omini can move none of them | Two access points are on the same or overlapping 2.4 GHz channels (less than 5 apart), or one is on a channel other than 1, 6 or 11 (with more than three access points, a channel holds more than its even share of the three). One alert for the network, listing the access points and their channels and those on automatic channel; every access point is taken to hear the others. **Resolve** on the alert moves them ([Wi-Fi channels](map.md#wi-fi-channels)) |
 
 ### Network and security
 

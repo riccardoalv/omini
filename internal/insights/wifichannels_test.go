@@ -50,7 +50,7 @@ func TestWifiChannelsFine(t *testing.T) {
 func TestWifiChannelConflictAllAuto(t *testing.T) {
 	topo := topology.Topology{Nodes: []topology.Node{accessPoint("a", 6, true), accessPoint("b", 6, true)}}
 	got := byRule(Evaluate(Input{Topology: topo}))["wifi_channel_conflict"]
-	if len(got) != 1 || got[0].Params["movable"] != 0 || got[0].Params["auto_aps"] != "a, b" {
-		t.Fatalf("told, with nothing to move: %+v", got)
+	if len(got) != 1 || got[0].Params["movable"] != 0 || got[0].Params["auto_aps"] != "a, b" || got[0].Severity != Info {
+		t.Fatalf("told as information, with nothing to move: %+v", got)
 	}
 }
