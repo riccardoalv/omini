@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/riccardoalv/omini/compare/v1.11.0...v1.11.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* **netscan:** an upstream DNS forwarder is not asked local names ([868c511](https://github.com/riccardoalv/omini/commit/868c51119b8e01736c3e4a2417e0849c17aee0bc))
+
 ## [1.11.0](https://github.com/riccardoalv/omini/compare/v1.10.0...v1.11.0) (2026-11-23)
 
 
