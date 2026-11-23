@@ -304,8 +304,10 @@ become alerts.
   Docker) and host networking.
 - **DNS**: the servers are those DHCP hands out, the gateway, and the hosts
   listening on port 53. Each one resolves an internet name (**Advanced →
-  External name for the DNS check**, `example.com` by default) and a local
-  name, timed: one of the DNS names Omini set (the first in order) once it
+  External name for the DNS check**, `example.com` by default) and, except
+  the hosts that are only listening on port 53 (a forwarder upstream the
+  clients are not given, such as the operator's router in front of the
+  firewall, which knows no local names), a local name, timed: one of the DNS names Omini set (the first in order) once it
   has set any, else a name the scan learned from reverse DNS. Alerts: `dns_down` (the
   internet name does not resolve), `dns_slow` (over 500 ms in two checks in a row), `dns_local`
   (the internet name resolves, the local one does not).

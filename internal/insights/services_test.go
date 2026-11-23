@@ -30,6 +30,12 @@ func TestDHCPAndDNSRules(t *testing.T) {
 				Local: &model.DnsQuery{Name: "nas.home.lan", Ok: false, Error: model.Ptr("not found")},
 			},
 			{Server: "192.168.1.53", External: &model.DnsQuery{Name: "example.com", Ok: false, Error: model.Ptr("timeout")}},
+			// An upstream forwarder knows no local names: no dns_local about it.
+			{
+				Server: "192.168.100.1", Upstream: model.Ptr(true),
+				External: &model.DnsQuery{Name: "example.com", Ok: true},
+				Local:    &model.DnsQuery{Name: "nas.home.lan", Ok: false, Error: model.Ptr("not found")},
+			},
 			{Server: "192.168.1.54", External: &model.DnsQuery{Name: "example.com", Ok: true, RttMs: model.Ptr(800.0)}},
 		},
 	}

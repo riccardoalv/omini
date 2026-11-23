@@ -1083,6 +1083,10 @@ class DnsCheck(BaseModel):
     server: str
     external: DnsQuery | None = None
     local: DnsQuery | None = None
+    upstream: bool | None = None
+    """
+    A host answering DNS that the network's clients are not given (DHCP does not hand it out and it is not the gateway): a forwarder upstream, such as the operator's router in front of the firewall. Only the internet name is checked on it: it is not expected to know local names.
+    """
 
 
 class Container(BaseModel):

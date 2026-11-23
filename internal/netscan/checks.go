@@ -51,7 +51,9 @@ func (s *Integration) checkDHCP(ctx context.Context, locals []localNet) map[stri
 
 // checkDNS resolves an external name and, when one is known, a local name
 // with each DNS server of the network: those DHCP hands out, the gateway, and
-// the hosts listening on port 53.
+// the hosts listening on port 53. Those last ones (only) are upstream: a
+// forwarder the clients are not given (the operator's router in front of the
+// firewall), asked the external name only, since it knows no local names.
 func (s *Integration) checkDNS(ctx context.Context, external string, dhcp map[string]model.DhcpCheck,
 	gateway netip.Addr, hosts []*hostAcc,
 ) []model.DnsCheck {
@@ -60,6 +62,7 @@ func (s *Integration) checkDNS(ctx context.Context, external string, dhcp map[st
 		query = dnscheck.Query
 	}
 	var servers []string
+	upstream := map[string]bool{}
 	add := func(ip string) {
 		if a, err := netip.ParseAddr(ip); err == nil && a.Is4() && !slices.Contains(servers, ip) {
 			servers = append(servers, ip)
@@ -75,8 +78,13 @@ func (s *Integration) checkDNS(ctx context.Context, external string, dhcp map[st
 	local := ""
 	for _, h := range hosts {
 		d := s.cached(h)
-		if slices.Contains(d.ports, 53) || (h.ip == gateway && gateway.IsValid()) {
-			add(h.ip.String())
+		client := h.ip == gateway && gateway.IsValid()
+		if slices.Contains(d.ports, 53) || client {
+			ip := h.ip.String()
+			if !client && !slices.Contains(servers, ip) {
+				upstream[ip] = true
+			}
+			add(ip)
 		}
 		if name := localName(d.names); name != "" && (local == "" || h.ip == gateway) {
 			local = name // the gateway's own name, else any host's
@@ -91,9 +99,12 @@ func (s *Integration) checkDNS(ctx context.Context, external string, dhcp map[st
 		go func() {
 			defer wg.Done()
 			c := model.DnsCheck{Server: srv}
+			if upstream[srv] {
+				c.Upstream = model.Ptr(true)
+			}
 			ext := query(ctx, srv, external)
 			c.External = &ext
-			if local != "" {
+			if local != "" && !upstream[srv] {
 				loc := query(ctx, srv, local)
 				c.Local = &loc
 			}

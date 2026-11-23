@@ -756,6 +756,12 @@ type DnsCheck struct {
 
 	// Server corresponds to the JSON schema field "server".
 	Server string `json:"server" yaml:"server"`
+
+	// A host answering DNS that the network's clients are not given (DHCP does not
+	// hand it out and it is not the gateway): a forwarder upstream, such as the
+	// operator's router in front of the firewall. Only the internet name is checked
+	// on it: it is not expected to know local names.
+	Upstream *bool `json:"upstream,omitempty,omitzero" yaml:"upstream,omitempty"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

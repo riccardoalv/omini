@@ -158,7 +158,7 @@ func dnsSlow(in Input, _ index) []Insight {
 // dnsLocal: the server answers for the internet but not for a local name.
 func dnsLocal(in Input, _ index) []Insight {
 	return dnsRule(in, func(c model.DnsCheck) (string, string, map[string]any) {
-		if c.External != nil && c.External.Ok && c.Local != nil && !c.Local.Ok {
+		if c.External != nil && c.External.Ok && c.Local != nil && !c.Local.Ok && !model.Deref(c.Upstream) {
 			return "dns_local", Warning, map[string]any{"name": c.Local.Name, "error": model.Deref(c.Local.Error)}
 		}
 		return "", "", nil

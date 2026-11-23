@@ -78,7 +78,7 @@ attention) and **info** (worth knowing).
 | `dhcp_rogue` | critical | A second DHCP server answered that is not a router or a device known to serve DHCP |
 | `dns_down` | critical | A DNS server of the network does not resolve the internet name of the check |
 | `dns_slow` | warning | A DNS server took more than 500 ms to answer in two checks in a row (one slow answer is a name it had to look up again) |
-| `dns_local` | warning | A DNS server resolves the internet name but not a local one |
+| `dns_local` | warning | A DNS server the clients use (handed out by DHCP, or the gateway) resolves the internet name but not a local one |
 | `vlan_unknown` | warning | A device has a VLAN that is not one of the network's (created on the device, not in Omini) |
 | `port_forward` | info | A router forwards a port (or a range) from the internet to a device: one alert per enabled forward (protocol and external port), open while it exists, with where it goes (the device's name when Omini knows the address), who may use it and its description. The router's panel lists them under **Exposed to the internet**. Omini never changes them |
 | `upnp_forward` | warning | Like `port_forward`, for a forward a device opened by itself through UPnP or NAT-PMP |

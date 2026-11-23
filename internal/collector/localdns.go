@@ -42,6 +42,9 @@ func (c *Collector) checkOwnDNSName(ctx context.Context, topo *topology.Topology
 	var wg sync.WaitGroup
 	for i := range topo.DnsChecks {
 		check := &topo.DnsChecks[i]
+		if model.Deref(check.Upstream) {
+			continue // a forwarder upstream knows no local names
+		}
 		wg.Go(func() {
 			q := query(ctx, check.Server, names[0])
 			check.Local = &q

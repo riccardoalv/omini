@@ -32,6 +32,8 @@ func TestDNSChecksTestANameOminiSet(t *testing.T) {
 		return topology.Topology{DnsChecks: []model.DnsCheck{
 			{Server: "192.168.1.1", Local: &model.DnsQuery{Name: "host.lan", Ok: true}},
 			{Server: "192.168.1.53"},
+			// The operator's router in front of the firewall: no local names.
+			{Server: "192.168.100.1", Upstream: model.Ptr(true)},
 		}}
 	}
 	// No name set yet: the scan's name stays.
@@ -56,5 +58,8 @@ func TestDNSChecksTestANameOminiSet(t *testing.T) {
 	}
 	if l := topo.DnsChecks[1].Local; l == nil || l.Name != "nas.home.arpa" || l.Ok {
 		t.Fatalf("checks %+v", topo.DnsChecks)
+	}
+	if _, ok := asked["192.168.100.1"]; ok || topo.DnsChecks[2].Local != nil {
+		t.Fatalf("the upstream forwarder was asked a local name: %v", asked)
 	}
 }
