@@ -953,6 +953,63 @@ func TestNestedRouterIsNotTheCenter(t *testing.T) {
 	}
 }
 
+// A firewall behind the operator's ONT: its WAN is an address in the ONT's
+// LAN (double NAT), and the ONT does PPPoE. The ONT is the center: the
+// internet above it, the firewall below its LAN port, whatever the roles.
+func TestFirewallBehindTheOperatorsRouter(t *testing.T) {
+	const fwWAN, ontMAC = "24:8a:07:00:00:01", "64:db:38:00:00:46"
+	fw := model.Device{
+		Key: fwWAN, Name: "OPNsense", Host: model.Ptr("192.168.1.1"),
+		MACs: []model.MACAddress{fwWAN}, Role: model.Ptr(model.DeviceRoleFirewall),
+		Interfaces: []model.Interface{
+			{Name: "vtnet0", Wan: model.Ptr(true), MAC: model.Ptr(model.MACAddress(fwWAN)), IPs: []string{"192.168.100.3/24"}},
+			{Name: "mlxen0", IPs: []string{"192.168.1.1/24"}},
+		},
+		Gateways: []model.Gateway{{Name: "WAN_DHCP", Interface: model.Ptr("vtnet0"), Address: model.Ptr("192.168.100.1"), Status: model.GatewayStatusUp}},
+	}
+	ont := model.Device{
+		Key: ontMAC, Name: "ZTE F670L", Host: model.Ptr("192.168.100.1"),
+		MACs: []model.MACAddress{ontMAC}, Role: model.Ptr(model.DeviceRoleRouter),
+		Interfaces: []model.Interface{
+			{Name: "LAN4", Up: model.Ptr(true)},
+			{Name: "LAN", Type: model.Ptr(model.InterfaceTypeBridge), IPs: []string{"192.168.100.1/24"}, Members: []string{"LAN4"}},
+			{Name: "PON"},
+			{Name: "pppoe", Wan: model.Ptr(true), Parent: model.Ptr("PON"), Up: model.Ptr(true), IPs: []string{"100.64.0.10/32"}},
+		},
+		Gateways: []model.Gateway{{Name: "pppoe", Interface: model.Ptr("pppoe"), Address: model.Ptr("100.64.0.1"), Status: model.GatewayStatusUp}},
+		Fdb:      []model.FdbEntry{{MAC: fwWAN, Port: "LAN4"}},
+	}
+	topo := topology.Build([]topology.Source{
+		{IntegrationID: 3, Online: true, Devices: []model.Device{fw}},
+		{IntegrationID: 11, Online: true, Devices: []model.Device{ont}},
+	})
+	fwID, ontID := "dev:"+fwWAN, "dev:"+ontMAC
+	var wans []string
+	for _, n := range topo.Nodes {
+		if n.Kind == topology.KindWAN {
+			wans = append(wans, n.ID)
+		}
+	}
+	if len(wans) != 1 || wans[0] != "wan:"+ontID+":pppoe" {
+		t.Fatalf("WAN nodes %v (want only the ONT's PPPoE)", wans)
+	}
+	var fwUnderONT, wanAboveONT bool
+	for _, e := range topo.Edges {
+		if e.Source == ontID && e.Target == fwID && e.SourcePort == "LAN4" {
+			fwUnderONT = true
+		}
+		if e.Source == wans[0] && e.Target == ontID {
+			wanAboveONT = true
+		}
+		if e.Source == fwID && e.Target == ontID {
+			t.Fatalf("the ONT hangs below the firewall: %+v", e)
+		}
+	}
+	if !fwUnderONT || !wanAboveONT {
+		t.Fatalf("firewall under the ONT's LAN4: %v; internet above the ONT: %v\n%+v", fwUnderONT, wanAboveONT, topo.Edges)
+	}
+}
+
 // The firewall's own integration reports it as a firewall with its WAN; the
 // hypervisor's reports the same machine (same MAC) as one more VM — a server
 // with a link to its host. Merged, it is still the center: no link to the host.

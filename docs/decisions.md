@@ -206,6 +206,11 @@ tested with fixtures). The rules that are easy to break:
   MAC vendor alone only when the network has exactly one Proxmox host. A
   firewall running as a VM is the center of the network, not a branch of its
   host ("Runs on"). A double-NAT router is not the center.
+- **The center is the device with the real internet uplink**, whatever its
+  role: a firewall whose WAN is an address in another managed device's LAN
+  (behind the operator's ONT or router) hangs below that device's LAN port,
+  and the operator's device, with the internet above it, is the root. Among
+  devices with a real uplink, firewalls still come before routers.
 - **End devices on LLDP** (a desk phone, a server running lldpd) are clients,
   not network gear; the computer behind a desk phone hangs from the phone.
   VRRP/CARP virtual MACs are never clients.

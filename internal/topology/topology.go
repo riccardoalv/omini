@@ -1746,10 +1746,17 @@ func (b *builder) result() Topology {
 }
 
 // rootIDs returns BFS starting points: firewalls and routers first, then the
-// best connected node of each remaining component.
+// best connected node of each remaining component. A firewall or router whose
+// WAN is a link into another device's LAN (a firewall behind the operator's
+// ONT) is not the center: the device with the real internet uplink is, and the
+// nested one hangs below it.
 func (b *builder) rootIDs(adj map[string][]string) []string {
 	rank := func(n *Node) int {
 		switch {
+		case n.Kind == KindDevice && b.center[n.ID] && n.Role == string(model.DeviceRoleFirewall):
+			return -2
+		case n.Kind == KindDevice && b.center[n.ID]:
+			return -1
 		case n.Kind == KindDevice && n.Role == string(model.DeviceRoleFirewall):
 			return 0
 		case n.Kind == KindDevice && n.Role == string(model.DeviceRoleRouter):
