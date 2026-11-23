@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/riccardoalv/omini/compare/v1.11.1...v2.0.0) (2026-11-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* don't silently skip config load errors by <a
+
+### <li>fix
+
+* don't silently skip config load errors by &lt;a ([1ebbc75](https://github.com/riccardoalv/omini/commit/1ebbc75114dcb346323746608a53ed0e107b3a39))
+
 ## [1.11.1](https://github.com/riccardoalv/omini/compare/v1.11.0...v1.11.1) (2026-11-23)
 
 
