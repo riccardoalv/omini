@@ -115,8 +115,8 @@ function pick(key: string | undefined) {
         {{ t('host.paused') }}:
         <template v-for="(p, i) in paused" :key="p.node.id">
           <button class="link" type="button" @click="emit('select', p.node.id)">
-            {{ displayName(p.node, t) }}</button
-          ><small v-if="p.rule" class="muted"> ({{ t('host.manual') + ': ' + p.rule }})</small
+            {{ displayName(p.node, t) }}</button><small v-if="p.rule" class="muted">
+            ({{ t('host.manual') + ': ' + p.rule }})</small
           >{{ i < paused.length - 1 ? ', ' : '' }}
         </template>
       </p>
