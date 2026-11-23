@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/riccardoalv/omini/compare/v1.10.0...v1.11.0) (2026-11-23)
+
+
+### Features
+
+* **plugins:** ZTE ONT plugin in the store ([506c839](https://github.com/riccardoalv/omini/commit/506c8399755eac7a1499434a3a06a4ece80b4d05))
+
+
+### Bug Fixes
+
+* **topology:** the device with the real uplink is the center ([ea5087b](https://github.com/riccardoalv/omini/commit/ea5087bf1eeb878b01a7c0d2446e91393dc3b567))
+
 ## [1.10.0](https://github.com/riccardoalv/omini/compare/v1.9.1...v1.10.0) (2026-10-24)
 
 
