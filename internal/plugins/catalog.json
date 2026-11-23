@@ -188,5 +188,19 @@
     "categories": [
       "nas"
     ]
+  },
+  {
+    "id": "zte",
+    "detect": {"brands": ["zte"]},
+    "name": "ZTE ONT",
+    "description": "ZTE fiber ONTs (GPON, tested on the F670L) through their web interface: the PON link with optical receive and transmit power, temperature, voltage and bias, PPPoE WANs (IPv4 and IPv6) and gateways, LAN ports with link speed and traffic, ARP, MAC table, DHCP and DHCPv6 leases, Wi-Fi networks, radios and clients, port forwards, UPnP and DMZ, CPU, memory and firmware; sets fixed addresses, local DNS names, Wi-Fi networks and channels, pauses devices (MAC filter) and keeps configuration backups.",
+    "url": "https://github.com/riccardoalv/omini-plugin-zte",
+    "icon": "router",
+    "publisher": "official",
+    "trust": "experimental",
+    "categories": [
+      "router",
+      "wifi"
+    ]
   }
 ]

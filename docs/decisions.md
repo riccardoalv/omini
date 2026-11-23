@@ -817,6 +817,16 @@ for many devices at once.
   is an access point; no per-client signal in the local API (only the cloud
   app has it, and the cloud is not used); the Wi-Fi passwords that come with
   the network names are never kept.
+- **ZTE ONTs** (F670L, firmware V9): the web interface, as its own
+  JavaScript talks to it (SHA-256 login, a token per page, every change signed
+  with the device's RSA key, Wi-Fi passwords AES-encrypted). The ONT keeps one
+  session, so the plugin signs out after every run instead of keeping its
+  session (signing in during a collection would sign the user out of the
+  browser, and keeping it would sign them out all the time). Pausing uses the
+  MAC filter (block list, rules of type Route: the internet only), the only
+  per-device block the ONT has; with an allow list it is refused. Wi-Fi
+  networks map to the ONT's fixed slots (a deleted one goes back to off and
+  "SSIDn"). The optical levels are the PON port's transceiver.
 - **Proxmox VE**: a read-only API token (PVEAuditor); clusters are read
   through any node; VMs report the memory they were given.
 

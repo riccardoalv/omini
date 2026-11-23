@@ -19,6 +19,7 @@ own API. Collecting only reads. The integrations that support it can also
 | Horaco switch | yes | ports and create | | | | | | | yes |
 | AdGuard Home | | | | | | yes | | | yes |
 | Pi-hole | | | | | | yes | | | yes |
+| ZTE ONT | | | fixed addresses | yes (fixed slots, no VLANs) | yes | yes | | yes (MAC filter) | yes |
 
 Mercusys Halo, Docker, TrueNAS and Synology DSM only read.
 
@@ -40,7 +41,7 @@ permission is missing.
 - Plugins: [OPNsense](#opnsense) · [pfSense](#pfsense) · [MikroTik RouterOS](#mikrotik-routeros)
   · [UniFi Network](#unifi-network) · [TP-Link Omada](#tp-link-omada) · [OpenWrt](#openwrt)
   · [Proxmox VE](#proxmox-ve) · [Horaco switch](#horaco-switch) · [Mercusys Halo](#mercusys-halo)
-  · [AdGuard Home](#adguard-home) · [Pi-hole](#pi-hole)
+  · [AdGuard Home](#adguard-home) · [Pi-hole](#pi-hole) · [ZTE ONT](#zte-ont)
 
 ## Adding an integration
 
@@ -166,6 +167,7 @@ hardware; reports from users are welcome.
 | Docker | [omini-plugin-docker](https://github.com/riccardoalv/omini-plugin-docker) | Containers |
 | TrueNAS | [omini-plugin-truenas](https://github.com/riccardoalv/omini-plugin-truenas) | NAS |
 | Synology DSM | [omini-plugin-synology](https://github.com/riccardoalv/omini-plugin-synology) | NAS |
+| ZTE ONT | [omini-plugin-zte](https://github.com/riccardoalv/omini-plugin-zte) | Fiber ONT, router, Wi-Fi |
 
 When the network scan identifies one of these devices and its integration is
 not set up, the **Integration available** alert says so.
@@ -483,6 +485,35 @@ Use the main unit's address and the web interface password. The plugin keeps
 its session between collections and signs in again only when asked; signing
 in may sign you out of the web interface in your browser. The local API has
 no per-client signal or link rate.
+
+## ZTE ONT
+
+Reads ZTE fiber ONTs (GPON) through their web interface, tested on an F670L
+with firmware V9 (the kind operators install): the **PON link** with the
+optical module's receive and transmit power, temperature, voltage and bias
+(shown as the PON port's transceiver), the WAN connections (PPPoE, IPv4 and
+IPv6, their VLAN) and gateways, the LAN ports with link speed, traffic and
+errors, ARP, the MAC table, DHCP and DHCPv6 leases, the Wi-Fi networks,
+radios and clients, port forwards, UPnP mappings and the DMZ host, and CPU,
+memory, uptime and firmware. An ONT in bridge mode (a router behind it does
+PPPoE) is not reported as the router.
+
+It changes fixed addresses, local DNS names, the Wi-Fi networks (name,
+password, on or off: the ONT has fixed slots, four per radio, and a new
+network takes the first free slot of each radio) and a radio's channel,
+pauses devices through the ONT's **MAC filter** (turned on as a block list
+when needed; refused while it is an allow list) and backs up its settings as
+JSON without secrets.
+
+**Account:** the administrator account of the web interface (`admin`), on the
+ONT's label or given by the operator; the `user` account (not tested)
+usually sees fewer pages.
+
+The ONT allows **one session at a time**: the plugin signs in at the start of
+each collection and **signs out at the end**, so you can still use the web
+interface in your browser (a collection that runs while you are signed in
+signs you out). Reservation names keep 10 characters (the firmware drops
+longer ones).
 
 ## AdGuard Home
 
